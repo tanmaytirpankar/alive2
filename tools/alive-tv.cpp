@@ -9,6 +9,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/AsmParser/Parser.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/IR/LLVMContext.h"
@@ -16,22 +17,43 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IRReader/IRReader.h"
+#include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCInstPrinter.h"
+#include "llvm/MC/MCTargetOptions.h"
+#include "llvm/MC/MCTargetOptionsCommandFlags.h"
+#include "llvm/MC/MCParser/MCAsmParser.h"
+#include "llvm/MC/MCParser/MCTargetAsmParser.h"
+#include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/MC/MCStreamer.h"
 #include "llvm/Passes/PassBuilder.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
+#include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Pass.h"
 
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <utility>
+#include <vector>
+#include <unordered_map>
+#include <ranges>
 
 using namespace tools;
 using namespace util;
 using namespace std;
 using namespace llvm_util;
+using namespace llvm;
 
 #define LLVM_ARGS_PREFIX ""
 #define ARGS_SRC_TGT
@@ -57,6 +79,10 @@ llvm::cl::opt<std::string> opt_src_fn(LLVM_ARGS_PREFIX "src-fn",
 llvm::cl::opt<std::string> opt_tgt_fn(LLVM_ARGS_PREFIX"tgt-fn",
   llvm::cl::desc("Name of tgt function (without @)"),
   llvm::cl::cat(alive_cmdargs), llvm::cl::init("tgt"));
+
+llvm::cl::opt<bool> opt_backend_tv(LLVM_ARGS_PREFIX "backend-tv",
+  llvm::cl::desc("Verify operation of a backend (default=false)"),
+  llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
 
 
 llvm::ExitOnError ExitOnErr;
@@ -269,12 +295,474 @@ llvm::Function *findFunction(llvm::Module &M, const string &FName) {
 }
 }
 
+static llvm::mc::RegisterMCTargetOptionsFlags MOF;
+
+class MCStreamerWrapper final : public llvm::MCStreamer {
+public:
+  std::vector<llvm::MCInst> Insts;
+
+  MCStreamerWrapper(llvm::MCContext &Context)
+      : MCStreamer(Context) {}
+
+  // We only want to intercept the emission of new instructions.
+  virtual void emitInstruction(const llvm::MCInst &Inst,
+                               const llvm::MCSubtargetInfo & /* unused */) override {
+    Insts.push_back(Inst);
+  }
+
+  bool emitSymbolAttribute(llvm::MCSymbol *Symbol, llvm::MCSymbolAttr Attribute) override {
+    return true;
+  }
+
+  void emitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size,
+                        unsigned ByteAlignment) override {}
+  void emitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol = nullptr,
+                    uint64_t Size = 0, unsigned ByteAlignment = 0,
+                    llvm::SMLoc Loc = llvm::SMLoc()) override {}
+  void emitGPRel32Value(const llvm::MCExpr *Value) override {}
+  void BeginCOFFSymbolDef(const llvm::MCSymbol *Symbol) override {}
+  void EmitCOFFSymbolStorageClass(int StorageClass) override {}
+  void EmitCOFFSymbolType(int Type) override {}
+  void EndCOFFSymbolDef() override {}
+
+  /*
+  ArrayRef<llvm::MCInst> GetInstructionSequence(unsigned Index) const {
+    return Regions.getInstructionSequence(Index);
+  }
+  */
+};
+
+//unsigned SymValue::id_{0};
+
+struct CanonVal{
+  static unsigned id_;
+  unsigned id{0};
+  std::string prefix;
+  void assignId() {
+    id = ++id_;
+  }
+};
+
+static unsigned id_{0};
+unsigned getId() {
+  return ++id_;
+}
+
+unsigned InsertAndFind(std::unordered_map<unsigned, unsigned>& var2num, unsigned var){
+  if (var2num.count(var) == 0) {
+    auto new_value_num = getId();
+    var2num.emplace(var, new_value_num);
+    return new_value_num;
+  }
+  return 0;
+}
+
+struct MCOperandHash {
+  enum Kind{reg=(1<<2)-1, immedidate=(1<<3)-1};
+  size_t operator()(const MCOperand& op) const
+  {  
+      unsigned prefix;
+      unsigned id;
+      if (op.isReg()){
+        prefix = Kind::reg;
+        id = op.getReg();
+      }
+      else if (op.isImm()){
+        prefix = Kind::immedidate;
+        id = op.getImm();
+      }
+      else {
+        assert("no" && false);
+      }
+      return std::hash<unsigned long>() (prefix * id);
+  } 
+};
+
+struct MCOperandEqual {
+  enum Kind{reg=(1<<2)-1, immedidate=(1<<3)-1};
+  bool operator()(const MCOperand& lhs, const MCOperand& rhs) const
+  {  
+      if ((lhs.isReg() && rhs.isReg() && (lhs.getReg() == rhs.getReg()))  
+      ||  (lhs.isImm() && rhs.isImm() && (lhs.getImm() == rhs.getImm()))){
+          return true;
+      }
+      return false;
+  } 
+};
+
+struct SymValue{
+  unsigned opcode{0};
+  //std::vector<MCOperand> operands;
+  std::vector<unsigned> operands;
+  //SymValue()
+  //:id(++id_) {}
+  
+};
+
+struct SymValueHash {
+  size_t operator()(const SymValue& op) const
+  {  
+    //auto op_hasher = MCOperandHash();
+    // Is this the right way to go about this
+    unsigned combined_val = 41; // start with some prime number
+    // Is this too expensive?
+    for (auto& e : op.operands) {
+      combined_val += e;
+    }
+    return std::hash<unsigned long>() (op.opcode + combined_val);
+  } 
+};
+
+struct SymValueEqual {
+  enum Kind{reg=(1<<2)-1, immedidate=(1<<3)-1};
+  bool operator()(const SymValue& lhs, const SymValue& rhs) const
+  { 
+    // auto mcop_eq = MCOperandEqual();
+    if (lhs.opcode != rhs.opcode || lhs.operands.size() != rhs.operands.size()) {
+      return false;
+    } 
+    for (unsigned i=0; i < rhs.operands.size(); ++i) {
+      //if (!mcop_eq(lhs.operands[i], rhs.operands[i]))
+      if (lhs.operands[i] != rhs.operands[i])
+        return false;
+    } 
+    return true;
+  } 
+};
+
+
+auto FindReadBeforeWritten(std::vector<MCInst>& instrs) {
+  std::unordered_set<MCOperand,MCOperandHash,MCOperandEqual> reads;
+  std::unordered_set<MCOperand,MCOperandHash,MCOperandEqual> writes;
+  // TODO for writes, should only apply to instructions that update a destination register
+  for (auto& I : instrs) {
+    assert(I.getNumOperands() > 0 && "MCInst with zero operands");
+    for (unsigned j = 1; j < I.getNumOperands(); ++j) {
+      if (!writes.contains(I.getOperand(j))) 
+        reads.insert(I.getOperand(j));
+    }
+    writes.insert(I.getOperand(0));
+  }
+
+  // for (auto& elem : reads) {
+  //   elem.dump();
+  // }
+  // cout << "writes\n";
+  // for (auto& elem : writes) {
+  //   elem.dump();
+  // }
+
+  return reads;
+}
+
+std::vector<bool> LastWrites(std::vector<MCInst>& instrs) {
+  // TODO need to check for size of instrs in backend-tv and return error
+  // otherwise these helper functions will fail in an ugly manner
+  auto last_write = std::vector<bool>(instrs.size(), false);
+  std::unordered_set<MCOperand,MCOperandHash,MCOperandEqual> willOverwrite;
+  // cout << "printing in reverse\n";
+  unsigned index = instrs.size() - 1;
+  // TODO should only apply to instructions that update a destination register
+  for (auto& r_I : ranges::views::reverse(instrs)) {
+    // TODO Check for dest reg 
+    // for now assume operand 0 is dest register 
+    if (!willOverwrite.contains(r_I.getOperand(0))) {
+      last_write[index] = true;
+      willOverwrite.insert(r_I.getOperand(0));
+    }
+    index--;
+    // r_I.dump_pretty(llvm::errs());
+    // llvm::errs() << '\n';
+  }
+  return last_write;
+}
+//bool SymValExists(std::vector<unique_ptr<SymValue>>, )
+void backendTV() {
+  if (!opt_file2.empty()) {
+    cerr << "Please only specify one bitcode file when validating a backend\n";
+    exit(-1);    
+  }
+
+  llvm::LLVMContext Context;
+  auto M1 = openInputFile(Context, opt_file1);
+  if (!M1.get()) {
+    cerr << "Could not read bitcode from '" << opt_file1 << "'\n";
+    exit(-1);
+  }
+
+#define ARGS_MODULE_VAR M1
+# include "llvm_util/cmd_args_def.h"
+
+  auto &DL = M1.get()->getDataLayout();
+  llvm::Triple targetTriple(M1.get()->getTargetTriple());
+  llvm::TargetLibraryInfoWrapperPass TLI(targetTriple);
+
+  llvm_util::initializer llvm_util_init(*out, DL);
+  smt_init.emplace();
+
+  LLVMInitializeAArch64TargetInfo();
+  LLVMInitializeAArch64Target();
+  LLVMInitializeAArch64TargetMC();
+  LLVMInitializeAArch64AsmParser();
+  LLVMInitializeAArch64AsmPrinter();
+ 
+  std::string Error;
+  const char *TripleName = "aarch64-arm-none-eabi";
+  auto Target = llvm::TargetRegistry::lookupTarget(TripleName, Error);
+  if (!Target) {
+    cerr << Error;
+    exit(-1);
+  }
+  llvm::TargetOptions Opt;
+  const char *CPU = "apple-a12";
+  auto RM = llvm::Optional<llvm::Reloc::Model>();
+  auto TM = Target->createTargetMachine(TripleName, CPU, "", Opt, RM);
+
+  llvm::SmallString<1024> Asm;
+  llvm::raw_svector_ostream Dest(Asm);
+
+  llvm::legacy::PassManager pass;
+  if (TM->addPassesToEmitFile(pass, Dest, nullptr, llvm::CGFT_AssemblyFile)) {
+    cerr << "Failed to generate assembly";
+    exit(-1);
+  }
+  pass.run(*M1);
+
+  // FIXME only do this in verbose mode, or something
+  for (size_t i=0; i<Asm.size(); ++i)
+    cout << Asm[i];
+  cout << "\n\n";
+
+  llvm::Triple TheTriple(TripleName);
+
+  auto MCOptions = llvm::mc::InitMCTargetOptionsFromFlags();
+  std::unique_ptr<llvm::MCRegisterInfo> MRI(Target->createMCRegInfo(TripleName));
+  assert(MRI && "Unable to create target register info!");
+
+  std::unique_ptr<llvm::MCAsmInfo> MAI(
+      Target->createMCAsmInfo(*MRI, TripleName, MCOptions));
+  assert(MAI && "Unable to create MC asm info!");
+
+  std::unique_ptr<llvm::MCSubtargetInfo> STI(
+      Target->createMCSubtargetInfo(TripleName, CPU, ""));
+  assert(STI && "Unable to create subtarget info!");
+  assert(STI->isCPUStringValid(CPU) && "Invalid CPU!");
+
+  llvm::MCContext Ctx(TheTriple, MAI.get(), MRI.get(), STI.get());
+
+  llvm::SourceMgr SrcMgr;
+  auto Buf = llvm::MemoryBuffer::getMemBuffer(Asm.c_str());
+  assert(Buf);
+  SrcMgr.AddNewSourceBuffer(std::move(Buf), llvm::SMLoc());
+
+  std::unique_ptr<llvm::MCInstrInfo> MCII(Target->createMCInstrInfo());
+  assert(MCII && "Unable to create instruction info!");
+
+  std::unique_ptr<llvm::MCInstPrinter> IPtemp(Target->createMCInstPrinter(
+      TheTriple, 0, *MAI, *MCII, *MRI));
+
+  MCStreamerWrapper Str(Ctx);
+  
+  std::unique_ptr<llvm::MCAsmParser> Parser(
+      llvm::createMCAsmParser(SrcMgr, Ctx, Str, *MAI));
+  assert(Parser);
+  
+  llvm::MCTargetOptions Opts;
+  Opts.PreserveAsmComments = false;
+  std::unique_ptr<llvm::MCTargetAsmParser> TAP(
+      Target->createMCAsmParser(*STI, *Parser, *MCII, Opts));
+  assert(TAP);
+  Parser->setTargetParser(*TAP);
+  Parser->Run(true); // ??
+
+  // FIXME Nader your code here
+  cout << "\n\nPretty Parsed MCInsts:\n";
+  for (auto I : Str.Insts) {
+    I.dump_pretty(llvm::errs(), IPtemp.get(), " ", MRI.get());
+    llvm::errs() << '\n';
+  }
+
+  cout << "\n\nParsed MCInsts:\n";
+  for (auto I : Str.Insts) {
+    I.dump_pretty(llvm::errs());
+    llvm::errs() << '\n';
+  } 
+  
+  cout << "\n\n";
+  std::unordered_map<MCOperand,unsigned,MCOperandHash,MCOperandEqual> svar2num; 
+  std::unordered_map<unsigned,MCOperand> num2cvar; 
+  std::unordered_map<SymValue,unsigned,SymValueHash,SymValueEqual> value2num;
+   
+  cout << "finding readers and updating maps\n";
+  auto first_reads = FindReadBeforeWritten(Str.Insts);
+  for (auto& read_op : first_reads) {
+    auto new_num = getId();
+    svar2num.emplace(read_op, new_num);
+    num2cvar.emplace(new_num, read_op);
+  }
+  cout << "--------svar2num-----------\n";
+  for (auto& [key,val]: svar2num) {
+    key.dump();
+    cout << ", " << val << '\n';
+  }
+  cout << "--------num2cvar----------\n";
+  for (auto& [key,val]: num2cvar) {
+    cout << key << ", ";
+    val.dump();
+    cout << '\n';
+  }
+  cout << "----------------------\n";
+  auto last_writes = LastWrites(Str.Insts);
+  for (unsigned i = 0; i < Str.Insts.size(); ++i) {
+    auto& cur_instr = Str.Insts[i];
+    // llvm::errs() << "<" << last_writes[i] << "> ";
+    // cur_instr.dump_pretty(llvm::errs());
+    // llvm::errs() << '\n';
+    auto sym_val = SymValue();
+    // TODO move this to SymValue CTOR and also distinguish operand selection based on opcode
+    // Right now we assume operand 0 is destination and operands 1..n are used
+    sym_val.opcode = cur_instr.getOpcode();
+    assert(cur_instr.getNumOperands() > 0 && "MCInst with zero operands");
+    for (unsigned j = 1; j < cur_instr.getNumOperands(); ++j) {
+        sym_val.operands.push_back(svar2num[cur_instr.getOperand(j)]);
+    }
+    if (!value2num.contains(sym_val)) {
+     // TODO 
+    }
+
+    // Only do the following if opcode writes to a variable
+    auto dst = cur_instr.getOperand(0);
+    auto new_num = getId();
+    svar2num.emplace(dst, new_num);
+
+    MCOperand new_dst;
+    if (last_writes[i]) { //no need to add version numbering to dst
+      new_dst = dst;
+    }
+    else {
+      new_dst = dst;
+      assert(new_dst.isReg());
+      new_dst.setReg(1000 + new_num); // FIXME
+    }
+
+    num2cvar.emplace(new_num, new_dst);
+    //dst.setReg(new_dst.getReg());
+    cur_instr.getOperand(0).setReg(new_dst.getReg());
+
+    if (!sym_val.operands.empty()) {
+      value2num.emplace(sym_val, new_num);
+    }
+    // Update MCInstrs operands with 
+
+    for (unsigned j = 1; j < cur_instr.getNumOperands(); ++j) {
+      auto& inst_operand = cur_instr.getOperand(j);
+      if (inst_operand.isReg()) {
+        inst_operand.setReg(num2cvar[sym_val.operands[j-1]].getReg());
+      }
+    }
+  } 
+
+  cout << "\n\nAfter LVN MCInsts:\n";
+  for (auto I : Str.Insts) {
+    I.dump_pretty(llvm::errs());
+    llvm::errs() << '\n';
+  }
+/*
+  auto SRC = findFunction(*M1, opt_src_fn);
+  auto TGT = findFunction(*M1, opt_tgt_fn);
+  if (SRC && TGT) {
+    compareFunctions(*SRC, *TGT, TLI);
+    return;
+  } else {
+    M2 = CloneModule(*M1);
+    optimizeModule(M2.get());
+  }
+
+  // FIXME: quadratic, may not be suitable for very large modules
+  // emitted by opt-fuzz
+  for (auto &F1 : *M1.get()) {
+    if (F1.isDeclaration())
+      continue;
+    if (!func_names.empty() && !func_names.count(F1.getName().str()))
+      continue;
+    for (auto &F2 : *M2.get()) {
+      if (F2.isDeclaration() || F1.getName() != F2.getName())
+        continue;
+      if (!compareFunctions(F1, F2, TLI))
+        if (opt_error_fatal)
+          return;
+      break;
+    }
+  }
+
+  */
+}
+
+void bitcodeTV() {
+  llvm::LLVMContext Context;
+  auto M1 = openInputFile(Context, opt_file1);
+  if (!M1.get()) {
+    cerr << "Could not read bitcode from '" << opt_file1 << "'\n";
+    exit(-1);
+  }
+
+#define ARGS_MODULE_VAR M1
+# include "llvm_util/cmd_args_def.h"
+
+  auto &DL = M1.get()->getDataLayout();
+  llvm::Triple targetTriple(M1.get()->getTargetTriple());
+  llvm::TargetLibraryInfoWrapperPass TLI(targetTriple);
+
+  llvm_util::initializer llvm_util_init(*out, DL);
+  smt_init.emplace();
+
+  unique_ptr<llvm::Module> M2;
+  if (opt_file2.empty()) {
+    auto SRC = findFunction(*M1, opt_src_fn);
+    auto TGT = findFunction(*M1, opt_tgt_fn);
+    if (SRC && TGT) {
+      compareFunctions(*SRC, *TGT, TLI);
+      return;
+    } else {
+      M2 = CloneModule(*M1);
+      optimizeModule(M2.get());
+    }
+  } else {
+    M2 = openInputFile(Context, opt_file2);
+    if (!M2.get()) {
+      *out << "Could not read bitcode from '" << opt_file2 << "'\n";
+      exit(-1);
+    }
+  }
+
+  if (M1.get()->getTargetTriple() != M2.get()->getTargetTriple()) {
+    *out << "Modules have different target triples\n";
+    exit(-1);
+  }
+
+  // FIXME: quadratic, may not be suitable for very large modules
+  // emitted by opt-fuzz
+  for (auto &F1 : *M1.get()) {
+    if (F1.isDeclaration())
+      continue;
+    if (!func_names.empty() && !func_names.count(F1.getName().str()))
+      continue;
+    for (auto &F2 : *M2.get()) {
+      if (F2.isDeclaration() || F1.getName() != F2.getName())
+        continue;
+      if (!compareFunctions(F1, F2, TLI))
+        if (opt_error_fatal)
+          return;
+      break;
+    }
+  }
+}
+
 int main(int argc, char **argv) {
   llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
   llvm::PrettyStackTraceProgram X(argc, argv);
   llvm::EnableDebugBuffering = true;
   llvm::llvm_shutdown_obj llvm_shutdown; // Call llvm_shutdown() on exit.
-  llvm::LLVMContext Context;
 
   std::string Usage =
       R"EOF(Alive2 stand-alone translation validator:
@@ -305,70 +793,18 @@ convenient way to demonstrate an existing optimizer bug.
   llvm::cl::HideUnrelatedOptions(alive_cmdargs);
   llvm::cl::ParseCommandLineOptions(argc, argv, Usage);
 
-  auto M1 = openInputFile(Context, opt_file1);
-  if (!M1.get()) {
-    cerr << "Could not read bitcode from '" << opt_file1 << "'\n";
-    return -1;
-  }
-
-#define ARGS_MODULE_VAR M1
-# include "llvm_util/cmd_args_def.h"
-
-  auto &DL = M1.get()->getDataLayout();
-  llvm::Triple targetTriple(M1.get()->getTargetTriple());
-  llvm::TargetLibraryInfoWrapperPass TLI(targetTriple);
-
-  llvm_util::initializer llvm_util_init(*out, DL);
-  smt_init.emplace();
-
-  unique_ptr<llvm::Module> M2;
-  if (opt_file2.empty()) {
-    auto SRC = findFunction(*M1, opt_src_fn);
-    auto TGT = findFunction(*M1, opt_tgt_fn);
-    if (SRC && TGT) {
-      compareFunctions(*SRC, *TGT, TLI);
-      goto end;
-    } else {
-      M2 = CloneModule(*M1);
-      optimizeModule(M2.get());
-    }
+  if (opt_backend_tv) {
+    backendTV();
   } else {
-    M2 = openInputFile(Context, opt_file2);
-    if (!M2.get()) {
-      *out << "Could not read bitcode from '" << opt_file2 << "'\n";
-      return -1;
-    }
+    bitcodeTV();
   }
-
-  if (M1.get()->getTargetTriple() != M2.get()->getTargetTriple()) {
-    *out << "Modules have different target triples\n";
-    return -1;
-  }
-
-  // FIXME: quadratic, may not be suitable for very large modules
-  // emitted by opt-fuzz
-  for (auto &F1 : *M1.get()) {
-    if (F1.isDeclaration())
-      continue;
-    if (!func_names.empty() && !func_names.count(F1.getName().str()))
-      continue;
-    for (auto &F2 : *M2.get()) {
-      if (F2.isDeclaration() || F1.getName() != F2.getName())
-        continue;
-      if (!compareFunctions(F1, F2, TLI))
-        if (opt_error_fatal)
-          goto end;
-      break;
-    }
-  }
-
+  
   *out << "Summary:\n"
           "  " << num_correct << " correct transformations\n"
           "  " << num_unsound << " incorrect transformations\n"
           "  " << num_failed  << " failed-to-prove transformations\n"
           "  " << num_errors << " Alive2 errors\n";
 
-end:
   if (opt_smt_stats)
     smt::solver_print_stats(*out);
 
