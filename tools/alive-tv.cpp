@@ -23,6 +23,9 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCTargetOptions.h"
+#include "llvm/MC/MCInstrAnalysis.h"
+#include "llvm/MC/MCSymbol.h"
+#include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCTargetOptionsCommandFlags.h"
 #include "llvm/MC/MCParser/MCAsmParser.h"
 #include "llvm/MC/MCParser/MCTargetAsmParser.h"
@@ -298,53 +301,23 @@ llvm::Function *findFunction(llvm::Module &M, const string &FName) {
 
 static llvm::mc::RegisterMCTargetOptionsFlags MOF;
 
-class MCStreamerWrapper final : public llvm::MCStreamer {
-public:
-  std::vector<llvm::MCInst> Insts;
-
-  MCStreamerWrapper(llvm::MCContext &Context)
-      : MCStreamer(Context) {}
-
-  // We only want to intercept the emission of new instructions.
-  virtual void emitInstruction(const llvm::MCInst &Inst,
-                               const llvm::MCSubtargetInfo & /* unused */) override {
-    Insts.push_back(Inst);
-  }
-
-  bool emitSymbolAttribute(llvm::MCSymbol *Symbol, llvm::MCSymbolAttr Attribute) override {
-    return true;
-  }
-
-  void emitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size,
-                        unsigned ByteAlignment) override {}
-  void emitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol = nullptr,
-                    uint64_t Size = 0, unsigned ByteAlignment = 0,
-                    llvm::SMLoc Loc = llvm::SMLoc()) override {}
-  void emitGPRel32Value(const llvm::MCExpr *Value) override {}
-  void BeginCOFFSymbolDef(const llvm::MCSymbol *Symbol) override {}
-  void EmitCOFFSymbolStorageClass(int StorageClass) override {}
-  void EmitCOFFSymbolType(int Type) override {}
-  void EndCOFFSymbolDef() override {}
-
-  /*
-  ArrayRef<llvm::MCInst> GetInstructionSequence(unsigned Index) const {
-    return Regions.getInstructionSequence(Index);
-  }
-  */
-};
-
-
 class MCInstWrapper{
-private:
-  llvm::MCInst instr;
+  
 public:
-  MCInstWrapper(llvm::MCInst& _instr) : instr(_instr) 
+  llvm::MCInst instr;
+  MCInstWrapper(llvm::MCInst _instr) : instr(_instr) 
   {}
   unsigned getOpcode() const {
     return instr.getOpcode(); 
   }
 
 };
+
+class MCBasicBlock {
+  std::string name;
+};
+
+// class MCFunction
 
 // Visit a Vector MCInstWrapper
 
@@ -388,6 +361,90 @@ std::optional<IR::Function> arm2alive(vector<MCInstWrapper> &instrs) {
   return {};
 }
 
+
+class MCStreamerWrapper final : public llvm::MCStreamer {
+private:
+  std::vector<MCInstWrapper> CurBlock;
+  llvm::MCInstrAnalysis* Ana_ptr;
+  llvm::MCInstPrinter* IP_ptr;
+  llvm::MCRegisterInfo* MRI_ptr;
+public:
+  unsigned cnt{0};
+  std::vector<llvm::MCInst> Insts;
+  std::vector<MCInstWrapper> W_Insts;
+  std::vector<std::vector<MCInstWrapper>> Blocks;
+  
+  MCStreamerWrapper(llvm::MCContext &Context, llvm::MCInstrAnalysis* _Ana_ptr, 
+                    llvm::MCInstPrinter* _IP_ptr, llvm::MCRegisterInfo* _MRI_ptr)
+      : MCStreamer(Context), Ana_ptr(_Ana_ptr) , IP_ptr(_IP_ptr), MRI_ptr(_MRI_ptr) {}
+
+  // We only want to intercept the emission of new instructions.
+  virtual void emitInstruction(const llvm::MCInst &Inst,
+                               const llvm::MCSubtargetInfo & /* unused */) override {
+    MCInstWrapper Cur_Inst(Inst);
+    CurBlock.push_back(Cur_Inst); 
+    Insts.push_back(Inst);
+    if (Ana_ptr->isTerminator(Inst)) {
+      Blocks.push_back(CurBlock);
+      CurBlock.clear();
+    }
+    errs() << cnt++ << "  : ";
+    Inst.dump_pretty(llvm::errs(), IP_ptr, " ", MRI_ptr);
+    if (Ana_ptr->isBranch(Inst)) 
+      errs() << ": branch ";
+    if (Ana_ptr->isTerminator(Inst)) 
+      errs() << ": terminator ";
+    errs() << "\n";
+  }
+
+  bool emitSymbolAttribute(llvm::MCSymbol *Symbol, llvm::MCSymbolAttr Attribute) override {
+    return true;
+  }
+
+  void emitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size,
+                        unsigned ByteAlignment) override {}
+  void emitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol = nullptr,
+                    uint64_t Size = 0, unsigned ByteAlignment = 0,
+                    llvm::SMLoc Loc = llvm::SMLoc()) override {}
+  void emitGPRel32Value(const llvm::MCExpr *Value) override {}
+  void BeginCOFFSymbolDef(const llvm::MCSymbol *Symbol) override {}
+  void EmitCOFFSymbolStorageClass(int StorageClass) override {}
+  void EmitCOFFSymbolType(int Type) override {}
+  void EndCOFFSymbolDef() override {}
+  virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
+    errs() << cnt++ << "  : ";
+    errs() << "inside Emit Label: symbol=" << Symbol->getName() << 
+    /*", loc=" << Loc.getPointer() <<*/ '\n'; 
+    if (CurBlock.size() > 0) {
+      Blocks.push_back(CurBlock);
+      CurBlock.clear();
+    }
+    
+  }
+
+  void printBlocks() {
+    cout << "#of Blocks = " << Blocks.size() << '\n';
+    cout << "-------------\n";
+    int i=0;
+    for (auto& block: Blocks) {
+      errs() << "block " << i << '\n';
+      for (auto& inst: block) {
+        inst.instr.dump_pretty(llvm::errs(), IP_ptr, " ", MRI_ptr);
+        errs() << '\n';
+      }
+      i++;
+    }
+    cout << "-------------\n";
+  }
+  /*
+  ArrayRef<llvm::MCInst> GetInstructionSequence(unsigned Index) const {
+    return Regions.getInstructionSequence(Index);
+  }
+  */
+};
+
+
+
 struct CanonVal{
   static unsigned id_;
   unsigned id{0};
@@ -412,7 +469,7 @@ unsigned InsertAndFind(std::unordered_map<unsigned, unsigned>& var2num, unsigned
 }
 
 struct MCOperandHash {
-  enum Kind{reg=(1<<2)-1, immedidate=(1<<3)-1};
+  enum Kind{reg=(1<<2)-1, immedidate=(1<<3)-1, symbol=(1<<4)-1};
   size_t operator()(const MCOperand& op) const
   {  
       unsigned prefix;
@@ -424,6 +481,19 @@ struct MCOperandHash {
       else if (op.isImm()){
         prefix = Kind::immedidate;
         id = op.getImm();
+      }
+      else if (op.isExpr()) {
+        prefix = Kind::symbol;
+        auto expr = op.getExpr();
+        if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
+          const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*expr);
+          const MCSymbol &Sym = SRE.getSymbol();
+          errs() << "label : " << Sym.getName() << '\n'; // FIXME remove when done
+          id = Sym.getOffset();
+        }
+        else {
+          assert("unsupported mcExpr" && false);
+        } 
       }
       else {
         assert("no" && false);
@@ -437,7 +507,8 @@ struct MCOperandEqual {
   bool operator()(const MCOperand& lhs, const MCOperand& rhs) const
   {  
       if ((lhs.isReg() && rhs.isReg() && (lhs.getReg() == rhs.getReg()))  
-      ||  (lhs.isImm() && rhs.isImm() && (lhs.getImm() == rhs.getImm()))){
+      ||  (lhs.isImm() && rhs.isImm() && (lhs.getImm() == rhs.getImm()))
+      ||  (lhs.isExpr() && rhs.isExpr() && (lhs.getExpr() == rhs.getExpr()))){ //FIXME this is just comparing ptrs
           return true;
       }
       return false;
@@ -585,8 +656,8 @@ void backendTV() {
   // FIXME only do this in verbose mode, or something
   for (size_t i=0; i<Asm.size(); ++i)
     cout << Asm[i];
+  cout << "-------------\n";
   cout << "\n\n";
-
   llvm::Triple TheTriple(TripleName);
 
   auto MCOptions = llvm::mc::InitMCTargetOptionsFromFlags();
@@ -614,8 +685,10 @@ void backendTV() {
 
   std::unique_ptr<llvm::MCInstPrinter> IPtemp(Target->createMCInstPrinter(
       TheTriple, 0, *MAI, *MCII, *MRI));
+  
+  auto Ana = std::make_unique<MCInstrAnalysis>(MCII.get());
 
-  MCStreamerWrapper Str(Ctx);
+  MCStreamerWrapper Str(Ctx, Ana.get(), IPtemp.get(), MRI.get());
   
   std::unique_ptr<llvm::MCAsmParser> Parser(
       llvm::createMCAsmParser(SrcMgr, Ctx, Str, *MAI));
@@ -643,6 +716,9 @@ void backendTV() {
   } 
   
   cout << "\n\n";
+  
+  Str.printBlocks();
+  
   std::unordered_map<MCOperand,unsigned,MCOperandHash,MCOperandEqual> svar2num; 
   std::unordered_map<unsigned,MCOperand> num2cvar; 
   std::unordered_map<SymValue,unsigned,SymValueHash,SymValueEqual> value2num;
