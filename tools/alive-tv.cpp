@@ -9,6 +9,7 @@
 
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/Bitcode/BitcodeReader.h"
@@ -305,22 +306,58 @@ class MCInstWrapper{
   
 public:
   llvm::MCInst instr;
-  MCInstWrapper(llvm::MCInst _instr) : instr(_instr) 
-  {}
+  MCInstWrapper(llvm::MCInst _instr) : instr(_instr) {}
+  auto& getMCInst() {return instr;}
   unsigned getOpcode() const {
     return instr.getOpcode(); 
   }
-
+  friend auto operator<=>(const MCInstWrapper&, const MCInstWrapper&) = default;
 };
 
 class MCBasicBlock {
-  std::string name;
+  std::string Name;
+  using SetTy = llvm::DenseSet<MCBasicBlock*>;
+  SetTy Succs;
+public:
+  std::vector<MCInstWrapper> Instrs;
+  MCBasicBlock(std::string _Name) : Name(_Name) {}
+  const std::string& getName() const{return Name;}
+  auto& getInstrs() const { return Instrs;}
+  void addInst(const MCInstWrapper& inst) { Instrs.push_back(inst); }
+  void addSucc(MCBasicBlock* succ_block) { Succs.insert(succ_block); }
+  auto succBegin() const { return Succs.begin(); }
+  auto succEnd() const { return Succs.end(); }
+
 };
 
-// class MCFunction
+class MCFunction {
+  std::string Name;
+
+  unsigned label_cnt{0};
+public:
+  std::vector<MCBasicBlock> BBs;
+  MCFunction() {}
+  MCFunction(std::string _Name) : Name(_Name) {}
+  void setName(std::string _Name) {
+    Name = _Name;
+  }
+  MCBasicBlock* addBlock(std::string b_name) {
+    return &BBs.emplace_back(b_name);
+  }
+  std::string getLabel() {
+    return Name + std::to_string(++label_cnt);
+  }
+  MCBasicBlock* findBlockByName(std::string b_name) {
+    for (auto& bb : BBs) {
+      if (bb.getName() == b_name) {
+        return &bb;
+      }
+    }
+    return nullptr;
+  }
+};
 
 // Visit a Vector MCInstWrapper
-
 class MCInstVisitor{
 private:
   vector<MCInstWrapper> instrs;
@@ -350,7 +387,7 @@ IR::Type* arm_type2alive(MCOperand ty){
 
 // FIXME evantually this should take the entire arm SSA function as an input. i.e., ArmFunction class
 // For now we pass a vector of MCInstWrapper which represents a single basicblock in SSA form 
-std::optional<IR::Function> arm2alive(vector<MCInstWrapper> &instrs) {
+std::optional<IR::Function> arm2alive(MCFunction &mf) {
   // identify function type by returning an IR::Type
 
   //Function Fn();
@@ -361,14 +398,22 @@ std::optional<IR::Function> arm2alive(vector<MCInstWrapper> &instrs) {
   return {};
 }
 
-
+// TODO for now we're using this class to generate the arm assembly
+// cfg. might want to move this implementation somewhere else
 class MCStreamerWrapper final : public llvm::MCStreamer {
+enum ASMLine{none=0, label=1, non_term_instr=2, terminator=3};
 private:
-  std::vector<MCInstWrapper> CurBlock;
+  MCBasicBlock* CurBlock{nullptr};
+  std::string CurLabel;
+  bool first_label{true};
+  unsigned prev_line{0};
+  std::map<std::string,std::vector<MCInstWrapper>*> Label2Block;
+  std::vector<std::string> LabelNames;
   llvm::MCInstrAnalysis* Ana_ptr;
   llvm::MCInstPrinter* IP_ptr;
   llvm::MCRegisterInfo* MRI_ptr;
 public:
+  MCFunction MF;
   unsigned cnt{0};
   std::vector<llvm::MCInst> Insts;
   std::vector<MCInstWrapper> W_Insts;
@@ -381,17 +426,42 @@ public:
   // We only want to intercept the emission of new instructions.
   virtual void emitInstruction(const llvm::MCInst &Inst,
                                const llvm::MCSubtargetInfo & /* unused */) override {
-    MCInstWrapper Cur_Inst(Inst);
-    CurBlock.push_back(Cur_Inst); 
-    Insts.push_back(Inst);
-    if (Ana_ptr->isTerminator(Inst)) {
-      Blocks.push_back(CurBlock);
-      CurBlock.clear();
+    assert(prev_line != ASMLine::none);
+    if (prev_line == ASMLine::terminator) {
+      CurBlock = MF.addBlock(MF.getLabel());
     }
+    MCInstWrapper Cur_Inst(Inst);
+    CurBlock->addInst(Cur_Inst);
+    Insts.push_back(Inst);
+    
+    if (Ana_ptr->isTerminator(Inst)) {
+      prev_line = ASMLine::terminator;
+    }
+    else {
+      prev_line = ASMLine::non_term_instr;
+    }
+    auto& inst_ref = Cur_Inst.getMCInst();
+    auto num_operands = inst_ref.getNumOperands();
+    for (unsigned i=0; i < num_operands; ++i ) {
+      auto op = inst_ref.getOperand(i);
+      if (op.isExpr()) {
+        auto expr = op.getExpr();
+        if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
+          const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*expr);
+          const MCSymbol &Sym = SRE.getSymbol();
+          errs() << "target label : " << Sym.getName() << ", offset=" << Sym.getOffset() << '\n'; // FIXME remove when done
+        } 
+      }
+    }
+    
     errs() << cnt++ << "  : ";
     Inst.dump_pretty(llvm::errs(), IP_ptr, " ", MRI_ptr);
     if (Ana_ptr->isBranch(Inst)) 
       errs() << ": branch ";
+    if (Ana_ptr->isConditionalBranch(Inst)) 
+      errs() << ": conditional branch ";
+    if (Ana_ptr->isUnconditionalBranch(Inst)) 
+      errs() << ": unconditional branch ";
     if (Ana_ptr->isTerminator(Inst)) 
       errs() << ": terminator ";
     errs() << "\n";
@@ -412,29 +482,93 @@ public:
   void EmitCOFFSymbolType(int Type) override {}
   void EndCOFFSymbolDef() override {}
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
-    errs() << cnt++ << "  : ";
-    errs() << "inside Emit Label: symbol=" << Symbol->getName() << 
-    /*", loc=" << Loc.getPointer() <<*/ '\n'; 
-    if (CurBlock.size() > 0) {
-      Blocks.push_back(CurBlock);
-      CurBlock.clear();
+    // Assuming the first label encountered is the function's name
+    // Need to figure out if there is a better name to get access to the function's name
+    if (first_label) {
+      MF.setName(Symbol->getName().str());
+      first_label = false;
     }
-    
+    CurLabel = Symbol->getName().str();
+    CurBlock = MF.addBlock(CurLabel);
+    prev_line = ASMLine::label;
+    errs() << cnt++ << "  : ";
+    errs() << "inside Emit Label: symbol=" << Symbol->getName() << '\n'; 
+  }
+
+  std::string findTargetLabel(MCInst& inst_ref) {
+    auto num_operands = inst_ref.getNumOperands();
+    for (unsigned i=0; i < num_operands; ++i ) {
+      auto op = inst_ref.getOperand(i);
+      if (op.isExpr()) {
+        auto expr = op.getExpr();
+        if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
+          const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*expr);
+          const MCSymbol &Sym = SRE.getSymbol();
+          return Sym.getName().str();
+        } 
+      }
+    }
+    UNREACHABLE();
+  }
+  // call after MF with basic block is constructed to generate the successors for 
+  // each basic block
+  void generateSuccessors() {
+    cout << "generating basic block successors" << '\n';
+    for (unsigned i=0; i < MF.BBs.size()-1; ++i) {
+      auto& cur_bb = MF.BBs[i];
+      auto next_bb_ptr = &MF.BBs[i+1];
+      if (cur_bb.Instrs.empty()) {
+        cout << "generateSuccessors, encountered basic block with 0 instructions" << '\n';
+        continue;
+      }
+      auto& last_mc_instr = cur_bb.Instrs.back().getMCInst();
+      if (Ana_ptr->isConditionalBranch(last_mc_instr)) {
+        std::string target = findTargetLabel(last_mc_instr);
+        auto target_bb = MF.findBlockByName(target);
+        cur_bb.addSucc(target_bb);
+        cur_bb.addSucc(next_bb_ptr);        
+      }
+      else if (Ana_ptr->isUnconditionalBranch(last_mc_instr)) {
+        std::string target = findTargetLabel(last_mc_instr);
+        auto target_bb = MF.findBlockByName(target);
+        cur_bb.addSucc(target_bb);
+      }
+      else if (Ana_ptr->isReturn(last_mc_instr)) {
+        continue;
+      }
+      else { // add edge to next block
+        cur_bb.addSucc(next_bb_ptr);
+      }
+    }
+
   }
 
   void printBlocks() {
-    cout << "#of Blocks = " << Blocks.size() << '\n';
+    cout << "#of Blocks = " << MF.BBs.size() << '\n';
     cout << "-------------\n";
     int i=0;
-    for (auto& block: Blocks) {
-      errs() << "block " << i << '\n';
-      for (auto& inst: block) {
+    for (auto& block: MF.BBs) {
+      errs() << "block " << i << ", name= " << block.getName() <<'\n';
+      for (auto& inst: block.Instrs) {
         inst.instr.dump_pretty(llvm::errs(), IP_ptr, " ", MRI_ptr);
         errs() << '\n';
       }
       i++;
     }
-    cout << "-------------\n";
+  }
+
+  void printCFG() {
+    cout << "printing arm function CFG" << '\n';
+    for (auto& block: MF.BBs) {
+      cout << block.getName() << ": [";
+      for (auto it=block.succBegin(); it!=block.succEnd(); ++it) {
+        
+        auto successor = *it;
+        cout << successor->getName() << ", ";
+        //cout << it->getName() << ", ";
+      }
+      cout << "]\n";
+    }
   }
   /*
   ArrayRef<llvm::MCInst> GetInstructionSequence(unsigned Index) const {
@@ -718,6 +852,13 @@ void backendTV() {
   cout << "\n\n";
   
   Str.printBlocks();
+  Str.generateSuccessors();
+  Str.printCFG();
+  // FIXME for now, exit if the function has more than 2 blocks
+  if (Str.MF.BBs.size() > 2) {
+    cout << "ERROR: we don't generate SSA for this type of arm function yet" << '\n';
+    return;
+  }
   
   std::unordered_map<MCOperand,unsigned,MCOperandHash,MCOperandEqual> svar2num; 
   std::unordered_map<unsigned,MCOperand> num2cvar; 
