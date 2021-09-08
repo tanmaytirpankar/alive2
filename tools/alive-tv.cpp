@@ -475,7 +475,7 @@ IR::Value* mc_get_operand(llvm::MCOperand mc_val) {
 
 // Visit a Vector MCInstWrapper
 class MCInstVisitor{
-  enum ARM_Instruction {Add=883};
+  enum ARM_Instruction {Add=883, Ret=3663};
 public:
   static std::unique_ptr<IR::Instr> visit_error(MCInstWrapper& I) {
     cout << "ERROR: Unsupported arm instruction: " ;
@@ -486,8 +486,8 @@ public:
   static std::unique_ptr<IR::Instr> mc_visit(MCInstWrapper& I) {
     // IR::BinOp::Op alive_op;
     auto opcode = I.getOpcode();
+    auto& mc_inst = I.getMCInst();
     if (opcode == ARM_Instruction::Add) {
-      auto& mc_inst = I.getMCInst();
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
       //for now only support adds with no shift
       assert(mc_inst.getOperand(3).isImm() && (mc_inst.getOperand(3).getImm() == 0));
@@ -502,6 +502,15 @@ public:
       auto ret = make_unique<IR::BinOp>(*ty, move(operand_name), *a, *b, alive_op);
       mc_add_identifier(mc_inst.getOperand(0),*ret.get());
       return ret;
+    }
+    else if (opcode == ARM_Instruction::Ret) {
+      // for now we're assuming that the function returns an integer value
+      assert(mc_inst.getNumOperands() == 1); 
+      auto ty = &get_int_type(32); // FIXME
+      auto val = mc_get_operand(mc_inst.getOperand(0));
+      if (!ty || !val)
+        return visit_error(I);
+      return make_unique<IR::Return>(*ty, *val);
     }
     else {
       return visit_error(I);
@@ -933,8 +942,54 @@ std::vector<bool> LastWrites(MCBasicBlock& block) {
   }
   return last_write;
 }
+Results backend_verify(std::optional<IR::Function>& fn1, 
+                       std::optional<IR::Function>& fn2,
+                       llvm::TargetLibraryInfoWrapperPass &TLI,
+                       bool print_transform = false,
+                       bool always_verify = false) {
+  Results r;
+  r.t.src = move(*fn1);
+  r.t.tgt = move(*fn2);
 
-void backendTV() {
+  if (!always_verify) {
+    stringstream ss1, ss2;
+    r.t.src.print(ss1);
+    r.t.tgt.print(ss2);
+    if (ss1.str() == ss2.str()) {
+      if (print_transform)
+        r.t.print(*out, {});
+      r.status = Results::SYNTACTIC_EQ;
+      return r;
+    }
+  }
+
+  smt_init->reset();
+  r.t.preprocess();
+  TransformVerify verifier(r.t, false);
+
+  if (print_transform)
+    r.t.print(*out, {});
+
+  {
+    auto types = verifier.getTypings();
+    if (!types) {
+      r.status = Results::TYPE_CHECKER_FAILED;
+      return r;
+    }
+    assert(types.hasSingleTyping());
+  }
+
+  r.errs = verifier.verify();
+  if (r.errs) {
+    r.status = r.errs.isUnsound() ? Results::UNSOUND : Results::FAILED_TO_PROVE;
+  } else {
+    r.status = Results::CORRECT;
+  }
+  return r;
+
+
+}
+bool backendTV() {
   if (!opt_file2.empty()) {
     cerr << "Please only specify one bitcode file when validating a backend\n";
     exit(-1);    
@@ -1056,7 +1111,7 @@ void backendTV() {
   // FIXME for now, exit if the function has more than 2 blocks
   if (Str.MF.BBs.size() > 2) {
     cout << "ERROR: we don't generate SSA for this type of arm function yet" << '\n';
-    return;
+    return false;
   }
   
   std::unordered_map<MCOperand,unsigned,MCOperandHash,MCOperandEqual> svar2num; 
@@ -1170,6 +1225,54 @@ void backendTV() {
   auto TF = arm2alive(MF, DL);
   if (TF) 
     TF->print(cout << "\n----------alive-lift-arm-target----------\n");
+
+  auto r = backend_verify(AF,TF, TLI);
+
+  if (r.status == Results::ERROR) {
+    *out << "ERROR: " << r.error;
+    ++num_errors;
+    return true;
+  }
+
+  if (opt_print_dot) {
+    r.t.src.writeDot("src");
+    r.t.tgt.writeDot("tgt");
+  }
+
+  switch (r.status) {
+  case Results::ERROR:
+    UNREACHABLE();
+    break;
+
+  case Results::SYNTACTIC_EQ:
+    *out << "Transformation seems to be correct! (syntactically equal)\n\n";
+    ++num_correct;
+    break;
+
+  case Results::CORRECT:
+    *out << "Transformation seems to be correct!\n\n";
+    ++num_correct;
+    break;
+
+  case Results::TYPE_CHECKER_FAILED:
+    *out << "Transformation doesn't verify!\n"
+            "ERROR: program doesn't type check!\n\n";
+    ++num_errors;
+    return true;
+
+  case Results::UNSOUND:
+    *out << "Transformation doesn't verify!\n\n";
+    if (!opt_quiet)
+      *out << r.errs << endl;
+    ++num_unsound;
+    return false;
+
+  case Results::FAILED_TO_PROVE:
+    *out << r.errs << endl;
+    ++num_failed;
+    return true;
+  }
+  return false;
 /*
   auto SRC = findFunction(*M1, opt_src_fn);
   auto TGT = findFunction(*M1, opt_tgt_fn);
