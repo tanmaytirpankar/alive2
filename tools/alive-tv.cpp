@@ -6,6 +6,8 @@
 #include "smt/smt.h"
 #include "tools/transform.h"
 #include "util/version.h"
+#include "util/sort.h"
+#include "ir/instr.h"
 
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Triple.h"
@@ -320,6 +322,9 @@ public:
       else if (it->isImm()) {
         cout << "<MCOperand Imm:" << it->getImm() << ">";
       }
+      else {
+        assert("MCInstWrapper printing an unsupported operand" && false);
+      }
       cout << " ";
       // TODO for other types
     }
@@ -353,7 +358,6 @@ public:
 
 class MCFunction {
   std::string Name;
-
   unsigned label_cnt{0};
 public:
   std::vector<MCBasicBlock> BBs;
@@ -364,6 +368,9 @@ public:
   }
   MCBasicBlock* addBlock(std::string b_name) {
     return &BBs.emplace_back(b_name);
+  }
+  std::string getName() {
+    return Name;
   }
   std::string getLabel() {
     return Name + std::to_string(++label_cnt);
@@ -376,22 +383,59 @@ public:
     }
     return nullptr;
   }
-};
-
-// Visit a Vector MCInstWrapper
-class MCInstVisitor{
-private:
-  vector<MCInstWrapper> instrs;
-public:
-  MCInstVisitor(vector<MCInstWrapper>&& _instrs) : instrs(std::move(_instrs))
-  {}
-  void visit() {
-    for (auto& i: instrs) {
-      cout << "instr opcode = " << i.getOpcode() << "\n";
-    }
+  bool isVarArg() {
+    return false;
   }
-
 };
+
+struct MCOperandHash {
+  enum Kind{reg=(1<<2)-1, immedidate=(1<<3)-1, symbol=(1<<4)-1};
+  size_t operator()(const MCOperand& op) const
+  {  
+      unsigned prefix;
+      unsigned id;
+      if (op.isReg()){
+        prefix = Kind::reg;
+        id = op.getReg();
+      }
+      else if (op.isImm()){
+        prefix = Kind::immedidate;
+        id = op.getImm();
+      }
+      else if (op.isExpr()) {
+        prefix = Kind::symbol;
+        auto expr = op.getExpr();
+        if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
+          const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*expr);
+          const MCSymbol &Sym = SRE.getSymbol();
+          errs() << "label : " << Sym.getName() << '\n'; // FIXME remove when done
+          id = Sym.getOffset();
+        }
+        else {
+          assert("unsupported mcExpr" && false);
+        } 
+      }
+      else {
+        assert("no" && false);
+      }
+      return std::hash<unsigned long>() (prefix * id);
+  } 
+};
+
+struct MCOperandEqual {
+  enum Kind{reg=(1<<2)-1, immedidate=(1<<3)-1};
+  bool operator()(const MCOperand& lhs, const MCOperand& rhs) const
+  {  
+      if ((lhs.isReg() && rhs.isReg() && (lhs.getReg() == rhs.getReg()))  
+      ||  (lhs.isImm() && rhs.isImm() && (lhs.getImm() == rhs.getImm()))
+      ||  (lhs.isExpr() && rhs.isExpr() && (lhs.getExpr() == rhs.getExpr()))){ //FIXME this is just comparing ptrs
+          return true;
+      }
+      return false;
+  } 
+};
+
+std::unordered_map<llvm::MCOperand, IR::Value*, MCOperandHash, MCOperandEqual> mc_value_cache;
 
 // Should eventually be moved to utils.h
 // Will need more parameters to identify the exact type of oprand.
@@ -406,17 +450,161 @@ IR::Type* arm_type2alive(MCOperand ty){
   return nullptr;
 }
 
+void mc_add_identifier(const llvm::MCOperand &mc_val, IR::Value& v) {
+  mc_value_cache.emplace(mc_val, &v);
+}
+
+IR::Value* mc_get_operand(llvm::MCOperand mc_val) {
+  if (auto I = mc_value_cache.find(mc_val);
+      I != mc_value_cache.end())
+    return I->second;
+
+  auto ty = &get_int_type(32); // FIXME
+  if (!ty)
+    return nullptr;
+
+  // TODO
+  if (mc_val.isImm()){
+
+  }
+
+  assert("Unsupported operand" && false);
+
+  return nullptr;
+}
+
+// Visit a Vector MCInstWrapper
+class MCInstVisitor{
+  enum ARM_Instruction {Add=883};
+public:
+  static std::unique_ptr<IR::Instr> visit_error(MCInstWrapper& I) {
+    cout << "ERROR: Unsupported arm instruction: " ;
+    I.print();
+    return {};
+  }
+  // TODO add support for other arm instructions
+  static std::unique_ptr<IR::Instr> mc_visit(MCInstWrapper& I) {
+    // IR::BinOp::Op alive_op;
+    auto opcode = I.getOpcode();
+    if (opcode == ARM_Instruction::Add) {
+      auto& mc_inst = I.getMCInst();
+      assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
+      //for now only support adds with no shift
+      assert(mc_inst.getOperand(3).isImm() && (mc_inst.getOperand(3).getImm() == 0));
+      auto alive_op = IR::BinOp::Add;
+      auto ty = &get_int_type(32); // FIXME
+      auto a = mc_get_operand(mc_inst.getOperand(1));
+      auto b = mc_get_operand(mc_inst.getOperand(2));
+      if (!ty || !a || !b)
+        return visit_error(I);
+      assert(mc_inst.getOperand(0).isReg());
+      std::string operand_name = "%" + std::to_string(mc_inst.getOperand(0).getReg());
+      auto ret = make_unique<IR::BinOp>(*ty, move(operand_name), *a, *b, alive_op);
+      mc_add_identifier(mc_inst.getOperand(0),*ret.get());
+      return ret;
+    }
+    else {
+      return visit_error(I);
+    }
+    return nullptr;
+
+  }
+
+};
+
+// std::unique_ptr<IR::Instr> visit_error(MCInstWrapper& I) {
+//   cout << "ERROR: Unsupported arm instruction: " << I.print() << '\n';
+//   return {};
+// }
+// // TODO add support for other arm instructions
+// // FIXME the code will need to become more modular
+// 
+// std::unique_ptr<IR::Instr> mc_visit(MCInstWrapper& I) {
+//   IR::BinOp::Op alive_op;
+//   auto opcode = I.getOpcode();
+//   return nullptr;
+// }
+
+
+
 // FIXME evantually this should take the entire arm SSA function as an input. i.e., ArmFunction class
 // For now we pass a vector of MCInstWrapper which represents a single basicblock in SSA form 
-std::optional<IR::Function> arm2alive(MCFunction &mf) {
-  // identify function type by returning an IR::Type
+std::optional<IR::Function> arm2alive(MCFunction &MF, const llvm::DataLayout &DL) {
+  // only work with 
 
-  //Function Fn();
-  //return move(Fn);
-
-  // Possibly additional attributes inferred from debug info
+  // for now assume that return type is 32-bit integer
+  auto func_return_type = &get_int_type(32);
+  if (!func_return_type) 
+    return {};
   
-  return {};
+  IR::Function Fn(*func_return_type, MF.getName());
+  reset_state(Fn);
+  
+  // FIXME infer funciton attributes 
+  // Most likely need to emit and read the debug info
+  
+  auto& first_BB = MF.BBs[0];
+  auto& BB_mcinstrs = first_BB.getInstrs();
+  MCInst& first_instr = BB_mcinstrs[0].getMCInst();
+  // FIXME for now assuming arm function takes two args
+  // from the first 2 arguments of the first instruction in the MCFunction
+  for (unsigned idx = 1; idx < 3; ++idx) {
+    auto& operand = first_instr.getOperand(idx);
+    auto ty = arm_type2alive(operand);
+    if (!ty) 
+      return {};
+    assert(operand.isReg());
+    std::string operand_name = "%" + std::to_string(operand.getReg());
+    auto val = make_unique<IR::Input>(*ty, move(operand_name));
+    mc_add_identifier(operand, *val.get());
+    Fn.addInput(move(val));
+  }
+
+  // Create Fn's BBs
+  vector<pair<IR::BasicBlock*, MCBasicBlock*>> sorted_bbs;
+  
+  {
+    util::edgesTy edges;
+    vector<MCBasicBlock*> bbs;
+    unordered_map<MCBasicBlock*, unsigned> bb_map;
+    
+    auto bb_num = [&](MCBasicBlock* bb) {
+      auto[I, inserted] = bb_map.emplace(bb, bbs.size());
+      if (inserted) {
+        bbs.emplace_back(bb);
+        edges.emplace_back();
+      }
+      return I->second;
+    };
+
+    for (auto& bb : MF.BBs) {
+      auto n = bb_num(&bb);
+      for (auto it=bb.succBegin(); it!=bb.succEnd(); ++it) {
+        auto succ_ptr = *it;
+        auto n_dst = bb_num(succ_ptr);
+        edges[n].emplace(n_dst);
+      }
+    }
+
+    for (auto v : top_sort(edges)) {
+        sorted_bbs.emplace_back(&Fn.getBB(bbs[v]->getName()), bbs[v]);
+    }
+  }
+
+  for (auto& [alive_bb, mc_bb] : sorted_bbs) {
+    auto mc_instrs = mc_bb->getInstrs();
+    for (auto& mc_instr : mc_instrs) {
+      if (auto I = MCInstVisitor::mc_visit(mc_instr)) {
+        // auto alive_i = I.get();
+        alive_bb->addInstr(move(I));
+      }
+      else {
+        return {};
+      }
+    }    
+  }
+    
+  return move(Fn);
 }
 
 // TODO for now we're using this class to generate the arm assembly
@@ -506,7 +694,7 @@ public:
     // Assuming the first label encountered is the function's name
     // Need to figure out if there is a better name to get access to the function's name
     if (first_label) {
-      MF.setName(Symbol->getName().str());
+      MF.setName(Symbol->getName().str() + "-tgt");
       first_label = false;
     }
     CurLabel = Symbol->getName().str();
@@ -622,53 +810,6 @@ unsigned InsertAndFind(std::unordered_map<unsigned, unsigned>& var2num, unsigned
   }
   return 0;
 }
-
-struct MCOperandHash {
-  enum Kind{reg=(1<<2)-1, immedidate=(1<<3)-1, symbol=(1<<4)-1};
-  size_t operator()(const MCOperand& op) const
-  {  
-      unsigned prefix;
-      unsigned id;
-      if (op.isReg()){
-        prefix = Kind::reg;
-        id = op.getReg();
-      }
-      else if (op.isImm()){
-        prefix = Kind::immedidate;
-        id = op.getImm();
-      }
-      else if (op.isExpr()) {
-        prefix = Kind::symbol;
-        auto expr = op.getExpr();
-        if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
-          const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*expr);
-          const MCSymbol &Sym = SRE.getSymbol();
-          errs() << "label : " << Sym.getName() << '\n'; // FIXME remove when done
-          id = Sym.getOffset();
-        }
-        else {
-          assert("unsupported mcExpr" && false);
-        } 
-      }
-      else {
-        assert("no" && false);
-      }
-      return std::hash<unsigned long>() (prefix * id);
-  } 
-};
-
-struct MCOperandEqual {
-  enum Kind{reg=(1<<2)-1, immedidate=(1<<3)-1};
-  bool operator()(const MCOperand& lhs, const MCOperand& rhs) const
-  {  
-      if ((lhs.isReg() && rhs.isReg() && (lhs.getReg() == rhs.getReg()))  
-      ||  (lhs.isImm() && rhs.isImm() && (lhs.getImm() == rhs.getImm()))
-      ||  (lhs.isExpr() && rhs.isExpr() && (lhs.getExpr() == rhs.getExpr()))){ //FIXME this is just comparing ptrs
-          return true;
-      }
-      return false;
-  } 
-};
 
 struct SymValue{
   unsigned opcode{0};
@@ -908,6 +1049,7 @@ void backendTV() {
   
   cout << "\n\n";
   
+  Str.MF.BBs.pop_back(); // remove the last basic block corresponding to .Lfunc_end 
   Str.printBlocks();
   Str.generateSuccessors();
   Str.printCFG();
@@ -968,14 +1110,14 @@ void backendTV() {
     svar2num.emplace(dst, new_num);
 
     MCOperand new_dst;
-    if (last_writes[i]) { //no need to add version numbering to dst
-      new_dst = dst;
-    }
-    else {
+    // if (last_writes[i]) { //no need to add version numbering to dst
+    //   new_dst = dst;
+    // }
+    // else {
       new_dst = dst;
       assert(new_dst.isReg());
       new_dst.setReg(1000 + new_num); // FIXME
-    }
+    // }
 
     num2cvar.emplace(new_num, new_dst);
     //dst.setReg(new_dst.getReg());
@@ -1024,6 +1166,10 @@ void backendTV() {
     break;
   }
   AF->print(cout << "\n----------alive-ir-src.ll-file----------\n");
+
+  auto TF = arm2alive(MF, DL);
+  if (TF) 
+    TF->print(cout << "\n----------alive-lift-arm-target----------\n");
 /*
   auto SRC = findFunction(*M1, opt_src_fn);
   auto TGT = findFunction(*M1, opt_tgt_fn);
