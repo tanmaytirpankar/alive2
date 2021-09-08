@@ -479,6 +479,7 @@ class MCInstVisitor{
 public:
   static std::unique_ptr<IR::Instr> visit_error(MCInstWrapper& I) {
     cout << "ERROR: Unsupported arm instruction: " ;
+    exit(1); // for now lets exit the program if the arm instruction is not supported
     I.print();
     return {};
   }
