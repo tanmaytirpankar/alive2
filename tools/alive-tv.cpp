@@ -307,11 +307,26 @@ class MCInstWrapper{
 public:
   llvm::MCInst instr;
   MCInstWrapper(llvm::MCInst _instr) : instr(_instr) {}
-  auto& getMCInst() {return instr;}
+  llvm::MCInst& getMCInst() {return instr;}
   unsigned getOpcode() const {
     return instr.getOpcode(); 
   }
+  void print() const {
+    cout << "< MCInstWrapper " << getOpcode() << " ";
+    for (auto it=instr.begin(); it!=instr.end(); ++it) {
+      if (it->isReg()) {
+        cout << "<MCOperand Reg:" << it->getReg() << ">";
+      }
+      else if (it->isImm()) {
+        cout << "<MCOperand Imm:" << it->getImm() << ">";
+      }
+      cout << " ";
+      // TODO for other types
+    }
+    cout << ">\n"; 
+  }
   friend auto operator<=>(const MCInstWrapper&, const MCInstWrapper&) = default;
+
 };
 
 class MCBasicBlock {
@@ -322,11 +337,17 @@ public:
   std::vector<MCInstWrapper> Instrs;
   MCBasicBlock(std::string _Name) : Name(_Name) {}
   const std::string& getName() const{return Name;}
-  auto& getInstrs() const { return Instrs;}
-  void addInst(const MCInstWrapper& inst) { Instrs.push_back(inst); }
+  auto& getInstrs() { return Instrs;}
+  void addInst(MCInstWrapper& inst) { Instrs.push_back(inst); }
   void addSucc(MCBasicBlock* succ_block) { Succs.insert(succ_block); }
   auto succBegin() const { return Succs.begin(); }
   auto succEnd() const { return Succs.end(); }
+  auto size() const { return Instrs.size(); }
+  void print() const {
+    for (auto& inst: Instrs) {
+      inst.print();
+    }
+  }
 
 };
 
@@ -689,12 +710,14 @@ struct SymValueEqual {
   } 
 };
 
-
-auto FindReadBeforeWritten(std::vector<MCInst>& instrs) {
+// Return variable that are read before being written in the basic block
+auto FindReadBeforeWritten(std::vector<MCInst>& instrs, llvm::MCInstrAnalysis* Ana_ptr) {
   std::unordered_set<MCOperand,MCOperandHash,MCOperandEqual> reads;
   std::unordered_set<MCOperand,MCOperandHash,MCOperandEqual> writes;
   // TODO for writes, should only apply to instructions that update a destination register
   for (auto& I : instrs) {
+    if (Ana_ptr->isReturn(I))
+      continue;
     assert(I.getNumOperands() > 0 && "MCInst with zero operands");
     for (unsigned j = 1; j < I.getNumOperands(); ++j) {
       if (!writes.contains(I.getOperand(j))) 
@@ -703,23 +726,38 @@ auto FindReadBeforeWritten(std::vector<MCInst>& instrs) {
     writes.insert(I.getOperand(0));
   }
 
-  // for (auto& elem : reads) {
-  //   elem.dump();
-  // }
-  // cout << "writes\n";
-  // for (auto& elem : writes) {
-  //   elem.dump();
-  // }
+  return reads;
+}
+
+// Return variable that are read before being written in the basic block
+auto FindReadBeforeWritten(MCBasicBlock& block, llvm::MCInstrAnalysis* Ana_ptr) {
+  auto mcInstrs = block.getInstrs();
+  std::unordered_set<MCOperand,MCOperandHash,MCOperandEqual> reads;
+  std::unordered_set<MCOperand,MCOperandHash,MCOperandEqual> writes;
+  // TODO for writes, should only apply to instructions that update a destination register
+  for (auto& WI : mcInstrs) {
+    auto& I = WI.getMCInst();
+    if (Ana_ptr->isReturn(I))
+      continue;
+    assert(I.getNumOperands() > 0 && "MCInst with zero operands");
+    for (unsigned j = 1; j < I.getNumOperands(); ++j) {
+      if (!writes.contains(I.getOperand(j))) 
+        reads.insert(I.getOperand(j));
+    }
+    writes.insert(I.getOperand(0));
+  }
 
   return reads;
 }
+
+
+
 
 std::vector<bool> LastWrites(std::vector<MCInst>& instrs) {
   // TODO need to check for size of instrs in backend-tv and return error
   // otherwise these helper functions will fail in an ugly manner
   auto last_write = std::vector<bool>(instrs.size(), false);
   std::unordered_set<MCOperand,MCOperandHash,MCOperandEqual> willOverwrite;
-  // cout << "printing in reverse\n";
   unsigned index = instrs.size() - 1;
   // TODO should only apply to instructions that update a destination register
   for (auto& r_I : ranges::views::reverse(instrs)) {
@@ -730,12 +768,31 @@ std::vector<bool> LastWrites(std::vector<MCInst>& instrs) {
       willOverwrite.insert(r_I.getOperand(0));
     }
     index--;
-    // r_I.dump_pretty(llvm::errs());
-    // llvm::errs() << '\n';
   }
   return last_write;
 }
-//bool SymValExists(std::vector<unique_ptr<SymValue>>, )
+
+std::vector<bool> LastWrites(MCBasicBlock& block) {
+  // TODO need to check for size of instrs in backend-tv and return error
+  // otherwise these helper functions will fail in an ugly manner
+  auto mcInstrs = block.getInstrs();
+  auto last_write = std::vector<bool>(mcInstrs.size(), false);
+  std::unordered_set<MCOperand,MCOperandHash,MCOperandEqual> willOverwrite;
+  unsigned index = mcInstrs.size() - 1;
+  // TODO should only apply to instructions that update a destination register
+  for (auto& r_WI : ranges::views::reverse(mcInstrs)) {
+    auto& r_I = r_WI.getMCInst();
+    // TODO Check for dest reg 
+    // for now assume operand 0 is dest register 
+    if (!willOverwrite.contains(r_I.getOperand(0))) {
+      last_write[index] = true;
+      willOverwrite.insert(r_I.getOperand(0));
+    }
+    index--;
+  }
+  return last_write;
+}
+
 void backendTV() {
   if (!opt_file2.empty()) {
     cerr << "Please only specify one bitcode file when validating a backend\n";
@@ -865,7 +922,10 @@ void backendTV() {
   std::unordered_map<SymValue,unsigned,SymValueHash,SymValueEqual> value2num;
    
   cout << "finding readers and updating maps\n";
-  auto first_reads = FindReadBeforeWritten(Str.Insts);
+  auto& MF = Str.MF;
+  auto& first_BB = MF.BBs[0];
+  // FIXME for now we process first basic block only
+  auto first_reads = FindReadBeforeWritten(first_BB, Ana.get());
   for (auto& read_op : first_reads) {
     auto new_num = getId();
     svar2num.emplace(read_op, new_num);
@@ -874,18 +934,19 @@ void backendTV() {
   cout << "--------svar2num-----------\n";
   for (auto& [key,val]: svar2num) {
     key.dump();
-    cout << ", " << val << '\n';
+    errs() << ": " << val << '\n';
   }
   cout << "--------num2cvar----------\n";
   for (auto& [key,val]: num2cvar) {
-    cout << key << ", ";
+    errs() << key << ": ";
     val.dump();
-    cout << '\n';
+    errs() << '\n';
   }
   cout << "----------------------\n";
-  auto last_writes = LastWrites(Str.Insts);
-  for (unsigned i = 0; i < Str.Insts.size(); ++i) {
-    auto& cur_instr = Str.Insts[i];
+  auto last_writes = LastWrites(first_BB);
+  for (unsigned i = 0; i < first_BB.Instrs.size(); ++i) {
+    auto& cur_w_instr = first_BB.getInstrs()[i];
+    auto& cur_instr = cur_w_instr.getMCInst();
     // llvm::errs() << "<" << last_writes[i] << "> ";
     // cur_instr.dump_pretty(llvm::errs());
     // llvm::errs() << '\n';
@@ -934,10 +995,35 @@ void backendTV() {
   } 
 
   cout << "\n\nAfter LVN MCInsts:\n";
-  for (auto I : Str.Insts) {
-    I.dump_pretty(llvm::errs());
-    llvm::errs() << '\n';
+  
+  first_BB.print();
+  // Adjust the ret instruction's operand
+  // FIXME for now we're doing something pretty naive/wrong except in the simplest cases
+  auto& BB_mcinstrs = first_BB.getInstrs();
+  auto BB_size = first_BB.size();
+  assert(BB_size > 1);
+  MCInst& last_instr = BB_mcinstrs[BB_size-1].getMCInst();
+  MCInst& sec_last_instr = BB_mcinstrs[BB_size-2].getMCInst();
+  auto& dest_operand = sec_last_instr.getOperand(0);
+  auto& ret_operand = last_instr.getOperand(0);
+  assert(dest_operand.isReg());
+  ret_operand.setReg(dest_operand.getReg());
+
+  cout << "\n\nAfter adjusting return instruction:\n";
+  first_BB.print();
+  
+  cout << "\n\nConverting source llvm function to alive ir\n"; 
+  std::optional<IR::Function> AF;
+  // Only try to verify the first function in the module
+  for (auto &F : *M1.get()) {
+    if (F.isDeclaration())
+      continue;
+    if (!func_names.empty() && !func_names.count(F.getName().str()))
+      continue;
+    AF = llvm2alive(F,TLI.getTLI(F));
+    break;
   }
+  AF->print(cout << "\n----------alive-ir-src.ll-file----------\n");
 /*
   auto SRC = findFunction(*M1, opt_src_fn);
   auto TGT = findFunction(*M1, opt_tgt_fn);
