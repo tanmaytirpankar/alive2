@@ -304,8 +304,12 @@ llvm::Function *findFunction(llvm::Module &M, const string &FName) {
 
 static llvm::mc::RegisterMCTargetOptionsFlags MOF;
 
+// Class that wraps the underlying MCInst instruction
+// FIXME a lot has to change in this class since write
+// now it doens't really wrap the instruction well enough 
+// and it doesn't add additional functionality compared 
+// to MCInst
 class MCInstWrapper{
-  
 public:
   llvm::MCInst instr;
   MCInstWrapper(llvm::MCInst _instr) : instr(_instr) {}
@@ -334,6 +338,7 @@ public:
 
 };
 
+// Class to represent a basic block of machine instructions 
 class MCBasicBlock {
   std::string Name;
   using SetTy = llvm::DenseSet<MCBasicBlock*>;
@@ -356,6 +361,7 @@ public:
 
 };
 
+// Class to represent a machine fucntion
 class MCFunction {
   std::string Name;
   unsigned label_cnt{0};
@@ -437,9 +443,9 @@ struct MCOperandEqual {
 
 std::unordered_map<llvm::MCOperand, IR::Value*, MCOperandHash, MCOperandEqual> mc_value_cache;
 
-// Should eventually be moved to utils.h
+// TODO Should eventually be moved to utils.h
 // Will need more parameters to identify the exact type of oprand.
-// For now, we're just returning 32 bit ints
+// FIXME For now, we're just returning 32 bit ints
 IR::Type* arm_type2alive(MCOperand ty){
   if (ty.isReg()) {
     return &get_int_type(32);
@@ -473,7 +479,7 @@ IR::Value* mc_get_operand(llvm::MCOperand mc_val) {
   return nullptr;
 }
 
-// Visit a Vector MCInstWrapper
+
 class MCInstVisitor{
   enum ARM_Instruction {Add=883, Ret=3663};
 public:
@@ -483,7 +489,10 @@ public:
     I.print();
     return {};
   }
-  // TODO add support for other arm instructions
+  // Rudimentary function to visit an MCInstWrapper instructions and convert it to 
+  // alive IR Ideally would want a nicer designed interface, but I opted for 
+  // simplicity to get the initial prototype. 
+  // FIXME add support for more arm instructions
   static std::unique_ptr<IR::Instr> mc_visit(MCInstWrapper& I) {
     // IR::BinOp::Op alive_op;
     auto opcode = I.getOpcode();
@@ -522,26 +531,11 @@ public:
 
 };
 
-// std::unique_ptr<IR::Instr> visit_error(MCInstWrapper& I) {
-//   cout << "ERROR: Unsupported arm instruction: " << I.print() << '\n';
-//   return {};
-// }
-// // TODO add support for other arm instructions
-// // FIXME the code will need to become more modular
-// 
-// std::unique_ptr<IR::Instr> mc_visit(MCInstWrapper& I) {
-//   IR::BinOp::Op alive_op;
-//   auto opcode = I.getOpcode();
-//   return nullptr;
-// }
-
-
-
-// FIXME evantually this should take the entire arm SSA function as an input. i.e., ArmFunction class
-// For now we pass a vector of MCInstWrapper which represents a single basicblock in SSA form 
+// Convert an MCFucntion to IR::Function 
+// Adapted from llvm2alive_ in llvm2alive.cpp with some simplifying assumptions
+// FIXME for now, we are making a lot of simplifying assumptions like assuming types 
+// of arguments.
 std::optional<IR::Function> arm2alive(MCFunction &MF, const llvm::DataLayout &DL) {
-  // only work with 
-
   // for now assume that return type is 32-bit integer
   auto func_return_type = &get_int_type(32);
   if (!func_return_type) 
@@ -550,8 +544,8 @@ std::optional<IR::Function> arm2alive(MCFunction &MF, const llvm::DataLayout &DL
   IR::Function Fn(*func_return_type, MF.getName());
   reset_state(Fn);
   
-  // FIXME infer funciton attributes 
-  // Most likely need to emit and read the debug info
+  // FIXME infer function attributes 
+  // Most likely need to emit and read the debug info from the MCStreamer 
   
   auto& first_BB = MF.BBs[0];
   auto& BB_mcinstrs = first_BB.getInstrs();
@@ -617,8 +611,17 @@ std::optional<IR::Function> arm2alive(MCFunction &MF, const llvm::DataLayout &DL
   return move(Fn);
 }
 
-// TODO for now we're using this class to generate the arm assembly
-// cfg. might want to move this implementation somewhere else
+// We're overriding MCStreamerWrapper to generate an MCFunction
+// from the arm assembly. MCStreamerWrapper provides callbacks to handle
+// different parts of the assembly file. The main callbacks that we're 
+// using right now are emitInstruction and emitLabel to access the 
+// instruction and labels in the arm assembly. 
+//
+// FIXME for now, we're using this class to generate the MCFunction and 
+// also print the MCFunction. we should move this implementation somewhere else
+// TODO we'll need to implement some the other callbacks to extract more information
+// from the asm file. For example, it would be useful to extract debug info to
+// determine the number of function parameters.
 class MCStreamerWrapper final : public llvm::MCStreamer {
 enum ASMLine{none=0, label=1, non_term_instr=2, terminator=3};
 private:
@@ -729,8 +732,9 @@ public:
     }
     UNREACHABLE();
   }
-  // call after MF with basic block is constructed to generate the successors for 
-  // each basic block
+
+  // Only call after MF with Basicblocks is constructed to generate the 
+  // successors for each basic block
   void generateSuccessors() {
     cout << "generating basic block successors" << '\n';
     for (unsigned i=0; i < MF.BBs.size()-1; ++i) {
@@ -781,10 +785,8 @@ public:
     for (auto& block: MF.BBs) {
       cout << block.getName() << ": [";
       for (auto it=block.succBegin(); it!=block.succEnd(); ++it) {
-        
         auto successor = *it;
         cout << successor->getName() << ", ";
-        //cout << it->getName() << ", ";
       }
       cout << "]\n";
     }
@@ -796,40 +798,20 @@ public:
   */
 };
 
-
-
-struct CanonVal{
-  static unsigned id_;
-  unsigned id{0};
-  std::string prefix;
-  void assignId() {
-    id = ++id_;
-  }
-};
-
 static unsigned id_{0};
 unsigned getId() {
   return ++id_;
 }
 
-unsigned InsertAndFind(std::unordered_map<unsigned, unsigned>& var2num, unsigned var){
-  if (var2num.count(var) == 0) {
-    auto new_value_num = getId();
-    var2num.emplace(var, new_value_num);
-    return new_value_num;
-  }
-  return 0;
-}
-
+// Used for performing LVN
 struct SymValue{
   unsigned opcode{0};
   //std::vector<MCOperand> operands;
   std::vector<unsigned> operands;
-  //SymValue()
-  //:id(++id_) {}
-  
 };
 
+// FIXME we should probably remove these and go with the default <=>
+// implementation as this implementation is neither nice nor performant
 struct SymValueHash {
   size_t operator()(const SymValue& op) const
   {  
@@ -848,12 +830,10 @@ struct SymValueEqual {
   enum Kind{reg=(1<<2)-1, immedidate=(1<<3)-1};
   bool operator()(const SymValue& lhs, const SymValue& rhs) const
   { 
-    // auto mcop_eq = MCOperandEqual();
     if (lhs.opcode != rhs.opcode || lhs.operands.size() != rhs.operands.size()) {
       return false;
     } 
     for (unsigned i=0; i < rhs.operands.size(); ++i) {
-      //if (!mcop_eq(lhs.operands[i], rhs.operands[i]))
       if (lhs.operands[i] != rhs.operands[i])
         return false;
     } 
@@ -861,7 +841,7 @@ struct SymValueEqual {
   } 
 };
 
-// Return variable that are read before being written in the basic block
+// Return variables that are read before being written in the basic block
 auto FindReadBeforeWritten(std::vector<MCInst>& instrs, llvm::MCInstrAnalysis* Ana_ptr) {
   std::unordered_set<MCOperand,MCOperandHash,MCOperandEqual> reads;
   std::unordered_set<MCOperand,MCOperandHash,MCOperandEqual> writes;
@@ -880,7 +860,7 @@ auto FindReadBeforeWritten(std::vector<MCInst>& instrs, llvm::MCInstrAnalysis* A
   return reads;
 }
 
-// Return variable that are read before being written in the basic block
+// Return variable that are read before being written in the basicblock
 auto FindReadBeforeWritten(MCBasicBlock& block, llvm::MCInstrAnalysis* Ana_ptr) {
   auto mcInstrs = block.getInstrs();
   std::unordered_set<MCOperand,MCOperandHash,MCOperandEqual> reads;
@@ -900,9 +880,6 @@ auto FindReadBeforeWritten(MCBasicBlock& block, llvm::MCInstrAnalysis* Ana_ptr) 
 
   return reads;
 }
-
-
-
 
 std::vector<bool> LastWrites(std::vector<MCInst>& instrs) {
   // TODO need to check for size of instrs in backend-tv and return error
@@ -943,6 +920,8 @@ std::vector<bool> LastWrites(MCBasicBlock& block) {
   }
   return last_write;
 }
+
+// Perform verification on two alive functions
 Results backend_verify(std::optional<IR::Function>& fn1, 
                        std::optional<IR::Function>& fn2,
                        llvm::TargetLibraryInfoWrapperPass &TLI,
@@ -987,9 +966,8 @@ Results backend_verify(std::optional<IR::Function>& fn1,
     r.status = Results::CORRECT;
   }
   return r;
-
-
 }
+
 bool backendTV() {
   if (!opt_file2.empty()) {
     cerr << "Please only specify one bitcode file when validating a backend\n";
@@ -1090,7 +1068,8 @@ bool backendTV() {
   Parser->setTargetParser(*TAP);
   Parser->Run(true); // ??
 
-  // FIXME Nader your code here
+  // FIXME remove printing of the mcInsts
+  // For now, print the parsed instructions for debug puropses
   cout << "\n\nPretty Parsed MCInsts:\n";
   for (auto I : Str.Insts) {
     I.dump_pretty(llvm::errs(), IPtemp.get(), " ", MRI.get());
@@ -1109,7 +1088,15 @@ bool backendTV() {
   Str.printBlocks();
   Str.generateSuccessors();
   Str.printCFG();
-  // FIXME for now, exit if the function has more than 2 blocks
+
+  
+  // In this part, we want to use lvn on each basic block and use 
+  // the SSA construction algorithm described in 
+  // https://link.springer.com/chapter/10.1007/978-3-642-37051-9_6
+  // to generate SSA form that can be converted into alive IR
+  // FIXME For now, lvn is implemented, but the SSA construction algorithm is 
+  // not. 
+  // Hence, for now, we exit if the function has more than 2 blocks
   if (Str.MF.BBs.size() > 2) {
     cout << "ERROR: we don't generate SSA for this type of arm function yet" << '\n';
     return false;
@@ -1145,9 +1132,6 @@ bool backendTV() {
   for (unsigned i = 0; i < first_BB.Instrs.size(); ++i) {
     auto& cur_w_instr = first_BB.getInstrs()[i];
     auto& cur_instr = cur_w_instr.getMCInst();
-    // llvm::errs() << "<" << last_writes[i] << "> ";
-    // cur_instr.dump_pretty(llvm::errs());
-    // llvm::errs() << '\n';
     auto sym_val = SymValue();
     // TODO move this to SymValue CTOR and also distinguish operand selection based on opcode
     // Right now we assume operand 0 is destination and operands 1..n are used
@@ -1172,7 +1156,9 @@ bool backendTV() {
     // else {
       new_dst = dst;
       assert(new_dst.isReg());
-      new_dst.setReg(1000 + new_num); // FIXME
+      // FIXME I'm offsetting the register number by 1000
+      // to use new values. this has to be fixed by updating MCInstWrapper
+      new_dst.setReg(1000 + new_num); 
     // }
 
     num2cvar.emplace(new_num, new_dst);
@@ -1192,11 +1178,13 @@ bool backendTV() {
     }
   } 
 
-  cout << "\n\nAfter LVN MCInsts:\n";
+  cout << "\n\nAfter performing LVN:\n";
   
   first_BB.print();
   // Adjust the ret instruction's operand
-  // FIXME for now we're doing something pretty naive/wrong except in the simplest cases
+  // FIXME for now, we're doing something pretty naive/wrong except in the simplest cases
+  // I'm assuming that the destination for the second to last instruction is the return 
+  // value of the function.
   auto& BB_mcinstrs = first_BB.getInstrs();
   auto BB_size = first_BB.size();
   assert(BB_size > 1);
@@ -1401,7 +1389,7 @@ convenient way to demonstrate an existing optimizer bug.
   llvm::cl::ParseCommandLineOptions(argc, argv, Usage);
 
   if (opt_backend_tv) {
-    backendTV();
+    backendTV(); // this is the function we use to perform arm translation validation
   } else {
     bitcodeTV();
   }
