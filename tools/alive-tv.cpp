@@ -346,6 +346,7 @@ class MCBasicBlock {
   std::string Name;
   using SetTy = llvm::DenseSet<MCBasicBlock *>;
   SetTy Succs;
+  SetTy Preds;
 
 public:
   std::vector<MCInstWrapper> Instrs;
@@ -353,24 +354,43 @@ public:
   const std::string &getName() const {
     return Name;
   }
+
   auto &getInstrs() {
     return Instrs;
   }
+
   void addInst(MCInstWrapper &inst) {
     Instrs.push_back(inst);
   }
+
   void addSucc(MCBasicBlock *succ_block) {
     Succs.insert(succ_block);
   }
+
+  void addPred(MCBasicBlock *pred_block) {
+    Preds.insert(pred_block);
+  }
+
+  auto predBegin() {
+    return Preds.begin();
+  }
+
+  auto predEnd() {
+    return Preds.end();
+  } 
+
   auto succBegin() const {
     return Succs.begin();
   }
+
   auto succEnd() const {
     return Succs.end();
   }
+
   auto size() const {
     return Instrs.size();
   }
+
   void print() const {
     for (auto &inst : Instrs) {
       inst.print();
@@ -792,6 +812,23 @@ public:
     }
   }
 
+  // Remove empty basic blocks from the machine function
+  void removeEmptyBlocks() {
+    // TODO
+  }
+
+  // Only call after generateSucessors() has been called
+  // generate predecessors for each basic block in a MCFunction
+  void generatePredecessors() {
+    cout << "generating basic block predecessors" << '\n';
+    for (auto &block : MF.BBs) {
+      for (auto it = block.succBegin(); it != block.succEnd(); ++it) {
+        auto successor = *it;
+        successor->addPred(&block);
+      }
+    }
+  }
+
   void printBlocks() {
     cout << "#of Blocks = " << MF.BBs.size() << '\n';
     cout << "-------------\n";
@@ -808,11 +845,24 @@ public:
 
   void printCFG() {
     cout << "printing arm function CFG" << '\n';
+    cout << "successors" << '\n';
     for (auto &block : MF.BBs) {
       cout << block.getName() << ": [";
       for (auto it = block.succBegin(); it != block.succEnd(); ++it) {
         auto successor = *it;
         cout << successor->getName() << ", ";
+        
+      }
+      cout << "]\n";
+    }
+
+    cout << "predecessors" << '\n';
+    for (auto &block : MF.BBs) {
+      cout << block.getName() << ": [";
+      for (auto it = block.predBegin(); it != block.predEnd(); ++it) {
+        auto predecessor = *it;
+        cout << predecessor->getName() << ", ";
+        
       }
       cout << "]\n";
     }
@@ -1114,10 +1164,11 @@ bool backendTV() {
 
   cout << "\n\n";
 
-  Str.MF.BBs
-      .pop_back(); // remove the last basic block corresponding to .Lfunc_end
   Str.printBlocks();
   Str.generateSuccessors();
+  Str.generatePredecessors();
+  Str.MF.BBs
+    .pop_back(); // remove the last basic block corresponding to .Lfunc_end
   Str.printCFG();
 
   // In this part, we want to use lvn on each basic block and use
@@ -1126,8 +1177,8 @@ bool backendTV() {
   // to generate SSA form that can be converted into alive IR
   // FIXME For now, lvn is implemented, but the SSA construction algorithm is
   // not.
-  // Hence, for now, we exit if the function has more than 2 blocks
-  if (Str.MF.BBs.size() > 2) {
+  // Hence, for now, we exit if the function has more than 1 block
+  if (Str.MF.BBs.size() > 1) {
     cout << "ERROR: we don't generate SSA for this type of arm function yet"
          << '\n';
     return false;
