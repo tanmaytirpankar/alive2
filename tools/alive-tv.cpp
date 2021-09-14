@@ -814,7 +814,8 @@ public:
 
   // Remove empty basic blocks from the machine function
   void removeEmptyBlocks() {
-    // TODO
+    cout << "removing empty basic blocks" << '\n';
+    std::erase_if(MF.BBs, [](MCBasicBlock b){return b.size() == 0;});
   }
 
   // Only call after generateSucessors() has been called
@@ -1165,10 +1166,10 @@ bool backendTV() {
   cout << "\n\n";
 
   Str.printBlocks();
+  Str.removeEmptyBlocks(); // remove empty basic blocks, including .Lfunc_end
+  Str.printBlocks();
   Str.generateSuccessors();
   Str.generatePredecessors();
-  Str.MF.BBs
-    .pop_back(); // remove the last basic block corresponding to .Lfunc_end
   Str.printCFG();
 
   // In this part, we want to use lvn on each basic block and use
