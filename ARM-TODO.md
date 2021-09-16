@@ -6,7 +6,10 @@ Many things required to be done. Listing things things that come to mind at the 
 
 - process the debug info in the assembly parser
 
-- handle functions with different number of parameter (either using the src IR file or from debug info)
+- handle functions with different number of parameters (either using the src IR file or from debug info)
+    - for now, lets use the IR fileand support simple parameters passed thru registers
 
-- handle different types 
+- handle different types
+
+- investigate if arm asl can be used to lift arm instructions to alive IR
 

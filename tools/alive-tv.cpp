@@ -520,22 +520,24 @@ class MCInstVisitor {
   // FIXME, these opcode number change accross llvm versions, so we need
   // a more stable way to distinguish instructions. Probably using
   // llvm::MCInstPrinter and updating MCInstWrapper
-  enum ARM_Instruction { Add = 885, Ret = 3665 };
+  enum ARM_Instruction { Add = 885, Adds = 870, Sub = 5115, Subs = 5108, Ret = 3665 };
 
 public:
-  static std::unique_ptr<IR::Instr> visit_error(MCInstWrapper &I) {
+  static std::vector<std::unique_ptr<IR::Instr>> visit_error(MCInstWrapper &I) {
+    std::vector<std::unique_ptr<IR::Instr>> res; 
     cout << "ERROR: Unsupported arm instruction: ";
     exit(1); // for now lets exit the program if the arm instruction is not
              // supported
     I.print();
-    return {};
+    return res;
   }
   // Rudimentary function to visit an MCInstWrapper instructions and convert it
   // to alive IR Ideally would want a nicer designed interface, but I opted for
   // simplicity to get the initial prototype.
   // FIXME add support for more arm instructions
-  static std::unique_ptr<IR::Instr> mc_visit(MCInstWrapper &I) {
-    // IR::BinOp::Op alive_op;
+  // FIXME generate code for setting NZCV flags and other changes to arm PSTATE
+  static std::vector<std::unique_ptr<IR::Instr>> mc_visit(MCInstWrapper &I) {
+    std::vector<std::unique_ptr<IR::Instr>> res; 
     auto opcode = I.getOpcode();
     auto &mc_inst = I.getMCInst();
     if (opcode == ARM_Instruction::Add) {
@@ -555,7 +557,47 @@ public:
       auto ret =
           make_unique<IR::BinOp>(*ty, move(operand_name), *a, *b, alive_op);
       mc_add_identifier(mc_inst.getOperand(0), *ret.get());
-      return ret;
+      res.push_back(move(ret));
+      return res;
+    } else if (opcode == ARM_Instruction::Adds) {
+      // FIXME add support for updating N Z C bits
+      assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
+      // for now only support adds with no shift
+      assert(mc_inst.getOperand(3).isImm() &&
+             (mc_inst.getOperand(3).getImm() == 0));
+      auto alive_op = IR::BinOp::SAdd_Overflow;
+      auto ty = &get_int_type(32); // FIXME
+      auto a = mc_get_operand(mc_inst.getOperand(1));
+      auto b = mc_get_operand(mc_inst.getOperand(2));
+      if (!ty || !a || !b)
+        return visit_error(I);
+      assert(mc_inst.getOperand(0).isReg());
+      std::string operand_name =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg());
+      auto ret =
+          make_unique<IR::BinOp>(*ty, move(operand_name), *a, *b, alive_op);
+      mc_add_identifier(mc_inst.getOperand(0), *ret.get());
+      res.push_back(move(ret));
+      return res;
+    } else if (opcode == ARM_Instruction::Sub) {
+      assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
+      // for now only support subs with no shift
+      assert(mc_inst.getOperand(3).isImm() &&
+             (mc_inst.getOperand(3).getImm() == 0));
+      auto alive_op = IR::BinOp::Sub;
+      auto ty = &get_int_type(32); // FIXME
+      auto a = mc_get_operand(mc_inst.getOperand(1));
+      auto b = mc_get_operand(mc_inst.getOperand(2));
+      if (!ty || !a || !b)
+        return visit_error(I);
+      assert(mc_inst.getOperand(0).isReg());
+      std::string operand_name =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg());
+      auto ret =
+          make_unique<IR::BinOp>(*ty, move(operand_name), *a, *b, alive_op);
+      mc_add_identifier(mc_inst.getOperand(0), *ret.get());
+      res.push_back(move(ret));
+      return res;
     } else if (opcode == ARM_Instruction::Ret) {
       // for now we're assuming that the function returns an integer value
       assert(mc_inst.getNumOperands() == 1);
@@ -563,11 +605,12 @@ public:
       auto val = mc_get_operand(mc_inst.getOperand(0));
       if (!ty || !val)
         return visit_error(I);
-      return make_unique<IR::Return>(*ty, *val);
+      res.push_back(make_unique<IR::Return>(*ty, *val));
+      return res;
     } else {
       return visit_error(I);
     }
-    return nullptr;
+    return res;
   }
 };
 
@@ -639,11 +682,13 @@ std::optional<IR::Function> arm2alive(MCFunction &MF,
   for (auto &[alive_bb, mc_bb] : sorted_bbs) {
     auto mc_instrs = mc_bb->getInstrs();
     for (auto &mc_instr : mc_instrs) {
-      if (auto I = MCInstVisitor::mc_visit(mc_instr)) {
-        // auto alive_i = I.get();
-        alive_bb->addInstr(move(I));
-      } else {
+      auto I_vect = MCInstVisitor::mc_visit(mc_instr); 
+      if (I_vect.empty())
         return {};
+      else {
+        for (auto& I : I_vect) {
+          alive_bb->addInstr(move(I));
+        }
       }
     }
   }
