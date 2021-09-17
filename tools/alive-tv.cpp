@@ -479,8 +479,38 @@ struct MCOperandEqual {
   }
 };
 
-std::unordered_map<llvm::MCOperand, IR::Value *, MCOperandHash, MCOperandEqual>
-    mc_value_cache;
+class AMCValue {
+  llvm::MCOperand operand;
+  unsigned id;
+public:
+  AMCValue(llvm::MCOperand _operand, unsigned _id) : operand(_operand), id(_id) {}
+  unsigned get_id() const { return id;}
+  auto& get_operand() const {return operand;}
+};
+
+struct AMCValueHash {
+  size_t operator()(const AMCValue &op) const {
+    MCOperandHash h;  
+    auto op_hash = h(op.get_operand());
+    return std::hash<unsigned long>()(op_hash + op.get_id());
+  }
+};
+
+struct AMCValueEqual {
+  bool operator()(const AMCValue &lhs, const AMCValue &rhs) const {
+    MCOperandEqual op_eq;
+    return op_eq(lhs.get_operand(), rhs.get_operand()) && (lhs.get_id() == rhs.get_id());
+  }
+};
+
+
+std::unordered_map<llvm::MCOperand, unsigned, MCOperandHash, MCOperandEqual>
+    mc_operand_id;
+
+// Mapping between machine value and IR::value used when translating asm to Alive IR
+ std::unordered_map<AMCValue, IR::Value *, AMCValueHash, AMCValueEqual>
+     mc_value_cache;
+
 
 // TODO Should eventually be moved to utils.h
 // Will need more parameters to identify the exact type of oprand.
@@ -493,22 +523,65 @@ IR::Type *arm_type2alive(MCOperand ty) {
   }
   return nullptr;
 }
-
-void mc_add_identifier(const llvm::MCOperand &mc_val, IR::Value &v) {
-  mc_value_cache.emplace(mc_val, &v);
+//std::optional<unsigned>
+unsigned get_cur_op_id(llvm::MCOperand &mc_op) {
+  if (mc_op.isImm()) {
+    return 0;
+  }
+  else if (mc_op.isReg()) {
+    auto I = mc_operand_id.find(mc_op);
+    assert(I != mc_operand_id.end());
+    return mc_operand_id[mc_op];
+  }
+  else {
+    cout << "ERROR: [get_cur_op_id] unsupported MCOperand type" << '\n';
+    exit(0);
+  }
 }
 
-IR::Value *mc_get_operand(llvm::MCOperand mc_val) {
+unsigned get_new_op_id(llvm::MCOperand &mc_op) {
+  if (mc_op.isImm()) {
+    return 0;
+  }
+  else if (mc_op.isReg()) {
+    auto I = mc_operand_id.find(mc_op);
+    if (I == mc_operand_id.end()) {
+      mc_operand_id.emplace(mc_op, 0);
+      return 0;
+    }
+    else {
+      mc_operand_id[mc_op]+=1;
+      return mc_operand_id[mc_op];
+    }
+  }
+  else {
+    cout << "ERROR: [get_new_op_id] unsupported MCOperand type" << '\n';
+    exit(0);
+  }
+}
+
+void mc_add_identifier(llvm::MCOperand &mc_op, unsigned op_id, IR::Value &v) {
+  assert(mc_op.isReg()); // FIXME
+  cout << "add_identifier(reg_num = " << mc_op.getReg() 
+  << ", id = " <<  op_id << ")" << '\n';
+  auto mc_val = AMCValue(mc_op, op_id);
+  mc_value_cache.emplace(mc_val, &v);
+}
+  
+IR::Value *mc_get_operand(AMCValue mc_val) {
   if (auto I = mc_value_cache.find(mc_val); I != mc_value_cache.end())
     return I->second;
+  else {
+    cout << "value not found in cache\n";
+  }
 
   auto ty = &get_int_type(32); // FIXME
   if (!ty)
     return nullptr;
 
   // TODO
-  if (mc_val.isImm()) {
-  }
+  // if (mc_val.isImm()) {
+  // }
 
   assert("Unsupported operand" && false);
 
@@ -520,7 +593,8 @@ class MCInstVisitor {
   // FIXME, these opcode number change accross llvm versions, so we need
   // a more stable way to distinguish instructions. Probably using
   // llvm::MCInstPrinter and updating MCInstWrapper
-  enum ARM_Instruction { Add = 885, Adds = 870, Sub = 5115, Subs = 5108, Ret = 3665 };
+  enum ARM_Instruction { Add = 885, Adds = 870, Sub = 5115, Subs = 5108, SBF=3830, 
+                         EOR = 1505, CSEL = 1423 , Ret = 3665 };
 
 public:
   static std::vector<std::unique_ptr<IR::Instr>> visit_error(MCInstWrapper &I) {
@@ -547,8 +621,10 @@ public:
              (mc_inst.getOperand(3).getImm() == 0));
       auto alive_op = IR::BinOp::Add;
       auto ty = &get_int_type(32); // FIXME
-      auto a = mc_get_operand(mc_inst.getOperand(1));
-      auto b = mc_get_operand(mc_inst.getOperand(2));
+      auto mc_val_lhs = AMCValue(mc_inst.getOperand(1), get_cur_op_id(mc_inst.getOperand(1)));
+      auto mc_val_rhs = AMCValue(mc_inst.getOperand(2), get_cur_op_id(mc_inst.getOperand(2)));
+      auto a = mc_get_operand(mc_val_lhs);
+      auto b = mc_get_operand(mc_val_rhs);
       if (!ty || !a || !b)
         return visit_error(I);
       assert(mc_inst.getOperand(0).isReg());
@@ -556,38 +632,62 @@ public:
           "%" + std::to_string(mc_inst.getOperand(0).getReg());
       auto ret =
           make_unique<IR::BinOp>(*ty, move(operand_name), *a, *b, alive_op);
-      mc_add_identifier(mc_inst.getOperand(0), *ret.get());
+      mc_add_identifier(mc_inst.getOperand(0), get_new_op_id(mc_inst.getOperand(0)), *ret.get());
       res.push_back(move(ret));
       return res;
     } else if (opcode == ARM_Instruction::Adds) {
-      // FIXME add support for updating N Z C bits
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
       // for now only support adds with no shift
       assert(mc_inst.getOperand(3).isImm() &&
              (mc_inst.getOperand(3).getImm() == 0));
       auto alive_op = IR::BinOp::SAdd_Overflow;
       auto ty = &get_int_type(32); // FIXME
-      auto a = mc_get_operand(mc_inst.getOperand(1));
-      auto b = mc_get_operand(mc_inst.getOperand(2));
+      auto mc_val_lhs = AMCValue(mc_inst.getOperand(1), get_cur_op_id(mc_inst.getOperand(1)));
+      auto mc_val_rhs = AMCValue(mc_inst.getOperand(2), get_cur_op_id(mc_inst.getOperand(2)));
+      auto a = mc_get_operand(mc_val_lhs);
+      auto b = mc_get_operand(mc_val_rhs);
       if (!ty || !a || !b)
         return visit_error(I);
       assert(mc_inst.getOperand(0).isReg());
+      auto dst_id = get_new_op_id(mc_inst.getOperand(0));
       std::string operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg());
-      auto ret =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+      auto ret_1 =
           make_unique<IR::BinOp>(*ty, move(operand_name), *a, *b, alive_op);
-      mc_add_identifier(mc_inst.getOperand(0), *ret.get());
-      res.push_back(move(ret));
+      mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret_1.get());
+      
+      // FIXME add a cache for value names
+      dst_id = get_new_op_id(mc_inst.getOperand(0));
+      operand_name =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+      auto extract_ov_inst =
+          make_unique<IR::ExtractValue>(*ty, move(operand_name), *ret_1.get());
+      mc_add_identifier(mc_inst.getOperand(0), dst_id, *extract_ov_inst.get());
+      extract_ov_inst->addIdx(1);
+      // FIXME add a map that from each flag to its lates IR::Value*
+      dst_id = get_new_op_id(mc_inst.getOperand(0));
+      operand_name =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+      auto extract_add_inst =
+          make_unique<IR::ExtractValue>(*ty, move(operand_name), *ret_1.get());
+      mc_add_identifier(mc_inst.getOperand(0), dst_id, *extract_add_inst.get());
+      extract_add_inst->addIdx(0);
+
+      res.push_back(move(ret_1));
+      res.push_back(move(extract_ov_inst));
+      res.push_back(move(extract_add_inst));
       return res;
     } else if (opcode == ARM_Instruction::Sub) {
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
-      // for now only support subs with no shift
+      // for now only support adds with no shift
       assert(mc_inst.getOperand(3).isImm() &&
              (mc_inst.getOperand(3).getImm() == 0));
       auto alive_op = IR::BinOp::Sub;
       auto ty = &get_int_type(32); // FIXME
-      auto a = mc_get_operand(mc_inst.getOperand(1));
-      auto b = mc_get_operand(mc_inst.getOperand(2));
+      auto mc_val_lhs = AMCValue(mc_inst.getOperand(1), get_cur_op_id(mc_inst.getOperand(1)));
+      auto mc_val_rhs = AMCValue(mc_inst.getOperand(2), get_cur_op_id(mc_inst.getOperand(2)));
+      auto a = mc_get_operand(mc_val_lhs);
+      auto b = mc_get_operand(mc_val_rhs);
       if (!ty || !a || !b)
         return visit_error(I);
       assert(mc_inst.getOperand(0).isReg());
@@ -595,14 +695,73 @@ public:
           "%" + std::to_string(mc_inst.getOperand(0).getReg());
       auto ret =
           make_unique<IR::BinOp>(*ty, move(operand_name), *a, *b, alive_op);
-      mc_add_identifier(mc_inst.getOperand(0), *ret.get());
+      mc_add_identifier(mc_inst.getOperand(0), get_new_op_id(mc_inst.getOperand(0)), *ret.get());
+      res.push_back(move(ret));
+      return res;
+    } else if (opcode == ARM_Instruction::SBF) {
+      assert(mc_inst.getNumOperands() == 4); // dst, src, imm1, imm2
+      assert(mc_inst.getOperand(2).isImm() &&
+             mc_inst.getOperand(3).isImm());
+      auto alive_op = IR::BinOp::AShr;
+      auto ty = &get_int_type(32); // FIXME
+      auto mc_val_lhs = AMCValue(mc_inst.getOperand(1), get_cur_op_id(mc_inst.getOperand(1)));
+      auto a = mc_get_operand(mc_val_lhs);
+      auto shift_amt = make_intconst(mc_inst.getOperand(2).getImm(), 32);
+      if (!ty || !a || !shift_amt)
+        return visit_error(I);
+      auto dst_id = get_new_op_id(mc_inst.getOperand(0));
+      std::string operand_name =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+      auto ret =
+          make_unique<IR::BinOp>(*ty, move(operand_name), *a, *shift_amt, alive_op);
+      mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret.get());
+      res.push_back(move(ret));
+      return res;
+    } else if (opcode == ARM_Instruction::EOR) {
+      assert(mc_inst.getNumOperands() == 3); // dst, src, imm
+      assert(mc_inst.getOperand(1).isReg() && mc_inst.getOperand(2).isImm());
+      auto alive_op = IR::BinOp::Xor;
+      auto ty = &get_int_type(32); // FIXME
+      auto mc_val_lhs = AMCValue(mc_inst.getOperand(1), get_cur_op_id(mc_inst.getOperand(1)));
+      auto a = mc_get_operand(mc_val_lhs);
+      auto imm_val = make_intconst(mc_inst.getOperand(2).getImm(), 32); // FIXME, need to decode immediate val
+      if (!ty || !a || !imm_val)
+        return visit_error(I);
+      auto dst_id = get_new_op_id(mc_inst.getOperand(0));
+      std::string operand_name =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+      auto ret =
+          make_unique<IR::BinOp>(*ty, move(operand_name), *a, *imm_val, alive_op);
+      mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret.get());
+      res.push_back(move(ret));
+      return res;
+    } else if (opcode == ARM_Instruction::CSEL) {
+      assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, cond
+      // TODO decode condition and find the approprate cond val
+      assert(mc_inst.getOperand(1).isReg() && mc_inst.getOperand(2).isReg());
+      assert(mc_inst.getOperand(3).isImm());
+      auto ty = &get_int_type(32); // FIXME
+      auto mc_val_lhs = AMCValue(mc_inst.getOperand(1), get_cur_op_id(mc_inst.getOperand(1)));
+      auto mc_val_rhs = AMCValue(mc_inst.getOperand(2), get_cur_op_id(mc_inst.getOperand(2)));
+      auto a = mc_get_operand(mc_val_lhs);
+      auto b = mc_get_operand(mc_val_rhs);
+      auto imm_cond = make_intconst(1, 1);
+      if (!ty || !a || !b)
+        return visit_error(I);
+      auto dst_id = get_new_op_id(mc_inst.getOperand(0));
+      std::string operand_name =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+      auto ret =
+          make_unique<IR::Select>(*ty, move(operand_name), *imm_cond, *a, *b);
+      mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret.get());
       res.push_back(move(ret));
       return res;
     } else if (opcode == ARM_Instruction::Ret) {
       // for now we're assuming that the function returns an integer value
       assert(mc_inst.getNumOperands() == 1);
       auto ty = &get_int_type(32); // FIXME
-      auto val = mc_get_operand(mc_inst.getOperand(0));
+      AMCValue mc_val_res{mc_inst.getOperand(0), get_cur_op_id(mc_inst.getOperand(0))};
+      auto val = mc_get_operand(mc_val_res);
       if (!ty || !val)
         return visit_error(I);
       res.push_back(make_unique<IR::Return>(*ty, *val));
@@ -644,7 +803,7 @@ std::optional<IR::Function> arm2alive(MCFunction &MF,
     assert(operand.isReg());
     std::string operand_name = "%" + std::to_string(operand.getReg());
     auto val = make_unique<IR::Input>(*ty, move(operand_name));
-    mc_add_identifier(operand, *val.get());
+    mc_add_identifier(operand, get_new_op_id(operand), *val.get());
     Fn.addInput(move(val));
   }
 
@@ -683,8 +842,11 @@ std::optional<IR::Function> arm2alive(MCFunction &MF,
     auto mc_instrs = mc_bb->getInstrs();
     for (auto &mc_instr : mc_instrs) {
       auto I_vect = MCInstVisitor::mc_visit(mc_instr); 
-      if (I_vect.empty())
+      if (I_vect.empty()) {
+        Fn.print(cout << "\n----------partially-lifted-arm-target----------\n");
         return {};
+      }
+        
       else {
         for (auto& I : I_vect) {
           alive_bb->addInstr(move(I));
