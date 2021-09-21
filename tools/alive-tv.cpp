@@ -2,6 +2,7 @@
 // Distributed under the MIT license that can be found in the LICENSE file.
 
 #include "ir/instr.h"
+#include "ir/type.h"
 #include "llvm_util/llvm2alive.h"
 #include "llvm_util/utils.h"
 #include "smt/smt.h"
@@ -12,6 +13,7 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Triple.h"
+#include <llvm/ADT/BitVector.h>
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/Bitcode/BitcodeReader.h"
@@ -47,6 +49,7 @@
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Support/MathExtras.h"
 
 #include <fstream>
 #include <iostream>
@@ -503,13 +506,30 @@ struct AMCValueEqual {
   }
 };
 
-
+// Some variables that we need to maintain as we're performing arm-tv
 std::unordered_map<llvm::MCOperand, unsigned, MCOperandHash, MCOperandEqual>
     mc_operand_id;
 
 // Mapping between machine value and IR::value used when translating asm to Alive IR
  std::unordered_map<AMCValue, IR::Value *, AMCValueHash, AMCValueEqual>
      mc_value_cache;
+
+unsigned type_id_counter{0};
+IR::Value* cur_ov{nullptr};
+
+// TODO return the correct bit for remaining cases
+IR::Value* evaluate_condition(uint64_t cond) {
+  // invert_bit = cond & 1;
+  cond>>=1;
+
+  switch (cond)
+  {
+  case 3: return cur_ov;
+  default: return nullptr;
+  }
+
+  return nullptr;
+}
 
 
 // TODO Should eventually be moved to utils.h
@@ -523,7 +543,31 @@ IR::Type *arm_type2alive(MCOperand ty) {
   }
   return nullptr;
 }
-//std::optional<unsigned>
+
+// Generate the required struct type for an alive2 sadd_overflow instruction
+// FIXME these type object generators should be either grouped in one class or
+// be refactored in some other way.
+// This function should also be moved to utils.cpp as it will need to use objects
+// that are defined there
+// further I'm not sure if the padding matters at this point but the code is 
+// based on utils.cpp llvm_type2alive function that uses padding for struct types
+auto sadd_overflow_type(MCOperand op) {
+  vector<IR::Type*> elems;
+  vector<bool> is_padding{false, false, true};
+  
+  assert(op.isReg());
+  auto add_res_ty = &get_int_type(32);
+  auto add_ov_ty = &get_int_type(1);
+  auto padding_ty = &get_int_type(24);
+  elems.push_back(add_res_ty);
+  elems.push_back(add_ov_ty);
+  elems.push_back(padding_ty);
+  auto ty = new IR::StructType("ty_" + to_string(type_id_counter++),
+                                      move(elems), move(is_padding));
+  return ty;
+
+}
+
 unsigned get_cur_op_id(llvm::MCOperand &mc_op) {
   if (mc_op.isImm()) {
     return 0;
@@ -588,6 +632,41 @@ IR::Value *mc_get_operand(AMCValue mc_val) {
   return nullptr;
 }
 
+// Code taken from llvm. This should be okay for now. But we generally 
+// don't want to trust the llvm implementation so we need to complete my
+// implementation at function decode_bit_mask
+static inline uint64_t ror(uint64_t elt, unsigned size) {
+  return ((elt & 1) << (size-1)) | (elt >> 1);
+}
+
+/// decodeLogicalImmediate - Decode a logical immediate value in the form
+/// "N:immr:imms" (where the immr and imms fields are each 6 bits) into the
+/// integer value it represents with regSize bits.
+static inline uint64_t decodeLogicalImmediate(uint64_t val, unsigned regSize) {
+  // Extract the N, imms, and immr fields.
+  unsigned N = (val >> 12) & 1;
+  unsigned immr = (val >> 6) & 0x3f;
+  unsigned imms = val & 0x3f;
+
+  assert((regSize == 64 || N == 0) && "undefined logical immediate encoding");
+  int len = 31 - llvm::countLeadingZeros((N << 6) | (~imms & 0x3f));
+  assert(len >= 0 && "undefined logical immediate encoding");
+  unsigned size = (1 << len);
+  unsigned R = immr & (size - 1);
+  unsigned S = imms & (size - 1);
+  assert(S != size - 1 && "undefined logical immediate encoding");
+  uint64_t pattern = (1ULL << (S + 1)) - 1;
+  for (unsigned i = 0; i < R; ++i)
+    pattern = ror(pattern, size);
+
+  // Replicate the pattern to fill the regSize.
+  while (size != regSize) {
+    pattern |= (pattern << size);
+    size *= 2;
+  }
+  return pattern;
+}
+
 class MCInstVisitor {
   // the arm opcodes that are currently supported
   // FIXME, these opcode number change accross llvm versions, so we need
@@ -595,7 +674,6 @@ class MCInstVisitor {
   // llvm::MCInstPrinter and updating MCInstWrapper
   enum ARM_Instruction { Add = 885, Adds = 870, Sub = 5115, Subs = 5108, SBF=3830, 
                          EOR = 1505, CSEL = 1423 , Ret = 3665 };
-
 public:
   static std::vector<std::unique_ptr<IR::Instr>> visit_error(MCInstWrapper &I) {
     std::vector<std::unique_ptr<IR::Instr>> res; 
@@ -642,6 +720,7 @@ public:
              (mc_inst.getOperand(3).getImm() == 0));
       auto alive_op = IR::BinOp::SAdd_Overflow;
       auto ty = &get_int_type(32); // FIXME
+      auto ty_ptr = sadd_overflow_type(mc_inst.getOperand(1));
       auto mc_val_lhs = AMCValue(mc_inst.getOperand(1), get_cur_op_id(mc_inst.getOperand(1)));
       auto mc_val_rhs = AMCValue(mc_inst.getOperand(2), get_cur_op_id(mc_inst.getOperand(2)));
       auto a = mc_get_operand(mc_val_lhs);
@@ -653,17 +732,19 @@ public:
       std::string operand_name =
           "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
       auto ret_1 =
-          make_unique<IR::BinOp>(*ty, move(operand_name), *a, *b, alive_op);
+          make_unique<IR::BinOp>(*ty_ptr, move(operand_name), *a, *b, alive_op);
       mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret_1.get());
       
       // FIXME add a cache for value names
       dst_id = get_new_op_id(mc_inst.getOperand(0));
       operand_name =
           "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+      auto ty_i1 = &get_int_type(1); 
       auto extract_ov_inst =
-          make_unique<IR::ExtractValue>(*ty, move(operand_name), *ret_1.get());
+          make_unique<IR::ExtractValue>(*ty_i1, move(operand_name), *ret_1.get());
       mc_add_identifier(mc_inst.getOperand(0), dst_id, *extract_ov_inst.get());
       extract_ov_inst->addIdx(1);
+      cur_ov = extract_ov_inst.get();
       // FIXME add a map that from each flag to its lates IR::Value*
       dst_id = get_new_op_id(mc_inst.getOperand(0));
       operand_name =
@@ -672,7 +753,6 @@ public:
           make_unique<IR::ExtractValue>(*ty, move(operand_name), *ret_1.get());
       mc_add_identifier(mc_inst.getOperand(0), dst_id, *extract_add_inst.get());
       extract_add_inst->addIdx(0);
-
       res.push_back(move(ret_1));
       res.push_back(move(extract_ov_inst));
       res.push_back(move(extract_add_inst));
@@ -724,7 +804,8 @@ public:
       auto ty = &get_int_type(32); // FIXME
       auto mc_val_lhs = AMCValue(mc_inst.getOperand(1), get_cur_op_id(mc_inst.getOperand(1)));
       auto a = mc_get_operand(mc_val_lhs);
-      auto imm_val = make_intconst(mc_inst.getOperand(2).getImm(), 32); // FIXME, need to decode immediate val
+      auto decoded_immediate = decodeLogicalImmediate(mc_inst.getOperand(2).getImm(), 32);
+      auto imm_val = make_intconst(decoded_immediate, 32); // FIXME, need to decode immediate val
       if (!ty || !a || !imm_val)
         return visit_error(I);
       auto dst_id = get_new_op_id(mc_inst.getOperand(0));
@@ -745,14 +826,17 @@ public:
       auto mc_val_rhs = AMCValue(mc_inst.getOperand(2), get_cur_op_id(mc_inst.getOperand(2)));
       auto a = mc_get_operand(mc_val_lhs);
       auto b = mc_get_operand(mc_val_rhs);
-      auto imm_cond = make_intconst(1, 1);
+      auto cond_val_imm = mc_inst.getOperand(3).getImm();
+      auto cond_val = evaluate_condition(cond_val_imm);
+      assert(cond_val);
+      // auto imm_cond = make_intconst(1, 1);
       if (!ty || !a || !b)
         return visit_error(I);
       auto dst_id = get_new_op_id(mc_inst.getOperand(0));
       std::string operand_name =
           "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
       auto ret =
-          make_unique<IR::Select>(*ty, move(operand_name), *imm_cond, *a, *b);
+          make_unique<IR::Select>(*ty, move(operand_name), *cond_val, *a, *b);
       mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret.get());
       res.push_back(move(ret));
       return res;
@@ -787,7 +871,11 @@ std::optional<IR::Function> arm2alive(MCFunction &MF,
   IR::Function Fn(*func_return_type, MF.getName());
   reset_state(Fn);
 
-  // FIXME infer function attributes
+  // set function attribute to include noundef
+  // Fn.getFnAttrs().set(IR::FnAttrs::NoUndef);
+  // TODO need to disable poison values as well. Figure how to do so
+
+  // FIXME infer function attributes if any
   // Most likely need to emit and read the debug info from the MCStreamer
 
   auto &first_BB = MF.BBs[0];
@@ -1439,7 +1527,7 @@ bool backendTV() {
     // Only do the following if opcode writes to a variable
     auto dst = cur_instr.getOperand(0);
     auto new_num = getId();
-    svar2num.emplace(dst, new_num);
+    svar2num.insert_or_assign(dst, new_num);
 
     MCOperand new_dst;
     // if (last_writes[i]) { //no need to add version numbering to dst
@@ -1454,14 +1542,12 @@ bool backendTV() {
     // }
 
     num2cvar.emplace(new_num, new_dst);
-    // dst.setReg(new_dst.getReg());
     cur_instr.getOperand(0).setReg(new_dst.getReg());
 
     if (!sym_val.operands.empty()) {
       value2num.emplace(sym_val, new_num);
     }
     // Update MCInstrs operands with
-
     for (unsigned j = 1; j < cur_instr.getNumOperands(); ++j) {
       auto &inst_operand = cur_instr.getOperand(j);
       if (inst_operand.isReg()) {
@@ -1643,6 +1729,112 @@ void bitcodeTV() {
       break;
     }
   }
+}
+
+// arm util functions
+
+// print a bitvector from msb to lsb
+void print_bit_vector(llvm::BitVector& bits) {
+  for (int i = bits.size() - 1; i >= 0 ; --i) {
+    cout << bits[i] << ' ';
+  }
+}
+
+int highest_set_bit(llvm::BitVector& x) {
+  for (int i = x.size() - 1; i >= 0 ; --i) {
+    if (x[i] == true) 
+      return i;
+  }
+  return -1;
+}
+
+llvm::BitVector ones(int n) {
+  llvm::BitVector res(n, true);
+  return res;
+}
+
+llvm::BitVector zeros(int n) {
+  llvm::BitVector res(n, false);
+  return res;
+}
+
+//return a bitvector that is comprised of msb:bits
+llvm::BitVector concat_bit(bool msb, llvm::BitVector bits) {
+  llvm::BitVector res = bits;
+  res.resize(res.size()+1, msb);
+  return res;
+}
+
+llvm::BitVector concat_bit_vectors(llvm::BitVector msb_bits, llvm::BitVector bits) {
+  llvm::BitVector res = bits;
+  res.resize(msb_bits.size() + bits.size(), false);
+  auto offset = bits.size();
+  for (int i = msb_bits.size() - 1; i >= 0 ; --i) {
+    res[i + offset] = msb_bits[i];
+  }
+  return res;
+}
+
+llvm::BitVector zero_extend(llvm::BitVector m,  unsigned n) {
+  assert(n >= m.size());
+  auto res = m;
+  res.resize(n, false);
+  return res;
+}
+
+uint64_t to_uint(const llvm::BitVector& x) {
+  assert(x.size() <= 64);
+  uint64_t res = 0;
+  for (int i = x.size() - 1; i >= 0 ; --i) {
+    res<<=1;
+    res+=x[i];
+  }
+  return res;
+}
+
+
+
+// adapted from the arm ISA 
+// Decode AArch64 bitfield and logical immediate masks which use a similar encoding structure
+std::pair<llvm::BitVector, llvm::BitVector> decode_bit_mask(bool immN, 
+                                                            llvm::BitVector imms,
+                                                            llvm::BitVector immr,
+                                                            bool immediate,
+                                                            int M) {  
+  llvm::BitVector  res1(M, false);
+  llvm::BitVector  res2(M, false);
+  assert(imms.size() == 6);
+  assert(immr.size() == 6);
+  auto not_imms = imms;
+  not_imms.flip();
+  auto temp = concat_bit(immN, not_imms);
+  auto len = highest_set_bit(temp);
+  if (len < 1) {
+    cout << "ERROR: [decode_bit_mask] UNDEFINED behavior. Aborting.\n";
+    exit(0);
+  } 
+  cout << "len is: " << len << '\n';
+  assert( M >= (1 << len));
+
+  auto levels = zero_extend(ones(len), 6);
+  cout << "levels\n";
+  print_bit_vector(levels);
+  cout << "\n";
+  
+  temp = imms;
+  temp &= levels;
+  if (immediate && (levels == temp)) {
+    cout << "ERROR: [decode_bit_mask] UNDEFINED behavior. Aborting.\n";
+    exit(0);
+  }
+
+  auto S = to_uint(temp); //temp = imms & levels
+  temp = immr;
+  temp &= levels;
+  auto R = to_uint(temp); //temp = immr & levels
+  cout << "S = " << S << ", R = " << R << '\n';
+  auto res = std::make_pair(res1, res2);
+  return res;
 }
 
 int main(int argc, char **argv) {
