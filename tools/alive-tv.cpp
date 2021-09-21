@@ -606,8 +606,8 @@ unsigned get_new_op_id(llvm::MCOperand &mc_op) {
 
 void mc_add_identifier(llvm::MCOperand &mc_op, unsigned op_id, IR::Value &v) {
   assert(mc_op.isReg()); // FIXME
-  cout << "add_identifier(reg_num = " << mc_op.getReg() 
-  << ", id = " <<  op_id << ")" << '\n';
+  // cout << "add_identifier(reg_num = " << mc_op.getReg() 
+  // << ", id = " <<  op_id << ")" << '\n';
   auto mc_val = AMCValue(mc_op, op_id);
   mc_value_cache.emplace(mc_val, &v);
 }
@@ -890,7 +890,9 @@ std::optional<IR::Function> arm2alive(MCFunction &MF,
       return {};
     assert(operand.isReg());
     std::string operand_name = "%" + std::to_string(operand.getReg());
-    auto val = make_unique<IR::Input>(*ty, move(operand_name));
+    IR::ParamAttrs attrs;
+    attrs.set(IR::ParamAttrs::NoUndef);
+    auto val = make_unique<IR::Input>(*ty, move(operand_name), move(attrs));
     mc_add_identifier(operand, get_new_op_id(operand), *val.get());
     Fn.addInput(move(val));
   }
