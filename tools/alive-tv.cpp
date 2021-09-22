@@ -515,20 +515,27 @@ std::unordered_map<llvm::MCOperand, unsigned, MCOperandHash, MCOperandEqual>
      mc_value_cache;
 
 unsigned type_id_counter{0};
-IR::Value* cur_ov{nullptr};
+// Values currently holding ZNCV bits, respectively
+IR::Value* cur_v{nullptr};
+IR::Value* cur_z{nullptr};
+IR::Value* cur_n{nullptr};
+IR::Value* cur_c{nullptr};
 
 // TODO return the correct bit for remaining cases
 IR::Value* evaluate_condition(uint64_t cond) {
   // invert_bit = cond & 1;
   cond>>=1;
+  IR::Value* res = nullptr;
 
-  switch (cond)
-  {
-  case 3: return cur_ov;
+  switch (cond) {
+  case 0: res = cur_z; break;
+  case 1: res = cur_c; break;
+  case 2: res = cur_n; break;
+  case 3: res = cur_v; break;
   default: return nullptr;
   }
 
-  return nullptr;
+  return res;
 }
 
 
@@ -744,7 +751,7 @@ public:
           make_unique<IR::ExtractValue>(*ty_i1, move(operand_name), *ret_1.get());
       mc_add_identifier(mc_inst.getOperand(0), dst_id, *extract_ov_inst.get());
       extract_ov_inst->addIdx(1);
-      cur_ov = extract_ov_inst.get();
+      cur_v = extract_ov_inst.get();
       // FIXME add a map that from each flag to its lates IR::Value*
       dst_id = get_new_op_id(mc_inst.getOperand(0));
       operand_name =
