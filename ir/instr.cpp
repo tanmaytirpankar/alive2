@@ -70,18 +70,16 @@ struct LoopLikeFunctionApproximator {
     auto ub = ub_i();
     prefix.add(ub_i);
 
-    if (is_last) {
+    if (is_last)
       s.addPre(prefix().implies(!continue_i));
-      return { move(res_i), move(np_i), move(ub) };
-    }
 
-    if (continue_i.isFalse() || ub.isFalse())
+    if (is_last || continue_i.isFalse() || ub.isFalse())
       return { move(res_i), move(np_i), move(ub) };
 
     prefix.add(continue_i);
     auto [val_next, np_next, ub_next] = _loop(s, prefix, i + 1, unroll_cnt);
     return { expr::mkIf(continue_i, move(val_next), move(res_i)),
-             expr::mkIf(continue_i, move(np_next), move(np_i)),
+             np_i && continue_i.implies(np_next),
              ub && continue_i.implies(ub_next) };
   }
 };
@@ -1997,14 +1995,42 @@ void FnCall::print(ostream &os) const {
   os << ')' << attrs;
 }
 
+static void eq_bids(OrExpr &acc, Memory &m, const Type &t,
+                    const StateValue &val, const expr &bid) {
+  if (auto agg = t.getAsAggregateType()) {
+    for (unsigned i = 0, e = agg->numElementsConst(); i != e; ++i) {
+      eq_bids(acc, m, agg->getChild(i), agg->extract(val, i), bid);
+    }
+    return;
+  }
+
+  if (t.isPtrType()) {
+    acc.add(val.non_poison && Pointer(m, val.value).getBid() == bid);
+  }
+}
+
+static expr ptr_only_args(State &s, const Pointer &p) {
+  expr bid = p.getBid();
+  auto &m  = s.getMemory();
+
+  OrExpr e;
+  for (auto &in : s.getFn().getInputs()) {
+    if (hasPtr(in.getType()))
+      eq_bids(e, m, in.getType(), s[in], bid);
+  }
+  return e();
+}
+
 static void unpack_inputs(State &s, Value &argv, Type &ty,
-                          const ParamAttrs &argflag, StateValue value,
-                          StateValue value2, vector<StateValue> &inputs,
+                          const ParamAttrs &argflag, bool argmemonly,
+                          StateValue value, StateValue value2,
+                          vector<StateValue> &inputs,
                           vector<Memory::PtrInput> &ptr_inputs) {
   if (auto agg = ty.getAsAggregateType()) {
     for (unsigned i = 0, e = agg->numElementsConst(); i != e; ++i) {
-      unpack_inputs(s, argv, agg->getChild(i), argflag, agg->extract(value, i),
-                    agg->extract(value2, i), inputs, ptr_inputs);
+      unpack_inputs(s, argv, agg->getChild(i), argflag, argmemonly,
+                    agg->extract(value, i), agg->extract(value2, i), inputs,
+                    ptr_inputs);
     }
     return;
   }
@@ -2015,6 +2041,10 @@ static void unpack_inputs(State &s, Value &argv, Type &ty,
     value.non_poison = move(new_non_poison);
 
     if (ty.isPtrType()) {
+      if (argmemonly)
+        value.non_poison
+          &= ptr_only_args(s, Pointer(s.getMemory(), value.value));
+
       ptr_inputs.emplace_back(move(value),
                               argflag.blockSize,
                               argflag.has(ParamAttrs::NoCapture));
@@ -2075,6 +2105,7 @@ StateValue FnCall::toSMT(State &s) const {
   vector<StateValue> inputs;
   vector<Memory::PtrInput> ptr_inputs;
   vector<Type*> out_types;
+  bool argmemonly = attrs.has(FnAttrs::ArgMemOnly);
 
   ostringstream fnName_mangled;
   fnName_mangled << fnName;
@@ -2093,8 +2124,8 @@ StateValue FnCall::toSMT(State &s) const {
       sv2 = s[*arg];
     }
 
-    unpack_inputs(s, *arg, arg->getType(), flags, move(sv), move(sv2), inputs,
-                  ptr_inputs);
+    unpack_inputs(s, *arg, arg->getType(), flags, argmemonly, move(sv),
+                  move(sv2), inputs, ptr_inputs);
     fnName_mangled << '#' << arg->getType();
   }
   fnName_mangled << '!' << getType();
@@ -2102,7 +2133,7 @@ StateValue FnCall::toSMT(State &s) const {
     unpack_ret_ty(out_types, getType());
 
   auto check_access = [&]() {
-    if (attrs.has(FnAttrs::ArgMemOnly)) {
+    if (argmemonly) {
       for (auto &p : ptr_inputs) {
         if (!p.byval) {
           Pointer ptr(s.getMemory(), p.val.value);
@@ -2129,7 +2160,8 @@ StateValue FnCall::toSMT(State &s) const {
     return s.getFn().getFnAttrs().has(attr) && !attrs.has(attr);
   };
 
-  if (check(FnAttrs::NoFree) ||
+  if (check(FnAttrs::ArgMemOnly) ||
+      check(FnAttrs::NoFree) ||
       check(FnAttrs::NoThrow) ||
       check(FnAttrs::WillReturn))
     s.addUB(expr(false));
@@ -2676,10 +2708,10 @@ unique_ptr<Instr> Phi::dup(const string &suffix) const {
 
 
 const BasicBlock& JumpInstr::target_iterator::operator*() const {
-  if (auto br = dynamic_cast<Branch*>(instr))
+  if (auto br = dynamic_cast<const Branch*>(instr))
     return idx == 0 ? br->getTrue() : *br->getFalse();
 
-  if (auto sw = dynamic_cast<Switch*>(instr))
+  if (auto sw = dynamic_cast<const Switch*>(instr))
     return idx == 0 ? *sw->getDefault() : *sw->getTarget(idx-1).second;
 
   UNREACHABLE();
@@ -2689,9 +2721,9 @@ JumpInstr::target_iterator JumpInstr::it_helper::end() const {
   unsigned idx;
   if (!instr) {
     idx = 0;
-  } else if (auto br = dynamic_cast<Branch*>(instr)) {
+  } else if (auto br = dynamic_cast<const Branch*>(instr)) {
     idx = br->getFalse() ? 2 : 1;
-  } else if (auto sw = dynamic_cast<Switch*>(instr)) {
+  } else if (auto sw = dynamic_cast<const Switch*>(instr)) {
     idx = sw->getNumTargets() + 1;
   } else {
     UNREACHABLE();
@@ -2981,16 +3013,14 @@ unique_ptr<Instr> Assume::dup(const string &suffix) const {
 }
 
 
-MemInstr::ByteAccessInfo
-MemInstr::ByteAccessInfo::intOnly(unsigned bytesz) {
+MemInstr::ByteAccessInfo MemInstr::ByteAccessInfo::intOnly(unsigned bytesz) {
   ByteAccessInfo info;
   info.byteSize = bytesz;
   info.hasIntByteAccess = true;
   return info;
 }
 
-MemInstr::ByteAccessInfo
-MemInstr::ByteAccessInfo::anyType(unsigned bytesz) {
+MemInstr::ByteAccessInfo MemInstr::ByteAccessInfo::anyType(unsigned bytesz) {
   ByteAccessInfo info;
   info.byteSize = bytesz;
   return info;
@@ -3007,36 +3037,10 @@ MemInstr::ByteAccessInfo::get(const Type &t, bool store, unsigned align) {
   return info;
 }
 
-MemInstr::ByteAccessInfo
-MemInstr::ByteAccessInfo::full(unsigned byteSize) {
-  return { true, true, true, byteSize };
+MemInstr::ByteAccessInfo MemInstr::ByteAccessInfo::full(unsigned byteSize) {
+  return { true, true, true, true, byteSize };
 }
 
-static void eq_bids(OrExpr &acc, Memory &m, const Type &t,
-                    const StateValue &val, const expr &bid) {
-  if (auto agg = t.getAsAggregateType()) {
-    for (unsigned i = 0, e = agg->numElementsConst(); i != e; ++i) {
-      eq_bids(acc, m, agg->getChild(i), agg->extract(val, i), bid);
-    }
-    return;
-  }
-
-  if (t.isPtrType()) {
-    acc.add(val.non_poison && Pointer(m, val.value).getBid() == bid);
-  }
-}
-
-static expr ptr_only_args(State &s, const Pointer &p) {
-  expr bid = p.getBid();
-  auto &m  = s.getMemory();
-
-  OrExpr e;
-  for (auto &in : s.getFn().getInputs()) {
-    if (hasPtr(in.getType()))
-      eq_bids(e, m, in.getType(), s[in], bid);
-  }
-  return e();
-}
 
 static void check_can_load(State &s, const expr &p0) {
   auto &attrs = s.getFn().getFnAttrs();
@@ -3723,7 +3727,6 @@ uint64_t Memcpy::getMaxAccessSize() const {
 }
 
 Memcpy::ByteAccessInfo Memcpy::getByteAccessInfo() const {
-  unsigned byteSize = 1;
 #if 0
   if (auto bytes = get_int(i->getBytes()))
     byteSize = gcd(gcd(i->getSrcAlign(), i->getDstAlign()), *bytes);
@@ -3731,7 +3734,9 @@ Memcpy::ByteAccessInfo Memcpy::getByteAccessInfo() const {
   // FIXME: memcpy doesn't have multi-byte support
   // Memcpy does not have sub-byte access, unless the sub-byte type appears
   // at other instructions
-  return ByteAccessInfo::full(byteSize);
+  auto info = ByteAccessInfo::full(1);
+  info.observesAddresses = false;
+  return info;
 }
 
 vector<Value*> Memcpy::operands() const {
@@ -3799,7 +3804,9 @@ uint64_t Memcmp::getMaxAccessSize() const {
 }
 
 Memcmp::ByteAccessInfo Memcmp::getByteAccessInfo() const {
-  return ByteAccessInfo::intOnly(1); /* memcmp raises UB on ptr bytes */
+  auto info = ByteAccessInfo::anyType(1);
+  info.observesAddresses = true;
+  return info;
 }
 
 vector<Value*> Memcmp::operands() const {
@@ -3833,7 +3840,6 @@ StateValue Memcmp::toSMT(State &s) const {
   s.addUB(p2.isDereferenceable(vnum, 1, false));
 
   expr zero = expr::mkUInt(0, 32);
-  auto &vn = vnum;
 
   expr result_var, result_var_neg;
   if (is_bcmp) {
@@ -3854,30 +3860,41 @@ StateValue Memcmp::toSMT(State &s) const {
 
   auto ith_exec =
       [&, this](unsigned i, bool is_last) -> tuple<expr, expr, AndExpr, expr> {
-    auto [val1, ub1] = s.getMemory().load((p1 + i)(), IntType("i8", 8), 1);
-    auto [val2, ub2] = s.getMemory().load((p2 + i)(), IntType("i8", 8), 1);
-
-    AndExpr ub_and;
-    ub_and.add(move(ub1));
-    ub_and.add(move(ub2));
+    assert(bits_byte == 8); // TODO: remove constraint
+    auto val1 = s.getMemory().raw_load(p1 + i);
+    auto val2 = s.getMemory().raw_load(p2 + i);
+    expr is_ptr1 = val1.isPtr();
+    expr is_ptr2 = val2.isPtr();
 
     expr result_neq;
     if (is_bcmp) {
       result_neq = result_var;
     } else {
-      auto pos = val1.value.uge(val2.value);
+      expr pos
+        = mkIf_fold(is_ptr1,
+                    val1.ptr().getAddress().uge(val2.ptr().getAddress()),
+                    val1.nonptrValue().uge(val2.nonptrValue()));
       result_neq = expr::mkIf(pos, result_var, result_var_neg);
     }
 
-    auto val_eq = val1.value == val2.value;
+    // allow null <-> 0 comparison
+    expr val_eq =
+      (is_ptr1 == is_ptr2 &&
+       mkIf_fold(is_ptr1,
+                 val1.ptr().getAddress() == val2.ptr().getAddress(),
+                 val1.nonptrValue() == val2.nonptrValue())) ||
+      (val1.isZero() && val2.isZero());
+
+    expr np
+      = (is_ptr1 == is_ptr2 || val1.isZero() || val2.isZero()) &&
+        !val1.isPoison() && !val2.isPoison();
+
     return { expr::mkIf(val_eq, zero, result_neq),
-             val1.non_poison && val2.non_poison,
-             move(ub_and),
-             val_eq && vn.uge(i + 2) };
+             move(np), {},
+             val_eq && vnum.uge(i + 2) };
   };
   auto [val, np, ub]
     = LoopLikeFunctionApproximator(ith_exec).encode(s, memcmp_unroll_cnt);
-  s.addUB((vnum != 0).implies(move(ub)));
   return { expr::mkIf(vnum == 0, zero, move(val)), (vnum != 0).implies(np) };
 }
 

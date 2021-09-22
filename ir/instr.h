@@ -326,27 +326,28 @@ public:
 
 class JumpInstr : public Instr {
 public:
-  JumpInstr(Type &type, std::string &&name) : Instr(type, std::move(name)) {}
+  JumpInstr(const char *name) : Instr(Type::voidTy, name) {}
 
   class target_iterator {
-    JumpInstr *instr;
+    const JumpInstr *instr;
     unsigned idx;
   public:
-    target_iterator() {}
-    target_iterator(JumpInstr *instr, unsigned idx) : instr(instr), idx(idx) {}
+    target_iterator() = default;
+    target_iterator(const JumpInstr *instr, unsigned idx)
+      : instr(instr), idx(idx) {}
     const BasicBlock& operator*() const;
     target_iterator& operator++(void) { ++idx; return *this; }
     bool operator==(const target_iterator &rhs) const { return idx == rhs.idx; }
   };
 
   class it_helper {
-    JumpInstr *instr;
+    const JumpInstr *instr;
   public:
-    it_helper(JumpInstr *instr = nullptr) : instr(instr) {}
+    it_helper(const JumpInstr *instr = nullptr) : instr(instr) {}
     target_iterator begin() const { return { instr, 0 }; }
     target_iterator end() const;
   };
-  it_helper targets() { return this; }
+  it_helper targets() const { return this; }
   virtual void replaceTargetWith(const BasicBlock *From,
                                  const BasicBlock *To) = 0;
 };
@@ -356,12 +357,10 @@ class Branch final : public JumpInstr {
   Value *cond = nullptr;
   const BasicBlock *dst_true, *dst_false = nullptr;
 public:
-  Branch(const BasicBlock &dst)
-    : JumpInstr(Type::voidTy, "br"), dst_true(&dst) {}
+  Branch(const BasicBlock &dst) : JumpInstr("br"), dst_true(&dst) {}
 
   Branch(Value &cond, const BasicBlock &dst_true, const BasicBlock &dst_false)
-    : JumpInstr(Type::voidTy, "br"), cond(&cond), dst_true(&dst_true),
-    dst_false(&dst_false) {}
+    : JumpInstr("br"), cond(&cond), dst_true(&dst_true), dst_false(&dst_false){}
 
   auto& getTrue() const { return *dst_true; }
   auto getFalse() const { return dst_false; }
@@ -389,8 +388,7 @@ class Switch final : public JumpInstr {
 
 public:
   Switch(Value &value, const BasicBlock &default_target)
-    : JumpInstr(Type::voidTy, "switch"), value(&value),
-      default_target(&default_target) {}
+    : JumpInstr("switch"), value(&value), default_target(&default_target) {}
 
   void addTarget(Value &val, const BasicBlock &target);
 
@@ -474,6 +472,7 @@ public:
     bool hasIntByteAccess = false;
     bool doesPtrLoad = false;
     bool doesPtrStore = false;
+    bool observesAddresses = false;
 
     // The maximum size of a byte that this instruction can support.
     // If zero, this instruction does not read/write bytes.
