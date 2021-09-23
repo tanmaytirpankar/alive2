@@ -684,12 +684,14 @@ class MCInstVisitor {
 public:
   static std::vector<std::unique_ptr<IR::Instr>> visit_error(MCInstWrapper &I) {
     std::vector<std::unique_ptr<IR::Instr>> res; 
-    cout << "ERROR: Unsupported arm instruction: ";
+    cout << "ERROR: Unsupported arm instruction. MCInst Opcode = " 
+         << I.getOpcode() << "\n";
     exit(1); // for now lets exit the program if the arm instruction is not
              // supported
     I.print();
     return res;
   }
+  
   // Rudimentary function to visit an MCInstWrapper instructions and convert it
   // to alive IR Ideally would want a nicer designed interface, but I opted for
   // simplicity to get the initial prototype.
