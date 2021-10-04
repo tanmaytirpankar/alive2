@@ -796,7 +796,7 @@ public:
       auto extract_ov_inst =
           make_unique<IR::ExtractValue>(*ty_i1, move(operand_name), *ret_1.get());
       mc_add_identifier(mc_inst.getOperand(0), dst_id, *extract_ov_inst.get());
-      extract_ov_inst->addIdx(13);
+      extract_ov_inst->addIdx(1);
       cur_v = extract_ov_inst.get();
 
       // generate uadd instruction id
