@@ -13,7 +13,7 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Triple.h"
-#include <llvm/ADT/BitVector.h>
+#include "llvm/ADT/BitVector.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/Bitcode/BitcodeReader.h"
@@ -50,6 +50,7 @@
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Support/MathExtras.h"
+
 
 #include <fstream>
 #include <iostream>
@@ -515,6 +516,7 @@ std::unordered_map<llvm::MCOperand, unsigned, MCOperandHash, MCOperandEqual>
      mc_value_cache;
 
 unsigned type_id_counter{0};
+
 // Values currently holding ZNCV bits, respectively
 IR::Value* cur_v{nullptr};
 IR::Value* cur_z{nullptr};
@@ -554,6 +556,8 @@ IR::Type *arm_type2alive(MCOperand ty) {
 // Generate the required struct type for an alive2 sadd_overflow instruction
 // FIXME these type object generators should be either grouped in one class or
 // be refactored in some other way.
+// We should also pass something more useful than just one operand that can be 
+// used as a key to cache complex types as right now this function leaks memory
 // This function should also be moved to utils.cpp as it will need to use objects
 // that are defined there
 // further I'm not sure if the padding matters at this point but the code is 
@@ -680,7 +684,7 @@ class MCInstVisitor {
   // a more stable way to distinguish instructions. Probably using
   // llvm::MCInstPrinter and updating MCInstWrapper
   enum ARM_Instruction { Add = 885, Adds = 870, Sub = 5115, Subs = 5108, SBF=3830, 
-                         EOR = 1505, CSEL = 1423 , Ret = 3665 };
+                         EOR = 1505, CSEL = 1423 , CSINV = 1427, Ret = 3665 };
 public:
   static std::vector<std::unique_ptr<IR::Instr>> visit_error(MCInstWrapper &I) {
     std::vector<std::unique_ptr<IR::Instr>> res; 
@@ -691,7 +695,7 @@ public:
     I.print();
     return res;
   }
-  
+
   // Rudimentary function to visit an MCInstWrapper instructions and convert it
   // to alive IR Ideally would want a nicer designed interface, but I opted for
   // simplicity to get the initial prototype.
