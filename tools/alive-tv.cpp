@@ -522,11 +522,11 @@ IR::Value* cur_n{nullptr};
 IR::Value* cur_c{nullptr};
 
 // TODO return the correct bit for remaining cases
+// FIXME: support lo flag. lo currently evaluates to cur_c, when it is really !cur_c
 IR::Value* evaluate_condition(uint64_t cond) {
   // invert_bit = cond & 1;
   cond>>=1;
   IR::Value* res = nullptr;
-
   switch (cond) {
   case 0: res = cur_z; break;
   case 1: res = cur_c; break;
@@ -575,12 +575,40 @@ auto sadd_overflow_type(MCOperand op) {
 
 }
 
+auto uadd_overflow_type(MCOperand op) {
+  vector<IR::Type*> elems;
+  vector<bool> is_padding{false, false, true};
+
+  assert(op.isReg());
+  auto add_res_ty = &get_int_type(32);
+  auto add_ov_ty = &get_int_type(1);
+  auto padding_ty = &get_int_type(24);
+  elems.push_back(add_res_ty);
+  elems.push_back(add_ov_ty);
+  elems.push_back(padding_ty);
+  auto ty = new IR::StructType("ty_" + to_string(type_id_counter++),
+                               move(elems), move(is_padding));
+  return ty;
+
+}
+
+// get_cur_op_id takes in an MCOperand, and returns the id for the
+// given operand.
+//
+// The operand is constructed using the name of a non-special purpose register
+// used in any given instruction.
+//
+// A previous instruction will associate its registers to operand ids in order
+// for later lookup by this function. All lookups must succeed, or else
+// translation has gone very wrong.
 unsigned get_cur_op_id(llvm::MCOperand &mc_op) {
   if (mc_op.isImm()) {
     return 0;
   }
   else if (mc_op.isReg()) {
     auto I = mc_operand_id.find(mc_op);
+
+    // the operand id is not found
     assert(I != mc_operand_id.end());
     return mc_operand_id[mc_op];
   }
@@ -680,7 +708,7 @@ class MCInstVisitor {
   // a more stable way to distinguish instructions. Probably using
   // llvm::MCInstPrinter and updating MCInstWrapper
   enum ARM_Instruction { Add = 885, Adds = 870, Sub = 5115, Subs = 5108, SBF=3830, 
-                         EOR = 1505, CSEL = 1423 , Ret = 3665 };
+                         EOR = 1505, CSEL = 1423 , Ret = 3665, CSINV = 1427};
 public:
   static std::vector<std::unique_ptr<IR::Instr>> visit_error(MCInstWrapper &I) {
     std::vector<std::unique_ptr<IR::Instr>> res; 
@@ -725,33 +753,73 @@ public:
       // for now only support adds with no shift
       assert(mc_inst.getOperand(3).isImm() &&
              (mc_inst.getOperand(3).getImm() == 0));
+
       auto alive_op = IR::BinOp::SAdd_Overflow;
       auto ty = &get_int_type(32); // FIXME
       auto ty_ptr = sadd_overflow_type(mc_inst.getOperand(1));
+
+      // convert lhs, rhs operands to IR::Values
       auto mc_val_lhs = AMCValue(mc_inst.getOperand(1), get_cur_op_id(mc_inst.getOperand(1)));
       auto mc_val_rhs = AMCValue(mc_inst.getOperand(2), get_cur_op_id(mc_inst.getOperand(2)));
       auto a = mc_get_operand(mc_val_lhs);
       auto b = mc_get_operand(mc_val_rhs);
+
+      // make sure that lhs and rhs conversion succeeded, type lookup succeeded
       if (!ty || !a || !b)
         return visit_error(I);
+
+      // make sure the first instruction is a register
       assert(mc_inst.getOperand(0).isReg());
+
+      // generate a new operand id for the destination register
       auto dst_id = get_new_op_id(mc_inst.getOperand(0));
       std::string operand_name =
           "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+
+      // generate IR::BinOp::SAdd_Overflow for dst = lhs + rhs
+      // The return value will be in the form:
+      // {i32 (result), i1 (overflow), i24 (padding)}
+      // we will return the first value, and use the second to "set the v flag"
       auto ret_1 =
           make_unique<IR::BinOp>(*ty_ptr, move(operand_name), *a, *b, alive_op);
       mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret_1.get());
       
       // FIXME add a cache for value names
+
+      // generate a new operand id for the v flag
       dst_id = get_new_op_id(mc_inst.getOperand(0));
       operand_name =
           "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
-      auto ty_i1 = &get_int_type(1); 
+      auto ty_i1 = &get_int_type(1);
+
+      // extract the v flag from SAdd_Overflow result
       auto extract_ov_inst =
           make_unique<IR::ExtractValue>(*ty_i1, move(operand_name), *ret_1.get());
       mc_add_identifier(mc_inst.getOperand(0), dst_id, *extract_ov_inst.get());
-      extract_ov_inst->addIdx(1);
+      extract_ov_inst->addIdx(13);
       cur_v = extract_ov_inst.get();
+
+      // generate uadd instruction id
+      dst_id = get_new_op_id(mc_inst.getOperand(0));
+      operand_name =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+
+      auto uadd_typ = uadd_overflow_type(mc_inst.getOperand(1));
+      auto uadd_inst = make_unique<IR::BinOp>(
+        *uadd_typ, move(operand_name), *a, *b, IR::BinOp::UAdd_Overflow);
+
+      // generate c flag
+      dst_id = get_new_op_id(mc_inst.getOperand(0));
+      operand_name =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+
+      // extract the c flag from UAdd_Overflow result
+      auto extract_oc_inst =
+          make_unique<IR::ExtractValue>(*ty_i1, move(operand_name), *uadd_inst.get());
+      mc_add_identifier(mc_inst.getOperand(0), dst_id, *extract_oc_inst.get());
+      extract_oc_inst->addIdx(1);
+      cur_c = extract_oc_inst.get();
+
       // FIXME add a map that from each flag to its lates IR::Value*
       dst_id = get_new_op_id(mc_inst.getOperand(0));
       operand_name =
@@ -759,9 +827,12 @@ public:
       auto extract_add_inst =
           make_unique<IR::ExtractValue>(*ty, move(operand_name), *ret_1.get());
       mc_add_identifier(mc_inst.getOperand(0), dst_id, *extract_add_inst.get());
+
       extract_add_inst->addIdx(0);
       res.push_back(move(ret_1));
       res.push_back(move(extract_ov_inst));
+      res.push_back(move(uadd_inst));
+      res.push_back(move(extract_oc_inst));
       res.push_back(move(extract_add_inst));
       return res;
     } else if (opcode == ARM_Instruction::Sub) {
@@ -857,7 +928,54 @@ public:
         return visit_error(I);
       res.push_back(make_unique<IR::Return>(*ty, *val));
       return res;
-    } else {
+    } else if (opcode == ARM_Instruction::CSINV) {
+      // csinv dst, a, b, cond
+      // if (cond) a else ~b
+
+      assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, cond
+      // TODO decode condition and find the approprate cond val
+      assert(mc_inst.getOperand(1).isReg() && mc_inst.getOperand(2).isReg());
+      assert(mc_inst.getOperand(3).isImm());
+
+      auto ty = &get_int_type(32); // FIXME
+
+      auto mc_val_lhs = AMCValue(mc_inst.getOperand(1), get_cur_op_id(mc_inst.getOperand(1)));
+
+      auto a = mc_get_operand(mc_val_lhs);
+      auto b = make_intconst(0, 32);
+
+      auto cond_val_imm = mc_inst.getOperand(3).getImm();
+      auto cond_val = evaluate_condition(cond_val_imm);
+
+      assert(cond_val);
+
+      if (!ty || !a || !b)
+        return visit_error(I);
+
+      // generate instruction for ~b
+      auto dst_id = get_new_op_id(mc_inst.getOperand(0));
+      std::string operand_name =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+
+      auto neg_one = make_intconst(-1, 32);
+      auto negated_b = make_unique<IR::BinOp>(
+          *ty, move(operand_name), *b, *neg_one, IR::BinOp::Xor);
+
+
+      // return if (cond) a else ~b
+      dst_id = get_new_op_id(mc_inst.getOperand(0));
+      operand_name =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+
+      auto ret =
+          make_unique<IR::Select>(*ty, move(operand_name), *cond_val, *negated_b.get(), *a);
+      mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret.get());
+
+      res.push_back(move(negated_b));
+      res.push_back(move(ret));
+      return res;
+    }
+    else {
       return visit_error(I);
     }
     return res;
@@ -1602,7 +1720,7 @@ bool backendTV() {
   if (TF)
     TF->print(cout << "\n----------alive-lift-arm-target----------\n");
 
-  auto r = backend_verify(AF, TF, TLI);
+  auto r = backend_verify(AF, TF, TLI, true);
 
   if (r.status == Results::ERROR) {
     *out << "ERROR: " << r.error;
