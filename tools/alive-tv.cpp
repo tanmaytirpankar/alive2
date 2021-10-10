@@ -380,7 +380,7 @@ public:
 
   auto predEnd() {
     return Preds.end();
-  } 
+  }
 
   auto succBegin() const {
     return Succs.begin();
@@ -493,7 +493,7 @@ public:
 
 struct AMCValueHash {
   size_t operator()(const AMCValue &op) const {
-    MCOperandHash h;  
+    MCOperandHash h;
     auto op_hash = h(op.get_operand());
     return std::hash<unsigned long>()(op_hash + op.get_id());
   }
@@ -515,29 +515,6 @@ std::unordered_map<llvm::MCOperand, unsigned, MCOperandHash, MCOperandEqual>
      mc_value_cache;
 
 unsigned type_id_counter{0};
-// Values currently holding ZNCV bits, respectively
-IR::Value* cur_v{nullptr};
-IR::Value* cur_z{nullptr};
-IR::Value* cur_n{nullptr};
-IR::Value* cur_c{nullptr};
-
-// TODO return the correct bit for remaining cases
-// FIXME: support lo flag. lo currently evaluates to cur_c, when it is really !cur_c
-IR::Value* evaluate_condition(uint64_t cond) {
-  // invert_bit = cond & 1;
-  cond>>=1;
-  IR::Value* res = nullptr;
-  switch (cond) {
-  case 0: res = cur_z; break;
-  case 1: res = cur_c; break;
-  case 2: res = cur_n; break;
-  case 3: res = cur_v; break;
-  default: return nullptr;
-  }
-
-  return res;
-}
-
 
 // TODO Should eventually be moved to utils.h
 // Will need more parameters to identify the exact type of oprand.
@@ -556,12 +533,12 @@ IR::Type *arm_type2alive(MCOperand ty) {
 // be refactored in some other way.
 // This function should also be moved to utils.cpp as it will need to use objects
 // that are defined there
-// further I'm not sure if the padding matters at this point but the code is 
+// further I'm not sure if the padding matters at this point but the code is
 // based on utils.cpp llvm_type2alive function that uses padding for struct types
 auto sadd_overflow_type(MCOperand op) {
   vector<IR::Type*> elems;
   vector<bool> is_padding{false, false, true};
-  
+
   assert(op.isReg());
   auto add_res_ty = &get_int_type(32);
   auto add_ov_ty = &get_int_type(1);
@@ -641,12 +618,12 @@ unsigned get_new_op_id(llvm::MCOperand &mc_op) {
 
 void mc_add_identifier(llvm::MCOperand &mc_op, unsigned op_id, IR::Value &v) {
   assert(mc_op.isReg()); // FIXME
-  // cout << "add_identifier(reg_num = " << mc_op.getReg() 
+  // cout << "add_identifier(reg_num = " << mc_op.getReg()
   // << ", id = " <<  op_id << ")" << '\n';
   auto mc_val = AMCValue(mc_op, op_id);
   mc_value_cache.emplace(mc_val, &v);
 }
-  
+
 IR::Value *mc_get_operand(AMCValue mc_val) {
   if (auto I = mc_value_cache.find(mc_val); I != mc_value_cache.end())
     return I->second;
@@ -667,7 +644,7 @@ IR::Value *mc_get_operand(AMCValue mc_val) {
   return nullptr;
 }
 
-// Code taken from llvm. This should be okay for now. But we generally 
+// Code taken from llvm. This should be okay for now. But we generally
 // don't want to trust the llvm implementation so we need to complete my
 // implementation at function decode_bit_mask
 static inline uint64_t ror(uint64_t elt, unsigned size) {
@@ -702,16 +679,41 @@ static inline uint64_t decodeLogicalImmediate(uint64_t val, unsigned regSize) {
   return pattern;
 }
 
+// Values currently holding ZNCV bits, respectively
+IR::Value* cur_v{nullptr};
+IR::Value* cur_z{nullptr};
+IR::Value* cur_n{nullptr};
+IR::Value* cur_c{nullptr};
+
+// TODO return the correct bit for remaining cases
+std::tuple<bool, IR::Value*> evaluate_condition(uint64_t cond) {
+  // cond<0> == '1' && cond != '1111'
+  auto invert_bit = (cond & 1) && (cond != 15);
+
+  cond>>=1;
+
+  IR::Value* res = nullptr;
+  switch (cond) {
+  case 0: res = cur_z; break;
+  case 1: res = cur_c; break;
+  case 2: res = cur_n; break;
+  case 3: res = cur_v; break;
+  default: return {false, nullptr};
+  }
+
+  return {invert_bit, res};
+}
+
 class MCInstVisitor {
   // the arm opcodes that are currently supported
   // FIXME, these opcode number change accross llvm versions, so we need
   // a more stable way to distinguish instructions. Probably using
   // llvm::MCInstPrinter and updating MCInstWrapper
-  enum ARM_Instruction { Add = 885, Adds = 870, Sub = 5115, Subs = 5108, SBF=3830, 
+  enum ARM_Instruction { Add = 885, Adds = 870, Sub = 5115, Subs = 5108, SBF=3830,
                          EOR = 1505, CSEL = 1423 , Ret = 3665, CSINV = 1427};
 public:
   static std::vector<std::unique_ptr<IR::Instr>> visit_error(MCInstWrapper &I) {
-    std::vector<std::unique_ptr<IR::Instr>> res; 
+    std::vector<std::unique_ptr<IR::Instr>> res;
     cout << "ERROR: Unsupported arm instruction: ";
     exit(1); // for now lets exit the program if the arm instruction is not
              // supported
@@ -783,7 +785,7 @@ public:
       auto ret_1 =
           make_unique<IR::BinOp>(*ty_ptr, move(operand_name), *a, *b, alive_op);
       mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret_1.get());
-      
+
       // FIXME add a cache for value names
 
       // generate a new operand id for the v flag
@@ -905,16 +907,23 @@ public:
       auto a = mc_get_operand(mc_val_lhs);
       auto b = mc_get_operand(mc_val_rhs);
       auto cond_val_imm = mc_inst.getOperand(3).getImm();
-      auto cond_val = evaluate_condition(cond_val_imm);
+      auto [invert, cond_val] = evaluate_condition(cond_val_imm);
       assert(cond_val);
-      // auto imm_cond = make_intconst(1, 1);
+
       if (!ty || !a || !b)
         return visit_error(I);
+
       auto dst_id = get_new_op_id(mc_inst.getOperand(0));
       std::string operand_name =
           "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
-      auto ret =
-          make_unique<IR::Select>(*ty, move(operand_name), *cond_val, *a, *b);
+
+      unique_ptr<IR::Select> ret;
+      if (!invert) {
+        ret = make_unique<IR::Select>(*ty, move(operand_name), *cond_val, *a, *b);
+      } else {
+        ret = make_unique<IR::Select>(*ty, move(operand_name), *cond_val, *b, *a);
+      }
+
       mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret.get());
       res.push_back(move(ret));
       return res;
@@ -945,7 +954,7 @@ public:
       auto b = make_intconst(0, 32);
 
       auto cond_val_imm = mc_inst.getOperand(3).getImm();
-      auto cond_val = evaluate_condition(cond_val_imm);
+      auto [invert, cond_val] = evaluate_condition(cond_val_imm);
 
       assert(cond_val);
 
@@ -962,15 +971,20 @@ public:
           *ty, move(operand_name), *b, *neg_one, IR::BinOp::Xor);
 
 
-      // return if (cond) a else ~b
       dst_id = get_new_op_id(mc_inst.getOperand(0));
       operand_name =
           "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
 
-      auto ret =
-          make_unique<IR::Select>(*ty, move(operand_name), *cond_val, *negated_b.get(), *a);
-      mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret.get());
+      // return if (cond) a else ~b
+      std::unique_ptr<IR::Select> ret;
 
+      if (!invert) {
+        ret = make_unique<IR::Select>(*ty, move(operand_name), *cond_val, *a, *negated_b.get());
+      } else {
+        ret = make_unique<IR::Select>(*ty, move(operand_name), *cond_val, *negated_b.get(), *a);
+      }
+
+      mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret.get());
       res.push_back(move(negated_b));
       res.push_back(move(ret));
       return res;
@@ -1056,12 +1070,12 @@ std::optional<IR::Function> arm2alive(MCFunction &MF,
   for (auto &[alive_bb, mc_bb] : sorted_bbs) {
     auto mc_instrs = mc_bb->getInstrs();
     for (auto &mc_instr : mc_instrs) {
-      auto I_vect = MCInstVisitor::mc_visit(mc_instr); 
+      auto I_vect = MCInstVisitor::mc_visit(mc_instr);
       if (I_vect.empty()) {
         Fn.print(cout << "\n----------partially-lifted-arm-target----------\n");
         return {};
       }
-        
+
       else {
         for (auto& I : I_vect) {
           alive_bb->addInstr(move(I));
@@ -1274,7 +1288,7 @@ public:
       for (auto it = block.succBegin(); it != block.succEnd(); ++it) {
         auto successor = *it;
         cout << successor->getName() << ", ";
-        
+
       }
       cout << "]\n";
     }
@@ -1285,7 +1299,7 @@ public:
       for (auto it = block.predBegin(); it != block.predEnd(); ++it) {
         auto predecessor = *it;
         cout << predecessor->getName() << ", ";
-        
+
       }
       cout << "]\n";
     }
@@ -1869,7 +1883,7 @@ void print_bit_vector(llvm::BitVector& bits) {
 
 int highest_set_bit(llvm::BitVector& x) {
   for (int i = x.size() - 1; i >= 0 ; --i) {
-    if (x[i] == true) 
+    if (x[i] == true)
       return i;
   }
   return -1;
@@ -1921,13 +1935,13 @@ uint64_t to_uint(const llvm::BitVector& x) {
 
 
 
-// adapted from the arm ISA 
+// adapted from the arm ISA
 // Decode AArch64 bitfield and logical immediate masks which use a similar encoding structure
-std::pair<llvm::BitVector, llvm::BitVector> decode_bit_mask(bool immN, 
+std::pair<llvm::BitVector, llvm::BitVector> decode_bit_mask(bool immN,
                                                             llvm::BitVector imms,
                                                             llvm::BitVector immr,
                                                             bool immediate,
-                                                            int M) {  
+                                                            int M) {
   llvm::BitVector  res1(M, false);
   llvm::BitVector  res2(M, false);
   assert(imms.size() == 6);
@@ -1939,7 +1953,7 @@ std::pair<llvm::BitVector, llvm::BitVector> decode_bit_mask(bool immN,
   if (len < 1) {
     cout << "ERROR: [decode_bit_mask] UNDEFINED behavior. Aborting.\n";
     exit(0);
-  } 
+  }
   cout << "len is: " << len << '\n';
   assert( M >= (1 << len));
 
@@ -1947,7 +1961,7 @@ std::pair<llvm::BitVector, llvm::BitVector> decode_bit_mask(bool immN,
   cout << "levels\n";
   print_bit_vector(levels);
   cout << "\n";
-  
+
   temp = imms;
   temp &= levels;
   if (immediate && (levels == temp)) {
