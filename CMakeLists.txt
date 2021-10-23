@@ -190,6 +190,8 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
   include(AddLLVM)
 
   include_directories(${LLVM_INCLUDE_DIRS})
+  include_directories(${LLVM_INCLUDE_DIRS}/llvm/Target/AArch64)
+
   add_definitions(${LLVM_DEFINITIONS})
 
   set(LLVM_UTIL_SRCS
