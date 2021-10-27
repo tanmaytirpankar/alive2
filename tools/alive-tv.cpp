@@ -1060,8 +1060,9 @@ public:
       operand_name =
           "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
 
+      auto i32_ty = &get_int_type(32);
       auto not_b = make_unique<IR::BinOp>(
-          *uadd_typ, move(operand_name), *b, *make_intconst(-1, 32), IR::BinOp::Xor);
+          *i32_ty, move(operand_name), *b, *make_intconst(-1, 32), IR::BinOp::Xor);
 
       // generate uadd instruction id
       dst_id = get_new_op_id(mc_inst.getOperand(0));
