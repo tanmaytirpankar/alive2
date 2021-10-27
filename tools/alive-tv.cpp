@@ -544,13 +544,15 @@ IR::Type *arm_type2alive(MCOperand ty) {
 // based on utils.cpp llvm_type2alive function that uses padding for struct types
 auto sadd_overflow_type(MCOperand op) {
   vector<IR::Type*> elems;
-  vector<bool> is_padding{false, false};
+  vector<bool> is_padding{false, false, true};
 
   assert(op.isReg());
   auto add_res_ty = &get_int_type(32);
   auto add_ov_ty = &get_int_type(1);
+  auto padding_ty = &get_int_type(24);
   elems.push_back(add_res_ty);
   elems.push_back(add_ov_ty);
+  elems.push_back(padding_ty);
   auto ty = new IR::StructType("ty_" + to_string(type_id_counter++),
                                       move(elems), move(is_padding));
   return ty;
@@ -559,13 +561,15 @@ auto sadd_overflow_type(MCOperand op) {
 
 auto uadd_overflow_type(MCOperand op) {
   vector<IR::Type*> elems;
-  vector<bool> is_padding{false, false};
+  vector<bool> is_padding{false, false, true};
 
   assert(op.isReg());
   auto add_res_ty = &get_int_type(32);
   auto add_ov_ty = &get_int_type(1);
+  auto padding_ty = &get_int_type(24);
   elems.push_back(add_res_ty);
   elems.push_back(add_ov_ty);
+  elems.push_back(padding_ty);
   auto ty = new IR::StructType("ty_" + to_string(type_id_counter++),
                                move(elems), move(is_padding));
   return ty;
