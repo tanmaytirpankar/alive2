@@ -625,8 +625,6 @@ unsigned get_new_op_id(llvm::MCOperand &mc_op) {
 
 void mc_add_identifier(llvm::MCOperand &mc_op, unsigned op_id, IR::Value &v) {
   assert(mc_op.isReg()); // FIXME
-  // cout << "add_identifier(reg_num = " << mc_op.getReg()
-  // << ", id = " <<  op_id << ")" << '\n';
   auto mc_val = AMCValue(mc_op, op_id);
   mc_value_cache.emplace(mc_val, &v);
 }
@@ -634,20 +632,6 @@ void mc_add_identifier(llvm::MCOperand &mc_op, unsigned op_id, IR::Value &v) {
 IR::Value *mc_get_operand(AMCValue mc_val) {
   if (auto I = mc_value_cache.find(mc_val); I != mc_value_cache.end())
     return I->second;
-  else {
-    cout << "value not found in cache\n";
-  }
-
-  auto ty = &get_int_type(32); // FIXME
-  if (!ty)
-    return nullptr;
-
-  // TODO
-  // if (mc_val.isImm()) {
-  // }
-
-  assert("Unsupported operand" && false);
-
   return nullptr;
 }
 
@@ -714,6 +698,7 @@ std::tuple<bool, IR::Value*> evaluate_condition(uint64_t cond) {
 class arm2alive_ {
   MCFunction &MF;
   const llvm::DataLayout &DL;
+  std::optional<IR::Function> &srcFn;
 
   static std::vector<std::unique_ptr<IR::Instr>> visit_error(MCInstWrapper &I) {
     std::vector<std::unique_ptr<IR::Instr>> res;
@@ -739,8 +724,8 @@ class arm2alive_ {
     return mc_get_operand(val);
   }
 public:
-  arm2alive_(MCFunction &MF,const llvm::DataLayout &DL):
-    MF(MF), DL(DL) {}
+  arm2alive_(MCFunction &MF, const llvm::DataLayout &DL, std::optional<IR::Function> &srcFn):
+    MF(MF), DL(DL), srcFn(srcFn) {}
   // Rudimentary function to visit an MCInstWrapper instructions and convert it
   // to alive IR Ideally would want a nicer designed interface, but I opted for
   // simplicity to get the initial prototype.
@@ -1123,24 +1108,42 @@ public:
     // FIXME infer function attributes if any
     // Most likely need to emit and read the debug info from the MCStreamer
 
-    auto &first_BB = MF.BBs[0];
-    auto &BB_mcinstrs = first_BB.getInstrs();
-    MCInst &first_instr = BB_mcinstrs[0].getMCInst();
-    // FIXME for now assuming arm function takes two args
-    // from the first 2 arguments of the first instruction in the MCFunction
-    for (unsigned idx = 1; idx < 3; ++idx) {
-      auto &operand = first_instr.getOperand(idx);
-      auto ty = arm_type2alive(operand);
-      if (!ty)
-        return {};
-      assert(operand.isReg());
+
+    int argNum = 0;
+    for (auto &v : srcFn->getInputs()) {
+      auto &typ = v.getType();
+      assert(typ.isIntType());
+      assert(typ.bits() == 32);
+
+      auto operand = MCOperand::createReg(AArch64::W0 + (argNum++));
+
       std::string operand_name = "%" + std::to_string(operand.getReg());
       IR::ParamAttrs attrs;
       attrs.set(IR::ParamAttrs::NoUndef);
-      auto val = make_unique<IR::Input>(*ty, move(operand_name), move(attrs));
+
+      auto val = make_unique<IR::Input>(typ, move(operand_name), move(attrs));
       mc_add_identifier(operand, get_new_op_id(operand), *val.get());
       Fn.addInput(move(val));
     }
+
+    // auto &first_BB = MF.BBs[0];
+    // auto &BB_mcinstrs = first_BB.getInstrs();
+    // MCInst &first_instr = BB_mcinstrs[0].getMCInst();
+    // FIXME for now assuming arm function takes two args
+    // from the first 2 arguments of the first instruction in the MCFunction
+//    for (unsigned idx = 1; idx < 3; ++idx) {
+//      auto &operand = first_instr.getOperand(idx);
+//      auto ty = arm_type2alive(operand);
+//      if (!ty)
+//        return {};
+//      assert(operand.isReg());
+//      std::string operand_name = "%" + std::to_string(operand.getReg());
+//      IR::ParamAttrs attrs;
+//      attrs.set(IR::ParamAttrs::NoUndef);
+//      auto val = make_unique<IR::Input>(*ty, move(operand_name), move(attrs));
+//      mc_add_identifier(operand, get_new_op_id(operand), *val.get());
+//      Fn.addInput(move(val));
+//    }
 
     // Create Fn's BBs
     vector<pair<IR::BasicBlock *, MCBasicBlock *>> sorted_bbs;
@@ -1197,9 +1200,9 @@ public:
 // FIXME for now, we are making a lot of simplifying assumptions like assuming
 // types of arguments.
 std::optional<IR::Function> arm2alive(MCFunction &MF,
-                                      const llvm::DataLayout &DL) {
-
-  return arm2alive_(MF, DL).run();
+                                      const llvm::DataLayout &DL,
+                                      std::optional<IR::Function> &srcFn) {
+  return arm2alive_(MF, DL, srcFn).run();
 }
 
 // We're overriding MCStreamerWrapper to generate an MCFunction
@@ -1843,9 +1846,10 @@ bool backendTV() {
     AF = llvm2alive(F, TLI.getTLI(F));
     break;
   }
+
   AF->print(cout << "\n----------alive-ir-src.ll-file----------\n");
 
-  auto TF = arm2alive(MF, DL);
+  auto TF = arm2alive(MF, DL, AF);
   if (TF)
     TF->print(cout << "\n----------alive-lift-arm-target----------\n");
 
