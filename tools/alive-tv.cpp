@@ -850,6 +850,7 @@ public:
       auto ty = &get_int_type(32); // FIXME
       auto a = get_value(mc_inst.getOperand(1));
       auto b = get_value(mc_inst.getOperand(2));
+
       if (!ty || !a || !b)
         return visit_error(I);
       assert(mc_inst.getOperand(0).isReg());
@@ -1086,6 +1087,72 @@ public:
       res.push_back(move(extract_add_inst));
       return res;
     }
+    else if (opcode == AArch64::MOVZWi) {
+      assert(mc_inst.getOperand(0).isReg());
+      assert(mc_inst.getOperand(1).isImm());
+
+      auto ty = &get_int_type(32);
+
+      auto dst_id = get_new_op_id(mc_inst.getOperand(0));
+      std::string operand_name =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+
+      auto lhs = make_intconst(mc_inst.getOperand(1).getImm(), 16);
+      auto sext = make_unique<IR::ConversionOp>(
+          *ty, move(operand_name), *lhs, IR::ConversionOp::SExt);
+
+      dst_id = get_new_op_id(mc_inst.getOperand(0));
+      operand_name =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+
+      auto rhs = make_intconst(0, 32);
+
+      auto ident = make_unique<IR::BinOp>(
+          *ty, move(operand_name), *sext, *rhs, IR::BinOp::Add);
+
+      mc_add_identifier(mc_inst.getOperand(0), dst_id, *ident.get());
+      res.push_back(move(sext));
+      res.push_back(move(ident));
+      return res;
+    }
+    else if (opcode == AArch64::MOVNWi) {
+      assert(mc_inst.getOperand(0).isReg());
+      assert(mc_inst.getOperand(1).isImm());
+      assert(mc_inst.getOperand(2).isImm() == 0);
+
+      auto ty = &get_int_type(32);
+
+      auto dst_id = get_new_op_id(mc_inst.getOperand(0));
+      std::string operand_name =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+
+      auto lhs = make_intconst(mc_inst.getOperand(1).getImm(), 16);
+      auto sext = make_unique<IR::ConversionOp>(
+          *ty, move(operand_name), *lhs, IR::ConversionOp::SExt);
+
+      dst_id = get_new_op_id(mc_inst.getOperand(0));
+      operand_name =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+      auto neg_one = make_intconst(-1, 32);
+
+      auto not_lhs = make_unique<IR::BinOp>(
+          *ty, move(operand_name), *sext, *neg_one, IR::BinOp::Xor);
+
+      dst_id = get_new_op_id(mc_inst.getOperand(0));
+      operand_name =
+          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+
+      auto rhs = make_intconst(0, 32);
+
+      auto ident = make_unique<IR::BinOp>(
+          *ty, move(operand_name), *not_lhs, *rhs, IR::BinOp::Add);
+
+      mc_add_identifier(mc_inst.getOperand(0), dst_id, *ident.get());
+      res.push_back(move(sext));
+      res.push_back(move(not_lhs));
+      res.push_back(move(ident));
+      return res;
+    }
     else {
       return visit_error(I);
     }
@@ -1115,6 +1182,7 @@ public:
       assert(typ.isIntType());
       assert(typ.bits() == 32);
 
+      // FIXME. Do a switch statement to figure out which register to start from
       auto operand = MCOperand::createReg(AArch64::W0 + (argNum++));
 
       std::string operand_name = "%" + std::to_string(operand.getReg());
