@@ -13,7 +13,7 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Triple.h"
-#include <llvm/ADT/BitVector.h>
+#include "llvm/ADT/BitVector.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/Bitcode/BitcodeReader.h"
@@ -523,6 +523,7 @@ std::unordered_map<llvm::MCOperand, unsigned, MCOperandHash, MCOperandEqual>
 
 unsigned type_id_counter{0};
 
+
 // TODO Should eventually be moved to utils.h
 // Will need more parameters to identify the exact type of oprand.
 // FIXME For now, we're just returning 32 bit ints
@@ -538,6 +539,8 @@ IR::Type *arm_type2alive(MCOperand ty) {
 // Generate the required struct type for an alive2 sadd_overflow instruction
 // FIXME these type object generators should be either grouped in one class or
 // be refactored in some other way.
+// We should also pass something more useful than just one operand that can be 
+// used as a key to cache complex types as right now this function leaks memory
 // This function should also be moved to utils.cpp as it will need to use objects
 // that are defined there
 // further I'm not sure if the padding matters at this point but the code is
@@ -670,6 +673,7 @@ static inline uint64_t decodeLogicalImmediate(uint64_t val, unsigned regSize) {
   return pattern;
 }
 
+
 // Values currently holding ZNCV bits, respectively
 IR::Value* cur_v{nullptr};
 IR::Value* cur_z{nullptr};
@@ -726,6 +730,7 @@ class arm2alive_ {
 public:
   arm2alive_(MCFunction &MF, const llvm::DataLayout &DL, std::optional<IR::Function> &srcFn):
     MF(MF), DL(DL), srcFn(srcFn) {}
+
   // Rudimentary function to visit an MCInstWrapper instructions and convert it
   // to alive IR Ideally would want a nicer designed interface, but I opted for
   // simplicity to get the initial prototype.
