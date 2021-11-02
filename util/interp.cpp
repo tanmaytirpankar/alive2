@@ -117,15 +117,16 @@ void interp(Function &f) {
       }
       if (auto string_float = const_ptr->getString()) {
         cout << "string repr of float constant : " << *string_float << '\n';
-      } else if (auto int_float = const_ptr->getInt()) {
-
-        auto new_val = new ConcreteValFloat(false,
-                                  llvm::APFloat(llvm::APFloatBase::IEEEhalf(),
-                                                llvm::APInt(16, *int_float)));
-        concrete_vals.emplace(&i, new_val);
-
-        cout << "int repr of float constant : " << *int_float << '\n';
       }
+//      else if (auto int_float = const_ptr->getInt()) {
+//
+//        auto new_val = new ConcreteValFloat(false,
+//                                  llvm::APFloat(llvm::APFloatBase::IEEEhalf(),
+//                                                llvm::APInt(16, *int_float)));
+//        concrete_vals.emplace(&i, new_val);
+//
+//        cout << "int repr of float constant : " << *int_float << '\n';
+//      }
 
     } else { // TODO for now we only support Int constants
       cout << "AliveExec-Error : Unsupported constant type. Aborting!" << '\n';
