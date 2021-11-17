@@ -705,29 +705,34 @@ class arm2alive_ {
   std::optional<IR::Function> &srcFn;
   IR::BasicBlock *BB;
 
+  MCInstPrinter *instrPrinter;
+  MCRegisterInfo *registerInfo;
+
   MCInst curInst;
   unsigned int curId;
 
 
   std::vector<std::unique_ptr<IR::Instr>> visit_error(MCInstWrapper &I) {
     std::vector<std::unique_ptr<IR::Instr>> res;
-    cout << "ERROR: Unsupported arm instruction: ";
-    I.print();
+    llvm::errs() << "ERROR: Unsupported arm instruction: "
+                 << instrPrinter->getOpcodeName(I.instr.getOpcode());
     exit(1); // for now lets exit the program if the arm instruction is not
              // supported
     return res;
   }
 
-  IR::Value* get_value(MCOperand &op) {
+  IR::Value* get_value(MCOperand &op, int lshr = 0) {
     assert(op.isImm() || op.isReg());
     if (op.isImm()) {
       // FIXME, figure out immediate size
-      return make_intconst(op.getImm(), 32);
+      return make_intconst(op.getImm() << lshr, 32);
     }
 
     if (op.getReg() == AArch64::WZR) {
         return make_intconst(0, 32);
     }
+
+    cout << "op: " << op.getReg() << endl;
 
     auto val = AMCValue(op, get_cur_op_id(op));
     return mc_get_operand(val);
@@ -747,8 +752,9 @@ class arm2alive_ {
   }
 
 public:
-  arm2alive_(MCFunction &MF, const llvm::DataLayout &DL, std::optional<IR::Function> &srcFn):
-    MF(MF), DL(DL), srcFn(srcFn) {}
+  arm2alive_(MCFunction &MF, const llvm::DataLayout &DL, std::optional<IR::Function> &srcFn,
+             MCInstPrinter* instrPrinter, MCRegisterInfo *registerInfo):
+    MF(MF), DL(DL), srcFn(srcFn), instrPrinter(instrPrinter), registerInfo(registerInfo) {}
 
   // Rudimentary function to visit an MCInstWrapper instructions and convert it
   // to alive IR Ideally would want a nicer designed interface, but I opted for
@@ -761,16 +767,14 @@ public:
     auto &mc_inst = I.getMCInst();
     curInst = mc_inst;
 
-    if (opcode == AArch64::ADDWrs) {
+    if (opcode == AArch64::ADDWrs || opcode == AArch64::ADDWri) {
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
-      // for now only support adds with no shift
-      assert(mc_inst.getOperand(3).isImm() &&
-             (mc_inst.getOperand(3).getImm() == 0));
+      assert(mc_inst.getOperand(3).isImm());
       auto alive_op = IR::BinOp::Add;
       auto ty = &get_int_type(32); // FIXME
 
       auto a = get_value(mc_inst.getOperand(1));
-      auto b = get_value(mc_inst.getOperand(2));
+      auto b = get_value(mc_inst.getOperand(2), mc_inst.getOperand(3).getImm());
 
       if (!ty || !a || !b)
         return visit_error(I);
@@ -781,11 +785,9 @@ public:
       add_identifier(*ret.get());
       res.push_back(move(ret));
       return res;
-    } else if (opcode == AArch64::ADDSWrs) {
+    } else if (opcode == AArch64::ADDSWrs || opcode == AArch64::ADDSWri) {
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
-      // for now only support adds with no shift
-      assert(mc_inst.getOperand(3).isImm() &&
-             (mc_inst.getOperand(3).getImm() == 0));
+      assert(mc_inst.getOperand(3).isImm());
 
       auto alive_op = IR::BinOp::SAdd_Overflow;
       auto ty = &get_int_type(32); // FIXME
@@ -793,7 +795,7 @@ public:
 
       // convert lhs, rhs operands to IR::Values
       auto a = get_value(mc_inst.getOperand(1));
-      auto b = get_value(mc_inst.getOperand(2));
+      auto b = get_value(mc_inst.getOperand(2), mc_inst.getOperand(3).getImm());
 
       // make sure that lhs and rhs conversion succeeded, type lookup succeeded
       if (!ty || !a || !b)
@@ -866,15 +868,13 @@ public:
       res.push_back(move(extract_oc_inst));
       res.push_back(move(extract_add_inst));
       return res;
-    } else if (opcode == AArch64::SUBWrs) {
+    } else if (opcode == AArch64::SUBWrs || opcode == AArch64::SUBWri) {
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
-      // for now only support adds with no shift
-      assert(mc_inst.getOperand(3).isImm() &&
-             (mc_inst.getOperand(3).getImm() == 0));
+      assert(mc_inst.getOperand(3).isImm());
       auto alive_op = IR::BinOp::Sub;
       auto ty = &get_int_type(32); // FIXME
       auto a = get_value(mc_inst.getOperand(1));
-      auto b = get_value(mc_inst.getOperand(2));
+      auto b = get_value(mc_inst.getOperand(2), mc_inst.getOperand(3).getImm());
 
       if (!ty || !a || !b)
         return visit_error(I);
@@ -904,7 +904,20 @@ public:
       mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret.get());
       res.push_back(move(ret));
       return res;
-    } else if (opcode == AArch64::EORWri) {
+    }
+    else if (opcode == AArch64::ANDWri || opcode == AArch64::ANDWrr) {
+      auto ty = &get_int_type(32);
+
+      auto ident = make_unique<IR::BinOp>(
+          *ty, next_name(),
+          *get_value(mc_inst.getOperand(1)),
+          *get_value(mc_inst.getOperand(2), mc_inst.getOperand(3).getImm()),
+          IR::BinOp::And);
+
+      add_identifier(*ident.get());
+      res.push_back(move(ident));
+    }
+    else if (opcode == AArch64::EORWri) {
       assert(mc_inst.getNumOperands() == 3); // dst, src, imm
       assert(mc_inst.getOperand(1).isReg() && mc_inst.getOperand(2).isImm());
       auto alive_op = IR::BinOp::Xor;
@@ -1013,11 +1026,9 @@ public:
       res.push_back(move(ret));
       return res;
     }
-    else if(opcode == AArch64::SUBSWrs) {
+    else if(opcode == AArch64::SUBSWrs || opcode == AArch64::SUBSWri) {
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
-      // for now only support adds with no shift
-      assert(mc_inst.getOperand(3).isImm() &&
-             (mc_inst.getOperand(3).getImm() == 0));
+      assert(mc_inst.getOperand(3).isImm());
 
       auto alive_op = IR::BinOp::SSub_Overflow;
       auto ty = &get_int_type(32); // FIXME
@@ -1025,7 +1036,7 @@ public:
 
       // convert lhs, rhs operands to IR::Values
       auto a = get_value(mc_inst.getOperand(1));
-      auto b = get_value(mc_inst.getOperand(2));
+      auto b = get_value(mc_inst.getOperand(2), mc_inst.getOperand(3).getImm());
 
       // make sure that lhs and rhs conversion succeeded, type lookup succeeded
       if (!ty || !a || !b)
@@ -1117,42 +1128,102 @@ public:
 
       auto ty = &get_int_type(32);
 
-      auto lhs = make_intconst(mc_inst.getOperand(1).getImm(), 16);
-      auto sext = make_unique<IR::ConversionOp>(
-          *ty, move(next_name()), *lhs, IR::ConversionOp::SExt);
+      auto lhs = get_value(mc_inst.getOperand(1),
+                mc_inst.getOperand(2).getImm());
 
       auto rhs = make_intconst(0, 32);
       auto ident = make_unique<IR::BinOp>(
-          *ty, next_name(), *sext, *rhs, IR::BinOp::Add);
+          *ty, next_name(), *lhs, *rhs, IR::BinOp::Add);
 
       add_identifier(*ident.get());
 
-      res.push_back(move(sext));
       res.push_back(move(ident));
       return res;
     }
     else if (opcode == AArch64::MOVNWi) {
       assert(mc_inst.getOperand(0).isReg());
       assert(mc_inst.getOperand(1).isImm());
-      assert(mc_inst.getOperand(2).isImm() == 0);
+      assert(mc_inst.getOperand(2).isImm());
 
       auto ty = &get_int_type(32);
 
-      auto lhs = make_intconst(mc_inst.getOperand(1).getImm(), 16);
-      auto sext = make_unique<IR::ConversionOp>(
-          *ty, move(next_name()), *lhs, IR::ConversionOp::SExt);
+      auto lhs = get_value(mc_inst.getOperand(1), mc_inst.getOperand(2).getImm());
 
       auto neg_one = make_intconst(-1, 32);
       auto not_lhs = make_unique<IR::BinOp>(
-          *ty, move(next_name()), *sext, *neg_one, IR::BinOp::Xor);
+          *ty, move(next_name()), *lhs, *neg_one, IR::BinOp::Xor);
 
       auto rhs = make_intconst(0, 32);
       auto ident = make_unique<IR::BinOp>(
           *ty, move(next_name()), *not_lhs, *rhs, IR::BinOp::Add);
 
       add_identifier(*ident.get());
-      res.push_back(move(sext));
       res.push_back(move(not_lhs));
+      res.push_back(move(ident));
+      return res;
+    } else if(opcode == AArch64::LSLVWr) {
+      auto ty = &get_int_type(32);
+
+      auto lhs = get_value(mc_inst.getOperand(1));
+      auto rhs = get_value(mc_inst.getOperand(2));
+
+      auto exp = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *lhs, *rhs, IR::BinOp::Shl);
+
+      add_identifier(*exp.get());
+
+      res.push_back(move(exp));
+      return res;
+    } else if(opcode == AArch64::LSRVWr) {
+      auto ty = &get_int_type(32);
+
+      auto lhs = get_value(mc_inst.getOperand(1));
+      auto rhs = get_value(mc_inst.getOperand(2));
+
+      auto exp = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *lhs, *rhs, IR::BinOp::LShr);
+
+      add_identifier(*exp.get());
+
+      res.push_back(move(exp));
+      return res;
+    }
+    else if (opcode == AArch64::ORNWrs) {
+      auto ty = &get_int_type(32);
+
+      auto lhs = get_value(mc_inst.getOperand(1));
+      auto rhs = get_value(mc_inst.getOperand(2));
+
+      auto neg_one = make_intconst(-1, 32);
+      auto not_rhs = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *rhs, *neg_one, IR::BinOp::Xor);
+
+      auto ident = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *lhs, *not_rhs, IR::BinOp::Or);
+
+      add_identifier(*ident.get());
+      res.push_back(move(not_rhs));
+      res.push_back(move(ident));
+      return res;
+    }
+    else if (opcode == AArch64::MOVKWi) {
+      auto ty = &get_int_type(32);
+
+      cout << "getting dest" << endl;
+      auto dest = get_value(mc_inst.getOperand(0));
+      cout << "got dest!!!1" << endl;
+      auto lhs = get_value(mc_inst.getOperand(1), mc_inst.getOperand(2).getImm());
+
+      auto bottom_bits = make_intconst(~0xFFFF, 32);
+      auto cleared = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *dest, *bottom_bits, IR::BinOp::And);
+
+      auto ident = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *cleared, *lhs, IR::BinOp::Or);
+
+      add_identifier(*ident.get());
+
+      res.push_back(move(cleared));
       res.push_back(move(ident));
       return res;
     }
@@ -1254,8 +1325,10 @@ public:
 // types of arguments.
 std::optional<IR::Function> arm2alive(MCFunction &MF,
                                       const llvm::DataLayout &DL,
-                                      std::optional<IR::Function> &srcFn) {
-  return arm2alive_(MF, DL, srcFn).run();
+                                      std::optional<IR::Function> &srcFn,
+                                      MCInstPrinter *instrPrinter,
+                                      MCRegisterInfo *registerInfo) {
+  return arm2alive_(MF, DL, srcFn, instrPrinter, registerInfo).run();
 }
 
 // We're overriding MCStreamerWrapper to generate an MCFunction
@@ -1902,7 +1975,7 @@ bool backendTV() {
 
   AF->print(cout << "\n----------alive-ir-src.ll-file----------\n");
 
-  auto TF = arm2alive(MF, DL, AF);
+  auto TF = arm2alive(MF, DL, AF, IPtemp.get(), MRI.get());
   if (TF)
     TF->print(cout << "\n----------alive-lift-arm-target----------\n");
 
