@@ -732,8 +732,6 @@ class arm2alive_ {
         return make_intconst(0, 32);
     }
 
-    cout << "op: " << op.getReg() << endl;
-
     auto val = AMCValue(op, get_cur_op_id(op));
     return mc_get_operand(val);
   }
@@ -1164,24 +1162,25 @@ public:
     } else if(opcode == AArch64::LSLVWr) {
       auto ty = &get_int_type(32);
 
+      auto zero = make_intconst(0, 32);
       auto lhs = get_value(mc_inst.getOperand(1));
       auto rhs = get_value(mc_inst.getOperand(2));
 
-      auto exp = make_unique<IR::BinOp>(
-          *ty, move(next_name()), *lhs, *rhs, IR::BinOp::Shl);
+      auto exp = make_unique<IR::TernaryOp>(
+          *ty, move(next_name()), *zero, *lhs, *rhs, IR::TernaryOp::FShl);
 
       add_identifier(*exp.get());
-
       res.push_back(move(exp));
       return res;
     } else if(opcode == AArch64::LSRVWr) {
       auto ty = &get_int_type(32);
 
+      auto zero = make_intconst(0, 32);
       auto lhs = get_value(mc_inst.getOperand(1));
       auto rhs = get_value(mc_inst.getOperand(2));
 
-      auto exp = make_unique<IR::BinOp>(
-          *ty, move(next_name()), *lhs, *rhs, IR::BinOp::LShr);
+      auto exp = make_unique<IR::TernaryOp>(
+          *ty, move(next_name()), *zero, *lhs, *rhs, IR::TernaryOp::FShr);
 
       add_identifier(*exp.get());
 
@@ -1209,12 +1208,10 @@ public:
     else if (opcode == AArch64::MOVKWi) {
       auto ty = &get_int_type(32);
 
-      cout << "getting dest" << endl;
-      auto dest = get_value(mc_inst.getOperand(0));
-      cout << "got dest!!!1" << endl;
-      auto lhs = get_value(mc_inst.getOperand(1), mc_inst.getOperand(2).getImm());
+      auto dest = get_value(mc_inst.getOperand(1));
+      auto lhs = get_value(mc_inst.getOperand(2), mc_inst.getOperand(3).getImm());
 
-      auto bottom_bits = make_intconst(~0xFFFF, 32);
+      auto bottom_bits = make_intconst(~(0xFFFF << mc_inst.getOperand(3).getImm()), 32);
       auto cleared = make_unique<IR::BinOp>(
           *ty, move(next_name()), *dest, *bottom_bits, IR::BinOp::And);
 
