@@ -673,6 +673,44 @@ static inline uint64_t decodeLogicalImmediate(uint64_t val, unsigned regSize) {
   return pattern;
 }
 
+// adapted from the arm ISA
+// Decode AArch64 bitfield and logical immediate masks which use a similar encoding structure
+std::tuple<uint64_t, uint64_t> decode_bit_mask(bool immNBit,
+                                     uint32_t _imms,
+                                     uint32_t _immr,
+                                     bool immediate,
+                                     int M) {
+  llvm::APInt imms(6, _imms);
+  llvm::APInt immr(6, _immr);
+
+  auto notImm = APInt(6, _imms);
+  notImm.flipAllBits();
+
+  auto concatted = APInt(1, (immNBit ? 1 : 0)).concat(notImm);
+  auto len = concatted.getBitWidth() - concatted.countLeadingZeros() - 1;
+
+  // Undefined behavior
+  assert(len >= 1);
+  assert(M >= (1 << len));
+
+  auto levels = llvm::APInt::getAllOnes(len).zextOrSelf(6);
+
+  auto S = (imms & levels);
+  auto R = (immr & levels);
+
+  auto diff = S - R;
+  auto esize = (1 << len);
+
+  auto d = diff.ashr(len - 1);
+
+  auto welem = llvm::APInt::getAllOnes(S.getZExtValue() + 1)
+                   .zextOrSelf(esize);
+  auto telem = llvm::APInt::getAllOnes(d.getZExtValue() + 1)
+                   .zextOrSelf(esize);
+
+  return {welem.rotr(R).getZExtValue(), telem.getZExtValue()};
+}
+
 
 // Values currently holding ZNCV bits, respectively
 IR::Value* cur_v{nullptr};
@@ -730,6 +768,10 @@ class arm2alive_ {
 
     if (op.getReg() == AArch64::WZR) {
         return make_intconst(0, 32);
+    }
+
+    if (op.getReg() == AArch64::XZR) {
+      return make_intconst(0, 64);
     }
 
     auto val = AMCValue(op, get_cur_op_id(op));
@@ -865,6 +907,22 @@ public:
       res.push_back(move(uadd_inst));
       res.push_back(move(extract_oc_inst));
       res.push_back(move(extract_add_inst));
+      return res;
+    } else if (opcode == AArch64::MADDWrrr) {
+      auto ty = &get_int_type(32); // FIXME
+
+      auto mul_lhs = get_value(mc_inst.getOperand(1));
+      auto mul_rhs = get_value(mc_inst.getOperand(2));
+      auto addend = get_value(mc_inst.getOperand(3));
+
+      auto mul = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *mul_lhs, *mul_rhs, IR::BinOp::Mul);
+      auto add = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *mul, *addend, IR::BinOp::Add);
+
+      add_identifier(*add.get());
+      res.push_back(move(mul));
+      res.push_back(move(add));
       return res;
     } else if (opcode == AArch64::SUBWrs || opcode == AArch64::SUBWri) {
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
@@ -1167,7 +1225,7 @@ public:
       auto rhs = get_value(mc_inst.getOperand(2));
 
       auto exp = make_unique<IR::TernaryOp>(
-          *ty, move(next_name()), *zero, *lhs, *rhs, IR::TernaryOp::FShl);
+          *ty, move(next_name()), *lhs, *zero, *rhs, IR::TernaryOp::FShl);
 
       add_identifier(*exp.get());
       res.push_back(move(exp));
@@ -1222,6 +1280,94 @@ public:
 
       res.push_back(move(cleared));
       res.push_back(move(ident));
+      return res;
+    }
+    else if (opcode == AArch64::UBFMWri) {
+      auto ty = &get_int_type(32);
+
+      auto src = get_value(mc_inst.getOperand(1));
+      auto immr = mc_inst.getOperand(2).getImm();
+      auto imms = mc_inst.getOperand(3).getImm();
+      auto r = make_intconst(immr, 32);
+
+      auto [wmaskInt, tmaskInt] = decode_bit_mask(false, imms, immr, false, 32);
+      auto wmask = make_intconst(wmaskInt, 32);
+      auto tmask = make_intconst(tmaskInt, 32);
+
+      auto ror = make_unique<IR::TernaryOp>(
+          *ty, move(next_name()), *src, *src, *r, IR::TernaryOp::FShr);
+      auto bot = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *ror, *wmask, IR::BinOp::And);
+      auto dst = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *bot ,*tmask, IR::BinOp::And);
+      add_identifier(*dst.get());
+
+      res.push_back(move(ror));
+      res.push_back(move(bot));
+      res.push_back(move(dst));
+      return res;
+    } else if (opcode == AArch64::BFMWri) {
+      auto ty = &get_int_type(32);
+
+      auto dst = get_value(mc_inst.getOperand(1));
+      auto src = get_value(mc_inst.getOperand(2));
+
+      auto immr = mc_inst.getOperand(3).getImm();
+      auto imms = mc_inst.getOperand(4).getImm();
+      auto r = make_intconst(immr, 32);
+
+      auto [wmaskInt, tmaskInt] = decode_bit_mask(false, imms, immr, false, 32);
+      auto wmask = make_intconst(wmaskInt, 32);
+      auto tmask = make_intconst(tmaskInt, 32);
+
+      auto not_wmask = make_intconst(~wmaskInt, 32);
+      auto not_tmask = make_intconst(~tmaskInt, 32);
+
+      auto bot_lhs = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *dst, *not_wmask, IR::BinOp::And);
+
+      auto bot_ror = make_unique<IR::TernaryOp>(
+          *ty, move(next_name()), *src, *src, *r, IR::TernaryOp::FShr);
+
+      auto bot_rhs = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *bot_ror, *wmask, IR::BinOp::And);
+
+      auto bot = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *bot_lhs, *bot_rhs, IR::BinOp::Or);
+
+      auto res_lhs = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *dst, *not_tmask, IR::BinOp::And);
+
+      auto res_rhs = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *bot, *tmask, IR::BinOp::And);
+
+      auto result = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *res_lhs, *res_rhs, IR::BinOp::Or);
+      add_identifier(*result.get());
+
+      res.push_back(move(bot_lhs));
+      res.push_back(move(bot_ror));
+      res.push_back(move(bot_rhs));
+      res.push_back(move(bot));
+      res.push_back(move(res_lhs));
+      res.push_back(move(res_rhs));
+      res.push_back(move(result));
+
+      return res;
+    } else if(opcode == AArch64::ORRWrs) {
+      // don't support shifts because I'm lazy
+      assert(mc_inst.getOperand(3).getImm() == 0);
+
+      auto ty = &get_int_type(32);
+
+      auto lhs = get_value(mc_inst.getOperand(1));
+      auto rhs = get_value(mc_inst.getOperand(2));
+
+      auto result = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *lhs, *rhs, IR::BinOp::Or);
+      add_identifier(*result.get());
+
+      res.push_back(move(result));
       return res;
     }
     else {
@@ -2116,109 +2262,7 @@ void bitcodeTV() {
 
 // arm util functions
 
-// print a bitvector from msb to lsb
-void print_bit_vector(llvm::BitVector& bits) {
-  for (int i = bits.size() - 1; i >= 0 ; --i) {
-    cout << bits[i] << ' ';
-  }
-}
 
-int highest_set_bit(llvm::BitVector& x) {
-  for (int i = x.size() - 1; i >= 0 ; --i) {
-    if (x[i] == true)
-      return i;
-  }
-  return -1;
-}
-
-llvm::BitVector ones(int n) {
-  llvm::BitVector res(n, true);
-  return res;
-}
-
-llvm::BitVector zeros(int n) {
-  llvm::BitVector res(n, false);
-  return res;
-}
-
-//return a bitvector that is comprised of msb:bits
-llvm::BitVector concat_bit(bool msb, llvm::BitVector bits) {
-  llvm::BitVector res = bits;
-  res.resize(res.size()+1, msb);
-  return res;
-}
-
-llvm::BitVector concat_bit_vectors(llvm::BitVector msb_bits, llvm::BitVector bits) {
-  llvm::BitVector res = bits;
-  res.resize(msb_bits.size() + bits.size(), false);
-  auto offset = bits.size();
-  for (int i = msb_bits.size() - 1; i >= 0 ; --i) {
-    res[i + offset] = msb_bits[i];
-  }
-  return res;
-}
-
-llvm::BitVector zero_extend(llvm::BitVector m,  unsigned n) {
-  assert(n >= m.size());
-  auto res = m;
-  res.resize(n, false);
-  return res;
-}
-
-uint64_t to_uint(const llvm::BitVector& x) {
-  assert(x.size() <= 64);
-  uint64_t res = 0;
-  for (int i = x.size() - 1; i >= 0 ; --i) {
-    res<<=1;
-    res+=x[i];
-  }
-  return res;
-}
-
-
-
-// adapted from the arm ISA
-// Decode AArch64 bitfield and logical immediate masks which use a similar encoding structure
-std::pair<llvm::BitVector, llvm::BitVector> decode_bit_mask(bool immN,
-                                                            llvm::BitVector imms,
-                                                            llvm::BitVector immr,
-                                                            bool immediate,
-                                                            int M) {
-  llvm::BitVector  res1(M, false);
-  llvm::BitVector  res2(M, false);
-  assert(imms.size() == 6);
-  assert(immr.size() == 6);
-  auto not_imms = imms;
-  not_imms.flip();
-  auto temp = concat_bit(immN, not_imms);
-  auto len = highest_set_bit(temp);
-  if (len < 1) {
-    cout << "ERROR: [decode_bit_mask] UNDEFINED behavior. Aborting.\n";
-    exit(0);
-  }
-  cout << "len is: " << len << '\n';
-  assert( M >= (1 << len));
-
-  auto levels = zero_extend(ones(len), 6);
-  cout << "levels\n";
-  print_bit_vector(levels);
-  cout << "\n";
-
-  temp = imms;
-  temp &= levels;
-  if (immediate && (levels == temp)) {
-    cout << "ERROR: [decode_bit_mask] UNDEFINED behavior. Aborting.\n";
-    exit(0);
-  }
-
-  auto S = to_uint(temp); //temp = imms & levels
-  temp = immr;
-  temp &= levels;
-  auto R = to_uint(temp); //temp = immr & levels
-  cout << "S = " << S << ", R = " << R << '\n';
-  auto res = std::make_pair(res1, res2);
-  return res;
-}
 
 int main(int argc, char **argv) {
   llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
