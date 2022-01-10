@@ -13,6 +13,7 @@
 #include "util/stopwatch.h"
 #include "util/symexec.h"
 #include <algorithm>
+#include <climits>
 #include <iostream>
 #include <map>
 #include <numeric>
@@ -38,6 +39,11 @@ static bool is_arbitrary(const expr &e) {
 static void print_single_varval(ostream &os, const State &st, const Model &m,
                                 const Value *var, const Type &type,
                                 const StateValue &val, unsigned child) {
+  if (dynamic_cast<const VoidType*>(&type)) {
+    os << "void";
+    return;
+  }
+
   if (!val.isValid()) {
     os << "(invalid expr)";
     return;
@@ -82,9 +88,9 @@ static void print_single_varval(ostream &os, const State &st, const Model &m,
   }
 }
 
-static void print_varval(ostream &os, const State &st, const Model &m,
-                         const Value *var, const Type &type,
-                         const StateValue &val, unsigned child = 0) {
+void tools::print_model_val(ostream &os, const State &st, const Model &m,
+                            const Value *var, const Type &type,
+                            const StateValue &val, unsigned child) {
   if (!type.isAggregateType()) {
     print_single_varval(os, st, m, var, type, val, child);
     return;
@@ -95,8 +101,8 @@ static void print_varval(ostream &os, const State &st, const Model &m,
   for (unsigned i = 0, e = agg->numElementsConst(); i < e; ++i) {
     if (i != 0)
       os << ", ";
-    print_varval(os, st, m, var, agg->getChild(i), agg->extract(val, i),
-                 child + i);
+    tools::print_model_val(os, st, m, var, agg->getChild(i),
+                           agg->extract(val, i), child + i);
   }
   os << (type.isStructType() ? " }" : " >");
 }
@@ -168,7 +174,7 @@ static bool error(Errors &errs, const State &src_state, const State &tgt_state,
         !dynamic_cast<const ConstantInput*>(var))
       continue;
     s << *var << " = ";
-    print_varval(s, src_state, m, var, var->getType(), val.val);
+    print_model_val(s, src_state, m, var, var->getType(), val.val);
     s << '\n';
   }
 
@@ -208,7 +214,7 @@ static bool error(Errors &errs, const State &src_state, const State &tgt_state,
         if (jumped) {
           continue;
         } else {
-          s << "UB triggered on " << var->getName() << '\n';
+          s << "UB triggered on " << name << '\n';
           break;
         }
       }
@@ -223,7 +229,8 @@ static bool error(Errors &errs, const State &src_state, const State &tgt_state,
         continue;
 
       s << *var << " = ";
-      print_varval(s, const_cast<State&>(*st), m, var, var->getType(), val.val);
+      print_model_val(s, const_cast<State&>(*st), m, var, var->getType(),
+                      val.val);
       s << '\n';
     }
 
@@ -386,14 +393,14 @@ check_refinement(Errors &errs, const Transform &t, const State &src_state,
                  const expr &fndom_a, const State::ValTy &ap,
                  const expr &fndom_b, const State::ValTy &bp,
                  bool check_each_var) {
-  if (src_state.sinkDomain().isTrue()) {
+  if (check_expr(!src_state.sinkDomain()).isUnsat()) {
     errs.add("The source program doesn't reach a return instruction.\n"
              "Consider increasing the unroll factor if it has loops", false);
     return;
   }
 
   auto sink_tgt = tgt_state.sinkDomain();
-  if (sink_tgt.isTrue()) {
+  if (check_expr(!sink_tgt).isUnsat()) {
     errs.add("The target program doesn't reach a return instruction.\n"
              "Consider increasing the unroll factor if it has loops", false);
     return;
@@ -497,9 +504,9 @@ check_refinement(Errors &errs, const Transform &t, const State &src_state,
   // 3. Check poison
   auto print_value = [&](ostream &s, const Model &m) {
     s << "Source value: ";
-    print_varval(s, src_state, m, var, type, a);
+    print_model_val(s, src_state, m, var, type, a);
     s << "\nTarget value: ";
-    print_varval(s, tgt_state, m, var, type, b);
+    print_model_val(s, tgt_state, m, var, type, b);
   };
 
   auto [poison_cnstr, value_cnstr] = type.refines(src_state, tgt_state, a, b);
@@ -562,10 +569,13 @@ static unsigned num_ptrs(const Type &ty) {
 }
 
 static bool returns_local(const Value &v) {
+  // no alias fns return local block
+  if (auto call = dynamic_cast<const FnCall*>(&v))
+    return call->getAttributes().has(FnAttrs::NoAlias);
+
   return dynamic_cast<const Alloc*>(&v) ||
          dynamic_cast<const Malloc*>(&v) ||
          dynamic_cast<const Calloc*>(&v);
-         // TODO: add noalias fn
 }
 
 static Value *get_base_ptr(Value *ptr) {
@@ -751,7 +761,6 @@ static void calculateAndInitConstants(Transform &t) {
   heap_block_alignment = 8;
 
   num_consts_src = 0;
-  num_extra_nonconst_tgt = 0;
 
   for (auto GV : globals_src) {
     if (GV->isConst())
@@ -763,8 +772,6 @@ static void calculateAndInitConstants(Transform &t) {
       [GVT](auto *GV) -> bool { return GVT->getName() == GV->getName(); });
     if (I == globals_src.end()) {
       ++num_globals;
-      if (!GVT->isConst())
-        ++num_extra_nonconst_tgt;
     }
   }
 
@@ -800,12 +807,16 @@ static void calculateAndInitConstants(Transform &t) {
   has_malloc       = false;
   has_free         = false;
   has_fncall       = false;
+  has_write_fncall = false;
   has_null_block   = false;
   does_ptr_store   = false;
   does_ptr_mem_access = false;
   does_int_mem_access = false;
   observes_addresses  = false;
   bool does_any_byte_access = false;
+
+  set<string> inaccessiblememonly_fns;
+  num_inaccessiblememonly_fns = 0;
 
   // Mininum access size (in bytes)
   uint64_t min_access_size = 8;
@@ -866,8 +877,15 @@ static void calculateAndInitConstants(Transform &t) {
 
       update_min_vect_sz(i.getType());
 
-      if (dynamic_cast<const FnCall*>(&i))
+      if (auto fn = dynamic_cast<const FnCall*>(&i)) {
         has_fncall |= true;
+        if (fn->hasAttribute(FnAttrs::InaccessibleMemOnly)) {
+          if (inaccessiblememonly_fns.emplace(fn->getName()).second)
+            ++num_inaccessiblememonly_fns;
+        } else {
+          has_write_fncall |= !fn->hasAttribute(FnAttrs::NoWrite);
+        }
+      }
 
       if (auto *mi = dynamic_cast<const MemInstr *>(&i)) {
         auto [alloc, align] = mi->getMaxAllocSize();
@@ -943,10 +961,10 @@ static void calculateAndInitConstants(Transform &t) {
                   has_ptr_load || has_fncall || has_int2ptr;
 
   num_nonlocals_src = num_globals_src + num_ptrinputs + num_nonlocals_inst_src +
-                      has_null_block;
+                      num_inaccessiblememonly_fns + has_null_block;
 
   // Allow at least one non-const global for calls to change
-  num_nonlocals_src += has_fncall;
+  num_nonlocals_src += has_write_fncall;
 
   num_nonlocals = num_nonlocals_src + num_globals - num_globals_src;
 
@@ -1018,6 +1036,8 @@ static void calculateAndInitConstants(Transform &t) {
                   << "\nnum_locals_tgt: " << num_locals_tgt
                   << "\nnum_nonlocals_src: " << num_nonlocals_src
                   << "\nnum_nonlocals: " << num_nonlocals
+                  << "\nnum_inaccessiblememonly_fns: "
+                    << num_inaccessiblememonly_fns
                   << "\nbits_for_bid: " << bits_for_bid
                   << "\nbits_for_offset: " << bits_for_offset
                   << "\nbits_size_t: " << bits_size_t
@@ -1109,6 +1129,19 @@ Errors TransformVerify::verify() const {
       ss << "Unsupported interprocedural transformation: global variable "
          << GVS->getName() << " is const in target but not in source";
       return { ss.str(), false };
+    }
+  }
+  for (auto GVT : globals_tgt) {
+    auto I = find_if(globals_src.begin(), globals_src.end(),
+      [GVT](auto *GV) -> bool { return GVT->getName() == GV->getName(); });
+    if (I != globals_src.end())
+      continue;
+
+    if (!GVT->isConst()) {
+        string s = "Unsupported interprocedural transformation: non-constant "
+                   "global variable " + GVT->getName() + " is introduced in"
+                   " target";
+        return { move(s), false };
     }
   }
 
@@ -1312,7 +1345,8 @@ static void optimize_ptrcmp(Function &f) {
     if (auto *gep = dynamic_cast<const GEP*>(&v))
       return gep->isInBounds();
 
-    return returns_local(v);
+    // noalias functions aren't required to return an inbounds ptr
+    return returns_local(v) && !dynamic_cast<const FnCall*>(&v);
   };
 
   for (auto &i : f.instrs()) {
@@ -1322,6 +1356,8 @@ static void optimize_ptrcmp(Function &f) {
 
     auto cond = icmp->getCond();
     bool is_eq = cond == ICmp::EQ || cond == ICmp::NE;
+    bool is_signed_cmp = cond == ICmp::SLE || cond == ICmp::SLT ||
+                         cond == ICmp::SGE || cond == ICmp::SGT;
 
     auto ops = icmp->operands();
     auto *op0 = ops[0];
@@ -1338,7 +1374,10 @@ static void optimize_ptrcmp(Function &f) {
     if (base0 && base0 == base1) {
       if (is_eq)
         const_cast<ICmp*>(icmp)->setPtrCmpMode(ICmp::PROVENANCE);
-      else if (is_inbounds(*op0) && is_inbounds(*op1))
+      else if (is_inbounds(*op0) && is_inbounds(*op1) && !is_signed_cmp)
+        // Even if op0 and op1 are inbounds, 'icmp slt op0, op1' must
+        // compare underlying addresses because it is possible for the block
+        // to span across [a, b] where a >s 0 && b <s 0.
         const_cast<ICmp*>(icmp)->setPtrCmpMode(ICmp::OFFSETONLY);
     }
   }

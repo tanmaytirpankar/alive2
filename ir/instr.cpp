@@ -237,8 +237,7 @@ void BinOp::print(ostream &os) const {
     os << "nuw ";
   if (flags & Exact)
     os << "exact ";
-  os << fmath
-     << print_type(getType()) << lhs->getName() << ", " << rhs->getName();
+  os << fmath << *lhs << ", " << rhs->getName();
 }
 
 static void div_ub(State &s, const expr &a, const expr &b, const expr &ap,
@@ -1509,15 +1508,18 @@ StateValue ConversionOp::toSMT(State &s) const {
     fn = [](auto &&val, auto &to_type) -> StateValue {
       expr bv  = val.fp2sint(to_type.bits());
       expr fp2 = bv.sint2fp(val);
-      // -0.0 is converted to 0 and then to 0.0, though -0.0 is ok to convert
-      return { move(bv), val.isFPZero() || fp2 == val.roundtz() };
+      // -0.xx is converted to 0 and then to 0.0, though -0.xx is ok to convert
+      expr valrtz = val.roundtz();
+      return { move(bv), valrtz.isFPZero() || fp2 == valrtz };
     };
     break;
   case FPToUInt:
     fn = [](auto &&val, auto &to_type) -> StateValue {
       expr bv  = val.fp2uint(to_type.bits());
       expr fp2 = bv.uint2fp(val);
-      return { move(bv), fp2 == val.roundtz() };
+      // -0.xx must be converted to 0, not poison.
+      expr valrtz = val.roundtz();
+      return { move(bv), valrtz.isFPZero() || fp2 == valrtz };
     };
     break;
   case FPExt:
@@ -2105,7 +2107,8 @@ StateValue FnCall::toSMT(State &s) const {
   vector<StateValue> inputs;
   vector<Memory::PtrInput> ptr_inputs;
   vector<Type*> out_types;
-  bool argmemonly = attrs.has(FnAttrs::ArgMemOnly);
+  bool argmemonly_fn   = s.getFn().getFnAttrs().has(FnAttrs::ArgMemOnly);
+  bool argmemonly_call = hasAttribute(FnAttrs::ArgMemOnly);
 
   ostringstream fnName_mangled;
   fnName_mangled << fnName;
@@ -2124,7 +2127,7 @@ StateValue FnCall::toSMT(State &s) const {
       sv2 = s[*arg];
     }
 
-    unpack_inputs(s, *arg, arg->getType(), flags, argmemonly, move(sv),
+    unpack_inputs(s, *arg, arg->getType(), flags, argmemonly_fn, move(sv),
                   move(sv2), inputs, ptr_inputs);
     fnName_mangled << '#' << arg->getType();
   }
@@ -2132,12 +2135,20 @@ StateValue FnCall::toSMT(State &s) const {
   if (!isVoid())
     unpack_ret_ty(out_types, getType());
 
-  auto check_access = [&]() {
-    if (argmemonly) {
+  auto check = [&](FnAttrs::Attribute attr) {
+    return s.getFn().getFnAttrs().has(attr) && !hasAttribute(attr);
+  };
+
+  auto check_implies = [&](FnAttrs::Attribute attr) {
+    if (!check(attr))
+      return;
+
+    if (argmemonly_call) {
       for (auto &p : ptr_inputs) {
         if (!p.byval) {
           Pointer ptr(s.getMemory(), p.val.value);
-          s.addUB(p.val.non_poison.implies(ptr.isLocal()));
+          s.addUB(p.val.non_poison.implies(
+                    ptr.isLocal() || ptr.isConstGlobal()));
         }
       }
     } else {
@@ -2145,25 +2156,19 @@ StateValue FnCall::toSMT(State &s) const {
     }
   };
 
-  if (!attrs.has(FnAttrs::NoRead)) {
-    if (s.getFn().getFnAttrs().has(FnAttrs::NoRead))
-      check_access();
-  }
-
-  if (!attrs.has(FnAttrs::NoWrite)) {
-    if (s.getFn().getFnAttrs().has(FnAttrs::NoWrite))
-      check_access();
-  }
+  check_implies(FnAttrs::NoRead);
+  check_implies(FnAttrs::NoWrite);
+  check_implies(FnAttrs::NoFree);
 
   // Check attributes that calles must have if caller has them
-  auto check = [&](FnAttrs::Attribute attr) {
-    return s.getFn().getFnAttrs().has(attr) && !attrs.has(attr);
-  };
-
   if (check(FnAttrs::ArgMemOnly) ||
-      check(FnAttrs::NoFree) ||
       check(FnAttrs::NoThrow) ||
-      check(FnAttrs::WillReturn))
+      check(FnAttrs::WillReturn) ||
+      check(FnAttrs::InaccessibleMemOnly))
+    s.addUB(expr(false));
+
+  // can't have both!
+  if (attrs.has(FnAttrs::ArgMemOnly) && attrs.has(FnAttrs::InaccessibleMemOnly))
     s.addUB(expr(false));
 
   unsigned idx = 0;
@@ -3153,7 +3158,7 @@ bool Malloc::canFree() const {
   return ptr != nullptr;
 }
 
-unsigned Malloc::getAlign() const {
+uint64_t Malloc::getAlign() const {
   return align ? align : heap_block_alignment;
 }
 
@@ -3253,7 +3258,7 @@ Calloc::ByteAccessInfo Calloc::getByteAccessInfo() const {
   return info;
 }
 
-unsigned Calloc::getAlign() const {
+uint64_t Calloc::getAlign() const {
   return align ? align : heap_block_alignment;
 }
 
@@ -3657,8 +3662,9 @@ StateValue Memset::toSMT(State &s) const {
   } else {
     auto &sv_ptr = s[*ptr];
     auto &sv_ptr2 = s[*ptr];
-    s.addUB((vbytes != 0).implies(
-        sv_ptr.non_poison && (sv_ptr.value == sv_ptr2.value)));
+    // can't be poison even if bytes=0 as address must be aligned regardless
+    s.addUB(sv_ptr.non_poison);
+    s.addUB((vbytes != 0).implies(sv_ptr.value == sv_ptr2.value));
     vptr = sv_ptr.value;
   }
   check_can_store(s, vptr);
@@ -4318,6 +4324,7 @@ const ConversionOp* isCast(ConversionOp::Op op, const Value &v) {
 
 bool hasNoSideEffects(const Instr &i) {
   return isNoOp(i) ||
+         dynamic_cast<const ExtractValue*>(&i) ||
          dynamic_cast<const GEP*>(&i) ||
          dynamic_cast<const ShuffleVector*>(&i);
 }

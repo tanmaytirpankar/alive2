@@ -25,8 +25,8 @@ public:
 
   uint64_t derefBytes = 0;       // Dereferenceable
   uint64_t derefOrNullBytes = 0; // DereferenceableOrNull
-  unsigned blockSize = 0;        // exact block size for e.g. byval args
-  unsigned align = 1;
+  uint64_t blockSize = 0;        // exact block size for e.g. byval args
+  uint64_t align = 1;
 
   bool has(Attribute a) const { return (bits & a) != 0; }
   void set(Attribute a) { bits |= (unsigned)a; }
@@ -56,7 +56,8 @@ public:
                    Dereferenceable = 1 << 5, NonNull = 1 << 6,
                    NoFree = 1 << 7, NoUndef = 1 << 8, Align = 1 << 9,
                    NoThrow = 1 << 10, NoAlias = 1 << 11, WillReturn = 1 << 12,
-                   DereferenceableOrNull = 1 << 13 };
+                   DereferenceableOrNull = 1 << 13,
+                   InaccessibleMemOnly = 1 << 14 };
 
   FnAttrs(unsigned bits = None) : bits(bits) {}
 
