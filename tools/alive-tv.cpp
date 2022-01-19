@@ -737,6 +737,12 @@ std::tuple<bool, IR::Value*> evaluate_condition(uint64_t cond) {
   return {invert_bit, res};
 }
 
+// DISABLE_REGISTER_LOOKUP will disable code that resolves 32/64 bit registers
+// to the same use.
+// FIXME make SSA to support 32/64 bit registers as same use
+#define DISABLE_REGISTER_LOOKUP true
+
+
 class arm2alive_ {
   MCFunction &MF;
   const llvm::DataLayout &DL;
@@ -751,15 +757,25 @@ class arm2alive_ {
 
 
   std::vector<std::unique_ptr<IR::Instr>> visit_error(MCInstWrapper &I) {
-    std::vector<std::unique_ptr<IR::Instr>> res;
     llvm::errs() << "ERROR: Unsupported arm instruction: "
                  << instrPrinter->getOpcodeName(I.instr.getOpcode());
     exit(1); // for now lets exit the program if the arm instruction is not
              // supported
-    return res;
   }
 
-  IR::Value* get_value(MCOperand &op, int lshr = 0) {
+  IR::Value* get_identifier(MCOperand &op) {
+    auto search_val = AMCValue(op, get_cur_op_id(op));
+    auto val = mc_get_operand(search_val);
+
+    assert(val != NULL);
+
+    return val;
+  }
+
+  // TODO: figure out how to deal with arguments passed in.
+  //  This function is buggy and won't handle it. If we have anything other
+  //  than 64 bit arguments, we may want to do some sort of conversion
+  IR::Value* get_value(MCOperand &op, int lshr = 0, size_t size = 32) {
     assert(op.isImm() || op.isReg());
     if (op.isImm()) {
       // FIXME, figure out immediate size
@@ -774,8 +790,18 @@ class arm2alive_ {
       return make_intconst(0, 64);
     }
 
-    auto val = AMCValue(op, get_cur_op_id(op));
-    return mc_get_operand(val);
+    auto val = get_identifier(op);
+    if (size == 64 || DISABLE_REGISTER_LOOKUP) {
+      return val;
+    }
+
+    auto ty = &get_int_type(32);
+    auto trunc = make_unique<IR::ConversionOp>(
+        *ty, move(next_name()), *val, IR::ConversionOp::Trunc);
+    val = trunc.get();
+
+    BB->addInstr(move(trunc));
+    return val;
   }
 
   unsigned long next_id() {
@@ -787,22 +813,49 @@ class arm2alive_ {
     return "%" + std::to_string(curInst.getOperand(0).getReg()) + "_" + std::to_string(next_id());
   }
 
+
   void add_identifier(IR::Value &v) {
     mc_add_identifier(curInst.getOperand(0), curId, v);
+  }
+
+  // ARM has 31 general purpose registers, w0-w30 which are 32 bit registers,
+  // and x0-x30 which are their 64 bit extensions.
+  // The 32 bit registers make up bits 0-31 of the 64 bit registers.
+  // Upon writing to a 32-bit register, the upper 32 bits of the corresponding
+  // 64 bit register are zeroed.
+  // Surprisingly, LLVM's AArch64 backend only supports x0-x28, and w0-w30,
+  // so if you notice the lack of use of x29 and x30, it is intentional
+  void store(IR::Value &v) {
+    if (v.bits() == 64 || DISABLE_REGISTER_LOOKUP) {
+      add_identifier(v);
+      return;
+    }
+
+    auto ty = &get_int_type(64);
+    auto new_val = make_unique<IR::ConversionOp>(
+      *ty, move(next_name()), v, IR::ConversionOp::ZExt);
+
+    add_identifier(*new_val.get());
+    BB->addInstr(move(new_val));
   }
 
 public:
   arm2alive_(MCFunction &MF, const llvm::DataLayout &DL, std::optional<IR::Function> &srcFn,
              MCInstPrinter* instrPrinter, MCRegisterInfo *registerInfo):
-    MF(MF), DL(DL), srcFn(srcFn), instrPrinter(instrPrinter), registerInfo(registerInfo) {}
+    MF(MF), DL(DL), srcFn(srcFn), instrPrinter(instrPrinter), registerInfo(registerInfo) {
+
+    assert((AArch64::W30 - AArch64::W0) == 30); // make sure 32 bit registers are sequential
+    assert((AArch64::X28 - AArch64::X0) == 28); // make sure 64 bit registers are sequential
+
+  }
 
   // Rudimentary function to visit an MCInstWrapper instructions and convert it
   // to alive IR Ideally would want a nicer designed interface, but I opted for
   // simplicity to get the initial prototype.
   // FIXME add support for more arm instructions
   // FIXME generate code for setting NZCV flags and other changes to arm PSTATE
-  std::vector<std::unique_ptr<IR::Instr>> mc_visit(MCInstWrapper &I) {
-    std::vector<std::unique_ptr<IR::Instr>> res; 
+  void mc_visit(MCInstWrapper &I) {
+    std::vector<std::unique_ptr<IR::Instr>> res;
     auto opcode = I.getOpcode();
     auto &mc_inst = I.getMCInst();
     curInst = mc_inst;
@@ -810,26 +863,24 @@ public:
     if (opcode == AArch64::ADDWrs || opcode == AArch64::ADDWri) {
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
       assert(mc_inst.getOperand(3).isImm());
-      auto alive_op = IR::BinOp::Add;
       auto ty = &get_int_type(32); // FIXME
 
       auto a = get_value(mc_inst.getOperand(1));
       auto b = get_value(mc_inst.getOperand(2), mc_inst.getOperand(3).getImm());
 
       if (!ty || !a || !b)
-        return visit_error(I);
-      assert(mc_inst.getOperand(0).isReg());
+        visit_error(I);
 
-      auto ret = make_unique<IR::BinOp>(*ty, move(next_name()), *a, *b, alive_op);
+      auto ret = make_unique<IR::BinOp>(
+          *ty, move(next_name()), *a, *b, IR::BinOp::Add);
 
-      add_identifier(*ret.get());
-      res.push_back(move(ret));
-      return res;
+      auto val = ret.get();
+      BB->addInstr(move(ret));
+      store(*val);
     } else if (opcode == AArch64::ADDSWrs || opcode == AArch64::ADDSWri) {
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
       assert(mc_inst.getOperand(3).isImm());
 
-      auto alive_op = IR::BinOp::SAdd_Overflow;
       auto ty = &get_int_type(32); // FIXME
       auto ty_ptr = sadd_overflow_type(mc_inst.getOperand(1));
 
@@ -839,75 +890,54 @@ public:
 
       // make sure that lhs and rhs conversion succeeded, type lookup succeeded
       if (!ty || !a || !b)
-        return visit_error(I);
+        visit_error(I);
 
       // make sure the first instruction is a register
       assert(mc_inst.getOperand(0).isReg());
-
-      // generate a new operand id for the destination register
-      auto dst_id = get_new_op_id(mc_inst.getOperand(0));
-      std::string operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
 
       // generate IR::BinOp::SAdd_Overflow for dst = lhs + rhs
       // The return value will be in the form:
       // {i32 (result), i1 (overflow), i24 (padding)}
       // we will return the first value, and use the second to "set the v flag"
-      auto ret_1 =
-          make_unique<IR::BinOp>(*ty_ptr, move(operand_name), *a, *b, alive_op);
-      mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret_1.get());
+      auto ret_1 = make_unique<IR::BinOp>(
+          *ty_ptr, move(next_name()), *a, *b, IR::BinOp::SAdd_Overflow);
+      auto ret_ptr = ret_1.get();
 
-      // FIXME add a cache for value names
-
-      // generate a new operand id for the v flag
-      dst_id = get_new_op_id(mc_inst.getOperand(0));
-      operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
       auto ty_i1 = &get_int_type(1);
-
       // extract the v flag from SAdd_Overflow result
       auto extract_ov_inst =
-          make_unique<IR::ExtractValue>(*ty_i1, move(operand_name), *ret_1.get());
-      mc_add_identifier(mc_inst.getOperand(0), dst_id, *extract_ov_inst.get());
+          make_unique<IR::ExtractValue>(*ty_i1, move(next_name()), *ret_ptr);
+      add_identifier(*extract_ov_inst.get());
+
       extract_ov_inst->addIdx(1);
       cur_v = extract_ov_inst.get();
 
-      // generate uadd instruction id
-      dst_id = get_new_op_id(mc_inst.getOperand(0));
-      operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
-
       auto uadd_typ = uadd_overflow_type(mc_inst.getOperand(1));
       auto uadd_inst = make_unique<IR::BinOp>(
-        *uadd_typ, move(operand_name), *a, *b, IR::BinOp::UAdd_Overflow);
+        *uadd_typ, move(next_name()), *a, *b, IR::BinOp::UAdd_Overflow);
 
-      // generate c flag
-      dst_id = get_new_op_id(mc_inst.getOperand(0));
-      operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
-
+      // FIXME add a map that from each flag to its lates IR::Value*
       // extract the c flag from UAdd_Overflow result
       auto extract_oc_inst =
-          make_unique<IR::ExtractValue>(*ty_i1, move(operand_name), *uadd_inst.get());
-      mc_add_identifier(mc_inst.getOperand(0), dst_id, *extract_oc_inst.get());
+          make_unique<IR::ExtractValue>(*ty_i1, move(next_name()), *uadd_inst.get());
+      add_identifier(*extract_oc_inst.get());
+
       extract_oc_inst->addIdx(1);
       cur_c = extract_oc_inst.get();
 
-      // FIXME add a map that from each flag to its lates IR::Value*
-      dst_id = get_new_op_id(mc_inst.getOperand(0));
-      operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
       auto extract_add_inst =
-          make_unique<IR::ExtractValue>(*ty, move(operand_name), *ret_1.get());
-      mc_add_identifier(mc_inst.getOperand(0), dst_id, *extract_add_inst.get());
+          make_unique<IR::ExtractValue>(*ty, move(next_name()), *ret_ptr);
       extract_add_inst->addIdx(0);
 
-      res.push_back(move(ret_1));
-      res.push_back(move(extract_ov_inst));
-      res.push_back(move(uadd_inst));
-      res.push_back(move(extract_oc_inst));
-      res.push_back(move(extract_add_inst));
-      return res;
+      auto res = extract_add_inst.get();
+
+      BB->addInstr(move(ret_1));
+      BB->addInstr(move(extract_ov_inst));
+      BB->addInstr(move(uadd_inst));
+      BB->addInstr(move(extract_oc_inst));
+      BB->addInstr(move(extract_add_inst));
+
+      store(*res);
     } else if (opcode == AArch64::MADDWrrr) {
       auto ty = &get_int_type(32); // FIXME
 
@@ -919,47 +949,47 @@ public:
           *ty, move(next_name()), *mul_lhs, *mul_rhs, IR::BinOp::Mul);
       auto add = make_unique<IR::BinOp>(
           *ty, move(next_name()), *mul, *addend, IR::BinOp::Add);
+      auto add_ptr = add.get();
 
-      add_identifier(*add.get());
-      res.push_back(move(mul));
-      res.push_back(move(add));
-      return res;
+      BB->addInstr(move(mul));
+      BB->addInstr(move(add));
+      store(*add_ptr);
     } else if (opcode == AArch64::SUBWrs || opcode == AArch64::SUBWri) {
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
       assert(mc_inst.getOperand(3).isImm());
-      auto alive_op = IR::BinOp::Sub;
       auto ty = &get_int_type(32); // FIXME
       auto a = get_value(mc_inst.getOperand(1));
       auto b = get_value(mc_inst.getOperand(2), mc_inst.getOperand(3).getImm());
 
       if (!ty || !a || !b)
-        return visit_error(I);
+        visit_error(I);
       assert(mc_inst.getOperand(0).isReg());
-      std::string operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg());
+
       auto ret =
-          make_unique<IR::BinOp>(*ty, move(operand_name), *a, *b, alive_op);
-      mc_add_identifier(mc_inst.getOperand(0), get_new_op_id(mc_inst.getOperand(0)), *ret.get());
-      res.push_back(move(ret));
-      return res;
+          make_unique<IR::BinOp>(*ty, move(next_name()), *a, *b, IR::BinOp::Sub);
+      auto ret_ptr = ret.get();
+
+      BB->addInstr(move(ret));
+      store(*ret_ptr);
+
     } else if (opcode == AArch64::SBFMWri) {
       assert(mc_inst.getNumOperands() == 4); // dst, src, imm1, imm2
       assert(mc_inst.getOperand(2).isImm() &&
              mc_inst.getOperand(3).isImm());
-      auto alive_op = IR::BinOp::AShr;
+
       auto ty = &get_int_type(32); // FIXME
       auto a = get_value(mc_inst.getOperand(1));
+
       auto shift_amt = make_intconst(mc_inst.getOperand(2).getImm(), 32);
       if (!ty || !a || !shift_amt)
-        return visit_error(I);
-      auto dst_id = get_new_op_id(mc_inst.getOperand(0));
-      std::string operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
-      auto ret =
-          make_unique<IR::BinOp>(*ty, move(operand_name), *a, *shift_amt, alive_op);
-      mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret.get());
-      res.push_back(move(ret));
-      return res;
+        visit_error(I);
+
+      auto ret = make_unique<IR::BinOp>(
+              *ty, move(next_name()), *a, *shift_amt, IR::BinOp::AShr);
+      auto res = ret.get();
+
+      BB->addInstr(move(ret));
+      store(*res);
     }
     else if (opcode == AArch64::ANDWri || opcode == AArch64::ANDWrr) {
       auto ty = &get_int_type(32);
@@ -970,27 +1000,28 @@ public:
           *get_value(mc_inst.getOperand(2), mc_inst.getOperand(3).getImm()),
           IR::BinOp::And);
 
-      add_identifier(*ident.get());
-      res.push_back(move(ident));
+      auto ident_ptr = ident.get();
+
+      BB->addInstr(move(ident));
+      store(*ident_ptr);
     }
     else if (opcode == AArch64::EORWri) {
       assert(mc_inst.getNumOperands() == 3); // dst, src, imm
       assert(mc_inst.getOperand(1).isReg() && mc_inst.getOperand(2).isImm());
-      auto alive_op = IR::BinOp::Xor;
+
       auto ty = &get_int_type(32); // FIXME
       auto a = get_value(mc_inst.getOperand(1));
       auto decoded_immediate = decodeLogicalImmediate(mc_inst.getOperand(2).getImm(), 32);
       auto imm_val = make_intconst(decoded_immediate, 32); // FIXME, need to decode immediate val
       if (!ty || !a || !imm_val)
-        return visit_error(I);
-      auto dst_id = get_new_op_id(mc_inst.getOperand(0));
-      std::string operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+        visit_error(I);
+
       auto ret =
-          make_unique<IR::BinOp>(*ty, move(operand_name), *a, *imm_val, alive_op);
-      mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret.get());
-      res.push_back(move(ret));
-      return res;
+          make_unique<IR::BinOp>(*ty, move(next_name()), *a, *imm_val, IR::BinOp::Xor);
+      auto res = ret.get();
+
+      BB->addInstr(move(ret));
+      store(*res);
     } else if (opcode == AArch64::CSELWr) {
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, cond
       // TODO decode condition and find the approprate cond val
@@ -1006,32 +1037,27 @@ public:
       assert(cond_val);
 
       if (!ty || !a || !b)
-        return visit_error(I);
+        visit_error(I);
 
-      auto dst_id = get_new_op_id(mc_inst.getOperand(0));
-      std::string operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
 
       unique_ptr<IR::Select> ret;
       if (!invert) {
-        ret = make_unique<IR::Select>(*ty, move(operand_name), *cond_val, *a, *b);
+        ret = make_unique<IR::Select>(*ty, move(next_name()), *cond_val, *a, *b);
       } else {
-        ret = make_unique<IR::Select>(*ty, move(operand_name), *cond_val, *b, *a);
+        ret = make_unique<IR::Select>(*ty, move(next_name()), *cond_val, *b, *a);
       }
 
-      mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret.get());
-      res.push_back(move(ret));
-      return res;
+      auto res = ret.get();
+
+      BB->addInstr(move(ret));
+      store(*res);
     } else if (opcode == AArch64::RET) {
       // for now we're assuming that the function returns an integer value
       assert(mc_inst.getNumOperands() == 1);
       auto ty = &get_int_type(32); // FIXME
-      AMCValue mc_val_res{mc_inst.getOperand(0), get_cur_op_id(mc_inst.getOperand(0))};
-      auto val = mc_get_operand(mc_val_res);
-      if (!ty || !val)
-        return visit_error(I);
-      res.push_back(make_unique<IR::Return>(*ty, *val));
-      return res;
+      auto val = get_value(mc_inst.getOperand(0));
+
+      BB->addInstr(make_unique<IR::Return>(*ty, *val));
     } else if (opcode == AArch64::CSINVWr) {
       // csinv dst, a, b, cond
       // if (cond) a else ~b
@@ -1052,35 +1078,28 @@ public:
       assert(cond_val);
 
       if (!ty || !a || !b)
-        return visit_error(I);
+        visit_error(I);
 
       // generate instruction for ~b
-      auto dst_id = get_new_op_id(mc_inst.getOperand(0));
-      std::string operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
 
       auto neg_one = make_intconst(-1, 32);
       auto negated_b = make_unique<IR::BinOp>(
-          *ty, move(operand_name), *b, *neg_one, IR::BinOp::Xor);
-
-
-      dst_id = get_new_op_id(mc_inst.getOperand(0));
-      operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+          *ty, move(next_name()), *b, *neg_one, IR::BinOp::Xor);
 
       // return if (cond) a else ~b
       std::unique_ptr<IR::Select> ret;
-
       if (!invert) {
-        ret = make_unique<IR::Select>(*ty, move(operand_name), *cond_val, *a, *negated_b.get());
+        ret = make_unique<IR::Select>(*ty, move(next_name()), *cond_val, *a, *negated_b.get());
       } else {
-        ret = make_unique<IR::Select>(*ty, move(operand_name), *cond_val, *negated_b.get(), *a);
+        ret = make_unique<IR::Select>(*ty, move(next_name()), *cond_val, *negated_b.get(), *a);
       }
 
-      mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret.get());
-      res.push_back(move(negated_b));
-      res.push_back(move(ret));
-      return res;
+      auto ret_ptr = ret.get();
+
+      BB->addInstr(move(negated_b));
+      BB->addInstr(move(ret));
+      store(*ret_ptr);
+
     }
     else if(opcode == AArch64::SUBSWrs || opcode == AArch64::SUBSWri) {
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
@@ -1096,36 +1115,25 @@ public:
 
       // make sure that lhs and rhs conversion succeeded, type lookup succeeded
       if (!ty || !a || !b)
-        return visit_error(I);
+        visit_error(I);
 
       // make sure the first instruction is a register
       assert(mc_inst.getOperand(0).isReg());
-
-      // generate a new operand id for the destination register
-      auto dst_id = get_new_op_id(mc_inst.getOperand(0));
-      std::string operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
 
       // generate IR::BinOp::SSub_Overflow for dst = lhs + rhs
       // The return value will be in the form:
       // {i32 (result), i1 (overflow), i24 (padding)}
       // we will return the first value, and use the second to "set the v flag"
       auto ret_1 =
-          make_unique<IR::BinOp>(*ty_ptr, move(operand_name), *a, *b, alive_op);
-      mc_add_identifier(mc_inst.getOperand(0), dst_id, *ret_1.get());
-
-      // FIXME add a cache for value names
+          make_unique<IR::BinOp>(*ty_ptr, move(next_name()), *a, *b, alive_op);
 
       // generate a new operand id for the v flag
-      dst_id = get_new_op_id(mc_inst.getOperand(0));
-      operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
       auto ty_i1 = &get_int_type(1);
 
       // extract the v flag from SAdd_Overflow result
       auto extract_ov_inst =
-          make_unique<IR::ExtractValue>(*ty_i1, move(operand_name), *ret_1.get());
-      mc_add_identifier(mc_inst.getOperand(0), dst_id, *extract_ov_inst.get());
+          make_unique<IR::ExtractValue>(*ty_i1, move(next_name()), *ret_1.get());
+      add_identifier(*extract_ov_inst.get());
       extract_ov_inst->addIdx(1);
       cur_v = extract_ov_inst.get();
 
@@ -1133,50 +1141,35 @@ public:
 
       // generate code for subtract borrow flag. This can be formulated as
       // a + not(b), or a + (-b)
-      dst_id = get_new_op_id(mc_inst.getOperand(0));
-      operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
-
       auto i32_ty = &get_int_type(32);
       auto not_b = make_unique<IR::BinOp>(
-          *i32_ty, move(operand_name), *b, *make_intconst(-1, 32), IR::BinOp::Xor);
-
-      // generate uadd instruction id
-      dst_id = get_new_op_id(mc_inst.getOperand(0));
-      operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+          *i32_ty, move(next_name()), *b, *make_intconst(-1, 32), IR::BinOp::Xor);
 
       auto uadd_inst = make_unique<IR::BinOp>(
-          *uadd_typ, move(operand_name), *a, *not_b, IR::BinOp::UAdd_Overflow);
-
-      // generate c flag
-      dst_id = get_new_op_id(mc_inst.getOperand(0));
-      operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
+          *uadd_typ, move(next_name()), *a, *not_b, IR::BinOp::UAdd_Overflow);
 
       // extract the c flag from UAdd_Overflow result
       auto extract_oc_inst =
-          make_unique<IR::ExtractValue>(*ty_i1, move(operand_name), *uadd_inst.get());
-      mc_add_identifier(mc_inst.getOperand(0), dst_id, *extract_oc_inst.get());
+          make_unique<IR::ExtractValue>(*ty_i1, move(next_name()), *uadd_inst.get());
+      add_identifier(*extract_oc_inst.get());
       extract_oc_inst->addIdx(1);
       cur_c = extract_oc_inst.get();
 
       // FIXME add a map that from each flag to its lates IR::Value*
-      dst_id = get_new_op_id(mc_inst.getOperand(0));
-      operand_name =
-          "%" + std::to_string(mc_inst.getOperand(0).getReg()) + "_" + std::to_string(dst_id);
       auto extract_add_inst =
-          make_unique<IR::ExtractValue>(*ty, move(operand_name), *ret_1.get());
-      mc_add_identifier(mc_inst.getOperand(0), dst_id, *extract_add_inst.get());
+          make_unique<IR::ExtractValue>(*ty, move(next_name()), *ret_1.get());
+      auto val = extract_add_inst.get();
+
       extract_add_inst->addIdx(0);
 
-      res.push_back(move(ret_1));
-      res.push_back(move(extract_ov_inst));
-      res.push_back(move(not_b));
-      res.push_back(move(uadd_inst));
-      res.push_back(move(extract_oc_inst));
-      res.push_back(move(extract_add_inst));
-      return res;
+      BB->addInstr(move(ret_1));
+      BB->addInstr(move(extract_ov_inst));
+      BB->addInstr(move(not_b));
+      BB->addInstr(move(uadd_inst));
+      BB->addInstr(move(extract_oc_inst));
+      BB->addInstr(move(extract_add_inst));
+
+      store(*val);
     }
     else if (opcode == AArch64::MOVZWi) {
       assert(mc_inst.getOperand(0).isReg());
@@ -1190,11 +1183,11 @@ public:
       auto rhs = make_intconst(0, 32);
       auto ident = make_unique<IR::BinOp>(
           *ty, next_name(), *lhs, *rhs, IR::BinOp::Add);
+      auto ident_ptr = ident.get();
 
-      add_identifier(*ident.get());
 
-      res.push_back(move(ident));
-      return res;
+      BB->addInstr(move(ident));
+      store(*ident_ptr);
     }
     else if (opcode == AArch64::MOVNWi) {
       assert(mc_inst.getOperand(0).isReg());
@@ -1212,11 +1205,12 @@ public:
       auto rhs = make_intconst(0, 32);
       auto ident = make_unique<IR::BinOp>(
           *ty, move(next_name()), *not_lhs, *rhs, IR::BinOp::Add);
+      auto ident_ptr = ident.get();
 
-      add_identifier(*ident.get());
-      res.push_back(move(not_lhs));
-      res.push_back(move(ident));
-      return res;
+      BB->addInstr(move(not_lhs));
+      BB->addInstr(move(ident));
+      store(*ident_ptr);
+
     } else if(opcode == AArch64::LSLVWr) {
       auto ty = &get_int_type(32);
 
@@ -1226,10 +1220,10 @@ public:
 
       auto exp = make_unique<IR::TernaryOp>(
           *ty, move(next_name()), *lhs, *zero, *rhs, IR::TernaryOp::FShl);
+      auto exp_ptr = exp.get();
 
-      add_identifier(*exp.get());
-      res.push_back(move(exp));
-      return res;
+      BB->addInstr(move(exp));
+      store(*exp_ptr);
     } else if(opcode == AArch64::LSRVWr) {
       auto ty = &get_int_type(32);
 
@@ -1239,11 +1233,10 @@ public:
 
       auto exp = make_unique<IR::TernaryOp>(
           *ty, move(next_name()), *zero, *lhs, *rhs, IR::TernaryOp::FShr);
+      auto exp_ptr = exp.get();
 
-      add_identifier(*exp.get());
-
-      res.push_back(move(exp));
-      return res;
+      BB->addInstr(move(exp));
+      store(*exp_ptr);
     }
     else if (opcode == AArch64::ORNWrs) {
       auto ty = &get_int_type(32);
@@ -1257,11 +1250,11 @@ public:
 
       auto ident = make_unique<IR::BinOp>(
           *ty, move(next_name()), *lhs, *not_rhs, IR::BinOp::Or);
+      auto ident_ptr = ident.get();
 
-      add_identifier(*ident.get());
-      res.push_back(move(not_rhs));
-      res.push_back(move(ident));
-      return res;
+      BB->addInstr(move(not_rhs));
+      BB->addInstr(move(ident));
+      store(*ident_ptr);
     }
     else if (opcode == AArch64::MOVKWi) {
       auto ty = &get_int_type(32);
@@ -1275,12 +1268,11 @@ public:
 
       auto ident = make_unique<IR::BinOp>(
           *ty, move(next_name()), *cleared, *lhs, IR::BinOp::Or);
+      auto ident_ptr = ident.get();
 
-      add_identifier(*ident.get());
-
-      res.push_back(move(cleared));
-      res.push_back(move(ident));
-      return res;
+      BB->addInstr(move(cleared));
+      BB->addInstr(move(ident));
+      store(*ident_ptr);
     }
     else if (opcode == AArch64::UBFMWri) {
       auto ty = &get_int_type(32);
@@ -1300,12 +1292,12 @@ public:
           *ty, move(next_name()), *ror, *wmask, IR::BinOp::And);
       auto dst = make_unique<IR::BinOp>(
           *ty, move(next_name()), *bot ,*tmask, IR::BinOp::And);
-      add_identifier(*dst.get());
+      auto dst_ptr = dst.get();
 
-      res.push_back(move(ror));
-      res.push_back(move(bot));
-      res.push_back(move(dst));
-      return res;
+      BB->addInstr(move(ror));
+      BB->addInstr(move(bot));
+      BB->addInstr(move(dst));
+      store(*dst_ptr);
     } else if (opcode == AArch64::BFMWri) {
       auto ty = &get_int_type(32);
 
@@ -1343,37 +1335,38 @@ public:
 
       auto result = make_unique<IR::BinOp>(
           *ty, move(next_name()), *res_lhs, *res_rhs, IR::BinOp::Or);
-      add_identifier(*result.get());
+      auto result_ptr = result.get();
 
-      res.push_back(move(bot_lhs));
-      res.push_back(move(bot_ror));
-      res.push_back(move(bot_rhs));
-      res.push_back(move(bot));
-      res.push_back(move(res_lhs));
-      res.push_back(move(res_rhs));
-      res.push_back(move(result));
+      BB->addInstr(move(bot_lhs));
+      BB->addInstr(move(bot_ror));
+      BB->addInstr(move(bot_rhs));
+      BB->addInstr(move(bot));
+      BB->addInstr(move(res_lhs));
+      BB->addInstr(move(res_rhs));
+      BB->addInstr(move(result));
+      store(*result_ptr);
 
-      return res;
     } else if(opcode == AArch64::ORRWrs) {
       // don't support shifts because I'm lazy
       assert(mc_inst.getOperand(3).getImm() == 0);
 
-      auto ty = &get_int_type(32);
+
+      // TODO: do something cleaner
+      auto ty = &get_int_type(opcode == AArch64::ORRWrs ? 32 : 64);
 
       auto lhs = get_value(mc_inst.getOperand(1));
       auto rhs = get_value(mc_inst.getOperand(2));
 
       auto result = make_unique<IR::BinOp>(
           *ty, move(next_name()), *lhs, *rhs, IR::BinOp::Or);
-      add_identifier(*result.get());
+      auto result_ptr = result.get();
 
-      res.push_back(move(result));
-      return res;
+      BB->addInstr(move(result));
+      store(*result_ptr);
     }
     else {
-      return visit_error(I);
+      visit_error(I);
     }
-    return res;
   }
 
   std::optional<IR::Function> run() {
@@ -1445,16 +1438,17 @@ public:
       BB = alive_bb;
       auto mc_instrs = mc_bb->getInstrs();
       for (auto &mc_instr : mc_instrs) {
-        auto I_vect = mc_visit(mc_instr);
-        if (I_vect.empty()) {
-          Fn.print(cout << "\n----------partially-lifted-arm-target----------\n");
-          return {};
-        }
-
-        for (auto& I : I_vect) {
-          alive_bb->addInstr(move(I));
-        }
+        mc_visit(mc_instr);
       }
+
+      auto instrs = BB->instrs();
+      if (instrs.begin() != instrs.end()) {
+        // if there are any instructions in the BB, keep processing
+        continue;
+      }
+
+      Fn.print(cout << "\n----------partially-lifted-arm-target----------\n");
+      return {};
     }
 
 
