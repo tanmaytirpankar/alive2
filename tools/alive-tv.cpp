@@ -852,6 +852,7 @@ class arm2alive_ {
   }
 
   // TODO return the correct bit for remaining cases
+  // TODO: @ryan-berger. Make the invert bit do code-gen, don't return tuple
   std::tuple<bool, IR::Value*> evaluate_condition(uint64_t cond) {
     // cond<0> == '1' && cond != '1111'
     auto invert_bit = (cond & 1) && (cond != 15);
@@ -864,10 +865,12 @@ class arm2alive_ {
     case 1: res = cur_c; break;
     case 2: res = cur_n; break;
     case 3: res = cur_v; break;
-    default: return {false, nullptr};
+    default:
+      assert(false && "condition code unhandled");
     }
 
-    // if (invert_bit)
+    assert(res != nullptr && "condition code was not generated");
+
     return {invert_bit, res};
   }
 
