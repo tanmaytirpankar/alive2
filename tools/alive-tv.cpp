@@ -718,24 +718,6 @@ IR::Value* cur_z{nullptr};
 IR::Value* cur_n{nullptr};
 IR::Value* cur_c{nullptr};
 
-// TODO return the correct bit for remaining cases
-std::tuple<bool, IR::Value*> evaluate_condition(uint64_t cond) {
-  // cond<0> == '1' && cond != '1111'
-  auto invert_bit = (cond & 1) && (cond != 15);
-
-  cond>>=1;
-
-  IR::Value* res = nullptr;
-  switch (cond) {
-  case 0: res = cur_z; break;
-  case 1: res = cur_c; break;
-  case 2: res = cur_n; break;
-  case 3: res = cur_v; break;
-  default: return {false, nullptr};
-  }
-
-  return {invert_bit, res};
-}
 
 // DISABLE_REGISTER_LOOKUP will disable code that resolves 32/64 bit registers
 // to the same use.
@@ -818,36 +800,81 @@ class arm2alive_ {
     mc_add_identifier(curInst.getOperand(0), curId, v);
   }
 
-  // ARM has 31 general purpose registers, w0-w30 which are 32 bit registers,
-  // and x0-x30 which are their 64 bit extensions.
-  // The 32 bit registers make up bits 0-31 of the 64 bit registers.
-  // Upon writing to a 32-bit register, the upper 32 bits of the corresponding
-  // 64 bit register are zeroed.
-  // Surprisingly, LLVM's AArch64 backend only supports x0-x28, and w0-w30,
-  // so if you notice the lack of use of x29 and x30, it is intentional
-  void store(IR::Value &v) {
+  // store will store an IR value using the current instruction's destination
+  // register.
+  // All values are kept track of in their full-width counterparts to simulate registers
+  // For example, a x0 register would be kept track of in the bottom bits of w0.
+  // Optionally, there is an "s" or signed flag that can be used when writing smaller
+  // bit-width values to half or full-width registers which will perform a small sign extension
+  // procedure.
+  void store(IR::Value &v, bool s = false) {
+    // if v.bits() == 64, regSize == 64 because of above assertion
     if (v.bits() == 64 || DISABLE_REGISTER_LOOKUP) {
       add_identifier(v);
       return;
     }
 
+    // FIXME: remove assert
+    assert(false && "unimplemented & buggy code path");
+
+    // FIXME: get register bit width for further computation
+    size_t regSize = 32;
+
+    // regSize should only be 32/64
+    assert(regSize == 32 || regSize == 64);
+
+    // if the s flag is set, the value is smaller than 32 bits,
+    // and the register we are storing it in _is_ 32 bits, we sign extend
+    // to 32 bits before zero-extending to 64
+    if (s && regSize == 32 && v.bits() < 32) {
+      auto ty = &get_int_type(32);
+      auto sext32 = make_unique<IR::ConversionOp>(*ty, move(next_name()), v,
+                                                IR::ConversionOp::SExt);
+
+      ty = &get_int_type(64);
+      auto zext64 = make_unique<IR::ConversionOp>(*ty, move(next_name()), *sext32.get(),
+                                                  IR::ConversionOp::ZExt);
+
+      BB->addInstr(move(sext32));
+
+      add_identifier(*zext64.get());
+      BB->addInstr(move(zext64));
+      return;
+    }
+
+    auto op = s ? IR::ConversionOp::SExt : IR::ConversionOp::ZExt;
     auto ty = &get_int_type(64);
     auto new_val = make_unique<IR::ConversionOp>(
-      *ty, move(next_name()), v, IR::ConversionOp::ZExt);
+        *ty, move(next_name()), v, op);
 
     add_identifier(*new_val.get());
     BB->addInstr(move(new_val));
   }
 
+  // TODO return the correct bit for remaining cases
+  std::tuple<bool, IR::Value*> evaluate_condition(uint64_t cond) {
+    // cond<0> == '1' && cond != '1111'
+    auto invert_bit = (cond & 1) && (cond != 15);
+
+    cond>>=1;
+
+    IR::Value* res = nullptr;
+    switch (cond) {
+    case 0: res = cur_z; break;
+    case 1: res = cur_c; break;
+    case 2: res = cur_n; break;
+    case 3: res = cur_v; break;
+    default: return {false, nullptr};
+    }
+
+    // if (invert_bit)
+    return {invert_bit, res};
+  }
+
 public:
   arm2alive_(MCFunction &MF, const llvm::DataLayout &DL, std::optional<IR::Function> &srcFn,
              MCInstPrinter* instrPrinter, MCRegisterInfo *registerInfo):
-    MF(MF), DL(DL), srcFn(srcFn), instrPrinter(instrPrinter), registerInfo(registerInfo) {
-
-    assert((AArch64::W30 - AArch64::W0) == 30); // make sure 32 bit registers are sequential
-    assert((AArch64::X28 - AArch64::X0) == 28); // make sure 64 bit registers are sequential
-
-  }
+    MF(MF), DL(DL), srcFn(srcFn), instrPrinter(instrPrinter), registerInfo(registerInfo) {}
 
   // Rudimentary function to visit an MCInstWrapper instructions and convert it
   // to alive IR Ideally would want a nicer designed interface, but I opted for
@@ -1034,7 +1061,7 @@ public:
 
       auto cond_val_imm = mc_inst.getOperand(3).getImm();
       auto [invert, cond_val] = evaluate_condition(cond_val_imm);
-      assert(cond_val);
+      assert(cond_val && "conditional value not generated");
 
       if (!ty || !a || !b)
         visit_error(I);
@@ -2087,7 +2114,8 @@ bool backendTV() {
   // instruction is the return value of the function.
   auto &BB_mcinstrs = first_BB.getInstrs();
   auto BB_size = first_BB.size();
-  assert(BB_size > 1);
+//  assert(BB_size > 1);
+  assert(BB_size > 2);
   MCInst &last_instr = BB_mcinstrs[BB_size - 1].getMCInst();
   MCInst &sec_last_instr = BB_mcinstrs[BB_size - 2].getMCInst();
   auto &dest_operand = sec_last_instr.getOperand(0);
