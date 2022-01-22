@@ -317,21 +317,25 @@ llvm::Function *findFunction(llvm::Module &M, const string &FName) {
 
 static llvm::mc::RegisterMCTargetOptionsFlags MOF;
 
-// Class that wraps the underlying MCInst instruction
+// Wraps the underlying MCInst
 // FIXME a lot has to change in this class since write
-// now it doens't really wrap the instruction well enough
+// now it doesn't really wrap the instruction well enough
 // and it doesn't add additional functionality compared
 // to MCInst
 class MCInstWrapper {
 public:
   llvm::MCInst instr;
+
   MCInstWrapper(llvm::MCInst _instr) : instr(_instr) {}
+
   llvm::MCInst &getMCInst() {
     return instr;
   }
+
   unsigned getOpcode() const {
     return instr.getOpcode();
   }
+
   void print() const {
     cout << "< MCInstWrapper " << getOpcode() << " ";
     for (auto it = instr.begin(); it != instr.end(); ++it) {
@@ -347,11 +351,12 @@ public:
     }
     cout << ">\n";
   }
+
   friend auto operator<=>(const MCInstWrapper &,
                           const MCInstWrapper &) = default;
 };
 
-// Class to represent a basic block of machine instructions
+// Represents a basic block of machine instructions
 class MCBasicBlock {
   std::string Name;
   using SetTy = llvm::DenseSet<MCBasicBlock *>;
@@ -361,6 +366,7 @@ class MCBasicBlock {
 public:
   std::vector<MCInstWrapper> Instrs;
   MCBasicBlock(std::string _Name) : Name(_Name) {}
+
   const std::string &getName() const {
     return Name;
   }
@@ -402,13 +408,13 @@ public:
   }
 
   void print() const {
-    for (auto &inst : Instrs) {
-      inst.print();
+    for (auto &instr : Instrs) {
+      instr.print();
     }
   }
 };
 
-// Class to represent a machine fucntion
+// Represents a machine function
 class MCFunction {
   std::string Name;
   unsigned label_cnt{0};
@@ -420,15 +426,19 @@ public:
   void setName(std::string _Name) {
     Name = _Name;
   }
+
   MCBasicBlock *addBlock(std::string b_name) {
     return &BBs.emplace_back(b_name);
   }
+
   std::string getName() {
     return Name;
   }
+
   std::string getLabel() {
     return Name + std::to_string(++label_cnt);
   }
+
   MCBasicBlock *findBlockByName(std::string b_name) {
     for (auto &bb : BBs) {
       if (bb.getName() == b_name) {
@@ -437,6 +447,7 @@ public:
     }
     return nullptr;
   }
+
   bool isVarArg() {
     return false;
   }
@@ -686,7 +697,7 @@ std::tuple<bool, IR::Value*> evaluate_condition(uint64_t cond) {
   auto invert_bit = (cond & 1) && (cond != 15);
 
   cond>>=1;
-
+  cout << "cond: " << cond << '\n';
   IR::Value* res = nullptr;
   switch (cond) {
   case 0: res = cur_z; break;
@@ -1336,7 +1347,7 @@ std::optional<IR::Function> arm2alive(MCFunction &MF,
 //
 // FIXME for now, we're using this class to generate the MCFunction and
 // also print the MCFunction. we should move this implementation somewhere else
-// TODO we'll need to implement some the other callbacks to extract more
+// TODO we'll need to implement some of the other callbacks to extract more
 // information from the asm file. For example, it would be useful to extract
 // debug info to determine the number of function parameters.
 class MCStreamerWrapper final : public llvm::MCStreamer {
@@ -1765,7 +1776,8 @@ bool backendTV() {
   const char *CPU = "apple-a12";
   auto RM = llvm::Optional<llvm::Reloc::Model>();
   auto TM = Target->createTargetMachine(TripleName, CPU, "", Opt, RM);
-
+  // TODO add later
+  // TM->setGlobalISel(true);
   llvm::SmallString<1024> Asm;
   llvm::raw_svector_ostream Dest(Asm);
 
