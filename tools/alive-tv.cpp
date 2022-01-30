@@ -539,7 +539,7 @@ IR::Type *arm_type2alive(MCOperand ty) {
 // Generate the required struct type for an alive2 sadd_overflow instruction
 // FIXME these type object generators should be either grouped in one class or
 // be refactored in some other way.
-// We should also pass something more useful than just one operand that can be 
+// We should also pass something more useful than just one operand that can be
 // used as a key to cache complex types as right now this function leaks memory
 // This function should also be moved to utils.cpp as it will need to use objects
 // that are defined there
@@ -939,7 +939,7 @@ class arm2alive_ {
   }
 
   void set_z(IR::Value* val) {
-    auto typ = &get_int_type(val->bits());
+    auto typ = &get_int_type(1);
     auto zero = make_intconst(0, val->bits());
 
     auto z = make_unique<IR::ICmp>(
@@ -947,11 +947,11 @@ class arm2alive_ {
 
     cur_z = z.get();
     BB->addInstr(move(z));
-    add_identifier(*z);
   }
 
   void set_n(IR::Value* val) {
-    auto typ = &get_int_type(val->bits());
+    cout << val->bits() << "\n";
+    auto typ = &get_int_type(1);
     auto zero = make_intconst(0, val->bits());
 
     auto n = make_unique<IR::ICmp>(
@@ -959,7 +959,6 @@ class arm2alive_ {
 
     cur_n = n.get();
     BB->addInstr(move(n));
-    add_identifier(*cur_n);
   }
 
 public:
@@ -1054,8 +1053,8 @@ public:
       BB->addInstr(move(uadd_inst));
       BB->addInstr(move(extract_oc_inst));
       BB->addInstr(move(extract_add_inst));
-      set_z(res);
-      set_n(res);
+//      set_z(res);
+//      set_n(res);
       store(*res);
     } else if (opcode == AArch64::MADDWrrr) {
       auto ty = &get_int_type(32); // FIXME
@@ -1290,9 +1289,6 @@ public:
 
       auto val = extract_add_inst.get();
       extract_add_inst->addIdx(0);
-
-
-
 
       BB->addInstr(move(ret_1));
       BB->addInstr(move(extract_ov_inst));
