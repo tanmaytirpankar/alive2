@@ -708,17 +708,19 @@ IR::Value *cur_c{nullptr};
 #define DISABLE_REGISTER_LOOKUP true
 
 set<int> s_flag = {
-    AArch64::ADDSWrs, AArch64::ADDSWri, AArch64::ADDSXrs,
-    AArch64::ADDSXri, AArch64::SUBSWrs, AArch64::SUBWri,
+    AArch64::ADDSWrs, AArch64::ADDSWri, AArch64::ADDSXrs, AArch64::ADDSXri,
+    AArch64::SUBSWrs, AArch64::SUBSWri, AArch64::SUBSXrs, AArch64::SUBXri,
 };
 
 set<int> instrs_32 = {
-    AArch64::ADDSWrs, AArch64::ADDSWri, AArch64::ADDWrs, AArch64::ADDWri,
+    AArch64::ADDSWrs, AArch64::ADDSWri, AArch64::ADDWrs,  AArch64::ADDWri,
+    AArch64::SUBWri,  AArch64::SUBWrs,  AArch64::SUBSWrs, AArch64::SUBSWri,
     AArch64::SBFMWri, AArch64::EORWri,  AArch64::CSELWr,
 };
 
 set<int> instrs_64 = {
-    AArch64::ADDSXrs, AArch64::ADDSXri, AArch64::ADDXrs, AArch64::ADDXri,
+    AArch64::ADDSXrs, AArch64::ADDSXri, AArch64::ADDXrs,  AArch64::ADDXri,
+    AArch64::SUBXri,  AArch64::SUBXrs,  AArch64::SUBSXrs, AArch64::SUBSXri,
     AArch64::SBFMXri, AArch64::EORXri,  AArch64::CSELXr,
 };
 
@@ -815,7 +817,7 @@ class arm2alive_ {
   // store will store an IR value using the current instruction's destination
   // register.
   // All values are kept track of in their full-width counterparts to simulate
-  // registers For example, a x0 register would be kept track of in the bottom
+  // registers. For example, a x0 register would be kept track of in the bottom
   // bits of w0. Optionally, there is an "s" or signed flag that can be used
   // when writing smaller bit-width values to half or full-width registers which
   // will perform a small sign extension procedure.
@@ -1006,9 +1008,9 @@ public:
     case AArch64::ADDXrs:
     case AArch64::ADDXri:
     case AArch64::ADDSXrs:
-    case AArch64::ADDSXri:
-
+    case AArch64::ADDSXri: {
       int size = get_size(opcode);
+
       auto ty = &get_int_type(size);
 
       auto a = get_value(mc_inst.getOperand(1), size = size);
@@ -1043,6 +1045,95 @@ public:
       store(*result);
       return;
     }
+    case AArch64::SUBWri:
+    case AArch64::SUBWrs:
+    case AArch64::SUBSWrs:
+    case AArch64::SUBSWri:
+    case AArch64::SUBXri:
+    case AArch64::SUBXrs:
+    case AArch64::SUBSXrs:
+    case AArch64::SUBSXri: {
+      assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
+      assert(mc_inst.getOperand(3).isImm());
+
+      int size = get_size(opcode);
+
+      auto ty = &get_int_type(size);
+      auto ty_ptr = sadd_overflow_type(mc_inst.getOperand(1), size);
+
+      // convert lhs, rhs operands to IR::Values
+      auto a = get_value(mc_inst.getOperand(1));
+      auto b = get_value(mc_inst.getOperand(2), mc_inst.getOperand(3).getImm());
+
+      // make sure that lhs and rhs conversion succeeded, type lookup succeeded
+      if (!ty || !a || !b)
+        visit_error(I);
+
+      // SSub_Overflow returns: {iN (result), i1 (overflow), i24 (padding)}
+      auto ssub = add_instr<IR::BinOp>(*ty_ptr, move(next_name()), *a, *b,
+                                       IR::BinOp::SSub_Overflow);
+      auto result = add_instr<IR::ExtractValue>(*ty, move(next_name()), *ssub);
+      result->addIdx(0);
+
+      if (has_s(opcode)) {
+        auto ty_i1 = &get_int_type(1);
+
+        auto new_v =
+            add_instr<IR::ExtractValue>(*ty_i1, move(next_name()), *ssub);
+        new_v->addIdx(1);
+
+        auto uadd_typ = uadd_overflow_type(mc_inst.getOperand(1), size);
+
+        // generate code for subtract borrow flag. This can be formulated as
+        // a + not(b), or a + (-b)
+        auto not_b = add_instr<IR::BinOp>(
+            *ty, move(next_name()), *b, *make_intconst(-1, 32), IR::BinOp::Xor);
+
+        auto uadd = add_instr<IR::BinOp>(
+            *uadd_typ, move(next_name()), *a, *not_b, IR::BinOp::UAdd_Overflow);
+
+        // extract the c flag from UAdd_Overflow result
+        auto new_c = add_instr<IR::ExtractValue>(
+            *ty_i1, move(next_name()), *uadd);
+        new_c->addIdx(1);
+
+
+        cur_v = new_v;
+        cur_c = new_c;
+        set_z(result);
+        set_n(result);
+      }
+
+      store(*result);
+      return;
+    }
+    case AArch64::CSELWr:
+    case AArch64::CSELXr: {
+      assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, cond
+      // TODO decode condition and find the approprate cond val
+      assert(mc_inst.getOperand(1).isReg() && mc_inst.getOperand(2).isReg());
+      assert(mc_inst.getOperand(3).isImm());
+
+      int size = get_size(opcode);
+
+
+      auto ty = &get_int_type(size); // FIXME
+
+      auto a = get_value(mc_inst.getOperand(1));
+      auto b = get_value(mc_inst.getOperand(2));
+
+      auto cond_val_imm = mc_inst.getOperand(3).getImm();
+      auto cond_val = evaluate_condition(cond_val_imm);
+
+      if (!ty || !a || !b)
+        visit_error(I);
+
+      auto ret =
+          add_instr<IR::Select>(*ty, move(next_name()), *cond_val, *a, *b);
+      store(*ret);
+      return;
+    }
+    }
 
     if (opcode == AArch64::MADDWrrr) {
       auto ty = &get_int_type(32); // FIXME
@@ -1060,24 +1151,6 @@ public:
       BB->addInstr(move(mul));
       BB->addInstr(move(add));
       store(*add_ptr);
-    } else if (opcode == AArch64::SUBWrs || opcode == AArch64::SUBWri) {
-      assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
-      assert(mc_inst.getOperand(3).isImm());
-      auto ty = &get_int_type(32); // FIXME
-      auto a = get_value(mc_inst.getOperand(1));
-      auto b = get_value(mc_inst.getOperand(2), mc_inst.getOperand(3).getImm());
-
-      if (!ty || !a || !b)
-        visit_error(I);
-      assert(mc_inst.getOperand(0).isReg());
-
-      auto ret = make_unique<IR::BinOp>(*ty, move(next_name()), *a, *b,
-                                        IR::BinOp::Sub);
-      auto ret_ptr = ret.get();
-
-      BB->addInstr(move(ret));
-      store(*ret_ptr);
-
     } else if (opcode == AArch64::SBFMWri || opcode == AArch64::SBFMXri) {
       assert(mc_inst.getNumOperands() == 4); // dst, src, imm1, imm2
       assert(mc_inst.getOperand(2).isImm() && mc_inst.getOperand(3).isImm());
@@ -1124,30 +1197,12 @@ public:
       auto res = add_instr<IR::BinOp>(*ty, move(next_name()), *a, *imm_val,
                                       IR::BinOp::Xor);
       store(*res);
-    } else if (opcode == AArch64::CSELWr || opcode == AArch64::CSELXr) {
-      assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, cond
-      // TODO decode condition and find the approprate cond val
-      assert(mc_inst.getOperand(1).isReg() && mc_inst.getOperand(2).isReg());
-      assert(mc_inst.getOperand(3).isImm());
-      auto ty = &get_int_type(get_size(opcode)); // FIXME
-
-      auto a = get_value(mc_inst.getOperand(1));
-      auto b = get_value(mc_inst.getOperand(2));
-
-      auto cond_val_imm = mc_inst.getOperand(3).getImm();
-      auto cond_val = evaluate_condition(cond_val_imm);
-
-      if (!ty || !a || !b)
-        visit_error(I);
-
-      auto ret =
-          add_instr<IR::Select>(*ty, move(next_name()), *cond_val, *a, *b);
-      store(*ret);
     } else if (opcode == AArch64::RET) {
       // for now we're assuming that the function returns an integer value
       assert(mc_inst.getNumOperands() == 1);
       // TODO: this seems like a hack. Change maybe?
       auto ty = &get_int_type(srcFn->getType().bits());
+      // TODO: make sure we are getting the correct bit width as well
       auto val = get_value(mc_inst.getOperand(0));
 
       BB->addInstr(make_unique<IR::Return>(*ty, *val));
@@ -1210,78 +1265,7 @@ public:
       BB->addInstr(move(sel));
       store(*sel_ptr);
     } else if (opcode == AArch64::SUBSWrs || opcode == AArch64::SUBSWri) {
-      assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
-      assert(mc_inst.getOperand(3).isImm());
 
-      auto alive_op = IR::BinOp::SSub_Overflow;
-      auto ty = &get_int_type(32); // FIXME
-      auto ty_ptr = sadd_overflow_type(mc_inst.getOperand(1), 32);
-
-      // convert lhs, rhs operands to IR::Values
-      auto a = get_value(mc_inst.getOperand(1));
-      auto b = get_value(mc_inst.getOperand(2), mc_inst.getOperand(3).getImm());
-
-      // make sure that lhs and rhs conversion succeeded, type lookup succeeded
-      if (!ty || !a || !b)
-        visit_error(I);
-
-      // make sure the first instruction is a register
-      assert(mc_inst.getOperand(0).isReg());
-
-      // generate IR::BinOp::SSub_Overflow for dst = lhs + rhs
-      // The return value will be in the form:
-      // {i32 (result), i1 (overflow), i24 (padding)}
-      // we will return the first value, and use the second to "set the v flag"
-      auto ret_1 =
-          make_unique<IR::BinOp>(*ty_ptr, move(next_name()), *a, *b, alive_op);
-
-      // generate a new operand id for the v flag
-      auto ty_i1 = &get_int_type(1);
-
-      // extract the v flag from SAdd_Overflow result
-      auto extract_ov_inst = make_unique<IR::ExtractValue>(
-          *ty_i1, move(next_name()), *ret_1.get());
-
-      add_identifier(*extract_ov_inst.get());
-      extract_ov_inst->addIdx(1);
-      cur_v = extract_ov_inst.get();
-
-      auto uadd_typ = uadd_overflow_type(mc_inst.getOperand(1), 32);
-
-      // generate code for subtract borrow flag. This can be formulated as
-      // a + not(b), or a + (-b)
-      auto i32_ty = &get_int_type(32);
-      auto not_b =
-          make_unique<IR::BinOp>(*i32_ty, move(next_name()), *b,
-                                 *make_intconst(-1, 32), IR::BinOp::Xor);
-
-      auto uadd_inst = make_unique<IR::BinOp>(*uadd_typ, move(next_name()), *a,
-                                              *not_b, IR::BinOp::UAdd_Overflow);
-
-      // extract the c flag from UAdd_Overflow result
-      auto extract_oc_inst = make_unique<IR::ExtractValue>(
-          *ty_i1, move(next_name()), *uadd_inst.get());
-
-      add_identifier(*extract_oc_inst.get());
-      extract_oc_inst->addIdx(1);
-      cur_c = extract_oc_inst.get();
-
-      // FIXME add a map that from each flag to its lates IR::Value*
-      auto extract_add_inst =
-          make_unique<IR::ExtractValue>(*ty, move(next_name()), *ret_1.get());
-
-      auto val = extract_add_inst.get();
-      extract_add_inst->addIdx(0);
-
-      BB->addInstr(move(ret_1));
-      BB->addInstr(move(extract_ov_inst));
-      BB->addInstr(move(not_b));
-      BB->addInstr(move(uadd_inst));
-      BB->addInstr(move(extract_oc_inst));
-      BB->addInstr(move(extract_add_inst));
-      set_z(val);
-      set_n(val);
-      store(*val);
     } else if (opcode == AArch64::MOVZWi) {
       assert(mc_inst.getOperand(0).isReg());
       assert(mc_inst.getOperand(1).isImm());
