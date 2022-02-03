@@ -713,15 +713,19 @@ set<int> s_flag = {
 };
 
 set<int> instrs_32 = {
-    AArch64::ADDSWrs, AArch64::ADDSWri, AArch64::ADDWrs,  AArch64::ADDWri,
-    AArch64::SUBWri,  AArch64::SUBWrs,  AArch64::SUBSWrs, AArch64::SUBSWri,
-    AArch64::SBFMWri, AArch64::EORWri,  AArch64::CSELWr,
+    AArch64::ADDSWrs,  AArch64::ADDSWri, AArch64::ADDWrs,  AArch64::ADDWri,
+    AArch64::SUBWri,   AArch64::SUBWrs,  AArch64::SUBSWrs, AArch64::SUBSWri,
+    AArch64::SBFMWri,  AArch64::CSELWr,  AArch64::ANDWri,  AArch64::ANDWrr,
+    AArch64::MADDWrrr, AArch64::EORWri,  AArch64::CSINVWr, AArch64::CSINCWr,
+    AArch64::MOVZWi,
 };
 
 set<int> instrs_64 = {
-    AArch64::ADDSXrs, AArch64::ADDSXri, AArch64::ADDXrs,  AArch64::ADDXri,
-    AArch64::SUBXri,  AArch64::SUBXrs,  AArch64::SUBSXrs, AArch64::SUBSXri,
-    AArch64::SBFMXri, AArch64::EORXri,  AArch64::CSELXr,
+    AArch64::ADDSXrs,  AArch64::ADDSXri, AArch64::ADDXrs,  AArch64::ADDXri,
+    AArch64::SUBXri,   AArch64::SUBXrs,  AArch64::SUBSXrs, AArch64::SUBSXri,
+    AArch64::SBFMXri,  AArch64::CSELXr,  AArch64::ANDXri,  AArch64::ANDXrr,
+    AArch64::MADDXrrr, AArch64::EORXri,  AArch64::CSINVXr, AArch64::CSINCXr,
+    AArch64::MOVZXi,
 };
 
 int get_size(int instr) {
@@ -771,11 +775,14 @@ class arm2alive_ {
   // TODO: figure out how to deal with arguments passed in.
   //  This function is buggy and won't handle it. If we have anything other
   //  than 64 bit arguments, we may want to do some sort of conversion
+  // TODO: make it so that lshr generates code on register lookups
+  //  some instructions make use of this, and the semantics need to be worked
+  //  out
   IR::Value *get_value(MCOperand &op, int lshr = 0, size_t size = 32) {
     assert(op.isImm() || op.isReg());
     if (op.isImm()) {
       // FIXME, figure out immediate size
-      return make_intconst(op.getImm() << lshr, 32);
+      return make_intconst(op.getImm() << lshr, size);
     }
 
     if (op.getReg() == AArch64::WZR) {
@@ -1089,14 +1096,13 @@ public:
         auto not_b = add_instr<IR::BinOp>(
             *ty, move(next_name()), *b, *make_intconst(-1, 32), IR::BinOp::Xor);
 
-        auto uadd = add_instr<IR::BinOp>(
-            *uadd_typ, move(next_name()), *a, *not_b, IR::BinOp::UAdd_Overflow);
+        auto uadd = add_instr<IR::BinOp>(*uadd_typ, move(next_name()), *a,
+                                         *not_b, IR::BinOp::UAdd_Overflow);
 
         // extract the c flag from UAdd_Overflow result
-        auto new_c = add_instr<IR::ExtractValue>(
-            *ty_i1, move(next_name()), *uadd);
+        auto new_c =
+            add_instr<IR::ExtractValue>(*ty_i1, move(next_name()), *uadd);
         new_c->addIdx(1);
-
 
         cur_v = new_v;
         cur_c = new_c;
@@ -1116,7 +1122,6 @@ public:
 
       int size = get_size(opcode);
 
-
       auto ty = &get_int_type(size); // FIXME
 
       auto a = get_value(mc_inst.getOperand(1));
@@ -1133,25 +1138,39 @@ public:
       store(*ret);
       return;
     }
+    case AArch64::ANDWri:
+    case AArch64::ANDWrr:
+    case AArch64::ANDXri:
+    case AArch64::ANDXrr: {
+      auto size = get_size(opcode);
+      auto ty = &get_int_type(size);
+
+      auto and_op = add_instr<IR::BinOp>(
+          *ty, next_name(), *get_value(mc_inst.getOperand(1), 0, size),
+          *get_value(mc_inst.getOperand(2), mc_inst.getOperand(3).getImm(),
+                     size),
+          IR::BinOp::And);
+
+      store(*and_op);
     }
+    case AArch64::MADDWrrr:
+    case AArch64::MADDXrrr: {
+      auto size = get_size(opcode);
+      auto ty = &get_int_type(size);
 
-    if (opcode == AArch64::MADDWrrr) {
-      auto ty = &get_int_type(32); // FIXME
+      auto mul_lhs = get_value(mc_inst.getOperand(1), 0, size);
+      auto mul_rhs = get_value(mc_inst.getOperand(2), 0, size);
+      auto addend = get_value(mc_inst.getOperand(3), 0, size);
 
-      auto mul_lhs = get_value(mc_inst.getOperand(1));
-      auto mul_rhs = get_value(mc_inst.getOperand(2));
-      auto addend = get_value(mc_inst.getOperand(3));
-
-      auto mul = make_unique<IR::BinOp>(*ty, move(next_name()), *mul_lhs,
-                                        *mul_rhs, IR::BinOp::Mul);
-      auto add = make_unique<IR::BinOp>(*ty, move(next_name()), *mul, *addend,
-                                        IR::BinOp::Add);
-      auto add_ptr = add.get();
-
-      BB->addInstr(move(mul));
-      BB->addInstr(move(add));
-      store(*add_ptr);
-    } else if (opcode == AArch64::SBFMWri || opcode == AArch64::SBFMXri) {
+      auto mul = add_instr<IR::BinOp>(*ty, move(next_name()), *mul_lhs,
+                                      *mul_rhs, IR::BinOp::Mul);
+      auto add = add_instr<IR::BinOp>(*ty, move(next_name()), *mul, *addend,
+                                      IR::BinOp::Add);
+      store(*add);
+      return;
+    }
+    case AArch64::SBFMWri:
+    case AArch64::SBFMXri: {
       assert(mc_inst.getNumOperands() == 4); // dst, src, imm1, imm2
       assert(mc_inst.getOperand(2).isImm() && mc_inst.getOperand(3).isImm());
 
@@ -1167,19 +1186,10 @@ public:
       auto res = add_instr<IR::BinOp>(*ty, move(next_name()), *a, *shift_amt,
                                       IR::BinOp::AShr);
       store(*res);
-    } else if (opcode == AArch64::ANDWri || opcode == AArch64::ANDWrr) {
-      auto ty = &get_int_type(32);
-
-      auto ident = make_unique<IR::BinOp>(
-          *ty, next_name(), *get_value(mc_inst.getOperand(1)),
-          *get_value(mc_inst.getOperand(2), mc_inst.getOperand(3).getImm()),
-          IR::BinOp::And);
-
-      auto ident_ptr = ident.get();
-
-      BB->addInstr(move(ident));
-      store(*ident_ptr);
-    } else if (opcode == AArch64::EORWri || opcode == AArch64::EORXri) {
+      return;
+    }
+    case AArch64::EORWri:
+    case AArch64::EORXri: {
       assert(mc_inst.getNumOperands() == 3); // dst, src, imm
       assert(mc_inst.getOperand(1).isReg() && mc_inst.getOperand(2).isImm());
 
@@ -1197,25 +1207,20 @@ public:
       auto res = add_instr<IR::BinOp>(*ty, move(next_name()), *a, *imm_val,
                                       IR::BinOp::Xor);
       store(*res);
-    } else if (opcode == AArch64::RET) {
-      // for now we're assuming that the function returns an integer value
-      assert(mc_inst.getNumOperands() == 1);
-      // TODO: this seems like a hack. Change maybe?
-      auto ty = &get_int_type(srcFn->getType().bits());
-      // TODO: make sure we are getting the correct bit width as well
-      auto val = get_value(mc_inst.getOperand(0));
-
-      BB->addInstr(make_unique<IR::Return>(*ty, *val));
-    } else if (opcode == AArch64::CSINVWr) {
+      return;
+    }
+    case AArch64::CSINVWr:
+    case AArch64::CSINVXr: {
       // csinv dst, a, b, cond
       // if (cond) a else ~b
-
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, cond
       // TODO decode condition and find the approprate cond val
       assert(mc_inst.getOperand(1).isReg() && mc_inst.getOperand(2).isReg());
       assert(mc_inst.getOperand(3).isImm());
 
-      auto ty = &get_int_type(32); // FIXME
+      auto size = get_size(opcode);
+
+      auto ty = &get_int_type(size); // FIXME
 
       auto a = get_value(mc_inst.getOperand(1));
       auto b = get_value(mc_inst.getOperand(2));
@@ -1226,27 +1231,23 @@ public:
       if (!ty || !a || !b)
         visit_error(I);
 
-      // generate instruction for ~b
+      auto neg_one = make_intconst(-1, size);
+      auto negated_b = add_instr<IR::BinOp>(*ty, move(next_name()), *b,
+                                            *neg_one, IR::BinOp::Xor);
 
-      auto neg_one = make_intconst(-1, 32);
-      auto negated_b = make_unique<IR::BinOp>(*ty, move(next_name()), *b,
-                                              *neg_one, IR::BinOp::Xor);
-
-      // return if (cond) a else ~b
-      auto ret = make_unique<IR::Select>(*ty, move(next_name()), *cond_val, *a,
-                                         *negated_b.get());
-
-      auto ret_ptr = ret.get();
-
-      BB->addInstr(move(negated_b));
-      BB->addInstr(move(ret));
-      store(*ret_ptr);
-
-    } else if (opcode == AArch64::CSINCWr) { // if cond then Rn else (Rm + 1)
+      auto ret = add_instr<IR::Select>(*ty, move(next_name()), *cond_val, *a,
+                                       *negated_b);
+      store(*ret);
+      return;
+    }
+    case AArch64::CSINCWr:
+    case AArch64::CSINCXr: {
       assert(mc_inst.getOperand(1).isReg() && mc_inst.getOperand(2).isReg());
       assert(mc_inst.getOperand(3).isImm());
 
-      auto ty = &get_int_type(32); // FIXME
+      auto size = get_size(opcode);
+
+      auto ty = &get_int_type(size);
 
       auto a = get_value(mc_inst.getOperand(1));
       auto b = get_value(mc_inst.getOperand(2));
@@ -1255,33 +1256,44 @@ public:
       auto cond_val = evaluate_condition(cond_val_imm);
 
       auto inc =
-          make_unique<IR::BinOp>(*ty, move(next_name()), *b,
-                                 *make_intconst(1, ty->bits()), IR::BinOp::Add);
+          add_instr<IR::BinOp>(*ty, move(next_name()), *b,
+                               *make_intconst(1, ty->bits()), IR::BinOp::Add);
       auto sel =
-          make_unique<IR::Select>(*ty, move(next_name()), *cond_val, *a, *inc);
-      auto sel_ptr = sel.get();
+          add_instr<IR::Select>(*ty, move(next_name()), *cond_val, *a, *inc);
 
-      BB->addInstr(move(inc));
-      BB->addInstr(move(sel));
-      store(*sel_ptr);
-    } else if (opcode == AArch64::SUBSWrs || opcode == AArch64::SUBSWri) {
-
-    } else if (opcode == AArch64::MOVZWi) {
+      store(*sel);
+      return;
+    }
+    case AArch64::MOVZWi:
+    case AArch64::MOVZXi: {
       assert(mc_inst.getOperand(0).isReg());
       assert(mc_inst.getOperand(1).isImm());
 
-      auto ty = &get_int_type(32);
+      auto size = get_size(opcode);
 
-      auto lhs =
-          get_value(mc_inst.getOperand(1), mc_inst.getOperand(2).getImm());
+      auto ty = &get_int_type(size);
 
-      auto rhs = make_intconst(0, 32);
+      auto lhs = get_value(mc_inst.getOperand(1),
+                           mc_inst.getOperand(2).getImm(), size);
+
+      auto rhs = make_intconst(0, size);
       auto ident =
-          make_unique<IR::BinOp>(*ty, next_name(), *lhs, *rhs, IR::BinOp::Add);
-      auto ident_ptr = ident.get();
+          add_instr<IR::BinOp>(*ty, next_name(), *lhs, *rhs, IR::BinOp::Add);
 
-      BB->addInstr(move(ident));
-      store(*ident_ptr);
+      store(*ident);
+      return;
+    }
+    }
+
+    if (opcode == AArch64::RET) {
+      // for now we're assuming that the function returns an integer value
+      assert(mc_inst.getNumOperands() == 1);
+      // TODO: this seems like a hack. Change maybe?
+      auto ty = &get_int_type(srcFn->getType().bits());
+      // TODO: make sure we are getting the correct bit width as well
+      auto val = get_value(mc_inst.getOperand(0));
+
+      BB->addInstr(make_unique<IR::Return>(*ty, *val));
     } else if (opcode == AArch64::MOVNWi) {
       assert(mc_inst.getOperand(0).isReg());
       assert(mc_inst.getOperand(1).isImm());
@@ -1293,17 +1305,13 @@ public:
           get_value(mc_inst.getOperand(1), mc_inst.getOperand(2).getImm());
 
       auto neg_one = make_intconst(-1, 32);
-      auto not_lhs = make_unique<IR::BinOp>(*ty, move(next_name()), *lhs,
-                                            *neg_one, IR::BinOp::Xor);
+      auto not_lhs = add_instr<IR::BinOp>(*ty, move(next_name()), *lhs,
+                                          *neg_one, IR::BinOp::Xor);
 
       auto rhs = make_intconst(0, 32);
-      auto ident = make_unique<IR::BinOp>(*ty, move(next_name()), *not_lhs,
-                                          *rhs, IR::BinOp::Add);
-      auto ident_ptr = ident.get();
-
-      BB->addInstr(move(not_lhs));
-      BB->addInstr(move(ident));
-      store(*ident_ptr);
+      auto ident = add_instr<IR::BinOp>(*ty, move(next_name()), *not_lhs, *rhs,
+                                        IR::BinOp::Add);
+      store(*ident);
 
     } else if (opcode == AArch64::LSLVWr) {
       auto ty = &get_int_type(32);
@@ -1408,37 +1416,28 @@ public:
       auto not_wmask = make_intconst(~wmaskInt, 32);
       auto not_tmask = make_intconst(~tmaskInt, 32);
 
-      auto bot_lhs = make_unique<IR::BinOp>(*ty, move(next_name()), *dst,
-                                            *not_wmask, IR::BinOp::And);
+      auto bot_lhs = add_instr<IR::BinOp>(*ty, move(next_name()), *dst,
+                                          *not_wmask, IR::BinOp::And);
 
-      auto bot_ror = make_unique<IR::TernaryOp>(*ty, move(next_name()), *src,
-                                                *src, *r, IR::TernaryOp::FShr);
+      auto bot_ror = add_instr<IR::TernaryOp>(*ty, move(next_name()), *src,
+                                              *src, *r, IR::TernaryOp::FShr);
 
-      auto bot_rhs = make_unique<IR::BinOp>(*ty, move(next_name()), *bot_ror,
-                                            *wmask, IR::BinOp::And);
+      auto bot_rhs = add_instr<IR::BinOp>(*ty, move(next_name()), *bot_ror,
+                                          *wmask, IR::BinOp::And);
 
-      auto bot = make_unique<IR::BinOp>(*ty, move(next_name()), *bot_lhs,
-                                        *bot_rhs, IR::BinOp::Or);
+      auto bot = add_instr<IR::BinOp>(*ty, move(next_name()), *bot_lhs,
+                                      *bot_rhs, IR::BinOp::Or);
 
-      auto res_lhs = make_unique<IR::BinOp>(*ty, move(next_name()), *dst,
-                                            *not_tmask, IR::BinOp::And);
+      auto res_lhs = add_instr<IR::BinOp>(*ty, move(next_name()), *dst,
+                                          *not_tmask, IR::BinOp::And);
 
-      auto res_rhs = make_unique<IR::BinOp>(*ty, move(next_name()), *bot,
-                                            *tmask, IR::BinOp::And);
+      auto res_rhs = add_instr<IR::BinOp>(*ty, move(next_name()), *bot, *tmask,
+                                          IR::BinOp::And);
 
-      auto result = make_unique<IR::BinOp>(*ty, move(next_name()), *res_lhs,
-                                           *res_rhs, IR::BinOp::Or);
-      auto result_ptr = result.get();
+      auto result = add_instr<IR::BinOp>(*ty, move(next_name()), *res_lhs,
+                                         *res_rhs, IR::BinOp::Or);
 
-      BB->addInstr(move(bot_lhs));
-      BB->addInstr(move(bot_ror));
-      BB->addInstr(move(bot_rhs));
-      BB->addInstr(move(bot));
-      BB->addInstr(move(res_lhs));
-      BB->addInstr(move(res_rhs));
-      store(*result_ptr);
-      BB->addInstr(move(result));
-
+      store(*result);
     } else if (opcode == AArch64::ORRWrs) {
       // don't support shifts because I'm lazy
       assert(mc_inst.getOperand(3).getImm() == 0);
@@ -1448,24 +1447,18 @@ public:
       auto lhs = get_value(mc_inst.getOperand(1));
       auto rhs = get_value(mc_inst.getOperand(2));
 
-      auto result = make_unique<IR::BinOp>(*ty, move(next_name()), *lhs, *rhs,
-                                           IR::BinOp::Or);
-      auto result_ptr = result.get();
-
-      BB->addInstr(move(result));
-      store(*result_ptr);
+      auto result = add_instr<IR::BinOp>(*ty, move(next_name()), *lhs, *rhs,
+                                         IR::BinOp::Or);
+      store(*result);
     } else if (opcode == AArch64::SDIVWr) {
       auto ty = &get_int_type(32);
 
       auto lhs = get_value(mc_inst.getOperand(1));
       auto rhs = get_value(mc_inst.getOperand(2));
 
-      auto result = make_unique<IR::BinOp>(*ty, move(next_name()), *lhs, *rhs,
-                                           IR::BinOp::SDiv);
-      auto result_ptr = result.get();
-
-      BB->addInstr(move(result));
-      store(*result_ptr);
+      auto result = add_instr<IR::BinOp>(*ty, move(next_name()), *lhs, *rhs,
+                                         IR::BinOp::SDiv);
+      store(*result);
     } else if (opcode == AArch64::UDIVWr) {
       auto ty = &get_int_type(32);
 
