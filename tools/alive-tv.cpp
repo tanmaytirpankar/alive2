@@ -772,8 +772,8 @@ class arm2alive_ {
     return val;
   }
 
-  // TODO: figure out how to deal with arguments passed in.
-  //  This function is buggy and won't handle it. If we have anything other
+  // TODO: figure out how to deal with mixed-width function arguments.
+  //  This function is buggy and won't handle support it. If we have anything other
   //  than 64 bit arguments, we may want to do some sort of conversion
   // TODO: make it so that lshr generates code on register lookups
   //  some instructions make use of this, and the semantics need to be worked
@@ -1283,9 +1283,7 @@ public:
       store(*ident);
       return;
     }
-    }
-
-    if (opcode == AArch64::RET) {
+    case AArch64::RET: {
       // for now we're assuming that the function returns an integer value
       assert(mc_inst.getNumOperands() == 1);
       // TODO: this seems like a hack. Change maybe?
@@ -1294,7 +1292,11 @@ public:
       auto val = get_value(mc_inst.getOperand(0));
 
       BB->addInstr(make_unique<IR::Return>(*ty, *val));
-    } else if (opcode == AArch64::MOVNWi) {
+      return;
+    }
+    }
+
+    if (opcode == AArch64::MOVNWi) {
       assert(mc_inst.getOperand(0).isReg());
       assert(mc_inst.getOperand(1).isImm());
       assert(mc_inst.getOperand(2).isImm());
