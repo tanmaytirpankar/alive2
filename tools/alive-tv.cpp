@@ -319,19 +319,15 @@ llvm::Function *findFunction(llvm::Module &M, const string &FName) {
 
 static llvm::mc::RegisterMCTargetOptionsFlags MOF;
 
-
-// Wraps the underlying MCInst
-// FIXME a lot has to change in this class since write
-// now it doesn't really wrap the instruction well enough
-// and it doesn't add additional functionality compared
-// to MCInst
 class MCInstWrapper {
 private:
-  // unsigned var_id{0};
   std::vector<unsigned> op_ids;
+  std::map<unsigned, std::string>
+      phi_blocks; // This is pretty wasteful but I'm not sure how to add
+                  // MCExpr operands to the underlying MCInst phi instructions
 public:
   llvm::MCInst instr;
-  
+
   MCInstWrapper(llvm::MCInst _instr) : instr(_instr) {
     op_ids.resize(instr.getNumOperands(), 0);
   }
@@ -345,19 +341,36 @@ public:
   }
 
   unsigned get_var_id(unsigned index) {
-     return op_ids[index];
+    return op_ids[index];
+  }
+
+  void set_phi_block(unsigned index, const std::string &block_name) {
+    phi_blocks[index] = block_name;
+  }
+
+  const std::string &get_phi_block(unsigned index) const {
+    return phi_blocks.at(index);
   }
 
   unsigned getOpcode() const {
     return instr.getOpcode();
   }
 
+  // FIXME: for phi instructions and figure out to use register names rather
+  // than numbers
   void print() const {
     cout << "< MCInstWrapper " << getOpcode() << " ";
     unsigned idx = 0;
     for (auto it = instr.begin(); it != instr.end(); ++it) {
       if (it->isReg()) {
-        cout << "<MCOperand Reg:(" << it->getReg() << ", " << op_ids[idx] << ")>";
+        if (getOpcode() == AArch64::PHI && idx >= 1) {
+          cout << "<Phi arg>:[(" << it->getReg() << "," << op_ids[idx] 
+               << ")," << get_phi_block(idx)  << "]>";
+        }
+        else {
+          cout << "<MCOperand Reg:(" << it->getReg() << ", " << op_ids[idx]
+               << ")>";
+        }
       } else if (it->isImm()) {
         cout << "<MCOperand Imm:" << it->getImm() << ">";
       } else if (it->isExpr()) {
@@ -402,7 +415,7 @@ public:
   MCInst generateMCReturnInstr() {
     MCInst mc_instr;
     mc_instr.setOpcode(AArch64::RET);
-    mc_instr.addOperand(MCOperand::createReg(AArch64::LR));\
+    mc_instr.addOperand(MCOperand::createReg(AArch64::LR));
     mc_instr.dump_pretty(errs(), IP_ptr, " ", MRI_ptr);
     errs() << "\n";
     return mc_instr;
@@ -1449,13 +1462,9 @@ public:
       std::unordered_set<MCOperand, MCOperandHash, MCOperandEqual>>
       phis; // map from block to variable names that need phi-nodes in those
             // blocks
-  std::unordered_map<MCBasicBlock*,
-      std::unordered_map<MCOperand, MCInstWrapper*, MCOperandHash, MCOperandEqual>>
-      phi_dests;
-  // using PtrPairTy = std::pair<MCBasicBlock *, MCInstWrapper *>;
   std::unordered_map<
       MCBasicBlock *,
-      std::unordered_map<MCOperand, std::vector<unsigned>, MCOperandHash, MCOperandEqual>>
+      std::unordered_map<MCOperand, std::vector<std::pair<unsigned,std::string>>, MCOperandHash, MCOperandEqual>>
       phi_args;
   std::vector<MCOperand> fn_args;
   MCStreamerWrapper(llvm::MCContext &Context, llvm::MCInstrAnalysis *_Ana_ptr,
@@ -1905,11 +1914,7 @@ public:
       return fresh_id;
     };
 
-    // auto getCurId = [&](const MCOperand &op) {
-    //   
-    //   auto &var_stack = stack[op];
-    //   return var_stack.front();
-    // };
+
     std::function<void(MCBasicBlock*)> rename;
     rename = [&](MCBasicBlock* block) {
       auto old_stack = stack;
@@ -1926,7 +1931,6 @@ public:
         MCInstWrapper new_w_instr(new_phi_instr);
         new_w_instr.set_op_id(0, phi_dst_id);
         block->addInstBegin(new_w_instr);
-        // phi_dests[block][]
       }
       cout << "after phis\n";
       block->print();
@@ -1986,17 +1990,18 @@ public:
         
         for (auto &phi_var : phis[s_block]) {
           if (stack.find(phi_var) == stack.end()) {
+            phi_var.print(errs(), MRI_ptr);
             assert(false && "phi var not in stack");
           }
           assert(stack[phi_var].size() > 0 && "phi var stack empty");
 
           if (phi_args[s_block].find(phi_var) == phi_args[s_block].end()) {
-            cout << "!!!!!!!!!!!\n";
-            phi_args[s_block][phi_var] = std::vector<unsigned>();
+            phi_args[s_block][phi_var] = std::vector<std::pair<unsigned,std::string>>();
           }
           errs() << "phi_arg[" << s_block->getName() 
                  << "][" << phi_var.getReg() << "]=" << stack[phi_var][0] <<"\n";
-          phi_args[s_block][phi_var].push_back(stack[phi_var][0]);
+          phi_args[s_block][phi_var].push_back(std::make_pair(stack[phi_var][0],
+                                                              block->getName()));
         }
       }
 
@@ -2005,28 +2010,12 @@ public:
       }
 
       stack = old_stack;
-      // auto& operand = MF.BBs[0].getInstrs()[0].getMCInst().getOperand(0);
-      // pushFresh(operand);
-      // cout << "stack\n";
-      // printStack(stack);
-      // cout << "-----------------\n";
-      // cout << "orig stack\n";
-      // printStack(old_stack);
-      // cout << "-----------------\n";
-      //cout << "fresh_id rename: " << fresh_id << "\n";
-//
-      //cout << "renaming block: " << block->getName() << "\n";
       
-
-
     };
 
     auto entry_block_ptr = &(MF.BBs[0]);
     
     entry_block_ptr->getInstrs()[0].print();
-    //auto& operand = entry_block_ptr->getInstrs()[0].getMCInst().getOperand(0);
-    //pushFresh(operand);
-    //pushFresh(operand);
     
     for (auto& arg : fn_args) {
       stack[arg] = std::vector<unsigned>();
@@ -2042,7 +2031,7 @@ public:
       for (auto &[phi_var, args] : phi_vars) {
         cout << "phi_var: " << phi_var.getReg() << "\n";
         for (auto arg : args) {
-          cout << arg << ",";
+          cout << arg.first << "-" << arg.second << ", ";
         }
         cout << "\n";
       }
@@ -2058,30 +2047,24 @@ public:
 
         auto phi_var = mc_instr.getOperand(0);
         unsigned index = 1;
-        for (auto var_id: phi_args[block][phi_var]) {
-          cout << "index = " << index << ", var_id = " << var_id << "\n";
+        for (auto var_id_label_pair: phi_args[block][phi_var]) {
+          cout << "index = " << index << ", var_id = " << var_id_label_pair.first << "\n";
           mc_instr.addOperand(MCOperand::createReg(phi_var.getReg()));
-          w_instr.set_op_id(index, var_id);
+          w_instr.set_op_id(index, var_id_label_pair.first);
+          w_instr.set_phi_block(index, var_id_label_pair.second);
           w_instr.print();
           index++;
         }
         
       }
     }
+    
     cout << "printing MCInsts after adding args to phi-nodes\n";
     for (auto& b: MF.BBs) {
+      cout << b.getName() << ":\n";
       b.print();
     }
-    // cout << "orig stack after\n";
-    // printStack(stack);
-    // cout << "-----------------\n";
 
-    //fresh_id = pushFresh(operand);
-    //cout << "fresh_id after: " << fresh_id << "\n";
-
-    
-
-    
   }
 
   // helper function to compute the intersection of predecessor dominator sets
@@ -2217,11 +2200,7 @@ public:
       cout << "]\n";
     }
   }
-  /*
-  ArrayRef<llvm::MCInst> GetInstructionSequence(unsigned Index) const {
-    return Regions.getInstructionSequence(Index);
-  }
-  */
+
 
 };
 
@@ -2541,14 +2520,14 @@ bool backendTV() {
   Str.addTerminator();
   Str.generateSuccessors();
   Str.generatePredecessors();
+  Str.findArgs(AF);
+  Str.rewriteOperands();
   Str.printCFG();
   Str.generateDominator();
   Str.generateDominatorFrontier();
   Str.findDefiningBlocks();
   Str.findPhis();
-  Str.findArgs(AF);
   Str.generateDomTree();
-  Str.rewriteOperands();
   Str.ssaRename();
 
   // In this part, we want to use lvn on each basic block and use
