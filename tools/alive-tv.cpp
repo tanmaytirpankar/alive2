@@ -1318,7 +1318,7 @@ public:
       store(*ident_ptr);
       break;
     }
-      // TODO: support MOVKW alonside our MOVKW support
+      // TODO: support MOVKX
     case AArch64::MOVKWi: {
       auto dest = get_value(mc_inst.getOperand(1));
       auto lhs =
