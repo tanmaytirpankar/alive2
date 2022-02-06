@@ -30,6 +30,7 @@ public:
 
   bool has(Attribute a) const { return (bits & a) != 0; }
   void set(Attribute a) { bits |= (unsigned)a; }
+  bool refinedBy(const ParamAttrs &other) const;
 
   // Returns true if it's UB for the argument to be poison / have a poison elem.
   bool poisonImpliesUB() const;
@@ -94,6 +95,15 @@ struct FastMathFlags final {
   bool isNNan() const { return flags & NNaN; }
   bool isNInf() const {return flags & NInf;}
   friend std::ostream& operator<<(std::ostream &os, const FastMathFlags &fm);
+};
+
+
+struct FpRoundingMode final {
+  enum Mode { Dynamic, RNE, RNA, RTP, RTN, RTZ } mode;
+  FpRoundingMode(Mode mode) : mode(mode) {}
+  bool isDynamic() const { return mode == Dynamic; }
+  smt::expr toSMT() const;
+  friend std::ostream& operator<<(std::ostream &os, FpRoundingMode rounding);
 };
 
 }

@@ -67,6 +67,8 @@ Please contact us or submit a PR if something is missing or inaccurate.
 60. InstSimplify incorrectly folds signed comparisons of 'gep inbounds' (https://llvm.org/PR52429)
 61. LoadStoreVectorizer assumes non-willreturn calls always return (https://llvm.org/PR52950)
 62. SROA sub-vector memcpy w/subsequent load loses the store (https://llvm.org/PR52971)
+63. NewGVN miscompiles with equal instructions modulo attributes (https://llvm.org/PR53218)
+64. InstCombine miscompiles combination of signed comparisons (https://llvm.org/PR53252)
 
 
 ### Bugs found in Z3
