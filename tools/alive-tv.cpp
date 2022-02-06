@@ -1468,7 +1468,7 @@ public:
       assert(typ.isIntType());
 
       // FIXME. Do a switch statement to figure out which register to start from
-      auto start = typ.bits() == 32 ? AArch64::W0 : AArch64::X0;
+      auto start = typ.bits() <= 32 ? AArch64::W0 : AArch64::X0;
       auto operand = MCOperand::createReg(start + (argNum++));
 
       std::string operand_name = "%" + std::to_string(operand.getReg());
