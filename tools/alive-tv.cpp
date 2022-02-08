@@ -335,19 +335,19 @@ public:
     return instr;
   }
 
-  void set_op_id(unsigned index, unsigned id) {
+  void setOpId(unsigned index, unsigned id) {
     op_ids[index] = id;
   }
 
-  unsigned get_var_id(unsigned index) {
+  unsigned getVarId(unsigned index) {
     return op_ids[index];
   }
 
-  void set_phi_block(unsigned index, const std::string &block_name) {
+  void setOpPhiBlock(unsigned index, const std::string &block_name) {
     phi_blocks[index] = block_name;
   }
 
-  const std::string &get_phi_block(unsigned index) const {
+  const std::string &getOpPhiBlock(unsigned index) const {
     return phi_blocks.at(index);
   }
 
@@ -364,7 +364,7 @@ public:
       if (it->isReg()) {
         if (getOpcode() == AArch64::PHI && idx >= 1) {
           cout << "<Phi arg>:[(" << it->getReg() << "," << op_ids[idx] 
-               << ")," << get_phi_block(idx)  << "]>";
+               << ")," << getOpPhiBlock(idx)  << "]>";
         }
         else {
           cout << "<MCOperand Reg:(" << it->getReg() << ", " << op_ids[idx]
@@ -382,46 +382,7 @@ public:
     cout << ">\n";
   }
 
-  friend auto operator<=>(const MCInstWrapper &,
-                          const MCInstWrapper &) = default;
 };
-
-class MCUtils {
-private:
-  llvm::MCInstPrinter *IP_ptr;
-  llvm::MCRegisterInfo *MRI_ptr;
-  std::unordered_map<unsigned, unsigned> var_ids;
-public:
-  
-  void SetMCInstPrinter(llvm::MCInstPrinter *IP) {
-    IP_ptr = IP;
-  }
-  
-  void setMCRegisterInfo(llvm::MCRegisterInfo *MRI) {
-    MRI_ptr = MRI;
-  }
-
-  unsigned generate_fresh_id(unsigned operand_id) {
-    if (var_ids.find(operand_id) == var_ids.end()) {
-      var_ids[operand_id] = 1;
-      return 0;
-    }
-    unsigned id = var_ids[operand_id];
-    var_ids[operand_id]++;
-    return id;
-  }
-  
-  MCInst generateMCReturnInstr() {
-    MCInst mc_instr;
-    mc_instr.setOpcode(AArch64::RET);
-    mc_instr.addOperand(MCOperand::createReg(AArch64::LR));
-    mc_instr.dump_pretty(errs(), IP_ptr, " ", MRI_ptr);
-    errs() << "\n";
-    return mc_instr;
-  } 
-};
-
-static MCUtils mc_utils_obj;
 
 // Represents a basic block of machine instructions
 class MCBasicBlock {
@@ -2141,7 +2102,7 @@ public:
         new_phi_instr.dump_pretty(errs(), IP_ptr, " ", MRI_ptr);
         cout << "phi_dst_id: " << phi_dst_id << "\n";
         MCInstWrapper new_w_instr(new_phi_instr);
-        new_w_instr.set_op_id(0, phi_dst_id);
+        new_w_instr.setOpId(0, phi_dst_id);
         block->addInstBegin(new_w_instr);
       }
       cout << "after phis\n";
@@ -2183,7 +2144,7 @@ public:
           errs() << "\n";
 
           auto& arg_id = stack[op][0]; 
-          w_instr.set_op_id(i, arg_id);
+          w_instr.setOpId(i, arg_id);
           
         }
         errs() << "printing operands done\n"; 
@@ -2191,7 +2152,7 @@ public:
         auto &dst_op = mc_instr.getOperand(0);
         dst_op.print(errs(), MRI_ptr);
         auto dst_id = pushFresh(dst_op);
-        w_instr.set_op_id(0, dst_id);
+        w_instr.setOpId(0, dst_id);
         errs() << "\n";
       }
 
@@ -2262,8 +2223,8 @@ public:
         for (auto var_id_label_pair: phi_args[block][phi_var]) {
           cout << "index = " << index << ", var_id = " << var_id_label_pair.first << "\n";
           mc_instr.addOperand(MCOperand::createReg(phi_var.getReg()));
-          w_instr.set_op_id(index, var_id_label_pair.first);
-          w_instr.set_phi_block(index, var_id_label_pair.second);
+          w_instr.setOpId(index, var_id_label_pair.first);
+          w_instr.setOpPhiBlock(index, var_id_label_pair.second);
           w_instr.print();
           index++;
         }
@@ -2627,7 +2588,7 @@ bool backendTV() {
   const char *CPU = "apple-a12";
   auto RM = llvm::Optional<llvm::Reloc::Model>();
   auto TM = Target->createTargetMachine(TripleName, CPU, "", Opt, RM);
-  // TODO add later
+  // TODO add later to check with global-isel enabled
   // TM->setGlobalISel(true);
   llvm::SmallString<1024> Asm;
   llvm::raw_svector_ostream Dest(Asm);
@@ -2676,8 +2637,6 @@ bool backendTV() {
   auto Ana = std::make_unique<MCInstrAnalysis>(MCII.get());
 
   MCStreamerWrapper Str(Ctx, Ana.get(), IPtemp.get(), MRI.get());
-  mc_utils_obj.setMCRegisterInfo(MRI.get());
-  mc_utils_obj.SetMCInstPrinter(IPtemp.get());
 
   std::unique_ptr<llvm::MCAsmParser> Parser(
       llvm::createMCAsmParser(SrcMgr, Ctx, Str, *MAI));
@@ -2740,100 +2699,22 @@ bool backendTV() {
   Str.generateDomTree();
   Str.ssaRename();
 
-  // In this part, we want to use lvn on each basic block and use
-  // the SSA construction algorithm described in
-  // https://link.springer.com/chapter/10.1007/978-3-642-37051-9_6
-  // to generate SSA form that can be converted into alive IR
-  // FIXME For now, lvn is implemented, but the SSA construction algorithm is
-  // not.
-  // Hence, for now, we exit if the function has more than 1 block
+  cout << "after SSA conversion\n";
+
   if (Str.MF.BBs.size() > 1) {
     cout << "ERROR: we don't generate SSA for this type of arm function yet"
          << '\n';
     return false;
   }
-
-  std::unordered_map<MCOperand, unsigned, MCOperandHash, MCOperandEqual>
-      svar2num;
-  std::unordered_map<unsigned, MCOperand> num2cvar;
-  std::unordered_map<SymValue, unsigned, SymValueHash, SymValueEqual> value2num;
-
-  cout << "finding readers and updating maps\n";
+  // TODO: @Ryan with the removal of lvn, some changes may need to go here to integrate with your code
   auto &MF = Str.MF;
   auto &first_BB = MF.BBs[0];
-  // FIXME for now we process first basic block only
-  auto first_reads = FindReadBeforeWritten(first_BB, Ana.get());
-  for (auto &read_op : first_reads) {
-    auto new_num = getId();
-    svar2num.emplace(read_op, new_num);
-    num2cvar.emplace(new_num, read_op);
-  }
-  cout << "--------svar2num-----------\n";
-  for (auto &[key, val] : svar2num) {
-    key.dump();
-    errs() << ": " << val << '\n';
-  }
-  cout << "--------num2cvar----------\n";
-  for (auto &[key, val] : num2cvar) {
-    errs() << key << ": ";
-    val.dump();
-    errs() << '\n';
-  }
-  cout << "----------------------\n";
-  auto last_writes = LastWrites(first_BB);
-  for (unsigned i = 0; i < first_BB.Instrs.size(); ++i) {
-    auto &cur_w_instr = first_BB.getInstrs()[i];
-    auto &cur_instr = cur_w_instr.getMCInst();
-    auto sym_val = SymValue();
-    // TODO move this to SymValue CTOR and also distinguish operand selection
-    // based on opcode Right now we assume operand 0 is destination and
-    // operands 1..n are used
-    sym_val.opcode = cur_instr.getOpcode();
-    assert(cur_instr.getNumOperands() > 0 && "MCInst with zero operands");
-    for (unsigned j = 1; j < cur_instr.getNumOperands(); ++j) {
-      sym_val.operands.push_back(svar2num[cur_instr.getOperand(j)]);
-    }
-    if (!value2num.contains(sym_val)) {
-      // TODO
-    }
 
-    // Only do the following if opcode writes to a variable
-    auto dst = cur_instr.getOperand(0);
-    auto new_num = getId();
-    svar2num.insert_or_assign(dst, new_num);
-
-    MCOperand new_dst;
-    // if (last_writes[i]) { //no need to add version numbering to dst
-    //   new_dst = dst;
-    // }
-    // else {
-    new_dst = dst;
-    assert(new_dst.isReg());
-    // FIXME I'm offsetting the register number by 1000
-    // to use new values. this has to be fixed by updating MCInstWrapper
-    new_dst.setReg(1000 + new_num);
-    // }
-
-    num2cvar.emplace(new_num, new_dst);
-    cur_instr.getOperand(0).setReg(new_dst.getReg());
-
-    if (!sym_val.operands.empty()) {
-      value2num.emplace(sym_val, new_num);
-    }
-    // Update MCInstrs operands with
-    for (unsigned j = 1; j < cur_instr.getNumOperands(); ++j) {
-      auto &inst_operand = cur_instr.getOperand(j);
-      if (inst_operand.isReg()) {
-        inst_operand.setReg(num2cvar[sym_val.operands[j - 1]].getReg());
-      }
-    }
-  }
-
-  cout << "\n\nAfter performing LVN:\n";
-
+  // FIXME Lets replace this with returing the last use X0
+  // It will still be wrong but It's better than the following
   first_BB.print();
   // Adjust the ret instruction's operand
-  // FIXME for now, we're doing something pretty naive/wrong except in the
+  // For now, we're doing something pretty naive/wrong except in the
   // simplest cases I'm assuming that the destination for the second to last
   // instruction is the return value of the function.
   auto &BB_mcinstrs = first_BB.getInstrs();
