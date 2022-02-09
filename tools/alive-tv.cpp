@@ -320,13 +320,13 @@ static llvm::mc::RegisterMCTargetOptionsFlags MOF;
 
 class MCInstWrapper {
 private:
+  llvm::MCInst instr;
   std::vector<unsigned> op_ids;
   std::map<unsigned, std::string>
       phi_blocks; // This is pretty wasteful but I'm not sure how to add
                   // MCExpr operands to the underlying MCInst phi instructions
 public:
-  llvm::MCInst instr;
-
+  
   MCInstWrapper(llvm::MCInst _instr) : instr(_instr) {
     op_ids.resize(instr.getNumOperands(), 0);
   }
@@ -386,22 +386,27 @@ public:
 
 // Represents a basic block of machine instructions
 class MCBasicBlock {
-  std::string Name;
+private:
+  std::string name;
   using SetTy = llvm::DenseSet<MCBasicBlock *>;
+  std::vector<MCInstWrapper> Instrs;
   SetTy Succs;
   SetTy Preds;
-
+  
 public:
-  std::vector<MCInstWrapper> Instrs;
-  MCBasicBlock(std::string _Name) : Name(_Name) {}
-  //MCBasicBlock(const MCBasicBlock&) =delete;
+  MCBasicBlock(std::string _name) : name(_name) {}
+  // MCBasicBlock(const MCBasicBlock&) =delete;
 
   const std::string &getName() const {
-    return Name;
+    return name;
   }
 
   auto &getInstrs() {
     return Instrs;
+  }
+
+  auto size() const {
+    return Instrs.size();
   }
 
   auto &getSuccs() {
@@ -444,10 +449,6 @@ public:
     return Succs.end();
   }
 
-  auto size() const {
-    return Instrs.size();
-  }
-
   void print() const {
     for (auto &instr : Instrs) {
       instr.print();
@@ -457,16 +458,16 @@ public:
 
 // Represents a machine function
 class MCFunction {
-  std::string Name;
+  std::string name;
   unsigned label_cnt{0};
 
 public:
   std::vector<MCBasicBlock> BBs;
   MCFunction() {}
-  MCFunction(std::string _Name) : Name(_Name) {}
+  MCFunction(std::string _name) : name(_name) {}
 
-  void setName(std::string _Name) {
-    Name = _Name;
+  void setName(std::string _name) {
+    name = _name;
   }
 
   MCBasicBlock *addBlock(std::string b_name) {
@@ -474,11 +475,11 @@ public:
   }
 
   std::string getName() {
-    return Name;
+    return name;
   }
 
   std::string getLabel() {
-    return Name + std::to_string(++label_cnt);
+    return name + std::to_string(++label_cnt);
   }
 
   MCBasicBlock *findBlockByName(std::string b_name) {
@@ -489,21 +490,20 @@ public:
     }
     return nullptr;
   }
-
-  bool isVarArg() {
-    return false;
-  }
 };
 
 struct MCOperandHash {
+  
   enum Kind {
     reg = (1 << 2) - 1,
     immedidate = (1 << 3) - 1,
     symbol = (1 << 4) - 1
   };
+  
   size_t operator()(const MCOperand &op) const {
     unsigned prefix;
     unsigned id;
+
     if (op.isReg()) {
       prefix = Kind::reg;
       id = op.getReg();
@@ -524,6 +524,7 @@ struct MCOperandHash {
     } else {
       assert("no" && false);
     }
+
     return std::hash<unsigned long>()(prefix * id);
   }
 };
@@ -542,6 +543,8 @@ struct MCOperandEqual {
   }
 };
 
+// CHECK @Ryan. Do we need this anymore? after the SSA conversion each MCInstWrapper should represent a
+// unique value. Hence mc_value_cache can be changed to map from MCInstWrapper to Value.
 class AMCValue {
   llvm::MCOperand operand;
   unsigned id;
@@ -803,6 +806,7 @@ bool has_s(int instr) {
   return s_flag.contains(instr);
 }
 
+// FIXME @Ryan. after the changes to MCInstWrapper. is there a need to have wrapper and curInst?
 class arm2alive_ {
   MCFunction &MF;
   const llvm::DataLayout &DL;
@@ -816,14 +820,14 @@ class arm2alive_ {
   MCInst curInst;
   unsigned int curId;
 
-  std::vector<std::unique_ptr<IR::Instr>> visit_error(MCInstWrapper &I) {
+  std::vector<std::unique_ptr<IR::Instr>> visitError(MCInstWrapper &I) {
     llvm::errs() << "ERROR: Unsupported arm instruction: "
-                 << instrPrinter->getOpcodeName(I.instr.getOpcode());
+                 << instrPrinter->getOpcodeName(I.getMCInst().getOpcode());
     exit(1); // for now lets exit the program if the arm instruction is not
              // supported
   }
 
-  IR::Value *get_identifier(MCOperand &op) {
+  IR::Value *getIdentifier(MCOperand &op) {
     auto search_val = AMCValue(op, get_cur_op_id(op));
     auto val = mc_get_operand(search_val);
 
@@ -853,7 +857,7 @@ class arm2alive_ {
       return make_intconst(0, 64);
     }
 
-    auto val = get_identifier(op);
+    auto val = getIdentifier(op);
     if (size == 64 || DISABLE_REGISTER_LOOKUP) {
       return val;
     }
@@ -1128,7 +1132,7 @@ public:
 
       // make sure that lhs and rhs conversion succeeded, type lookup succeeded
       if (!ty || !a || !b)
-        visit_error(I);
+        visitError(I);
 
       // SSub_Overflow returns: {iN (result), i1 (overflow), i24 (padding)}
       auto ssub = add_instr<IR::BinOp>(*ty_ptr, move(next_name()), *a, *b,
@@ -1181,7 +1185,7 @@ public:
       auto cond_val = evaluate_condition(cond_val_imm);
 
       if (!ty || !a || !b)
-        visit_error(I);
+        visitError(I);
 
       auto ret =
           add_instr<IR::Select>(*ty, move(next_name()), *cond_val, *a, *b);
@@ -1223,7 +1227,7 @@ public:
 
       auto shift_amt = make_intconst(mc_inst.getOperand(2).getImm(), size);
       if (!ty || !a || !shift_amt)
-        visit_error(I);
+        visitError(I);
 
       auto res = add_instr<IR::BinOp>(*ty, move(next_name()), *a, *shift_amt,
                                       IR::BinOp::AShr);
@@ -1241,7 +1245,7 @@ public:
       auto imm_val = make_intconst(decoded_immediate,
                                    size); // FIXME, need to decode immediate val
       if (!ty || !a || !imm_val)
-        visit_error(I);
+        visitError(I);
 
       auto res = add_instr<IR::BinOp>(*ty, move(next_name()), *a, *imm_val,
                                       IR::BinOp::Xor);
@@ -1264,7 +1268,7 @@ public:
       auto cond_val = evaluate_condition(cond_val_imm);
 
       if (!ty || !a || !b)
-        visit_error(I);
+        visitError(I);
 
       auto neg_one = make_intconst(-1, size);
       auto negated_b = add_instr<IR::BinOp>(*ty, move(next_name()), *b,
@@ -1493,7 +1497,7 @@ public:
       break;
     }
     default:
-      visit_error(I);
+      visitError(I);
     }
   }
 
@@ -1601,7 +1605,8 @@ std::optional<IR::Function> arm2alive(MCFunction &MF,
 // instruction and labels in the arm assembly.
 //
 // FIXME for now, we're using this class to generate the MCFunction and
-// also print the MCFunction. we should move this implementation somewhere else
+// also print the MCFunction and to convert the MCFunction into SSA form. 
+// We should move this implementation somewhere else
 // TODO we'll need to implement some of the other callbacks to extract more
 // information from the asm file. For example, it would be useful to extract
 // debug info to determine the number of function parameters.
@@ -1609,12 +1614,9 @@ class MCStreamerWrapper final : public llvm::MCStreamer {
   enum ASMLine { none = 0, label = 1, non_term_instr = 2, terminator = 3 };
 
 private:
-  MCBasicBlock *CurBlock{nullptr};
-  std::string CurLabel;
+  MCBasicBlock *temp_block{nullptr};
   bool first_label{true};
   unsigned prev_line{0};
-  std::map<std::string, std::vector<MCInstWrapper> *> Label2Block; // unused remove or use
-  std::vector<std::string> LabelNames;
   llvm::MCInstrAnalysis *Ana_ptr;
   llvm::MCInstPrinter *IP_ptr;
   llvm::MCRegisterInfo *MRI_ptr;
@@ -1622,13 +1624,11 @@ private:
 public:
   MCFunction MF;
   unsigned cnt{0};
-  std::vector<llvm::MCInst> Insts;
-  // std::vector<MCInstWrapper> W_Insts; // unused remove or use
-  std::vector<std::vector<MCInstWrapper>> Blocks;
+  std::vector<llvm::MCInst> Insts; // CHECK this should go as it's only being used for pretty printing which makes it unused after fixing MCInstWrapper::print
   using BlockSetTy = llvm::DenseSet<MCBasicBlock *>;
   std::unordered_map<MCBasicBlock*, BlockSetTy> dom;
   std::unordered_map<MCBasicBlock*, BlockSetTy> dom_frontier;
-  std::unordered_map<MCBasicBlock*, BlockSetTy> dom_tree; // CHECKME I may have made a mistake here
+  std::unordered_map<MCBasicBlock*, BlockSetTy> dom_tree; // CHECK I may have made a mistake here
   std::unordered_map<MCOperand, BlockSetTy, MCOperandHash, MCOperandEqual> defs;
   std::unordered_map<
       MCBasicBlock *,
@@ -1654,10 +1654,10 @@ public:
     assert(prev_line != ASMLine::none);
     
     if (prev_line == ASMLine::terminator) {
-      CurBlock = MF.addBlock(MF.getLabel());
+      temp_block = MF.addBlock(MF.getLabel());
     }
     MCInstWrapper Cur_Inst(Inst);
-    CurBlock->addInst(Cur_Inst);
+    temp_block->addInst(Cur_Inst);
     Insts.push_back(Inst);
 
     if (Ana_ptr->isTerminator(Inst)) {
@@ -1717,8 +1717,8 @@ public:
       MF.setName(Symbol->getName().str() + "-tgt");
       first_label = false;
     }
-    CurLabel = Symbol->getName().str();
-    CurBlock = MF.addBlock(CurLabel);
+    string cur_label = Symbol->getName().str();
+    temp_block = MF.addBlock(cur_label);
     prev_line = ASMLine::label;
     errs() << cnt++ << "  : ";
     errs() << "inside Emit Label: symbol=" << Symbol->getName() << '\n';
@@ -2293,13 +2293,13 @@ public:
     for (unsigned i = 0; i < MF.BBs.size() - 1; ++i) {
       auto &cur_bb = MF.BBs[i];
       auto next_bb_ptr = &MF.BBs[i + 1];
-      if (cur_bb.Instrs.empty()) {
+      if (cur_bb.size() == 0) {
         cout
             << "generateSuccessors, encountered basic block with 0 instructions"
             << '\n';
         continue;
       }
-      auto &last_mc_instr = cur_bb.Instrs.back().getMCInst();
+      auto &last_mc_instr = cur_bb.getInstrs().back().getMCInst();
       if (Ana_ptr->isConditionalBranch(last_mc_instr)) {
         std::string target = findTargetLabel(last_mc_instr);
         auto target_bb = MF.findBlockByName(target);
@@ -2341,8 +2341,8 @@ public:
     int i = 0;
     for (auto &block : MF.BBs) {
       errs() << "block " << i << ", name= " << block.getName() << '\n';
-      for (auto &inst : block.Instrs) {
-        inst.instr.dump_pretty(llvm::errs(), IP_ptr, " ", MRI_ptr);
+      for (auto &inst : block.getInstrs()) {
+        inst.getMCInst().dump_pretty(llvm::errs(), IP_ptr, " ", MRI_ptr);
         errs() << '\n';
       }
       i++;
