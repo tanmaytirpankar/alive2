@@ -26,10 +26,10 @@
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCInstBuilder.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCInstrAnalysis.h"
 #include "llvm/MC/MCInstrInfo.h"
-#include "llvm/MC/MCInstBuilder.h"
 #include "llvm/MC/MCParser/MCAsmParser.h"
 #include "llvm/MC/MCParser/MCTargetAsmParser.h"
 #include "llvm/MC/MCRegisterInfo.h"
@@ -58,6 +58,7 @@
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <ranges>
@@ -65,7 +66,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include <algorithm>
 
 using namespace tools;
 using namespace util;
@@ -326,7 +326,6 @@ private:
       phi_blocks; // This is pretty wasteful but I'm not sure how to add
                   // MCExpr operands to the underlying MCInst phi instructions
 public:
-  
   MCInstWrapper(llvm::MCInst _instr) : instr(_instr) {
     op_ids.resize(instr.getNumOperands(), 0);
   }
@@ -363,10 +362,9 @@ public:
     for (auto it = instr.begin(); it != instr.end(); ++it) {
       if (it->isReg()) {
         if (getOpcode() == AArch64::PHI && idx >= 1) {
-          cout << "<Phi arg>:[(" << it->getReg() << "," << op_ids[idx] 
-               << ")," << getOpPhiBlock(idx)  << "]>";
-        }
-        else {
+          cout << "<Phi arg>:[(" << it->getReg() << "," << op_ids[idx] << "),"
+               << getOpPhiBlock(idx) << "]>";
+        } else {
           cout << "<MCOperand Reg:(" << it->getReg() << ", " << op_ids[idx]
                << ")>";
         }
@@ -381,7 +379,6 @@ public:
     }
     cout << ">\n";
   }
-
 };
 
 // Represents a basic block of machine instructions
@@ -392,7 +389,7 @@ private:
   std::vector<MCInstWrapper> Instrs;
   SetTy Succs;
   SetTy Preds;
-  
+
 public:
   MCBasicBlock(std::string _name) : name(_name) {}
   // MCBasicBlock(const MCBasicBlock&) =delete;
@@ -493,13 +490,13 @@ public:
 };
 
 struct MCOperandHash {
-  
+
   enum Kind {
     reg = (1 << 2) - 1,
     immedidate = (1 << 3) - 1,
     symbol = (1 << 4) - 1
   };
-  
+
   size_t operator()(const MCOperand &op) const {
     unsigned prefix;
     unsigned id;
@@ -543,8 +540,9 @@ struct MCOperandEqual {
   }
 };
 
-// CHECK @Ryan. Do we need this anymore? after the SSA conversion each MCInstWrapper should represent a
-// unique value. Hence mc_value_cache can be changed to map from MCInstWrapper to Value.
+// CHECK @Ryan. Do we need this anymore? after the SSA conversion each
+// MCInstWrapper should represent a unique value. Hence mc_value_cache can be
+// changed to map from MCInstWrapper to Value.
 class AMCValue {
   llvm::MCOperand operand;
   unsigned id;
@@ -806,7 +804,8 @@ bool has_s(int instr) {
   return s_flag.contains(instr);
 }
 
-// FIXME @Ryan. after the changes to MCInstWrapper. is there a need to have wrapper and curInst?
+// FIXME @Ryan. after the changes to MCInstWrapper. is there a need to have
+// wrapper and curInst?
 class arm2alive_ {
   MCFunction &MF;
   const llvm::DataLayout &DL;
@@ -1384,10 +1383,10 @@ public:
       auto bottom_bits =
           make_intconst(~(0xFFFF << mc_inst.getOperand(3).getImm()), 32);
       auto cleared = add_instr<IR::BinOp>(*ty, move(next_name()), *dest,
-                                            *bottom_bits, IR::BinOp::And);
+                                          *bottom_bits, IR::BinOp::And);
 
-      auto ident = add_instr<IR::BinOp>(*ty, move(next_name()), *cleared,
-                                          *lhs, IR::BinOp::Or);
+      auto ident = add_instr<IR::BinOp>(*ty, move(next_name()), *cleared, *lhs,
+                                        IR::BinOp::Or);
       store(*ident);
       break;
     }
@@ -1605,7 +1604,7 @@ std::optional<IR::Function> arm2alive(MCFunction &MF,
 // instruction and labels in the arm assembly.
 //
 // FIXME for now, we're using this class to generate the MCFunction and
-// also print the MCFunction and to convert the MCFunction into SSA form. 
+// also print the MCFunction and to convert the MCFunction into SSA form.
 // We should move this implementation somewhere else
 // TODO we'll need to implement some of the other callbacks to extract more
 // information from the asm file. For example, it would be useful to extract
@@ -1624,11 +1623,14 @@ private:
 public:
   MCFunction MF;
   unsigned cnt{0};
-  std::vector<llvm::MCInst> Insts; // CHECK this should go as it's only being used for pretty printing which makes it unused after fixing MCInstWrapper::print
+  std::vector<llvm::MCInst>
+      Insts; // CHECK this should go as it's only being used for pretty printing
+             // which makes it unused after fixing MCInstWrapper::print
   using BlockSetTy = llvm::DenseSet<MCBasicBlock *>;
-  std::unordered_map<MCBasicBlock*, BlockSetTy> dom;
-  std::unordered_map<MCBasicBlock*, BlockSetTy> dom_frontier;
-  std::unordered_map<MCBasicBlock*, BlockSetTy> dom_tree; // CHECK I may have made a mistake here
+  std::unordered_map<MCBasicBlock *, BlockSetTy> dom;
+  std::unordered_map<MCBasicBlock *, BlockSetTy> dom_frontier;
+  std::unordered_map<MCBasicBlock *, BlockSetTy>
+      dom_tree; // CHECK I may have made a mistake here
   std::unordered_map<MCOperand, BlockSetTy, MCOperandHash, MCOperandEqual> defs;
   std::unordered_map<
       MCBasicBlock *,
@@ -1637,7 +1639,9 @@ public:
             // blocks
   std::unordered_map<
       MCBasicBlock *,
-      std::unordered_map<MCOperand, std::vector<std::pair<unsigned,std::string>>, MCOperandHash, MCOperandEqual>>
+      std::unordered_map<MCOperand,
+                         std::vector<std::pair<unsigned, std::string>>,
+                         MCOperandHash, MCOperandEqual>>
       phi_args;
   std::vector<MCOperand> fn_args;
   MCStreamerWrapper(llvm::MCContext &Context, llvm::MCInstrAnalysis *_Ana_ptr,
@@ -1652,7 +1656,7 @@ public:
                   const llvm::MCSubtargetInfo & /* unused */) override {
 
     assert(prev_line != ASMLine::none);
-    
+
     if (prev_line == ASMLine::terminator) {
       temp_block = MF.addBlock(MF.getLabel());
     }
@@ -1745,10 +1749,10 @@ public:
     assert(!MF.BBs.empty());
     if (MF.BBs.size() == 1) // only one blo
       return;
-    MCBasicBlock* firstBlockPtr = &MF.BBs[0];
+    MCBasicBlock *firstBlockPtr = &MF.BBs[0];
     bool addEntryBlock = false;
     for (unsigned i = 1; i < MF.BBs.size(); ++i) {
-      auto& curBlock = MF.BBs[i];
+      auto &curBlock = MF.BBs[i];
       if (curBlock.getSuccs().count(firstBlockPtr) == 1) {
         addEntryBlock = true;
         break;
@@ -1766,21 +1770,20 @@ public:
   // make sure that each block ends with a terminator
   // FIXME
   void addTerminator() {
-    
+
     return;
 
-    //for (unsigned i = 0; i < MF.BBs.size(); ++i) {
-    //  auto& curBlock = MF.BBs[i];
-    //  if (curBlock.getSuccs().count(firstBlockPtr) == 1) {
-    //    addEntryBlock = true;
-    //    break;
-    //  }
-    //}
-
+    // for (unsigned i = 0; i < MF.BBs.size(); ++i) {
+    //   auto& curBlock = MF.BBs[i];
+    //   if (curBlock.getSuccs().count(firstBlockPtr) == 1) {
+    //     addEntryBlock = true;
+    //     break;
+    //   }
+    // }
   }
-  
-  void postOrderDFS(MCBasicBlock& curBlock, BlockSetTy& visited, 
-                    std::vector<MCBasicBlock*> &postOrder) {
+
+  void postOrderDFS(MCBasicBlock &curBlock, BlockSetTy &visited,
+                    std::vector<MCBasicBlock *> &postOrder) {
     visited.insert(&curBlock);
     for (auto succ : curBlock.getSuccs()) {
       if (std::find(visited.begin(), visited.end(), succ) == visited.end()) {
@@ -1789,11 +1792,11 @@ public:
     }
     postOrder.push_back(&curBlock);
   }
-  
-  std::vector<MCBasicBlock*> postOrder() {
-    std::vector<MCBasicBlock*> postOrder;
+
+  std::vector<MCBasicBlock *> postOrder() {
+    std::vector<MCBasicBlock *> postOrder;
     BlockSetTy visited;
-    for (auto& curBlock : MF.BBs) {
+    for (auto &curBlock : MF.BBs) {
       if (visited.count(&curBlock) == 0) {
         postOrderDFS(curBlock, visited, postOrder);
       }
@@ -1806,22 +1809,22 @@ public:
     auto blocks = postOrder();
     std::reverse(blocks.begin(), blocks.end());
     cout << "postOrder\n";
-    for (auto& curBlock : blocks) {
+    for (auto &curBlock : blocks) {
       cout << curBlock->getName() << "\n";
       dom[curBlock] = BlockSetTy();
-      for (auto& b : blocks) {
+      for (auto &b : blocks) {
         dom[curBlock].insert(b);
       }
     }
-    
+
     cout << "printing dom before\n";
     printGraph(dom);
-    while(true) {
+    while (true) {
       bool changed = false;
-      for (auto& curBlock : blocks) {
+      for (auto &curBlock : blocks) {
         BlockSetTy newDom = intersect(curBlock->getPreds(), dom);
         newDom.insert(curBlock);
-        
+
         if (newDom != dom[curBlock]) {
           changed = true;
           dom[curBlock] = newDom;
@@ -1833,28 +1836,26 @@ public:
     }
     cout << "printing dom after\n";
     printGraph(dom);
-
   }
 
   void generateDominatorFrontier() {
     auto dominates = invertGraph(dom);
     cout << "printing dom_inverse\n";
     printGraph(dominates);
-    for (auto& [block, domSet] : dom) {
+    for (auto &[block, domSet] : dom) {
       BlockSetTy dominated_succs;
       dom_frontier[block] = BlockSetTy();
-      for (auto& dominated : dominates[block]) {
-        auto& temp_succs = dominated->getSuccs();
-        for (auto& elem : temp_succs) {
+      for (auto &dominated : dominates[block]) {
+        auto &temp_succs = dominated->getSuccs();
+        for (auto &elem : temp_succs) {
           dominated_succs.insert(elem);
         }
-        
-        for (auto& b : dominated_succs) {
+
+        for (auto &b : dominated_succs) {
           if (b == block || dominates[block].count(b) == 0) {
             dom_frontier[block].insert(b);
           }
         }
-
       }
     }
     cout << "printing dom_frontier\n";
@@ -1867,29 +1868,29 @@ public:
     cout << "printing dom_inverse\n";
     printGraph(dominates);
     cout << "-----------------\n";
-    std::unordered_map<MCBasicBlock*, BlockSetTy> s_dom;
-    for (auto& [block, children] : dominates) {
+    std::unordered_map<MCBasicBlock *, BlockSetTy> s_dom;
+    for (auto &[block, children] : dominates) {
       s_dom[block] = BlockSetTy();
-      for (auto& child : children) {
+      for (auto &child : children) {
         if (child != block) {
           s_dom[block].insert(child);
         }
       }
     }
 
-    std::unordered_map<MCBasicBlock*, BlockSetTy> child_dom;
+    std::unordered_map<MCBasicBlock *, BlockSetTy> child_dom;
 
-    for (auto& [block, children] : s_dom) {
+    for (auto &[block, children] : s_dom) {
       child_dom[block] = BlockSetTy();
-      for (auto& child : children) {
-          for (auto& child_doominates: s_dom[child]) {
-            child_dom[block].insert(child_doominates);  
-          }
+      for (auto &child : children) {
+        for (auto &child_doominates : s_dom[child]) {
+          child_dom[block].insert(child_doominates);
+        }
       }
     }
 
-    for (auto& [block, children]: s_dom) {
-      for (auto& child : children) {
+    for (auto &[block, children] : s_dom) {
+      for (auto &child : children) {
         if (child_dom[block].count(child) == 0) {
           dom_tree[block].insert(child);
         }
@@ -1950,11 +1951,11 @@ public:
     }
 
     // temp for debugging
-    for (auto& [var, blockSet] : defs) {
+    for (auto &[var, blockSet] : defs) {
       cout << "defs for \n";
       var.print(errs(), MRI_ptr);
       cout << "\n";
-      for (auto& block : blockSet) {
+      for (auto &block : blockSet) {
         cout << block->getName() << ",";
       }
       cout << "\n";
@@ -1962,15 +1963,15 @@ public:
   }
   // std::unordered_map<MCBasicBlock*, BlockSetTy> phis;
   void findPhis() {
-    //for (auto &block : MF.BBs) {
-    //  phis[&block] = VarSetTy();
-    //}
-    
-    for (auto& [var, block_set] : defs) {
-      vector<MCBasicBlock*> block_list(block_set.begin(), block_set.end());
+    // for (auto &block : MF.BBs) {
+    //   phis[&block] = VarSetTy();
+    // }
+
+    for (auto &[var, block_set] : defs) {
+      vector<MCBasicBlock *> block_list(block_set.begin(), block_set.end());
       for (unsigned i = 0; i < block_list.size(); ++i) {
-        //auto& df_blocks = dom_frontier[block_list[i]];
-        for (auto block_ptr: dom_frontier[block_list[i]]) {
+        // auto& df_blocks = dom_frontier[block_list[i]];
+        for (auto block_ptr : dom_frontier[block_list[i]]) {
           if (phis[block_ptr].count(var) == 0) {
             phis[block_ptr].insert(var);
 
@@ -1979,22 +1980,20 @@ public:
               block_list.push_back(block_ptr);
             }
           }
-          
         }
       }
-      
-    }  
+    }
     // temp for debugging
-    cout << "mapping from block name to variable names that require phi nodes in block\n";
-    for (auto& [block, varSet] : phis) {
+    cout << "mapping from block name to variable names that require phi nodes "
+            "in block\n";
+    for (auto &[block, varSet] : phis) {
       cout << "phis for: " << block->getName() << "\n";
-      for (auto& var : varSet) {
+      for (auto &var : varSet) {
         var.print(errs(), MRI_ptr);
         cout << "\n";
       }
       cout << "-------------\n";
     }
-  
   }
 
   // FIXME: this is duplicated code. need to refactor
@@ -2012,15 +2011,15 @@ public:
 
     // temp for debugging
     cout << "printing fn_args\n";
-    for (auto& arg : fn_args) {
-        arg.print(errs(), MRI_ptr);
-        cout << "\n";
+    for (auto &arg : fn_args) {
+      arg.print(errs(), MRI_ptr);
+      cout << "\n";
     }
-
   }
-  
+
   // go over 32 bit registers and replace them with the corresponding 64 bit
-  // FIXME: this will probably have some uninteded consequences that we need to identify
+  // FIXME: this will probably have some uninteded consequences that we need to
+  // identify
   void rewriteOperands() {
 
     for (auto &fn_arg : fn_args) {
@@ -2044,9 +2043,9 @@ public:
     }
 
     cout << "printing fn_args after rewrite\n";
-    for (auto& arg : fn_args) {
-        arg.print(errs(), MRI_ptr);
-        cout << "\n";
+    for (auto &arg : fn_args) {
+      arg.print(errs(), MRI_ptr);
+      cout << "\n";
     }
 
     cout << "printing MCInsts after rewriting operands\n";
@@ -2057,10 +2056,9 @@ public:
     std::unordered_map<MCOperand, std::vector<unsigned>, MCOperandHash,
                        MCOperandEqual>
         stack;
-    std::unordered_map<MCOperand, unsigned, MCOperandHash,
-                       MCOperandEqual>
+    std::unordered_map<MCOperand, unsigned, MCOperandHash, MCOperandEqual>
         counters;
-    
+
     cout << "SSA rename\n";
 
     auto printStack = [&](std::unordered_map<MCOperand, std::vector<unsigned>,
@@ -2087,14 +2085,13 @@ public:
       return fresh_id;
     };
 
-
-    std::function<void(MCBasicBlock*)> rename;
-    rename = [&](MCBasicBlock* block) {
+    std::function<void(MCBasicBlock *)> rename;
+    rename = [&](MCBasicBlock *block) {
       auto old_stack = stack;
       cout << "renaming block: " << block->getName() << "\n";
       block->print();
       cout << "----\n";
-      for (auto &phi_var: phis[block]) {
+      for (auto &phi_var : phis[block]) {
         auto phi_dst_id = pushFresh(phi_var);
         MCInst new_phi_instr;
         new_phi_instr.setOpcode(AArch64::PHI);
@@ -2108,11 +2105,11 @@ public:
       cout << "after phis\n";
       block->print();
       cout << "----\n";
-      
+
       cout << "renaming instructions\n";
       for (auto &w_instr : block->getInstrs()) {
         auto &mc_instr = w_instr.getMCInst();
-        
+
         if (mc_instr.getOpcode() == AArch64::PHI) {
           continue;
         }
@@ -2122,7 +2119,7 @@ public:
         // nothing to rename
         if (mc_instr.getNumOperands() == 1) {
           continue;
-        } 
+        }
 
         mc_instr.dump_pretty(errs(), IP_ptr, " ", MRI_ptr);
         errs() << "\n";
@@ -2139,15 +2136,14 @@ public:
           if (op_reg_num == AArch64::WZR || op_reg_num == AArch64::XZR) {
             continue;
           }
-          
+
           op.print(errs(), MRI_ptr);
           errs() << "\n";
 
-          auto& arg_id = stack[op][0]; 
+          auto &arg_id = stack[op][0];
           w_instr.setOpId(i, arg_id);
-          
         }
-        errs() << "printing operands done\n"; 
+        errs() << "printing operands done\n";
         errs() << "renaming dst\n";
         auto &dst_op = mc_instr.getOperand(0);
         dst_op.print(errs(), MRI_ptr);
@@ -2157,10 +2153,10 @@ public:
       }
 
       errs() << "renaming phi args in block's successors\n";
-      
+
       for (auto s_block : block->getSuccs()) {
         errs() << block->getName() << " -> " << s_block->getName() << "\n";
-        
+
         for (auto &phi_var : phis[s_block]) {
           if (stack.find(phi_var) == stack.end()) {
             phi_var.print(errs(), MRI_ptr);
@@ -2169,28 +2165,28 @@ public:
           assert(stack[phi_var].size() > 0 && "phi var stack empty");
 
           if (phi_args[s_block].find(phi_var) == phi_args[s_block].end()) {
-            phi_args[s_block][phi_var] = std::vector<std::pair<unsigned,std::string>>();
+            phi_args[s_block][phi_var] =
+                std::vector<std::pair<unsigned, std::string>>();
           }
-          errs() << "phi_arg[" << s_block->getName() 
-                 << "][" << phi_var.getReg() << "]=" << stack[phi_var][0] <<"\n";
-          phi_args[s_block][phi_var].push_back(std::make_pair(stack[phi_var][0],
-                                                              block->getName()));
+          errs() << "phi_arg[" << s_block->getName() << "][" << phi_var.getReg()
+                 << "]=" << stack[phi_var][0] << "\n";
+          phi_args[s_block][phi_var].push_back(
+              std::make_pair(stack[phi_var][0], block->getName()));
         }
       }
 
-      for (auto b: dom_tree[block]) {
+      for (auto b : dom_tree[block]) {
         rename(b);
       }
 
       stack = old_stack;
-      
     };
 
     auto entry_block_ptr = &(MF.BBs[0]);
-    
+
     entry_block_ptr->getInstrs()[0].print();
-    
-    for (auto& arg : fn_args) {
+
+    for (auto &arg : fn_args) {
       stack[arg] = std::vector<unsigned>();
       pushFresh(arg);
     }
@@ -2210,7 +2206,7 @@ public:
       }
     }
 
-    cout << "-----------------\n";// adding args to phi-nodes
+    cout << "-----------------\n"; // adding args to phi-nodes
     for (auto &[block, phi_vars] : phi_args) {
       for (auto &w_instr : block->getInstrs()) {
         auto &mc_instr = w_instr.getMCInst();
@@ -2220,28 +2216,28 @@ public:
 
         auto phi_var = mc_instr.getOperand(0);
         unsigned index = 1;
-        for (auto var_id_label_pair: phi_args[block][phi_var]) {
-          cout << "index = " << index << ", var_id = " << var_id_label_pair.first << "\n";
+        for (auto var_id_label_pair : phi_args[block][phi_var]) {
+          cout << "index = " << index
+               << ", var_id = " << var_id_label_pair.first << "\n";
           mc_instr.addOperand(MCOperand::createReg(phi_var.getReg()));
           w_instr.setOpId(index, var_id_label_pair.first);
           w_instr.setOpPhiBlock(index, var_id_label_pair.second);
           w_instr.print();
           index++;
         }
-        
       }
     }
-    
+
     cout << "printing MCInsts after adding args to phi-nodes\n";
-    for (auto& b: MF.BBs) {
+    for (auto &b : MF.BBs) {
       cout << b.getName() << ":\n";
       b.print();
     }
-
   }
 
   // helper function to compute the intersection of predecessor dominator sets
-  BlockSetTy intersect(BlockSetTy& preds, std::unordered_map<MCBasicBlock*, BlockSetTy>& dom) {
+  BlockSetTy intersect(BlockSetTy &preds,
+                       std::unordered_map<MCBasicBlock *, BlockSetTy> &dom) {
     BlockSetTy ret;
     if (preds.size() == 0) {
       return ret;
@@ -2251,10 +2247,10 @@ public:
     }
     ret = dom[*preds.begin()];
     auto second = ++preds.begin();
-    for (auto it = second;  it != preds.end(); ++it) {
-      auto& pred_set = dom[*it]; 
-      BlockSetTy new_ret; 
-      for (auto& b : ret) {
+    for (auto it = second; it != preds.end(); ++it) {
+      auto &pred_set = dom[*it];
+      BlockSetTy new_ret;
+      for (auto &b : ret) {
         if (pred_set.count(b) == 1) {
           new_ret.insert(b);
         }
@@ -2264,22 +2260,23 @@ public:
     return ret;
   }
 
-  // helper function to invert a graph 
-  std::unordered_map<MCBasicBlock*, BlockSetTy> invertGraph(std::unordered_map<MCBasicBlock*, BlockSetTy>& graph) {
-    std::unordered_map<MCBasicBlock*, BlockSetTy> res;
-    for (auto& curBlock : graph) {
-      for (auto& succ : curBlock.second) {
+  // helper function to invert a graph
+  std::unordered_map<MCBasicBlock *, BlockSetTy>
+  invertGraph(std::unordered_map<MCBasicBlock *, BlockSetTy> &graph) {
+    std::unordered_map<MCBasicBlock *, BlockSetTy> res;
+    for (auto &curBlock : graph) {
+      for (auto &succ : curBlock.second) {
         res[succ].insert(curBlock.first);
       }
     }
     return res;
   }
-  
+
   // Debug function to print domination info
-  void printGraph(std::unordered_map<MCBasicBlock*, BlockSetTy>& graph) {
-    for (auto& curBlock : graph) {
+  void printGraph(std::unordered_map<MCBasicBlock *, BlockSetTy> &graph) {
+    for (auto &curBlock : graph) {
       cout << curBlock.first->getName() << ": ";
-      for (auto& dst : curBlock.second) {
+      for (auto &dst : curBlock.second) {
         cout << dst->getName() << " ";
       }
       cout << "\n";
@@ -2371,8 +2368,6 @@ public:
       cout << "]\n";
     }
   }
-
-
 };
 
 static unsigned id_{0};
@@ -2665,7 +2660,7 @@ bool backendTV() {
   }
 
   cout << "\n\n";
-  
+
   cout << "\n\nConverting source llvm function to alive ir\n";
   std::optional<IR::Function> AF;
   // Only try to verify the first function in the module
@@ -2679,7 +2674,6 @@ bool backendTV() {
   }
 
   AF->print(cout << "\n----------alive-ir-src.ll-file----------\n");
-
 
   Str.printBlocks();
   Str.removeEmptyBlocks(); // remove empty basic blocks, including .Lfunc_end
@@ -2706,7 +2700,8 @@ bool backendTV() {
          << '\n';
     return false;
   }
-  // TODO: @Ryan with the removal of lvn, some changes may need to go here to integrate with your code
+  // TODO: @Ryan with the removal of lvn, some changes may need to go here to
+  // integrate with your code
   auto &MF = Str.MF;
   auto &first_BB = MF.BBs[0];
 
@@ -2730,7 +2725,6 @@ bool backendTV() {
   cout << "\n\nAfter adjusting return instruction:\n";
   first_BB.print();
 
-  
   auto TF = arm2alive(MF, DL, AF, IPtemp.get(), MRI.get());
   if (TF)
     TF->print(cout << "\n----------alive-lift-arm-target----------\n");
