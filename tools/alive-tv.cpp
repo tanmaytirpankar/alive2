@@ -34,6 +34,7 @@
 #include "llvm/MC/MCParser/MCTargetAsmParser.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCStreamer.h"
+#include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCTargetOptions.h"
 #include "llvm/MC/MCTargetOptionsCommandFlags.h"
@@ -790,7 +791,8 @@ class arm2alive_ {
   }
 
   std::string next_name() {
-    return "%" + std::to_string(instructionCount) + "_" + std::to_string(++curId);
+    return "%" + std::to_string(instructionCount) + "_" +
+           std::to_string(++curId);
   }
 
   void add_identifier(IR::Value &v) {
@@ -1004,7 +1006,8 @@ public:
         auto sadd = add_instr<IR::BinOp>(*overflow_type, move(next_name()), *a,
                                          *b, IR::BinOp::SAdd_Overflow);
 
-        auto result = add_instr<IR::ExtractValue>(*ty, move(next_name()), *sadd);
+        auto result =
+            add_instr<IR::ExtractValue>(*ty, move(next_name()), *sadd);
         result->addIdx(0);
 
         auto i1 = &get_int_type(1);
@@ -1027,7 +1030,8 @@ public:
         break;
       }
 
-      auto result = add_instr<IR::BinOp>(*ty, move(next_name()), *a, *b, IR::BinOp::Add);
+      auto result =
+          add_instr<IR::BinOp>(*ty, move(next_name()), *a, *b, IR::BinOp::Add);
       store(*result);
       break;
     }
@@ -1042,7 +1046,6 @@ public:
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
       assert(mc_inst.getOperand(3).isImm());
 
-
       // convert lhs, rhs operands to IR::Values
       auto a = get_value(1);
       auto b = get_value(2, mc_inst.getOperand(3).getImm());
@@ -1056,7 +1059,8 @@ public:
 
         auto ssub = add_instr<IR::BinOp>(*ty_ptr, move(next_name()), *a, *b,
                                          IR::BinOp::SSub_Overflow);
-        auto result = add_instr<IR::ExtractValue>(*ty, move(next_name()), *ssub);
+        auto result =
+            add_instr<IR::ExtractValue>(*ty, move(next_name()), *ssub);
         result->addIdx(0);
 
         auto ty_i1 = &get_int_type(1);
@@ -1088,8 +1092,8 @@ public:
         break;
       }
 
-      auto sub = add_instr<IR::BinOp>(*ty, move(next_name()), *a, *b,
-                                       IR::BinOp::Sub);
+      auto sub =
+          add_instr<IR::BinOp>(*ty, move(next_name()), *a, *b, IR::BinOp::Sub);
       store(*sub);
       break;
     }
@@ -1444,7 +1448,7 @@ public:
 
       std::string operand_name = "%" + std::to_string(operand.getReg());
       IR::ParamAttrs attrs;
-//      attrs.set(IR::ParamAttrs::NoUndef);
+      //      attrs.set(IR::ParamAttrs::NoUndef);
 
       auto val = make_unique<IR::Input>(typ, move(operand_name), move(attrs));
       mc_add_identifier(operand.getReg(), 0, *val.get());
