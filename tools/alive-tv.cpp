@@ -704,10 +704,6 @@ IR::Value *cur_z{nullptr};
 IR::Value *cur_n{nullptr};
 IR::Value *cur_c{nullptr};
 
-// DISABLE_REGISTER_LOOKUP will disable code that resolves 32/64 bit registers
-// to the same use.
-// FIXME make SSA to support 32/64 bit registers as same use
-#define DISABLE_REGISTER_LOOKUP false
 
 set<int> s_flag = {
     AArch64::ADDSWrs, AArch64::ADDSWri, AArch64::ADDSXrs, AArch64::ADDSXri,
@@ -782,9 +778,6 @@ class arm2alive_ {
     return val;
   }
 
-  // TODO: figure out how to deal with mixed-width function arguments.
-  //  This function is buggy and won't handle support it. If we have anything
-  //  other than 64 bit arguments, we may want to do some sort of conversion
   // TODO: make it so that lshr generates code on register lookups
   //  some instructions make use of this, and the semantics need to be worked
   //  out
@@ -808,7 +801,7 @@ class arm2alive_ {
     }
 
     auto val = getIdentifier(op.getReg(), wrapper->getVarId(idx));
-    if (size == 64 || DISABLE_REGISTER_LOOKUP) {
+    if (size == 64) {
       return val;
     }
 
@@ -858,12 +851,11 @@ class arm2alive_ {
     }
 
     // if v.bits() == 64, regSize == 64 because of above assertion
-    if (v.bits() == 64 || DISABLE_REGISTER_LOOKUP) {
+    if (v.bits() == 64) {
       add_identifier(v);
       return;
     }
 
-    // FIXME: get register bit width for further computation
     size_t regSize = get_size(wrapper->getMCInst().getOpcode());
 
     // regSize should only be 32/64
@@ -874,26 +866,23 @@ class arm2alive_ {
     // to 32 bits before zero-extending to 64
     if (s && regSize == 32 && v.bits() < 32) {
       auto ty = &get_int_type(32);
-      auto sext32 = make_unique<IR::ConversionOp>(*ty, move(next_name()), v,
+      auto sext32 = add_instr<IR::ConversionOp>(*ty, move(next_name()), v,
                                                   IR::ConversionOp::SExt);
 
       ty = &get_int_type(64);
-      auto zext64 = make_unique<IR::ConversionOp>(
-          *ty, move(next_name()), *sext32.get(), IR::ConversionOp::ZExt);
+      auto zext64 = add_instr<IR::ConversionOp>(
+          *ty, move(next_name()), *sext32, IR::ConversionOp::ZExt);
 
-      BB->addInstr(move(sext32));
 
-      add_identifier(*zext64.get());
-      BB->addInstr(move(zext64));
+      add_identifier(*zext64);
       return;
     }
 
     auto op = s ? IR::ConversionOp::SExt : IR::ConversionOp::ZExt;
     auto ty = &get_int_type(64);
-    auto new_val = make_unique<IR::ConversionOp>(*ty, move(next_name()), v, op);
+    auto new_val = add_instr<IR::ConversionOp>(*ty, move(next_name()), v, op);
 
-    add_identifier(*new_val.get());
-    BB->addInstr(move(new_val));
+    add_identifier(*new_val);
   }
 
   IR::Value *evaluate_condition(uint64_t cond) {
@@ -970,10 +959,8 @@ class arm2alive_ {
     if (invert_bit) {
       auto ty = &get_int_type(1);
       auto one = make_intconst(1, 1);
-      auto inverted = make_unique<IR::BinOp>(*ty, move(next_name()), *res, *one,
+      res = add_instr<IR::BinOp>(*ty, move(next_name()), *res, *one,
                                              IR::BinOp::Xor);
-      res = inverted.get();
-      BB->addInstr(move(inverted));
     }
 
     return res;
@@ -1434,16 +1421,12 @@ public:
       auto rhs = get_value(2);
 
       auto neg_one = make_intconst(-1, size);
-      auto not_rhs = make_unique<IR::BinOp>(*ty, move(next_name()), *rhs,
+      auto not_rhs = add_instr<IR::BinOp>(*ty, move(next_name()), *rhs,
                                             *neg_one, IR::BinOp::Xor);
 
-      auto ident = make_unique<IR::BinOp>(*ty, move(next_name()), *lhs,
+      auto ident = add_instr<IR::BinOp>(*ty, move(next_name()), *lhs,
                                           *not_rhs, IR::BinOp::Or);
-      auto ident_ptr = ident.get();
-
-      BB->addInstr(move(not_rhs));
-      BB->addInstr(move(ident));
-      store(*ident_ptr);
+      store(*ident);
       break;
     }
     case AArch64::MOVKWi:
@@ -1490,40 +1473,56 @@ public:
 
       auto immr = mc_inst.getOperand(3).getImm();
       auto imms = mc_inst.getOperand(4).getImm();
-      auto r = make_intconst(immr, size);
 
-      auto [wmaskInt, tmaskInt] =
-          decode_bit_mask(false, imms, immr, false, size);
+      if (imms >= immr) {
+        auto bits = (imms - immr + 1);
+        auto pos = immr;
 
-      auto wmask = make_intconst(wmaskInt.getZExtValue(), size);
-      auto tmask = make_intconst(tmaskInt.getZExtValue(), size);
+        auto mask = (((uint64_t)1 << bits) - 1) << pos;
 
-      auto not_wmask = make_intconst((~wmaskInt).getZExtValue(), size);
-      auto not_tmask = make_intconst((~tmaskInt).getZExtValue(), size);
+        auto masked =
+            add_instr<IR::BinOp>(*ty, move(next_name()), *src,
+                                 *make_intconst(mask, size), IR::BinOp::And);
+        auto shifted =
+            add_instr<IR::BinOp>(*ty, move(next_name()), *masked,
+                                 *make_intconst(pos, size), IR::BinOp::LShr);
 
-      auto bot_lhs = add_instr<IR::BinOp>(*ty, move(next_name()), *dst,
-                                          *not_wmask, IR::BinOp::And);
+        auto cleared =
+            add_instr<IR::BinOp>(*ty, move(next_name()), *dst,
+                                 *make_intconst((uint64_t)(-1) << bits, size), IR::BinOp::And);
 
-      auto bot_ror = add_instr<IR::TernaryOp>(*ty, move(next_name()), *src,
-                                              *src, *r, IR::TernaryOp::FShr);
+        auto res = add_instr<IR::BinOp>(*ty, move(next_name()), *cleared,
+                                        *shifted, IR::BinOp::Or);
+        store(*res);
+        return;
+      }
 
-      auto bot_rhs = add_instr<IR::BinOp>(*ty, move(next_name()), *bot_ror,
-                                          *wmask, IR::BinOp::And);
+      auto bits = imms + 1;
+      auto pos = size - immr;
 
-      auto bot = add_instr<IR::BinOp>(*ty, move(next_name()), *bot_lhs,
-                                      *bot_rhs, IR::BinOp::Or);
+      // This mask deletes `bits` number of bits starting at `pos`.
+      // If the mask is for a 32 bit value, it will chop off the top 32 bits of the 64 bit mask
+      // to keep the mask to a size of 32 bits
+      auto mask = ~((uint64_t)1 << bits) - 1) << pos) & ((uint64_t)-1 >> (64 - size));
 
-      auto res_lhs = add_instr<IR::BinOp>(*ty, move(next_name()), *dst,
-                                          *not_tmask, IR::BinOp::And);
+      // get `bits` number of bits from the least significant bits
+      auto bitfield = add_instr<IR::BinOp>(*ty, move(next_name()), *src,
+                                           *make_intconst(~((uint64_t)-1 << bits), size),
+                                           IR::BinOp::And);
 
-      auto res_rhs = add_instr<IR::BinOp>(*ty, move(next_name()), *bot, *tmask,
-                                          IR::BinOp::And);
+      // move the bitfield into position
+      auto moved =
+          add_instr<IR::BinOp>(*ty, move(next_name()), *bitfield,
+                               *make_intconst(pos, size), IR::BinOp::Shl);
 
-      auto result = add_instr<IR::BinOp>(*ty, move(next_name()), *res_lhs,
-                                         *res_rhs, IR::BinOp::Or);
-
-      store(*result);
-      break;
+      // carve out a place for the bitfield
+      auto masked =
+          add_instr<IR::BinOp>(*ty, move(next_name()), *dst,
+                               *make_intconst(mask, size), IR::BinOp::And);
+      // place the bitfield
+      auto res = add_instr<IR::BinOp>(*ty, move(next_name()), *masked, *moved, IR::BinOp::Or);
+      store(*res);
+      return;
     }
     case AArch64::ORRWrs:
     case AArch64::ORRXrs: {
@@ -1566,13 +1565,12 @@ public:
       auto val =
           getIdentifier(mc_inst.getOperand(0).getReg(), wrapper->getVarId(0));
       if (retTyp->bits() < val->bits()) {
-        cout << "trunc i" << val->bits() << " to i" << retTyp->bits() << "\n";
         auto trunc = add_instr<IR::ConversionOp>(*retTyp, move(next_name()),
                                                  *val, IR::ConversionOp::Trunc);
         val = trunc;
       }
 
-      BB->addInstr(make_unique<IR::Return>(*retTyp, *val));
+      add_instr<IR::Return>(*retTyp, *val);
       break;
     }
     default:
@@ -2489,6 +2487,7 @@ public:
     return 0;
   }
 
+  // TODO: @Nader this should just fall out of our SSA implementation
   void adjustReturns() {
     for (auto &block : MF.BBs) {
       for (auto &instr : block.getInstrs()) {
@@ -2841,39 +2840,8 @@ bool backendTV() {
          << '\n';
     return false;
   }
-  //  // TODO: @Ryan with the removal of lvn, some changes may need to go here
-  //  to
-  //  // integrate with your code
-  auto &MF = Str.MF;
-  //  auto &first_BB = MF.BBs[0];
-  //
-  //  // FIXME Lets replace this with returing the last use X0
-  //  // It will still be wrong but It's better than the following
-  //  first_BB.print();
-  //  // Adjust the ret instruction's operand
-  //  // For now, we're doing something pretty naive/wrong except in the
-  //  // simplest cases I'm assuming that the destination for the second to last
-  //  // instruction is the return value of the function.
-  //  auto &BB_mcinstrs = first_BB.getInstrs();
-  //  auto BB_size = first_BB.size();
-  //  assert(BB_size > 1);
-  //
-  //  auto &sec_last = BB_mcinstrs[BB_size - 2];
-  //  auto &last = BB_mcinstrs[BB_size - 1];
-  //
-  //  MCInst &sec_last_instr = sec_last.getMCInst();
-  //  MCInst &last_instr = last.getMCInst();
-  //
-  //  auto &dest_operand = sec_last_instr.getOperand(0);
-  //  auto &ret_operand = last_instr.getOperand(0);
-  //  assert(dest_operand.isReg());
-  //
-  //  ret_operand.setReg(dest_operand.getReg());
-  //  last.setOpId(0, sec_last.getVarId(0));
-  //
-  //  cout << "\n\nAfter adjusting return instruction:\n";
-  //  first_BB.print();
 
+  auto &MF = Str.MF;
   auto TF = arm2alive(MF, DL, AF, IPtemp.get(), MRI.get());
   if (TF)
     TF->print(cout << "\n----------alive-lift-arm-target----------\n");
