@@ -768,7 +768,7 @@ class arm2alive_ {
       return 0;
 
     visitError(*wrapper);
-    return -1;
+    UNREACHABLE();
   }
 
   IR::Value *getIdentifier(int reg, int id) {
@@ -1449,6 +1449,28 @@ public:
       auto src = get_value(1);
       auto immr = mc_inst.getOperand(2).getImm();
       auto imms = mc_inst.getOperand(3).getImm();
+
+      // LSL is preferred when imms != 31 and imms + 1 == immr
+      if (size == 32 && imms != 31 && imms + 1 == immr) {
+        auto dst = add_instr<IR::BinOp>(*ty, move(next_name()), *src, *make_intconst(31 - imms, size), IR::BinOp::Shl);
+        store(*dst);
+        return;
+      }
+
+      // LSL is preferred when imms != 63 and imms + 1 == immr
+      if (size == 64 && imms != 63 && imms + 1 == immr) {
+        auto dst = add_instr<IR::BinOp>(*ty, move(next_name()), *src, *make_intconst(63 - imms, size), IR::BinOp::Shl);
+        store(*dst);
+        return;
+      }
+
+      // LSR is preferred when imms == 31 or 63 (size - 1)
+      if (imms == size - 1) {
+        auto dst = add_instr<IR::BinOp>(*ty, move(next_name()), *src, *make_intconst(immr, size), IR::BinOp::LShr);
+        store(*dst);
+        return;
+      }
+
       auto r = make_intconst(immr, size);
 
       auto [wmaskInt, tmaskInt] =
@@ -1503,7 +1525,7 @@ public:
       // This mask deletes `bits` number of bits starting at `pos`.
       // If the mask is for a 32 bit value, it will chop off the top 32 bits of the 64 bit mask
       // to keep the mask to a size of 32 bits
-      auto mask = ~((uint64_t)1 << bits) - 1) << pos) & ((uint64_t)-1 >> (64 - size));
+      auto mask = ~((((uint64_t)1 << bits) - 1) << pos) & ((uint64_t)-1 >> (64 - size));
 
       // get `bits` number of bits from the least significant bits
       auto bitfield = add_instr<IR::BinOp>(*ty, move(next_name()), *src,
