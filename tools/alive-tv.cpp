@@ -1503,7 +1503,8 @@ public:
       // This mask deletes `bits` number of bits starting at `pos`.
       // If the mask is for a 32 bit value, it will chop off the top 32 bits of the 64 bit mask
       // to keep the mask to a size of 32 bits
-      auto mask = ~((uint64_t)1 << bits) - 1) << pos) & ((uint64_t)-1 >> (64 - size));
+      auto mask = ~((((uint64_t)1 << bits) - 1) << pos) & 
+                   ((uint64_t)-1 >> (64 - size));
 
       // get `bits` number of bits from the least significant bits
       auto bitfield = add_instr<IR::BinOp>(*ty, move(next_name()), *src,
