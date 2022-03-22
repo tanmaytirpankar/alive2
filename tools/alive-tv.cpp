@@ -2698,6 +2698,8 @@ bool backendTV() {
 #define ARGS_MODULE_VAR M1
 #include "llvm_util/cmd_args_def.h"
 
+  //FIXME: For now, we're hardcoding the target triple
+  M1.get()->setDataLayout("e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128");
   auto &DL = M1.get()->getDataLayout();
   llvm::Triple targetTriple(M1.get()->getTargetTriple());
   llvm::TargetLibraryInfoWrapperPass TLI(targetTriple);
