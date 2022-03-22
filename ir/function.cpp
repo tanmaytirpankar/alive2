@@ -9,7 +9,6 @@
 #include <fstream>
 #include <set>
 #include <unordered_set>
-#include <iostream>
 
 using namespace smt;
 using namespace util;
