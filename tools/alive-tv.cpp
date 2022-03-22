@@ -1148,7 +1148,8 @@ public:
         auto uadd_typ = uadd_overflow_type(mc_inst.getOperand(1), size);
 
         // generate code for subtract borrow flag. This can be formulated as
-        // a + not(b), or a + (-b)
+        // a + (-b) + 1
+        // TODO: generate the +1
         auto not_b =
             add_instr<IR::BinOp>(*ty, move(next_name()), *b,
                                  *make_intconst(-1, size), IR::BinOp::Xor);
@@ -1172,8 +1173,6 @@ public:
       auto sub =
           add_instr<IR::BinOp>(*ty, move(next_name()), *a, *b, IR::BinOp::Sub);
       store(*sub);
-      cout << "store sub\n";
-      cout << "-------\n";
       break;
     }
     case AArch64::CSELWr:
@@ -1246,7 +1245,7 @@ public:
       }
 
       // SXTB
-      if (imms == 7) {
+      if (immr == 0 && imms == 7) {
         auto i8 = &get_int_type(8);
         auto trunc = add_instr<IR::ConversionOp>(*i8, move(next_name()), *src,
                                                  IR::ConversionOp::Trunc);
@@ -1256,43 +1255,30 @@ public:
         return;
       }
 
-      auto [wmaskInt, tmaskInt] =
-          decode_bit_mask(size == 64, imms, immr, false, size);
+      // SXTH
+      if (immr == 0 && imms == 15) {
+        auto i8 = &get_int_type(16);
+        auto trunc = add_instr<IR::ConversionOp>(*i8, move(next_name()), *src,
+                                                 IR::ConversionOp::Trunc);
+        auto dst = add_instr<IR::ConversionOp>(*ty, move(next_name()), *trunc,
+                                               IR::ConversionOp::SExt);
+        store(*dst);
+        return;
+      }
 
-      auto wmask = make_intconst(wmaskInt.getZExtValue(), size);
-      auto tmask = make_intconst(tmaskInt.getZExtValue(), size);
+      // SXTW
+      if (immr == 0 && imms == 31) {
+        auto i8 = &get_int_type(32);
+        auto trunc = add_instr<IR::ConversionOp>(*i8, move(next_name()), *src,
+                                                 IR::ConversionOp::Trunc);
+        auto dst = add_instr<IR::ConversionOp>(*ty, move(next_name()), *trunc,
+                                               IR::ConversionOp::SExt);
+        store(*dst);
+        return;
+      }
 
-      auto ror = add_instr<IR::TernaryOp>(*ty, move(next_name()), *src, *src,
-                                          *r, IR::TernaryOp::FShr);
-
-      auto bot = add_instr<IR::BinOp>(*ty, move(next_name()), *ror, *wmask,
-                                      IR::BinOp::And);
-
-      auto shifted = add_instr<IR::BinOp>(*ty, move(next_name()), *src, *s,
-                                          IR::BinOp::LShr);
-      auto bitSet =
-          add_instr<IR::BinOp>(*ty, move(next_name()), *shifted,
-                               *make_intconst(1, size), IR::BinOp::And);
-
-      auto i1 = &get_int_type(1);
-      auto cond = add_instr<IR::ConversionOp>(*i1, move(next_name()), *bitSet,
-                                              IR::ConversionOp::Trunc);
-
-      auto top = add_instr<IR::Select>(*ty, move(next_name()), *cond,
-                                       *make_intconst(-1, size),
-                                       *make_intconst(0, size));
-
-      auto notTmask = make_intconst((~tmaskInt).getZExtValue(), size);
-      auto lhs = add_instr<IR::BinOp>(*ty, move(next_name()), *top, *notTmask,
-                                      IR::BinOp::And);
-
-      auto rhs = add_instr<IR::BinOp>(*ty, move(next_name()), *bot, *tmask,
-                                      IR::BinOp::And);
-
-      auto dst = add_instr<IR::BinOp>(*ty, move(next_name()), *lhs, *rhs,
-                                      IR::BinOp::Or);
-      store(*dst);
-      break;
+      // TODO: SBFIZ, SBFX
+      assert(false && "SBFIZ/SBFX aliases not yet supported")
     }
     case AArch64::EORWri:
     case AArch64::EORXri: {
@@ -1470,6 +1456,19 @@ public:
         store(*dst);
         return;
       }
+
+      if (imms < immr) {
+        auto pos = size - immr;
+        auto width = imms + 1;
+
+        auto mask = ((uint64_t)-1 << pos);
+        auto masked = add_instr<IR::BinOp>(*ty, move(next_name()), *src, *make_intconst(mask, size), IR::BinOp::And);
+        auto shifted = add_instr<IR::BinOp>(*ty, move(next_name()), *masked, *make_intconst(width, size), IR::BinOp::Shl);
+        store(*shifted);
+        return;
+      }
+
+      assert(false && "Unsupported cases for UBFM");
 
       auto r = make_intconst(immr, size);
 
