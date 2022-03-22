@@ -1081,19 +1081,6 @@ unique_ptr<Instr> FpUnaryOp::dup(const string &suffix) const {
     make_unique<FpUnaryOp>(getType(), getName() + suffix, *val, op, fmath, rm);
 }
 
-bool UnaryOp::isFPInstr() const{
-  if (op == Op::FAbs || 
-      op == Op::FNeg ||
-      op == Op::Ceil ||
-      op == Op::Floor ||
-      op == Op::Round ||
-      op == Op::RoundEven ||
-      op == Op::Trunc || 
-      op == Op::Sqrt)
-      return true;
-  return false;
-}
-
 vector<Value*> UnaryReductionOp::operands() const {
   return { val };
 }
