@@ -13,6 +13,7 @@
 #include <numeric>
 #include <sstream>
 #include <iostream>
+#include <variant>
 
 using namespace smt;
 using namespace util;
@@ -102,6 +103,10 @@ bool Instr::propagatesPoison() const {
   return false;
 }
 
+std::optional<IntConst> Instr::fold() const {
+  return {};
+}
+
 expr Instr::getTypeConstraints() const {
   UNREACHABLE();
   return {};
@@ -136,6 +141,40 @@ vector<Value*> BinOp::operands() const {
 
 bool BinOp::propagatesPoison() const {
   return true;
+}
+
+/*
+ * be super careful about poison!
+ */
+std::optional<IntConst> BinOp::fold() const {
+  IntConst *lhsConst = dynamic_cast<IntConst *>(lhs);
+  IntConst *rhsConst = dynamic_cast<IntConst *>(rhs);
+  if (!lhsConst || !rhsConst)
+    return {};
+  const long int *lhsVal = lhsConst->getInt();
+  const long int *rhsVal = rhsConst->getInt();
+  if (!lhsVal || !rhsVal)
+    return {};
+  switch (op) {
+  case Add: {
+    /*
+     * if we wanted to support these, we would need to do overflow
+     * checking here, but not worrying about this since the ARM lifter
+     * does not generate nsw or nuw
+     */
+    if ((flags & NSW) || (flags & NUW))
+      return {};
+    uint64_t mask = (1UL << (bits() - 1)) - 1;
+    auto folded = ((uint64_t)(*lhsVal) + (uint64_t)(*rhsVal)) & mask;
+    return IntConst(getType(), folded);
+  }
+  case And:
+    return IntConst(getType(), (uint64_t)(*lhsVal) & (uint64_t)(*rhsVal));
+  case Or:
+    return IntConst(getType(), (uint64_t)(*lhsVal) | (uint64_t)(*rhsVal));
+  default:
+    return {};
+  }
 }
 
 void BinOp::rauw(const Value &what, Value &with) {
@@ -4092,7 +4131,8 @@ bool hasNoSideEffects(const Instr &i) {
   return isNoOp(i) ||
          dynamic_cast<const ExtractValue*>(&i) ||
          dynamic_cast<const GEP*>(&i) ||
-         dynamic_cast<const ShuffleVector*>(&i);
+         dynamic_cast<const ShuffleVector*>(&i) ||
+         dynamic_cast<const ConversionOp*>(&i);
 }
 
 Value* isNoOp(const Value &v) {

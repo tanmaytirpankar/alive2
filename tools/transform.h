@@ -14,6 +14,8 @@
 
 namespace tools {
 
+extern bool optimize_ir;
+
 struct TransformPrintOpts {
   bool print_fn_header = true;
 };
@@ -24,6 +26,9 @@ struct Transform {
   IR::Function src, tgt;
   IR::Predicate *precondition = nullptr;
 
+  bool cleanupTruncExt(IR::Function &fn);
+  bool fold(IR::Function &fn);
+  bool deadInstElim(IR::Function &fn);
   void preprocess();
   void print(std::ostream &os, const TransformPrintOpts &opt) const;
   friend std::ostream& operator<<(std::ostream &os, const Transform &t);

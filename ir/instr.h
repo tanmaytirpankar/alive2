@@ -3,8 +3,10 @@
 // Copyright (c) 2018-present The Alive2 Authors.
 // Distributed under the MIT license that can be found in the LICENSE file.
 
+#include "ir/constant.h"
 #include "ir/value.h"
 #include "llvm/ADT/APInt.h"
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -22,6 +24,7 @@ protected:
 public:
   virtual std::vector<Value*> operands() const = 0;
   virtual bool propagatesPoison() const;
+  virtual std::optional<IntConst> fold() const;
   virtual void rauw(const Value &what, Value &with) = 0;
   smt::expr getTypeConstraints() const override;
   virtual smt::expr getTypeConstraints(const Function &f) const = 0;
@@ -50,6 +53,7 @@ public:
 
   std::vector<Value*> operands() const override;
   bool propagatesPoison() const override;
+  std::optional<IntConst> fold() const override;
   void rauw(const Value &what, Value &with) override;
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
