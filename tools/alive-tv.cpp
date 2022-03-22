@@ -1554,7 +1554,7 @@ public:
       auto rhs = get_value(2);
 
       auto result = add_instr<IR::BinOp>(*ty, move(next_name()), *lhs, *rhs,
-                                         IR::BinOp::SDiv);
+                                         IR::BinOp::UDiv);
       store(*result);
       break;
     }
