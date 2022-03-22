@@ -716,8 +716,8 @@ set<int> instrs_32 = {
     AArch64::ANDWri,  AArch64::ANDWrr,  AArch64::MADDWrrr, AArch64::EORWri,
     AArch64::CSINVWr, AArch64::CSINCWr, AArch64::MOVZWi,   AArch64::MOVNWi,
     AArch64::MOVKWi,  AArch64::LSLVWr,  AArch64::LSRVWr,   AArch64::ORNWrs,
-    AArch64::UBFMWri, AArch64::BFMWri,  AArch64::ORRWrs,   AArch64::SDIVWr,
-    AArch64::UDIVWr,
+    AArch64::UBFMWri, AArch64::BFMWri,  AArch64::ORRWrs,   AArch64::ORRWri,
+    AArch64::SDIVWr,  AArch64::UDIVWr,
 };
 
 set<int> instrs_64 = {
@@ -727,8 +727,8 @@ set<int> instrs_64 = {
     AArch64::ANDXri,  AArch64::ANDXrr,  AArch64::MADDXrrr, AArch64::EORXri,
     AArch64::CSINVXr, AArch64::CSINCXr, AArch64::MOVZXi,   AArch64::MOVNXi,
     AArch64::MOVKXi,  AArch64::LSLVXr,  AArch64::LSRVXr,   AArch64::ORNXrs,
-    AArch64::UBFMXri, AArch64::BFMXri,  AArch64::ORRXrs,   AArch64::SDIVXr,
-    AArch64::UDIVXr,
+    AArch64::UBFMXri, AArch64::BFMXri,  AArch64::ORRXrs,   AArch64::ORRXri,
+    AArch64::SDIVXr,  AArch64::UDIVXr,
 };
 
 bool has_s(int instr) {
@@ -1177,25 +1177,10 @@ public:
             add_instr<IR::ExtractValue>(*ty_i1, move(next_name()), *ssub);
         new_v->addIdx(1);
 
-        auto uadd_typ = uadd_overflow_type(mc_inst.getOperand(1), size);
-
-        // generate code for subtract borrow flag. This can be formulated as
-        // a + (-b) + 1
-        // TODO: generate the +1
-        auto not_b =
-            add_instr<IR::BinOp>(*ty, move(next_name()), *b,
-                                 *make_intconst(-1, size), IR::BinOp::Xor);
-
-        auto uadd = add_instr<IR::BinOp>(*uadd_typ, move(next_name()), *a,
-                                         *not_b, IR::BinOp::UAdd_Overflow);
-
-        // extract the c flag from UAdd_Overflow result
-        auto new_c =
-            add_instr<IR::ExtractValue>(*ty_i1, move(next_name()), *uadd);
-        new_c->addIdx(1);
+        cur_c = add_instr<IR::ICmp>(*ty_i1, move(next_name()), IR::ICmp::UGE,
+                                               *a, *b);
 
         cur_v = new_v;
-        cur_c = new_c;
         set_z(result);
         set_n(result);
         store(*result);
@@ -1585,6 +1570,19 @@ public:
                                       IR::BinOp::Or);
       store(*res);
       return;
+    }
+    case AArch64::ORRWri:
+    case AArch64::ORRXri: {
+      assert(false && "ORR with immediates not supported");
+      auto lhs = get_value(1);
+
+      auto imm = mc_inst.getOperand(2).isImm();
+      auto [decoded, _] = decode_bit_mask(size == 64, imm & (-1 << 6), imm >> 6, true, size);
+
+      auto result = add_instr<IR::BinOp>(*ty, move(next_name()), *lhs, *make_intconst(decoded.getZExtValue(), size),
+                                         IR::BinOp::Or);
+      store(*result);
+      break;
     }
     case AArch64::ORRWrs:
     case AArch64::ORRXrs: {
