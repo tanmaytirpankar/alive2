@@ -1463,7 +1463,6 @@ bool Transform::cleanupTruncExt(IR::Function &fn) {
       if (!fn.hasOneUse(*extInst))
         continue;
       auto &input = extInst->getValue();
-      // FIXME add hasoneuse checks
       auto oldWidth = truncInst->getType().bits();
       auto newWidth = input.getType().bits();
       if (oldWidth == newWidth) {
