@@ -38,6 +38,7 @@ public:
   void addInstr(std::unique_ptr<Instr> &&i, bool push_front = false);
   void addInstrAt(std::unique_ptr<Instr> &&i, const Instr *other, bool before);
   void delInstr(Instr *i);
+  void delInstr(const Instr *i);
 
   util::const_strip_unique_ptr<decltype(m_instrs)> instrs() const {
     return m_instrs;
@@ -100,6 +101,7 @@ public:
 
   smt::expr getTypeConstraints() const;
   void fixupTypes(const smt::Model &m);
+  void rauw(const Value &what, Value &with);
 
   const BasicBlock& getFirstBB() const { return *BB_order[0]; }
   BasicBlock& getFirstBB() { return *BB_order[0]; }
@@ -108,7 +110,11 @@ public:
   const BasicBlock& getBB(std::string_view name) const;
   const BasicBlock& bbOf(const Instr &i) const;
 
+  BasicBlock& insertBBBefore(std::string_view name, const BasicBlock &bb);
+
   void removeBB(BasicBlock &BB);
+
+  bool hasOneUse(const Instr &i);
 
   void addConstant(std::unique_ptr<Value> &&c);
   util::const_strip_unique_ptr<decltype(constants)> getConstants() const {
@@ -133,7 +139,6 @@ public:
   util::const_strip_unique_ptr<decltype(inputs)> getInputs() const {
     return inputs;
   }
-  bool hasSameInputs(const Function &rhs) const;
   Value *getReturnedInput() const { return returned_input; }
   void setReturnedInput(Value *v) { returned_input = v; }
 

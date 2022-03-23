@@ -59,6 +59,15 @@ void BasicBlock::delInstr(Instr *i) {
   }
 }
 
+void BasicBlock::delInstr(const Instr *i) {
+  for (auto I = m_instrs.begin(), E = m_instrs.end(); I != E; ++I) {
+    if (I->get() == i) {
+      m_instrs.erase(I);
+      return;
+    }
+  }
+}
+
 vector<Phi*> BasicBlock::phis() const {
   vector<Phi*> phis;
   for (auto &i : m_instrs) {
@@ -124,6 +133,11 @@ expr Function::getTypeConstraints() const {
   return t;
 }
 
+void Function::rauw(const Value &what, Value &with) {
+  for (auto bb : getBBs())
+    bb->rauw(what, with);
+}
+
 void Function::fixupTypes(const Model &m) {
   for (auto bb : getBBs()) {
     bb->fixupTypes(m);
@@ -161,6 +175,16 @@ const BasicBlock& Function::bbOf(const Instr &i) const {
   UNREACHABLE();
 }
 
+BasicBlock& Function::insertBBBefore(string_view name, const BasicBlock &bb) {
+  auto p = BBs.try_emplace(string(name), name);
+  if (p.second) {
+    auto I = find(BB_order.begin(), BB_order.end(), &bb);
+    assert(I != BB_order.end());
+    BB_order.insert(I, &p.first->second);
+  }
+  return p.first->second;
+}
+
 void Function::removeBB(BasicBlock &BB) {
   assert(BB.getName() != "#sink");
   BBs.erase(BB.getName());
@@ -171,6 +195,27 @@ void Function::removeBB(BasicBlock &BB) {
       break;
     }
   }
+}
+
+bool Function::hasOneUse(const Instr &target) {
+  long uses = 0;
+  for (auto *bb : getBBs()) {
+    for (auto &i : bb->instrs()) {
+      for (auto op : i.operands()) {
+        auto ip = dynamic_cast<Instr*>(op);
+        if (ip != nullptr && &target == ip)
+          uses++;
+      }
+    }
+  }
+  for (auto &agg : aggregates) {
+    for (auto val : agg->getVals()) {
+      auto ip = dynamic_cast<Instr*>(val);
+      if (ip != nullptr && &target == ip)
+        uses++;
+    }
+  }
+  return uses == 1;
 }
 
 void Function::addConstant(unique_ptr<Value> &&c) {
@@ -210,33 +255,6 @@ void Function::addInput(unique_ptr<Value> &&i) {
   assert(dynamic_cast<Input *>(i.get()) ||
          dynamic_cast<ConstantInput*>(i.get()));
   inputs.emplace_back(move(i));
-}
-
-bool Function::hasSameInputs(const Function &rhs) const {
-  auto litr = inputs.begin(), lend = inputs.end();
-  auto ritr = rhs.inputs.begin(), rend = rhs.inputs.end();
-
-  auto skip_constinputs = [&]() {
-    while (litr != lend && dynamic_cast<ConstantInput *>((*litr).get()))
-      litr++;
-    while (ritr != rend && dynamic_cast<ConstantInput *>((*ritr).get()))
-      ritr++;
-  };
-
-  skip_constinputs();
-
-  while (litr != lend && ritr != rend) {
-    auto *lv = dynamic_cast<Input *>((*litr).get());
-    auto *rv = dynamic_cast<Input *>((*ritr).get());
-    if (lv->getType().toString() != rv->getType().toString())
-      return false;
-
-    ++litr;
-    ++ritr;
-    skip_constinputs();
-  }
-
-  return litr == lend && ritr == rend;
 }
 
 bool Function::hasReturn() const {

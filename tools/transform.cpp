@@ -13,6 +13,7 @@
 #include "util/stopwatch.h"
 #include "util/symexec.h"
 #include <algorithm>
+#include <climits>
 #include <iostream>
 #include <map>
 #include <numeric>
@@ -748,6 +749,12 @@ static void initBitsProgramPointer(Transform &t) {
   assert(bits_program_pointer == t.tgt.bitsPointers());
 }
 
+static uint64_t aligned_alloc_size(uint64_t size, unsigned align) {
+  if (size <= align)
+    return align;
+  return add_saturate(size, align - 1);
+}
+
 static void calculateAndInitConstants(Transform &t) {
   if (!bits_program_pointer)
     initBitsProgramPointer(t);
@@ -756,6 +763,7 @@ static void calculateAndInitConstants(Transform &t) {
   const auto &globals_src = t.src.getGlobalVars();
   num_globals_src = globals_src.size();
   unsigned num_globals = num_globals_src;
+  uint64_t glb_alloc_aligned_size = 0;
 
   heap_block_alignment = 8;
 
@@ -764,6 +772,9 @@ static void calculateAndInitConstants(Transform &t) {
   for (auto GV : globals_src) {
     if (GV->isConst())
       ++num_consts_src;
+    glb_alloc_aligned_size
+      = add_saturate(glb_alloc_aligned_size,
+                     aligned_alloc_size(GV->size(), GV->getAlignment()));
   }
 
   for (auto GVT : globals_tgt) {
@@ -772,6 +783,9 @@ static void calculateAndInitConstants(Transform &t) {
     if (I == globals_src.end()) {
       ++num_globals;
     }
+    glb_alloc_aligned_size
+      = add_saturate(glb_alloc_aligned_size,
+                     aligned_alloc_size(GVT->size(), GVT->getAlignment()));
   }
 
   num_ptrinputs = 0;
@@ -794,7 +808,6 @@ static void calculateAndInitConstants(Transform &t) {
   num_locals_tgt = 0;
   uint64_t max_gep_src = 0, max_gep_tgt = 0;
   uint64_t max_alloc_size = 0;
-  uint64_t max_aligned_size = 0;
   uint64_t max_access_size = 0;
   uint64_t min_global_size = UINT64_MAX;
 
@@ -806,6 +819,7 @@ static void calculateAndInitConstants(Transform &t) {
   has_malloc       = false;
   has_free         = false;
   has_fncall       = false;
+  has_write_fncall = false;
   has_null_block   = false;
   does_ptr_store   = false;
   does_ptr_mem_access = false;
@@ -813,15 +827,23 @@ static void calculateAndInitConstants(Transform &t) {
   observes_addresses  = false;
   bool does_any_byte_access = false;
 
+  set<string> inaccessiblememonly_fns;
+  num_inaccessiblememonly_fns = 0;
+
   // Mininum access size (in bytes)
   uint64_t min_access_size = 8;
+  uint64_t loc_src_alloc_aligned_size = 0;
+  uint64_t loc_tgt_alloc_aligned_size = 0;
   unsigned min_vect_elem_sz = 0;
   bool does_mem_access = false;
   bool has_ptr_load = false;
 
   for (auto fn : { &t.src, &t.tgt }) {
-    unsigned &cur_num_locals = fn == &t.src ? num_locals_src : num_locals_tgt;
-    uint64_t &cur_max_gep    = fn == &t.src ? max_gep_src : max_gep_tgt;
+    bool is_src = fn == &t.src;
+    unsigned &cur_num_locals = is_src ? num_locals_src : num_locals_tgt;
+    uint64_t &cur_max_gep    = is_src ? max_gep_src : max_gep_tgt;
+    uint64_t &loc_alloc_aligned_size
+      = is_src ? loc_src_alloc_aligned_size : loc_tgt_alloc_aligned_size;
 
     for (auto &v : fn->getInputs()) {
       auto *i = dynamic_cast<const Input *>(&v);
@@ -872,13 +894,21 @@ static void calculateAndInitConstants(Transform &t) {
 
       update_min_vect_sz(i.getType());
 
-      if (dynamic_cast<const FnCall*>(&i))
+      if (auto fn = dynamic_cast<const FnCall*>(&i)) {
         has_fncall |= true;
+        if (fn->hasAttribute(FnAttrs::InaccessibleMemOnly)) {
+          if (inaccessiblememonly_fns.emplace(fn->getName()).second)
+            ++num_inaccessiblememonly_fns;
+        } else {
+          has_write_fncall |= !fn->hasAttribute(FnAttrs::NoWrite);
+        }
+      }
 
       if (auto *mi = dynamic_cast<const MemInstr *>(&i)) {
         auto [alloc, align] = mi->getMaxAllocSize();
-        max_alloc_size   = max(max_alloc_size, alloc);
-        max_aligned_size = max(max_aligned_size, add_saturate(alloc, align-1));
+        max_alloc_size     = max(max_alloc_size, alloc);
+        loc_alloc_aligned_size = add_saturate(loc_alloc_aligned_size,
+                                              aligned_alloc_size(alloc, align));
         max_access_size  = max(max_access_size, mi->getMaxAccessSize());
         cur_max_gep      = add_saturate(cur_max_gep, mi->getMaxGEPOffset());
         has_free        |= mi->canFree();
@@ -904,7 +934,7 @@ static void calculateAndInitConstants(Transform &t) {
 
       } else if (isCast(ConversionOp::Int2Ptr, i) ||
                   isCast(ConversionOp::Ptr2Int, i)) {
-        max_alloc_size = max_access_size = cur_max_gep = max_aligned_size
+        max_alloc_size = max_access_size = cur_max_gep = loc_alloc_aligned_size
           = UINT64_MAX;
         has_int2ptr |= isCast(ConversionOp::Int2Ptr, i) != nullptr;
         has_ptr2int |= isCast(ConversionOp::Ptr2Int, i) != nullptr;
@@ -949,10 +979,10 @@ static void calculateAndInitConstants(Transform &t) {
                   has_ptr_load || has_fncall || has_int2ptr;
 
   num_nonlocals_src = num_globals_src + num_ptrinputs + num_nonlocals_inst_src +
-                      has_null_block;
+                      num_inaccessiblememonly_fns + has_null_block;
 
   // Allow at least one non-const global for calls to change
-  num_nonlocals_src += has_fncall;
+  num_nonlocals_src += has_write_fncall;
 
   num_nonlocals = num_nonlocals_src + num_globals - num_globals_src;
 
@@ -986,8 +1016,8 @@ static void calculateAndInitConstants(Transform &t) {
   // counterexamples more readable
   // Allow an extra bit for the sign
   auto max_geps
-    = ilog2_ceil(add_saturate(max(max_gep_src, max_gep_tgt), max_access_size),
-                 true) + 1;
+    = bit_width(add_saturate(max(max_gep_src, max_gep_tgt), max_access_size))
+        + 1;
   bits_for_offset = min(round_up(max_geps, 4), (uint64_t)t.src.bitsPtrOffset());
   bits_for_offset = min(bits_for_offset, config::max_offset_bits);
   bits_for_offset = min(bits_for_offset, bits_program_pointer);
@@ -995,11 +1025,15 @@ static void calculateAndInitConstants(Transform &t) {
   // ASSUMPTION: programs can only allocate up to half of address space
   // so the first bit of size is always zero.
   // We need this assumption to support negative offsets.
-  bits_size_t = ilog2_ceil(max_alloc_size, true);
+  bits_size_t = bit_width(max_alloc_size);
   bits_size_t = min(max(bits_for_offset, bits_size_t), bits_program_pointer-1);
 
   // +1 because the pointer after the object must be valid (can't overflow)
-  bits_ptr_address = ilog2_ceil(add_saturate(max_aligned_size, 1), true);
+  uint64_t loc_alloc_aligned_size
+    = max(loc_src_alloc_aligned_size, loc_tgt_alloc_aligned_size);
+  bits_ptr_address
+    = add_saturate(
+        bit_width(max(glb_alloc_aligned_size, loc_alloc_aligned_size)), 1);
 
   // as an (unsound) optimization, we fix the first bit of the addr for
   // local/non-local if both exist (to reduce axiom fml size)
@@ -1024,13 +1058,16 @@ static void calculateAndInitConstants(Transform &t) {
                   << "\nnum_locals_tgt: " << num_locals_tgt
                   << "\nnum_nonlocals_src: " << num_nonlocals_src
                   << "\nnum_nonlocals: " << num_nonlocals
+                  << "\nnum_inaccessiblememonly_fns: "
+                    << num_inaccessiblememonly_fns
                   << "\nbits_for_bid: " << bits_for_bid
                   << "\nbits_for_offset: " << bits_for_offset
                   << "\nbits_size_t: " << bits_size_t
                   << "\nbits_ptr_address: " << bits_ptr_address
                   << "\nbits_program_pointer: " << bits_program_pointer
                   << "\nmax_alloc_size: " << max_alloc_size
-                  << "\nmax_aligned_size: " << max_aligned_size
+                  << "\nglb_alloc_aligned_size: " << glb_alloc_aligned_size
+                  << "\nloc_alloc_aligned_size: " << loc_alloc_aligned_size
                   << "\nmin_access_size: " << min_access_size
                   << "\nmax_access_size: " << max_access_size
                   << "\nbits_byte: " << bits_byte
@@ -1083,9 +1120,27 @@ pair<unique_ptr<State>, unique_ptr<State>> TransformVerify::exec() const {
 }
 
 Errors TransformVerify::verify() const {
-  if (!t.src.hasSameInputs(t.tgt)) {
-    return { "Unsupported interprocedural transformation: signature mismatch "
-             "between src and tgt", false };
+  {
+    auto src_inputs = t.src.getInputs();
+    auto tgt_inputs = t.tgt.getInputs();
+    auto litr = src_inputs.begin(), lend = src_inputs.end();
+    auto ritr = tgt_inputs.begin(), rend = tgt_inputs.end();
+
+    while (litr != lend && ritr != rend) {
+      auto *lv = dynamic_cast<const Input*>(&*litr);
+      auto *rv = dynamic_cast<const Input*>(&*ritr);
+      if (lv->getType().toString() != rv->getType().toString())
+        return { "Signature mismatch between src and tgt", false };
+
+      if (!lv->getAttributes().refinedBy(rv->getAttributes()))
+        return { "Parameter attributes not refined", true };
+
+      ++litr;
+      ++ritr;
+    }
+
+    if (litr != lend || ritr != rend)
+      return { "Signature mismatch between src and tgt", false };
   }
 
   // Check sizes of global variables
@@ -1342,6 +1397,8 @@ static void optimize_ptrcmp(Function &f) {
 
     auto cond = icmp->getCond();
     bool is_eq = cond == ICmp::EQ || cond == ICmp::NE;
+    bool is_signed_cmp = cond == ICmp::SLE || cond == ICmp::SLT ||
+                         cond == ICmp::SGE || cond == ICmp::SGT;
 
     auto ops = icmp->operands();
     auto *op0 = ops[0];
@@ -1358,10 +1415,116 @@ static void optimize_ptrcmp(Function &f) {
     if (base0 && base0 == base1) {
       if (is_eq)
         const_cast<ICmp*>(icmp)->setPtrCmpMode(ICmp::PROVENANCE);
-      else if (is_inbounds(*op0) && is_inbounds(*op1))
+      else if (is_inbounds(*op0) && is_inbounds(*op1) && !is_signed_cmp)
+        // Even if op0 and op1 are inbounds, 'icmp slt op0, op1' must
+        // compare underlying addresses because it is possible for the block
+        // to span across [a, b] where a >s 0 && b <s 0.
         const_cast<ICmp*>(icmp)->setPtrCmpMode(ICmp::OFFSETONLY);
     }
   }
+}
+
+bool Transform::fold(IR::Function &fn) {
+  bool changed = false;
+ again:
+  for (auto bb : fn.getBBs()) {
+    for (auto &i1 : bb->instrs()) {
+      auto folded = i1.fold();
+      if (folded) {
+        auto newI = make_unique<IntConst>(*folded);
+        fn.rauw(i1, *newI);
+        fn.addConstant(move(newI));
+        bb->delInstr(&i1);
+        changed = true;
+        goto again;
+      }
+    }
+  }
+  return changed;
+}
+
+bool Transform::peep(IR::Function &fn) {
+  bool changed = false;
+ again:
+  for (auto bb : fn.getBBs()) {
+    for (auto &i1 : bb->instrs()) {
+      auto peeped = i1.peep();
+      if (peeped) {
+        fn.rauw(i1, *peeped);
+        bb->delInstr(&i1);
+        changed = true;
+        goto again;
+      }
+    }
+  }
+  return changed;
+}
+
+// optimize redundant truncations of output of sext/zext instructions
+bool Transform::cleanupTruncExt(IR::Function &fn) {
+  bool changed = false;
+  static long newCount = 0;
+
+ again:
+  for (auto bb : fn.getBBs()) {
+    for (auto &i : bb->instrs()) {
+      auto truncInst = dynamic_cast<const ConversionOp*>(&i);
+      if (truncInst == nullptr || truncInst->getOp() != ConversionOp::Trunc)
+	continue;
+      if (!fn.hasOneUse(*truncInst))
+        continue;
+      auto extInst = dynamic_cast<const ConversionOp*>(&truncInst->getValue());
+      if (extInst == nullptr || (extInst->getOp() != ConversionOp::SExt &&
+                                 extInst->getOp() != ConversionOp::ZExt))
+	continue;
+      if (!fn.hasOneUse(*extInst))
+        continue;
+      auto &input = extInst->getValue();
+      auto oldWidth = truncInst->getType().bits();
+      auto newWidth = input.getType().bits();
+      if (oldWidth == newWidth) {
+	fn.rauw(i, input);
+      } else {
+        auto newConv = make_unique<ConversionOp>(truncInst->getType(),
+                                                 "%newconv" + to_string(newCount++),
+                                                 input,
+                                                 (oldWidth > newWidth) ?
+                                                 extInst->getOp() :
+                                                 ConversionOp::Trunc);
+	fn.rauw(i, *newConv);
+        bb->addInstrAt(move(newConv), &i, true);
+      }
+      changed = true;
+      bb->delInstr(truncInst);
+      bb->delInstr(extInst);
+      goto again;
+    }
+  }
+
+  return changed;
+}
+
+// remove side-effect free instructions without users
+bool Transform::deadInstElim(IR::Function &fn) {
+  vector<Instr*> to_remove;
+  bool changed = false;
+  auto users = fn.getUsers();
+
+  for (auto bb : fn.getBBs()) {
+    for (auto &i : bb->instrs()) {
+      auto i_ptr = const_cast<Instr*>(&i);
+      if (hasNoSideEffects(i) && !users.count(i_ptr))
+	to_remove.emplace_back(i_ptr);
+    }
+
+    for (auto i : to_remove) {
+      bb->delInstr(i);
+      changed = true;
+    }
+    to_remove.clear();
+  }
+
+  return changed;
 }
 
 void Transform::preprocess() {
@@ -1393,33 +1556,25 @@ void Transform::preprocess() {
   optimize_ptrcmp(src);
   optimize_ptrcmp(tgt);
 
-  // remove side-effect free instructions without users
-  vector<Instr*> to_remove;
-  for (auto fn : { &src, &tgt }) {
-    bool changed;
-    do {
-      auto users = fn->getUsers();
-      changed = false;
-
-      for (auto bb : fn->getBBs()) {
-        for (auto &i : bb->instrs()) {
-          auto i_ptr = const_cast<Instr*>(&i);
-          if (hasNoSideEffects(i) && !users.count(i_ptr))
-            to_remove.emplace_back(i_ptr);
-        }
-
-        for (auto i : to_remove) {
-          bb->delInstr(i);
-          changed = true;
-        }
-        to_remove.clear();
+  bool changed;
+  do {
+    changed = false;
+    if (config::optimize_ir) {
+      // probably just leave this off once we're done testing
+      if (true) {
+        changed |= fold(src);
+        changed |= peep(src);
+        changed |= cleanupTruncExt(src);
       }
-
-      changed |=
-        fn->removeUnusedStuff(users, fn == &src ? vector<string_view>()
-                                                : src.getGlobalVarNames());
-    } while (changed);
-  }
+      changed |= fold(tgt);
+      changed |= peep(tgt);
+      changed |= cleanupTruncExt(tgt);
+    }
+    changed |= deadInstElim(src);
+    changed |= deadInstElim(tgt);
+    changed |= src.removeUnusedStuff(src.getUsers(), vector<string_view>());
+    changed |= tgt.removeUnusedStuff(tgt.getUsers(), src.getGlobalVarNames());
+  } while (changed);
 
   // bits_program_pointer is used by unroll. Initialize it in advance
   initBitsProgramPointer(*this);

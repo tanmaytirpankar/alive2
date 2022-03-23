@@ -19,7 +19,7 @@ if (MSVC)
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "/O2 /Oi /Zi ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
   set(CMAKE_EXE_LINKER_FLAGS         "/LTCG:INCREMENTAL ${CMAKE_EXE_LINKER_FLAGS}")
 else()
-  set(CMAKE_CXX_FLAGS                "-Wall -Werror -march=native -fPIC ${CMAKE_CXX_FLAGS}")
+  set(CMAKE_CXX_FLAGS                "-Wall -Werror -fPIC ${CMAKE_CXX_FLAGS}")
   set(CMAKE_CXX_FLAGS_DEBUG          "-g -Og ${CMAKE_CXX_FLAGS_DEBUG}")
   set(CMAKE_CXX_FLAGS_RELEASE        "-O3 ${CMAKE_CXX_FLAGS_RELEASE}")
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
@@ -139,7 +139,7 @@ set(UTIL_SRCS
   util/stopwatch.cpp
   util/symexec.cpp
   util/unionfind.cpp
-  util/concreteval.cpp
+  #util/concreteval.cpp
 )
 
 set(UTIL_EXEC_SRCS
@@ -158,8 +158,8 @@ set(UTIL_EXEC_SRCS
   util/stopwatch.cpp
   #util/exec.cpp
   util/unionfind.cpp
-  util/concreteval.cpp
-  util/interp.cpp
+  #util/concreteval.cpp
+  #util/interp.cpp
 )
 
 add_library(util STATIC ${UTIL_SRCS})
@@ -217,9 +217,9 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
   #  "tools/alive-exec-concrete.cpp"
   #)
 
-  add_llvm_executable(alive-interp
-    "tools/alive-interp.cpp"
-  )
+  #add_llvm_executable(alive-interp
+  #  "tools/alive-interp.cpp"
+  #)
 
 else()
   set(LLVM_UTIL_SRCS "")
@@ -268,7 +268,7 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
   target_link_libraries(alive-tv PRIVATE ${ALIVE_LIBS_LLVM} ${llvm_libs})
   target_link_libraries(alive-exec PRIVATE ${ALIVE_LIBS_LLVM} ${llvm_libs})
   #target_link_libraries(alive-exec-concrete PRIVATE ${ALIVE_EXEC_LIBS_LLVM} ${llvm_libs})
-  target_link_libraries(alive-interp PRIVATE ${ALIVE_EXEC_LIBS_LLVM} ${llvm_libs})
+  #target_link_libraries(alive-interp PRIVATE ${ALIVE_EXEC_LIBS_LLVM} ${llvm_libs})
 endif()
 
 if (CYGWIN)
@@ -284,7 +284,7 @@ else()
     target_link_libraries(alive-tv PRIVATE ${Z3_LIBRARIES})
     target_link_libraries(alive-exec PRIVATE ${Z3_LIBRARIES})
     #target_link_libraries(alive-exec-concrete PRIVATE ${Z3_LIBRARIES})
-    target_link_libraries(alive-interp PRIVATE ${Z3_LIBRARIES})
+    #target_link_libraries(alive-interp PRIVATE ${Z3_LIBRARIES})
   endif()
 endif()
 

@@ -38,20 +38,35 @@ known_call(llvm::CallInst &i, const llvm::TargetLibraryInfo &TLI,
     RETURN_EXACT();
 
   // TODO: add support for checking mismatch of C vs C++ alloc fns
-  if (llvm::isMallocLikeFn(&i, &TLI, false)) {
+  if (llvm::isMallocOrCallocLikeFn(&i, &TLI)) {
+    // aligned malloc
+    if (auto *algn = llvm::getAllocAlignment(&i, &TLI)) {
+      if (auto algnint = dyn_cast<llvm::ConstantInt>(algn)) {
+        RETURN_VAL(
+          make_unique<Malloc>(*ty, value_name(i), *args[1], false,
+                              algnint->getZExtValue()));
+      } else {
+        // TODO: add support for non-const alignments
+        RETURN_APPROX();
+      }
+    }
+
+    // calloc
+    if (auto *init = llvm::getInitialValueOfAllocation(&i, &TLI, i.getType());
+        init && init->isNullValue())
+      RETURN_VAL(
+        make_unique<Calloc>(*ty, value_name(i), *args[0], *args[1], align(i)));
+
+    // malloc or new
     bool isNonNull = i.getCalledFunction()->getName() != "malloc";
     RETURN_VAL(
       make_unique<Malloc>(*ty, value_name(i), *args[0], isNonNull, align(i)));
   }
-  else if (llvm::isCallocLikeFn(&i, &TLI, false)) {
-    RETURN_VAL(
-      make_unique<Calloc>(*ty, value_name(i), *args[0], *args[1], align(i)));
-  }
-  else if (llvm::isReallocLikeFn(&i, &TLI, false)) {
+  if (llvm::isReallocLikeFn(&i, &TLI)) {
     RETURN_VAL(
       make_unique<Malloc>(*ty, value_name(i), *args[0], *args[1], align(i)));
   }
-  else if (llvm::isFreeCall(&i, &TLI)) {
+  if (llvm::isFreeCall(&i, &TLI)) {
     if (i.hasFnAttr(llvm::Attribute::NoFree)) {
       auto zero = make_intconst(0, 1);
       RETURN_VAL(make_unique<Assume>(*zero, Assume::AndNonPoison));
@@ -137,51 +152,67 @@ known_call(llvm::CallInst &i, const llvm::TargetLibraryInfo &TLI,
 
   case llvm::LibFunc_fabs:
   case llvm::LibFunc_fabsf:
-    RETURN_VAL(make_unique<UnaryOp>(*ty, value_name(i), *args[0], UnaryOp::FAbs,
-                                    parse_fmath(i)));
+    RETURN_VAL(make_unique<FpUnaryOp>(*ty, value_name(i), *args[0],
+                                      FpUnaryOp::FAbs, parse_fmath(i)));
 
   case llvm::LibFunc_ceil:
   case llvm::LibFunc_ceilf:
-    RETURN_VAL(
-      make_unique<UnaryOp>(*ty, value_name(i), *args[0], UnaryOp::Ceil));
+    RETURN_VAL(make_unique<FpUnaryOp>(*ty, value_name(i), *args[0],
+                                      FpUnaryOp::Ceil, parse_fmath(i)));
 
   case llvm::LibFunc_floor:
   case llvm::LibFunc_floorf:
-    RETURN_VAL(
-      make_unique<UnaryOp>(*ty, value_name(i), *args[0], UnaryOp::Floor));
+    RETURN_VAL(make_unique<FpUnaryOp>(*ty, value_name(i), *args[0],
+                                      FpUnaryOp::Floor, parse_fmath(i)));
+
+  case llvm::LibFunc_nearbyint:
+  case llvm::LibFunc_nearbyintf:
+    RETURN_VAL(make_unique<FpUnaryOp>(*ty, value_name(i), *args[0],
+                                      FpUnaryOp::NearbyInt, parse_fmath(i)));
+
+  case llvm::LibFunc_rint:
+  case llvm::LibFunc_rintf:
+    RETURN_VAL(make_unique<FpUnaryOp>(*ty, value_name(i), *args[0],
+                                      FpUnaryOp::RInt, parse_fmath(i)));
 
   case llvm::LibFunc_round:
   case llvm::LibFunc_roundf:
-    RETURN_VAL(
-      make_unique<UnaryOp>(*ty, value_name(i), *args[0], UnaryOp::Round));
+    RETURN_VAL(make_unique<FpUnaryOp>(*ty, value_name(i), *args[0],
+                                      FpUnaryOp::Round, parse_fmath(i)));
 
   case llvm::LibFunc_roundeven:
   case llvm::LibFunc_roundevenf:
-    RETURN_VAL(
-      make_unique<UnaryOp>(*ty, value_name(i), *args[0], UnaryOp::RoundEven));
+    RETURN_VAL(make_unique<FpUnaryOp>(*ty, value_name(i), *args[0],
+                                      FpUnaryOp::RoundEven, parse_fmath(i)));
 
   case llvm::LibFunc_trunc:
   case llvm::LibFunc_truncf:
-    RETURN_VAL(
-      make_unique<UnaryOp>(*ty, value_name(i), *args[0], UnaryOp::Trunc));
+    RETURN_VAL(make_unique<FpUnaryOp>(*ty, value_name(i), *args[0],
+                                      FpUnaryOp::Trunc, parse_fmath(i)));
+
+  case llvm::LibFunc_copysign:
+  case llvm::LibFunc_copysignf:
+    RETURN_VAL(make_unique<FpBinOp>(*ty, value_name(i), *args[0], *args[1],
+                                    FpBinOp::CopySign, parse_fmath(i)));
 
   case llvm::LibFunc_sqrt:
   case llvm::LibFunc_sqrtf:
     BB.addInstr(make_unique<Assume>(*args[0], Assume::WellDefined));
-    RETURN_VAL(
-      make_unique<UnaryOp>(*ty, value_name(i), *args[0], UnaryOp::Sqrt));
+    RETURN_VAL(make_unique<FpUnaryOp>(*ty, value_name(i), *args[0],
+                                      FpUnaryOp::Sqrt, parse_fmath(i)));
 
   case llvm::LibFunc_fwrite: {
     auto size = getInt(*args[1]);
     auto count = getInt(*args[2]);
-    if (size && count) {
-      auto bytes = *size * *count;
+    if (size || count) {
       // size_t fwrite(const void *ptr, 0, 0, FILE *stream) -> 0
-      if (bytes == 0)
+      if ((size && *size == 0) || (count && *count == 0))
         RETURN_VAL(
           make_unique<UnaryOp>(*ty, value_name(i),
                                *make_intconst(0, ty->bits()), UnaryOp::Copy));
-
+    }
+    if (size && count) {
+      auto bytes = *size * *count;
       // (void)fwrite(const void *ptr, 1, 1, FILE *stream) ->
       //   (void)fputc(int c, FILE *stream))
       if (bytes == 1 && i.use_empty() && TLI.has(llvm::LibFunc_fputc)) {

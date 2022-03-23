@@ -141,4 +141,8 @@ llvm::cl::opt<unsigned> opt_max_offset_in_bits(
                  "offset computations exceed the maximum."),
   llvm::cl::cat(alive_cmdargs));
 
+llvm::cl::opt<bool> opt_optimize_ir("optimize-ir",
+  llvm::cl::desc("Optimize Alive2 IR"), llvm::cl::init(true),
+  llvm::cl::cat(alive_cmdargs));
+
 }

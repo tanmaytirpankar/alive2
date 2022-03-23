@@ -638,25 +638,6 @@ static FastMathFlags parse_fast_math(token op_token) {
       break;
     }
   }
-
-  switch (op_token) {
-  case FABS:
-  case FADD:
-  case FSUB:
-  case FMUL:
-  case FDIV:
-  case FREM:
-  case FCMP:
-  case FMA:
-  case FMAX:
-  case FMIN:
-  case FMAXIMUM:
-  case FMINIMUM:
-    break;
-  default:
-    if (!fmath.isNone())
-      error("Unexpected fast-math tokens");
-  }
   return fmath;
 }
 
@@ -714,7 +695,6 @@ static unsigned parse_binop_flags(token op_token) {
 
 static unique_ptr<Instr> parse_binop(string_view name, token op_token) {
   auto flags = parse_binop_flags(op_token);
-  auto fmath = parse_fast_math(op_token);
   auto &type = parse_type();
   auto &a = parse_operand(type);
   parse_comma();
@@ -769,46 +749,73 @@ static unique_ptr<Instr> parse_binop(string_view name, token op_token) {
     op = BinOp::UMul_Overflow;
     rettype = &get_overflow_type(type);
     break;
-  case FADD: op = BinOp::FAdd; break;
-  case FSUB: op = BinOp::FSub; break;
-  case FMUL: op = BinOp::FMul; break;
-  case FDIV: op = BinOp::FDiv; break;
-  case FREM: op = BinOp::FRem; break;
-  case FMAX: op = BinOp::FMax; break;
-  case FMIN: op = BinOp::FMin; break;
-  case FMAXIMUM: op = BinOp::FMaximum; break;
-  case FMINIMUM: op = BinOp::FMinimum; break;
   case UMIN: op = BinOp::UMin; break;
   case UMAX: op = BinOp::UMax; break;
   case SMIN: op = BinOp::SMin; break;
   case SMAX: op = BinOp::SMax; break;
-  case ABS:
-    op = BinOp::Abs;
-    break;
+  case ABS:  op = BinOp::Abs; break;
   default:
     UNREACHABLE();
   }
-  return make_unique<BinOp>(*rettype, string(name), a, b, op, flags, fmath);
+  return make_unique<BinOp>(*rettype, string(name), a, b, op, flags);
+}
+
+static unique_ptr<Instr> parse_fp_binop(string_view name, token op_token) {
+  auto fmath = parse_fast_math(op_token);
+  auto &type = parse_type();
+  auto &a = parse_operand(type);
+  parse_comma();
+  Type &type_rhs = try_parse_type(type);
+  auto &b = parse_operand(type_rhs);
+  Type *rettype = &type;
+
+  FpBinOp::Op op;
+  switch (op_token) {
+  case FADD:     op = FpBinOp::FAdd; break;
+  case FSUB:     op = FpBinOp::FSub; break;
+  case FMUL:     op = FpBinOp::FMul; break;
+  case FDIV:     op = FpBinOp::FDiv; break;
+  case FREM:     op = FpBinOp::FRem; break;
+  case FMAX:     op = FpBinOp::FMax; break;
+  case FMIN:     op = FpBinOp::FMin; break;
+  case FMAXIMUM: op = FpBinOp::FMaximum; break;
+  case FMINIMUM: op = FpBinOp::FMinimum; break;
+  default:
+    UNREACHABLE();
+  }
+  return make_unique<FpBinOp>(*rettype, string(name), a, b, op, fmath);
 }
 
 static unique_ptr<Instr> parse_unaryop(string_view name, token op_token) {
-  auto fmath = parse_fast_math(op_token);
-
   UnaryOp::Op op;
   switch (op_token) {
   case BITREVERSE: op = UnaryOp::BitReverse; break;
   case BSWAP:      op = UnaryOp::BSwap; break;
   case CTPOP:      op = UnaryOp::Ctpop; break;
-  case FNEG:       op = UnaryOp::FNeg; break;
   case FFS:        op = UnaryOp::FFS; break;
-  case FABS:       op = UnaryOp::FAbs; break;
   default:
     UNREACHABLE();
   }
 
   auto &ty = parse_type();
   auto &a = parse_operand(ty);
-  return make_unique<UnaryOp>(ty, string(name), a, op, fmath);
+  return make_unique<UnaryOp>(ty, string(name), a, op);
+}
+
+static unique_ptr<Instr> parse_fp_unaryop(string_view name, token op_token) {
+  auto fmath = parse_fast_math(op_token);
+
+  FpUnaryOp::Op op;
+  switch (op_token) {
+  case FABS: op = FpUnaryOp::FAbs; break;
+  case FNEG: op = FpUnaryOp::FNeg; break;
+  default:
+    UNREACHABLE();
+  }
+
+  auto &ty = parse_type();
+  auto &a = parse_operand(ty);
+  return make_unique<FpUnaryOp>(ty, string(name), a, op, fmath);
 }
 
 static unique_ptr<Instr> parse_unary_reduction_op(string_view name,
@@ -836,13 +843,10 @@ static unique_ptr<Instr> parse_unary_reduction_op(string_view name,
 }
 
 static unique_ptr<Instr> parse_ternary(string_view name, token op_token) {
-  auto fmath = parse_fast_math(op_token);
-
   TernaryOp::Op op;
   switch (op_token) {
   case FSHL: op = TernaryOp::FShl; break;
   case FSHR: op = TernaryOp::FShr; break;
-  case FMA:  op = TernaryOp::FMA; break;
   default:
     UNREACHABLE();
   }
@@ -855,7 +859,28 @@ static unique_ptr<Instr> parse_ternary(string_view name, token op_token) {
   parse_comma();
   auto &cty = parse_type();
   auto &c = parse_operand(cty);
-  return make_unique<TernaryOp>(aty, string(name), a, b, c, op, fmath);
+  return make_unique<TernaryOp>(aty, string(name), a, b, c, op);
+}
+
+static unique_ptr<Instr> parse_fp_ternary(string_view name, token op_token) {
+  auto fmath = parse_fast_math(op_token);
+
+  FpTernaryOp::Op op;
+  switch (op_token) {
+  case FMA: op = FpTernaryOp::FMA; break;
+  default:
+    UNREACHABLE();
+  }
+
+  auto &aty = parse_type();
+  auto &a = parse_operand(aty);
+  parse_comma();
+  auto &bty = parse_type();
+  auto &b = parse_operand(bty);
+  parse_comma();
+  auto &cty = parse_type();
+  auto &c = parse_operand(cty);
+  return make_unique<FpTernaryOp>(aty, string(name), a, b, c, op, fmath);
 }
 
 static unique_ptr<Instr> parse_conversionop(string_view name, token op_token) {
@@ -870,17 +895,32 @@ static unique_ptr<Instr> parse_conversionop(string_view name, token op_token) {
   case SEXT:     op = ConversionOp::SExt; break;
   case ZEXT:     op = ConversionOp::ZExt; break;
   case TRUNC:    op = ConversionOp::Trunc; break;
-  case SITOFP:   op = ConversionOp::SIntToFP; break;
-  case UITOFP:   op = ConversionOp::UIntToFP; break;
-  case FPTOSI:   op = ConversionOp::FPToSInt; break;
-  case FPTOUI:   op = ConversionOp::FPToUInt; break;
-  case FPEXT:    op = ConversionOp::FPExt; break;
-  case FPTRUNC:  op = ConversionOp::FPTrunc; break;
   case PTRTOINT: op = ConversionOp::Ptr2Int; break;
   default:
     UNREACHABLE();
   }
   return make_unique<ConversionOp>(ty2, string(name), val, op);
+}
+
+static unique_ptr<Instr>
+parse_fp_conversionop(string_view name, token op_token) {
+  // op ty %op to ty2
+  auto &opty = parse_type();
+  auto &val = parse_operand(opty);
+  auto &ty2 = parse_type(/*optional=*/!tokenizer.consumeIf(TO));
+
+  FpConversionOp::Op op;
+  switch (op_token) {
+  case SITOFP:  op = FpConversionOp::SIntToFP; break;
+  case UITOFP:  op = FpConversionOp::UIntToFP; break;
+  case FPTOSI:  op = FpConversionOp::FPToSInt; break;
+  case FPTOUI:  op = FpConversionOp::FPToUInt; break;
+  case FPEXT:   op = FpConversionOp::FPExt; break;
+  case FPTRUNC: op = FpConversionOp::FPTrunc; break;
+  default:
+    UNREACHABLE();
+  }
+  return make_unique<FpConversionOp>(ty2, string(name), val, op);
 }
 
 static unique_ptr<Instr> parse_select(string_view name) {
@@ -1137,6 +1177,12 @@ static unique_ptr<Instr> parse_instr(string_view name) {
   case USUB_OVERFLOW:
   case SMUL_OVERFLOW:
   case UMUL_OVERFLOW:
+  case UMIN:
+  case UMAX:
+  case SMIN:
+  case SMAX:
+  case ABS:
+    return parse_binop(name, t);
   case FADD:
   case FSUB:
   case FMUL:
@@ -1146,19 +1192,15 @@ static unique_ptr<Instr> parse_instr(string_view name) {
   case FMIN:
   case FMAXIMUM:
   case FMINIMUM:
-  case UMIN:
-  case UMAX:
-  case SMIN:
-  case SMAX:
-  case ABS:
-    return parse_binop(name, t);
+    return parse_fp_binop(name, t);
   case BITREVERSE:
   case BSWAP:
   case CTPOP:
   case FFS:
+    return parse_unaryop(name, t);
   case FABS:
   case FNEG:
-    return parse_unaryop(name, t);
+    return parse_fp_unaryop(name, t);
   case REDUCE_ADD:
   case REDUCE_MUL:
   case REDUCE_AND:
@@ -1171,20 +1213,22 @@ static unique_ptr<Instr> parse_instr(string_view name) {
     return parse_unary_reduction_op(name, t);
   case FSHL:
   case FSHR:
-  case FMA:
     return parse_ternary(name, t);
+  case FMA:
+    return parse_fp_ternary(name, t);
   case BITCAST:
   case SEXT:
   case ZEXT:
   case TRUNC:
+  case PTRTOINT:
+    return parse_conversionop(name, t);
   case SITOFP:
   case UITOFP:
   case FPTOSI:
   case FPTOUI:
   case FPEXT:
   case FPTRUNC:
-  case PTRTOINT:
-    return parse_conversionop(name, t);
+    return parse_fp_conversionop(name, t);
   case SELECT:
     return parse_select(name);
   case EXTRACTVALUE:
