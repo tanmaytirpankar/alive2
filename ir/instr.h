@@ -25,6 +25,7 @@ public:
   virtual std::vector<Value*> operands() const = 0;
   virtual bool propagatesPoison() const;
   virtual std::optional<IntConst> fold() const;
+  virtual Value* peep() const;
   virtual void rauw(const Value &what, Value &with) = 0;
   smt::expr getTypeConstraints() const override;
   virtual smt::expr getTypeConstraints(const Function &f) const = 0;
@@ -54,6 +55,7 @@ public:
   std::vector<Value*> operands() const override;
   bool propagatesPoison() const override;
   std::optional<IntConst> fold() const override;
+  Value *peep() const override;
   void rauw(const Value &what, Value &with) override;
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;

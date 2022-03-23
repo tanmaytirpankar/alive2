@@ -28,6 +28,7 @@ struct Transform {
 
   bool cleanupTruncExt(IR::Function &fn);
   bool fold(IR::Function &fn);
+  bool peep(IR::Function &fn);
   bool deadInstElim(IR::Function &fn);
   void preprocess();
   void print(std::ostream &os, const TransformPrintOpts &opt) const;

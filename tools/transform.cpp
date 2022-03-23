@@ -1443,6 +1443,23 @@ bool Transform::fold(IR::Function &fn) {
   return changed;
 }
 
+bool Transform::peep(IR::Function &fn) {
+  bool changed = false;
+ again:
+  for (auto bb : fn.getBBs()) {
+    for (auto &i1 : bb->instrs()) {
+      auto peeped = i1.peep();
+      if (peeped) {
+        fn.rauw(i1, *peeped);
+        bb->delInstr(&i1);
+        changed = true;
+        goto again;
+      }
+    }
+  }
+  return changed;
+}
+
 // optimize redundant truncations of output of sext/zext instructions
 bool Transform::cleanupTruncExt(IR::Function &fn) {
   bool changed = false;
@@ -1543,12 +1560,14 @@ void Transform::preprocess() {
   do {
     changed = false;
     if (config::optimize_ir) {
-      // leave this turned off probably
+      // probably just leave this off once we're done testing
       if (true) {
         changed |= fold(src);
+        changed |= peep(src);
         changed |= cleanupTruncExt(src);
       }
       changed |= fold(tgt);
+      changed |= peep(tgt);
       changed |= cleanupTruncExt(tgt);
     }
     changed |= deadInstElim(src);

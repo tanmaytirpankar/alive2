@@ -107,6 +107,10 @@ std::optional<IntConst> Instr::fold() const {
   return {};
 }
 
+Value* Instr::peep() const {
+  return nullptr;
+}
+
 expr Instr::getTypeConstraints() const {
   UNREACHABLE();
   return {};
@@ -175,6 +179,18 @@ std::optional<IntConst> BinOp::fold() const {
   default:
     return {};
   }
+}
+
+Value* BinOp::peep() const {
+  if (!(op == And || op == Or || op == Add))
+    return nullptr;
+  IntConst *lhsConst = dynamic_cast<IntConst *>(lhs);
+  if (lhsConst && *(lhsConst->getInt()) == 0)
+    return rhs;
+  IntConst *rhsConst = dynamic_cast<IntConst *>(rhs);
+  if (rhsConst && *(rhsConst->getInt()) == 0)
+    return lhs;
+  return nullptr;
 }
 
 void BinOp::rauw(const Value &what, Value &with) {
