@@ -1252,7 +1252,7 @@ public:
       auto r = make_intconst(immr, size);
       //      auto s = make_intconst(imms, size);
 
-      // arithmetic shift right alias is perferred when:
+      // arithmetic shift right (ASR) alias is perferred when:
       // imms == 011111 and size == 32 or when imms == 111111 and size = 64
       if ((size == 32 && imms == 31) || (size == 64 && imms == 63)) {
         auto dst = add_instr<IR::BinOp>(*ty, move(next_name()), *src, *r,
@@ -1294,7 +1294,42 @@ public:
         return;
       }
 
-      // TODO: SBFIZ, SBFX
+      // SBFIZ
+      if (imms < immr) {
+        
+        auto pos = size - immr;
+        auto width = imms + 1;
+        auto mask = ((uint64_t)1 << (width)) - 1;
+        auto bitfield_mask = (uint64_t)1 << (width-1);
+         
+        auto masked =
+            add_instr<IR::BinOp>(*ty, move(next_name()), *src,
+                                 *make_intconst(mask, size), IR::BinOp::And);
+        
+        auto bitfield_lsb =
+            add_instr<IR::BinOp>(*ty, move(next_name()), *src,
+                                 *make_intconst(bitfield_mask, size), IR::BinOp::And);
+
+        auto insert_ones = 
+            add_instr<IR::BinOp>(*ty, move(next_name()), *masked,
+                                                *make_intconst(~mask, size), IR::BinOp::Or);
+        
+        auto cond_ty = &get_int_type(1);
+
+        auto bitfield_lsb_set = add_instr<IR::ICmp>(*cond_ty, move(next_name()), IR::ICmp::NE,
+                                          *bitfield_lsb, *make_intconst(0, size));
+
+        
+        auto res = add_instr<IR::Select>(*ty, move(next_name()),
+                                                      *bitfield_lsb_set, *insert_ones,
+                                                      *masked);
+        auto shifted_res =
+            add_instr<IR::BinOp>(*ty, move(next_name()), *res,
+                                 *make_intconst(pos, size), IR::BinOp::Shl);
+        store(*shifted_res);
+        return;
+      }
+      // TODO: SBFX
       assert(false && "SBFIZ/SBFX aliases not yet supported");
     }
     case AArch64::EORWri:
@@ -1507,6 +1542,7 @@ public:
       }
 
       // UBFX
+      // FIXME: this requires checking if UBFX is preferred.
       assert(false && "UBFX not supported");
       break;
     }
