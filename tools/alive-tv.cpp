@@ -1546,17 +1546,10 @@ public:
       auto pos = size - immr;
 
       // This mask deletes `bits` number of bits starting at `pos`.
-<<<<<<< HEAD
       // If the mask is for a 32 bit value, it will chop off the top 32 bits of the 64 bit mask
       // to keep the mask to a size of 32 bits
       auto mask = ~((((uint64_t)1 << bits) - 1) << pos) & 
                    ((uint64_t)-1 >> (64 - size));
-=======
-      // If the mask is for a 32 bit value, it will chop off the top 32 bits of
-      // the 64 bit mask to keep the mask to a size of 32 bits
-      auto mask =
-          ~((((uint64_t)1 << bits) - 1) << pos) & ((uint64_t)-1 >> (64 - size));
->>>>>>> 18b838188e22fd4eadec3803db964ffa4572edf5
 
       // get `bits` number of bits from the least significant bits
       auto bitfield = add_instr<IR::BinOp>(
