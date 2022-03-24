@@ -4144,6 +4144,11 @@ const ConversionOp* isCast(ConversionOp::Op op, const Value &v) {
 }
 
 bool hasNoSideEffects(const Instr &i) {
+  if (auto *B = dynamic_cast<const BinOp*>(&i)) {
+    return
+      B->getOp() != BinOp::SDiv && B->getOp() != BinOp::UDiv &&
+      B->getOp() != BinOp::SRem && B->getOp() != BinOp::URem;
+  }
   return isNoOp(i) ||
          dynamic_cast<const ExtractValue*>(&i) ||
          dynamic_cast<const GEP*>(&i) ||
