@@ -4148,7 +4148,8 @@ bool hasNoSideEffects(const Instr &i) {
          dynamic_cast<const ExtractValue*>(&i) ||
          dynamic_cast<const GEP*>(&i) ||
          dynamic_cast<const ShuffleVector*>(&i) ||
-         dynamic_cast<const ConversionOp*>(&i);
+         dynamic_cast<const ConversionOp*>(&i) ||
+         dynamic_cast<const ICmp*>(&i);
 }
 
 Value* isNoOp(const Value &v) {

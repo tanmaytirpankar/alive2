@@ -1460,7 +1460,11 @@ bool Transform::peep(IR::Function &fn) {
   return changed;
 }
 
-// optimize redundant truncations of output of sext/zext instructions
+/*
+ * optimize redundant truncations of output of sext/zext instructions
+ *
+ * TODO: handle ext of trunc, ext of ext, and trunc of trunc
+ */
 bool Transform::cleanupTruncExt(IR::Function &fn) {
   bool changed = false;
   static long newCount = 0;
@@ -1471,8 +1475,6 @@ bool Transform::cleanupTruncExt(IR::Function &fn) {
       auto truncInst = dynamic_cast<const ConversionOp*>(&i);
       if (truncInst == nullptr || truncInst->getOp() != ConversionOp::Trunc)
 	continue;
-      if (!fn.hasOneUse(*truncInst))
-        continue;
       auto extInst = dynamic_cast<const ConversionOp*>(&truncInst->getValue());
       if (extInst == nullptr || (extInst->getOp() != ConversionOp::SExt &&
                                  extInst->getOp() != ConversionOp::ZExt))
