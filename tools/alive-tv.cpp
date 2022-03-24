@@ -1484,14 +1484,13 @@ public:
       if (imms < immr) {
         auto pos = size - immr;
         auto width = imms + 1;
-
-        auto mask = ((uint64_t)-1 << pos);
+        auto mask = ((uint64_t)1 << (width)) - 1;
         auto masked =
             add_instr<IR::BinOp>(*ty, move(next_name()), *src,
                                  *make_intconst(mask, size), IR::BinOp::And);
         auto shifted =
             add_instr<IR::BinOp>(*ty, move(next_name()), *masked,
-                                 *make_intconst(width, size), IR::BinOp::Shl);
+                                 *make_intconst(pos, size), IR::BinOp::Shl);
         store(*shifted);
         return;
       }
