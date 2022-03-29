@@ -1329,8 +1329,23 @@ public:
         store(*shifted_res);
         return;
       }
-      // TODO: SBFX
-      assert(false && "SBFIZ/SBFX aliases not yet supported");
+      // FIXME: this requires checking if SBFX is preferred.
+      // For now, assume this is always SBFX 
+      auto width = imms + 1;
+      auto mask = ((uint64_t)1 << (width)) - 1;
+      auto pos = immr;
+
+      auto masked =
+            add_instr<IR::BinOp>(*ty, move(next_name()), *src,
+                                 *make_intconst(mask, size), IR::BinOp::And);
+      auto l_shifted =
+            add_instr<IR::BinOp>(*ty, move(next_name()), *masked,
+                                 *make_intconst(size - width, size), IR::BinOp::Shl);
+      auto shifted_res =
+            add_instr<IR::BinOp>(*ty, move(next_name()), *l_shifted,
+                                 *make_intconst(size - width + pos , size), IR::BinOp::AShr);
+      store(*shifted_res);
+      return;
     }
     case AArch64::EORWri:
     case AArch64::EORXri: {
@@ -1544,7 +1559,7 @@ public:
       // UBFX
       // FIXME: this requires checking if UBFX is preferred.
       // For now, assume this is always UBFX
-      // need to perform a mask from lsb to lsb + width and then perform a logical shift right
+      // we mask from lsb to lsb + width and then perform a logical shift right
       auto width = imms + 1;
       auto mask = ((uint64_t)1 << (width)) - 1;
       auto pos = immr;
