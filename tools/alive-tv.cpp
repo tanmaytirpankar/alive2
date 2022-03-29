@@ -1543,8 +1543,21 @@ public:
 
       // UBFX
       // FIXME: this requires checking if UBFX is preferred.
-      assert(false && "UBFX not supported");
-      break;
+      // For now, assume this is always UBFX
+      // need to perform a mask from lsb to lsb + width and then perform a logical shift right
+      auto width = imms + 1;
+      auto mask = ((uint64_t)1 << (width)) - 1;
+      auto pos = immr;
+
+      auto masked =
+            add_instr<IR::BinOp>(*ty, move(next_name()), *src,
+                                 *make_intconst(mask, size), IR::BinOp::And);
+      auto shifted_res =
+            add_instr<IR::BinOp>(*ty, move(next_name()), *masked,
+                                 *make_intconst(pos, size), IR::BinOp::LShr);
+      store(*shifted_res);
+      return;
+      //assert(false && "UBFX not supported");
     }
     case AArch64::BFMWri:
     case AArch64::BFMXri: {
