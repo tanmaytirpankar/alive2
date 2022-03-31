@@ -918,6 +918,7 @@ class arm2alive_ {
       // C == 1 && Z == 0
       res = add_instr<IR::BinOp>(*ty, move(next_name()), *c_cond, *z_cond,
                                  IR::BinOp::And);
+      break;
     }
     case 5: // GE/LT PSTATE.N == PSTATE.V
     {
@@ -1178,8 +1179,10 @@ public:
         cur_c = add_instr<IR::ICmp>(*ty_i1, move(next_name()), IR::ICmp::UGE,
                                                *a, *b);
 
+        cur_z = add_instr<IR::ICmp>(*ty_i1, move(next_name()), IR::ICmp::EQ,
+                                    *a, *b);
+
         cur_v = new_v;
-        set_z(result);
         set_n(result);
         store(*result);
         break;
