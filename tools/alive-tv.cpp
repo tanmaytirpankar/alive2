@@ -788,27 +788,25 @@ class arm2alive_ {
     auto size = get_size(inst.getOpcode());
 
     assert(op.isImm() || op.isReg());
+
+    IR::Value* v;
+    auto ty = &get_int_type(size);
+
     if (op.isImm()) {
-      // FIXME, figure out immediate size
-      return make_intconst(op.getImm() << shift, size);
+      v = make_intconst(op.getImm(), size);
+    } else if (op.getReg() == AArch64::XZR) {
+      v = make_intconst(0, 64);
+    } else if (op.getReg() == AArch64::WZR) {
+      v = make_intconst(0, 32);
+    } else if (size == 64) {
+      v = getIdentifier(op.getReg(), wrapper->getVarId(idx));
+    } else if (size == 32) {
+      auto tmp = getIdentifier(op.getReg(), wrapper->getVarId(idx));
+      v = add_instr<IR::ConversionOp>(*ty, move(next_name()), *tmp,
+                                                     IR::ConversionOp::Trunc);
+    } else {
+      assert(false && "unhandled case in get_value*");
     }
-
-    if (op.getReg() == AArch64::XZR) {
-      return make_intconst(0, 64);
-    }
-
-    if (op.getReg() == AArch64::WZR) {
-      return make_intconst(0, 32);
-    }
-
-    auto val = getIdentifier(op.getReg(), wrapper->getVarId(idx));
-    if (size == 64) {
-      return val;
-    }
-
-    auto ty = &get_int_type(32);
-    IR::Value *trunc = add_instr<IR::ConversionOp>(*ty, move(next_name()), *val,
-                                                   IR::ConversionOp::Trunc);
 
     if (shift != 0) {
       // yoinked form getShiftType/getShiftValue:
@@ -816,13 +814,13 @@ class arm2alive_ {
       // LLVM encodes its shifts into immediates (ARM doesn't, it has a shift
       // field in the instruction)
       int shift_type = ((shift >> 6) & 0x7);
-      assert(shift_type == 0);
-      trunc = add_instr<IR::BinOp>(*ty, move(next_name()), *trunc,
-                                   *make_intconst(shift & 0x3f, 32),
+      assert(shift_type == 0 && "shift type not supported on instruction");
+      v = add_instr<IR::BinOp>(*ty, move(next_name()), *v,
+                                   *make_intconst(shift & 0x3f, size),
                                    IR::BinOp::Shl);
     }
 
-    return trunc;
+    return v;
   }
 
   std::string next_name() {
@@ -920,6 +918,7 @@ class arm2alive_ {
       // C == 1 && Z == 0
       res = add_instr<IR::BinOp>(*ty, move(next_name()), *c_cond, *z_cond,
                                  IR::BinOp::And);
+      break;
     }
     case 5: // GE/LT PSTATE.N == PSTATE.V
     {
@@ -1180,8 +1179,10 @@ public:
         cur_c = add_instr<IR::ICmp>(*ty_i1, move(next_name()), IR::ICmp::UGE,
                                                *a, *b);
 
+        cur_z = add_instr<IR::ICmp>(*ty_i1, move(next_name()), IR::ICmp::EQ,
+                                    *a, *b);
+
         cur_v = new_v;
-        set_z(result);
         set_n(result);
         store(*result);
         break;
