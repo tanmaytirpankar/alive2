@@ -108,6 +108,11 @@ llvm::cl::opt<bool> opt_backend_tv(
     llvm::cl::desc("Verify operation of a backend (default=false)"),
     llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
 
+llvm::cl::opt<bool>
+    opt_global_isel("use-global-isel",
+                    llvm::cl::desc("Use Global Isel (default=false)"),
+                    llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
+
 llvm::ExitOnError ExitOnErr;
 
 // adapted from llvm-dis.cpp
@@ -2848,7 +2853,10 @@ bool backendTV() {
   auto RM = llvm::Optional<llvm::Reloc::Model>();
   auto TM = Target->createTargetMachine(TripleName, CPU, "", Opt, RM);
   // TODO add later to check with global-isel enabled
-  // TM->setGlobalISel(true);
+  if (opt_global_isel) {
+    TM->setGlobalISel(true);
+  }
+   
   llvm::SmallString<1024> Asm;
   llvm::raw_svector_ostream Dest(Asm);
 
