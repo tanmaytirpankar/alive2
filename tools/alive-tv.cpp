@@ -1032,7 +1032,7 @@ public:
 
       auto isSigned = extendType / 4;
       auto extendSize = ((extendType % 4) + 1) * 8;
-      auto shift = (extendImm >> 6) & 0x7;
+      auto shift = extendImm & 0x7;
 
       auto truncType = &get_int_type(extendSize);
       auto trunc =
@@ -1122,7 +1122,7 @@ public:
 
       auto isSigned = extendType / 4;
       auto extendSize = ((extendType % 4) + 1) * 8;
-      auto shift = (extendImm >> 6) & 0x7;
+      auto shift = extendImm & 0x7;
 
       auto truncType = &get_int_type(extendSize);
       auto trunc =
