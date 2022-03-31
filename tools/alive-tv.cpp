@@ -706,12 +706,12 @@ IR::Value *cur_c{nullptr};
 
 set<int> s_flag = {
     AArch64::ADDSWrs, AArch64::ADDSWri, AArch64::ADDSXrs, AArch64::ADDSXri,
-    AArch64::SUBSWrs, AArch64::SUBSWri, AArch64::SUBSXrs, AArch64::SUBXri,
+    AArch64::SUBSWrs, AArch64::SUBSWri, AArch64::SUBSXrs, AArch64::SUBSXri,
 };
 
 set<int> instrs_32 = {
     AArch64::ADDWrx,  AArch64::ADDSWrs, AArch64::ADDSWri,  AArch64::ADDWrs,
-    AArch64::ADDWri,  AArch64::SUBWri,  AArch64::SUBWrs,   AArch64::SUBWrx,
+    AArch64::ADDWri,  AArch64::ASRVWr, AArch64::SUBWri,  AArch64::SUBWrs,   AArch64::SUBWrx,
     AArch64::SUBSWrs, AArch64::SUBSWri, AArch64::SBFMWri,  AArch64::CSELWr,
     AArch64::ANDWri,  AArch64::ANDWrr,  AArch64::MADDWrrr, AArch64::EORWri,
     AArch64::CSINVWr, AArch64::CSINCWr, AArch64::MOVZWi,   AArch64::MOVNWi,
@@ -722,7 +722,7 @@ set<int> instrs_32 = {
 
 set<int> instrs_64 = {
     AArch64::ADDXrx,  AArch64::ADDSXrs, AArch64::ADDSXri,  AArch64::ADDXrs,
-    AArch64::ADDXri,  AArch64::SUBXri,  AArch64::SUBXrs,   AArch64::SUBXrx,
+    AArch64::ADDXri,  AArch64::ASRVXr, AArch64::SUBXri,  AArch64::SUBXrs,   AArch64::SUBXrx,
     AArch64::SUBSXrs, AArch64::SUBSXri, AArch64::SBFMXri,  AArch64::CSELXr,
     AArch64::ANDXri,  AArch64::ANDXrr,  AArch64::MADDXrrr, AArch64::EORXri,
     AArch64::CSINVXr, AArch64::CSINCXr, AArch64::MOVZXi,   AArch64::MOVNXi,
@@ -1094,6 +1094,16 @@ public:
       auto result =
           add_instr<IR::BinOp>(*ty, move(next_name()), *a, *b, IR::BinOp::Add);
       store(*result);
+      break;
+    }
+    case AArch64::ASRVWr:
+    case AArch64::ASRVXr:
+    {
+      auto a = get_value(1);
+      auto b = get_value(2);
+
+      auto res = add_instr<IR::BinOp>(*ty, move(next_name()), *a, *b, IR::BinOp::AShr);
+      store(*res);
       break;
     }
       // SUBrx is a subtract instruction with an extended register.
