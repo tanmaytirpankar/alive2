@@ -1773,6 +1773,8 @@ public:
     for (auto &v : srcFn->getInputs()) {
       auto &typ = v.getType();
       assert(typ.isIntType());
+      auto input_ptr = dynamic_cast<const IR::Input *>(&v);
+      assert(input_ptr);
 
       auto operand = MCOperand::createReg(AArch64::X0 + (argNum++));
 
@@ -1784,8 +1786,13 @@ public:
 
       stored = add_instr<IR::Freeze>(typ, move(next_name()), *stored);
       if (typ.bits() < 64) {
+        
         auto extended_type = &get_int_type(64);
-        stored = add_instr<IR::ConversionOp>(*extended_type, move(next_name()),
+        if (input_ptr->getAttributes().has(IR::ParamAttrs::Zext))
+          stored = add_instr<IR::ConversionOp>(*extended_type, move(next_name()),
+                                             *stored, IR::ConversionOp::ZExt);
+        else
+          stored = add_instr<IR::ConversionOp>(*extended_type, move(next_name()),
                                              *stored, IR::ConversionOp::SExt);
       }
 
