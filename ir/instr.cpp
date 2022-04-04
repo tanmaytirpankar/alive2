@@ -185,6 +185,13 @@ Value* BinOp::peep() const {
   IntConst *lhsConst = dynamic_cast<IntConst *>(lhs);
   IntConst *rhsConst = dynamic_cast<IntConst *>(rhs);
   switch (op) {
+  case Shl:
+  case AShr:
+  case LShr:
+  case Sub:
+    if (rhsConst && *(rhsConst->getInt()) == 0)
+      return lhs;
+    return nullptr;
   case And:
     if (lhsConst && *(lhsConst->getInt()) == 0)
       return lhs;
