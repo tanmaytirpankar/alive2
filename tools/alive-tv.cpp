@@ -1031,10 +1031,11 @@ public:
       auto extendType = ((extendImm >> 3) & 0x7);
 
       auto isSigned = extendType / 4;
-      auto extendSize = ((extendType % 4) + 1) * 8;
+      // FIXME: this is pretty hacky and we would get rid of it with alive-ssa
+      // auto extendSize = ((extendType % 4) + 1) * 8;
       auto shift = extendImm & 0x7;
 
-      auto truncType = &get_int_type(extendSize);
+      auto truncType = &get_int_type(32);
       auto trunc =
           add_instr<IR::ConversionOp>(*truncType, move(next_name()),
                                       *get_value(2), IR::ConversionOp::Trunc);
@@ -1131,10 +1132,11 @@ public:
       auto extendType = ((extendImm >> 3) & 0x7);
 
       auto isSigned = extendType / 4;
-      auto extendSize = ((extendType % 4) + 1) * 8;
+      // FIXME: this is pretty hacky and we would get rid of it with alive-ssa
+      // auto extendSize = ((extendType % 4) + 1) * 8;
       auto shift = extendImm & 0x7;
 
-      auto truncType = &get_int_type(extendSize);
+      auto truncType = &get_int_type(32);
       auto trunc =
           add_instr<IR::ConversionOp>(*truncType, move(next_name()),
                                       *get_value(2), IR::ConversionOp::Trunc);
