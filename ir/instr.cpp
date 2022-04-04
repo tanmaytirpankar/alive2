@@ -182,15 +182,25 @@ std::optional<IntConst> BinOp::fold() const {
 }
 
 Value* BinOp::peep() const {
-  if (!(op == And || op == Or || op == Add))
-    return nullptr;
   IntConst *lhsConst = dynamic_cast<IntConst *>(lhs);
-  if (lhsConst && *(lhsConst->getInt()) == 0)
-    return rhs;
   IntConst *rhsConst = dynamic_cast<IntConst *>(rhs);
-  if (rhsConst && *(rhsConst->getInt()) == 0)
-    return lhs;
-  return nullptr;
+  switch (op) {
+  case And:
+    if (lhsConst && *(lhsConst->getInt()) == 0)
+      return lhs;
+    if (rhsConst && *(rhsConst->getInt()) == 0)
+      return rhs;
+    return nullptr;
+  case Or:
+  case Add:
+    if (lhsConst && *(lhsConst->getInt()) == 0)
+      return rhs;
+    if (rhsConst && *(rhsConst->getInt()) == 0)
+      return lhs;
+    return nullptr;
+  default:
+    return nullptr;
+  }
 }
 
 void BinOp::rauw(const Value &what, Value &with) {
