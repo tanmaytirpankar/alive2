@@ -1788,12 +1788,12 @@ public:
       if (typ.bits() < 64) {
         
         auto extended_type = &get_int_type(64);
-        if (input_ptr->getAttributes().has(IR::ParamAttrs::Zext))
-          stored = add_instr<IR::ConversionOp>(*extended_type, move(next_name()),
-                                             *stored, IR::ConversionOp::ZExt);
-        else
+        if (input_ptr->getAttributes().has(IR::ParamAttrs::Sext))
           stored = add_instr<IR::ConversionOp>(*extended_type, move(next_name()),
                                              *stored, IR::ConversionOp::SExt);
+        else
+          stored = add_instr<IR::ConversionOp>(*extended_type, move(next_name()),
+                                             *stored, IR::ConversionOp::ZExt);
       }
 
       instructionCount++;
