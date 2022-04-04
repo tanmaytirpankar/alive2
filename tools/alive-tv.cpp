@@ -1786,7 +1786,7 @@ public:
       if (typ.bits() < 64) {
         auto extended_type = &get_int_type(64);
         stored = add_instr<IR::ConversionOp>(*extended_type, move(next_name()),
-                                             *stored, IR::ConversionOp::ZExt);
+                                             *stored, IR::ConversionOp::SExt);
       }
 
       instructionCount++;
