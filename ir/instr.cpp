@@ -155,8 +155,8 @@ std::optional<IntConst> BinOp::fold() const {
   IntConst *rhsConst = dynamic_cast<IntConst *>(rhs);
   if (!lhsConst || !rhsConst)
     return {};
-  const long int *lhsVal = lhsConst->getInt();
-  const long int *rhsVal = rhsConst->getInt();
+  auto *lhsVal = lhsConst->getInt();
+  auto *rhsVal = rhsConst->getInt();
   if (!lhsVal || !rhsVal)
     return {};
   switch (op) {
