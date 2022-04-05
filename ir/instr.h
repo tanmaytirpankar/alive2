@@ -5,7 +5,6 @@
 
 #include "ir/constant.h"
 #include "ir/value.h"
-#include "llvm/ADT/APInt.h"
 #include <optional>
 #include <string>
 #include <utility>
