@@ -1719,8 +1719,8 @@ public:
   }
 
   std::optional<IR::Function> run() {
-    // for now assume that return type is 32-bit integer
-    assert(srcFn->getType().isIntType());
+    if (!srcFn->getType().isIntType())
+      report_fatal_error("Only int types supported for now");
     auto func_return_type = &get_int_type(srcFn->getType().bits());
     if (!func_return_type)
       return {};
@@ -1771,7 +1771,8 @@ public:
     int argNum = 0;
     for (auto &v : srcFn->getInputs()) {
       auto &typ = v.getType();
-      assert(typ.isIntType());
+      if (!typ.isIntType())
+        report_fatal_error("[Unsupported Function Argument]: Only int types supported for now");
       auto input_ptr = dynamic_cast<const IR::Input *>(&v);
       assert(input_ptr);
 
@@ -1976,13 +1977,15 @@ public:
         }
       }
     }
+
+    assert(false && "Could not find target label in arm branch instruction");
     UNREACHABLE();
   }
 
   // Make sure that we have an entry label with no predecessors
   void addEntryBlock() {
     assert(!MF.BBs.empty());
-    if (MF.BBs.size() == 1) // only one blo
+    if (MF.BBs.size() == 1) 
       return;
     MCBasicBlock *firstBlockPtr = &MF.BBs[0];
     bool addEntryBlock = false;
@@ -1994,7 +1997,7 @@ public:
       }
     }
 
-    if (addEntryBlock) {
+    if (addEntryBlock) { // FIXME
       cerr << "ERROR: we need to add an entry block with no predecessors\n";
       exit(1);
     }
@@ -2153,10 +2156,9 @@ public:
         // need to check for special instructions like ret and branch
         // need to check for special destination operands like WZR
 
-        if (Ana_ptr->isCall(mc_instr)) {
-          cout << "ERROR: we don't handle calls yet! Exiting.\n";
-          exit(1);
-        }
+        if (Ana_ptr->isCall(mc_instr)) 
+          report_fatal_error("Function calls not supported yet");
+        
         if (Ana_ptr->isReturn(mc_instr) || Ana_ptr->isBranch(mc_instr)) {
           continue;
         }
@@ -2237,7 +2239,8 @@ public:
 
     for (auto &v : src_fn->getInputs()) {
       auto &typ = v.getType();
-      assert(typ.isIntType());
+      if (!typ.isIntType())
+        report_fatal_error("Only int types supported for now");
       // FIXME. Do a switch statement to figure out which register to start from
       auto start = typ.bits() == 32 ? AArch64::W0 : AArch64::X0;
       auto arg = MCOperand::createReg(start + (arg_num++));
