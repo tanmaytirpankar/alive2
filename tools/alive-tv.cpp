@@ -1,6 +1,7 @@
 // Copyright (c) 2018-present The Alive2 Authors.
 // Distributed under the MIT license that can be found in the LICENSE file.
 
+#include "llvm/MC/MCAsmInfo.h" // include first to avoid ambiguity for comparison operator from util/spaceship.h
 #include "ir/instr.h"
 #include "ir/type.h"
 #include "llvm_util/llvm2alive.h"
@@ -9,7 +10,6 @@
 #include "tools/transform.h"
 #include "util/sort.h"
 #include "util/version.h"
-#include "llvm/MC/MCAsmInfo.h" // include first to avoid ambiguity for comparison operator from util/spaceship.h
 
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseSet.h"
@@ -321,6 +321,8 @@ llvm::Function *findFunction(llvm::Module &M, const string &FName) {
   return 0;
 }
 } // namespace
+
+static llvm::mc::RegisterMCTargetOptionsFlags MOF;
 
 class MCInstWrapper {
 private:
