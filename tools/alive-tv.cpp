@@ -322,8 +322,6 @@ llvm::Function *findFunction(llvm::Module &M, const string &FName) {
 }
 } // namespace
 
-static llvm::mc::RegisterMCTargetOptionsFlags MOF;
-
 class MCInstWrapper {
 private:
   llvm::MCInst instr;
@@ -757,6 +755,9 @@ class arm2alive_ {
   std::vector<std::unique_ptr<IR::Instr>> visitError(MCInstWrapper &I) {
     llvm::errs() << "ERROR: Unsupported arm instruction: "
                  << instrPrinter->getOpcodeName(I.getMCInst().getOpcode());
+    llvm::errs().flush();
+    cout.flush();
+    cerr.flush();
     exit(1); // for now lets exit the program if the arm instruction is not
              // supported
   }
