@@ -712,28 +712,29 @@ IR::Value *cur_c{nullptr};
 set<int> s_flag = {
     AArch64::ADDSWrs, AArch64::ADDSWri, AArch64::ADDSXrs, AArch64::ADDSXri,
     AArch64::SUBSWrs, AArch64::SUBSWri, AArch64::SUBSXrs, AArch64::SUBSXri,
+    AArch64::ANDSWri, AArch64::ANDSXri,
 };
 
 set<int> instrs_32 = {
-    AArch64::ADDWrx, AArch64::ADDSWrs, AArch64::ADDSWri, AArch64::ADDWrs,
-    AArch64::ADDWri, AArch64::ASRVWr,  AArch64::SUBWri,  AArch64::SUBWrs,
-    AArch64::SUBWrx, AArch64::SUBSWrs, AArch64::SUBSWri, AArch64::SBFMWri,
-    AArch64::CSELWr, AArch64::ANDWri,  AArch64::ANDWrr,  AArch64::MADDWrrr,
-    AArch64::EORWri, AArch64::CSINVWr, AArch64::CSINCWr, AArch64::MOVZWi,
-    AArch64::MOVNWi, AArch64::MOVKWi,  AArch64::LSLVWr,  AArch64::LSRVWr,
-    AArch64::ORNWrs, AArch64::UBFMWri, AArch64::BFMWri,  AArch64::ORRWrs,
-    AArch64::ORRWri, AArch64::SDIVWr,  AArch64::UDIVWr,
+    AArch64::ADDWrx,   AArch64::ADDSWrs, AArch64::ADDSWri, AArch64::ADDWrs,
+    AArch64::ADDWri,   AArch64::ASRVWr,  AArch64::SUBWri,  AArch64::SUBWrs,
+    AArch64::SUBWrx,   AArch64::SUBSWrs, AArch64::SUBSWri, AArch64::SBFMWri,
+    AArch64::CSELWr,   AArch64::ANDWri,  AArch64::ANDWrr,  AArch64::MADDWrrr,
+    AArch64::MSUBWrrr, AArch64::EORWri,  AArch64::CSINVWr, AArch64::CSINCWr,
+    AArch64::MOVZWi,   AArch64::MOVNWi,  AArch64::MOVKWi,  AArch64::LSLVWr,
+    AArch64::LSRVWr,   AArch64::ORNWrs,  AArch64::UBFMWri, AArch64::BFMWri,
+    AArch64::ORRWrs,   AArch64::ORRWri,  AArch64::SDIVWr,  AArch64::UDIVWr,
 };
 
 set<int> instrs_64 = {
-    AArch64::ADDXrx, AArch64::ADDSXrs, AArch64::ADDSXri, AArch64::ADDXrs,
-    AArch64::ADDXri, AArch64::ASRVXr,  AArch64::SUBXri,  AArch64::SUBXrs,
-    AArch64::SUBXrx, AArch64::SUBSXrs, AArch64::SUBSXri, AArch64::SBFMXri,
-    AArch64::CSELXr, AArch64::ANDXri,  AArch64::ANDXrr,  AArch64::MADDXrrr,
-    AArch64::EORXri, AArch64::CSINVXr, AArch64::CSINCXr, AArch64::MOVZXi,
-    AArch64::MOVNXi, AArch64::MOVKXi,  AArch64::LSLVXr,  AArch64::LSRVXr,
-    AArch64::ORNXrs, AArch64::UBFMXri, AArch64::BFMXri,  AArch64::ORRXrs,
-    AArch64::ORRXri, AArch64::SDIVXr,  AArch64::UDIVXr,
+    AArch64::ADDXrx,   AArch64::ADDSXrs, AArch64::ADDSXri, AArch64::ADDXrs,
+    AArch64::ADDXri,   AArch64::ASRVXr,  AArch64::SUBXri,  AArch64::SUBXrs,
+    AArch64::SUBXrx,   AArch64::SUBSXrs, AArch64::SUBSXri, AArch64::SBFMXri,
+    AArch64::CSELXr,   AArch64::ANDXri,  AArch64::ANDXrr,  AArch64::MADDXrrr,
+    AArch64::MSUBXrrr, AArch64::EORXri,  AArch64::CSINVXr, AArch64::CSINCXr,
+    AArch64::MOVZXi,   AArch64::MOVNXi,  AArch64::MOVKXi,  AArch64::LSLVXr,
+    AArch64::LSRVXr,   AArch64::ORNXrs,  AArch64::UBFMXri, AArch64::BFMXri,
+    AArch64::ORRXrs,   AArch64::ORRXri,  AArch64::SDIVXr,  AArch64::UDIVXr,
 };
 
 bool has_s(int instr) {
@@ -755,10 +756,13 @@ class arm2alive_ {
   unsigned int curId;
 
   std::vector<std::unique_ptr<IR::Instr>> visitError(MCInstWrapper &I) {
+    // flush must happen before error is printed to make sure the error
+    // comes out nice and pretty when combing the stdout/stderr in scripts
+    cout.flush();
+
     llvm::errs() << "ERROR: Unsupported arm instruction: "
                  << instrPrinter->getOpcodeName(I.getMCInst().getOpcode());
     llvm::errs().flush();
-    cout.flush();
     cerr.flush();
     exit(1); // for now lets exit the program if the arm instruction is not
              // supported
@@ -1225,7 +1229,9 @@ public:
     case AArch64::ANDWri:
     case AArch64::ANDWrr:
     case AArch64::ANDXri:
-    case AArch64::ANDXrr: {
+    case AArch64::ANDXrr:
+    case AArch64::ANDSWri:
+    case AArch64::ANDSXri: {
       IR::Value *rhs;
       if (mc_inst.getOperand(2).isImm()) {
         auto imm = decodeLogicalImmediate(mc_inst.getOperand(2).getImm(), size);
@@ -1236,6 +1242,15 @@ public:
 
       auto and_op = add_instr<IR::BinOp>(*ty, next_name(), *get_value(1), *rhs,
                                          IR::BinOp::And);
+
+      if (has_s(opcode)) {
+        set_n(and_op);
+        set_z(and_op);
+
+        cur_c = make_intconst(0, 1);
+        cur_v = make_intconst(0, 1);
+      }
+
       store(*and_op);
       break;
     }
@@ -1250,6 +1265,19 @@ public:
       auto add =
           add_instr<IR::BinOp>(*ty, next_name(), *mul, *addend, IR::BinOp::Add);
       store(*add);
+      break;
+    }
+    case AArch64::MSUBWrrr:
+    case AArch64::MSUBXrrr: {
+      auto mul_lhs = get_value(1, 0);
+      auto mul_rhs = get_value(2, 0);
+      auto minuend = get_value(3, 0);
+
+      auto mul = add_instr<IR::BinOp>(*ty, move(next_name()), *mul_lhs,
+                                      *mul_rhs, IR::BinOp::Mul);
+      auto sub = add_instr<IR::BinOp>(*ty, move(next_name()), *mul, *minuend,
+                                      IR::BinOp::Sub);
+      store(*sub);
       break;
     }
     case AArch64::SBFMWri:
