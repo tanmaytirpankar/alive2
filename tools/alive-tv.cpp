@@ -1273,9 +1273,9 @@ public:
       auto mul_rhs = get_value(2, 0);
       auto minuend = get_value(3, 0);
 
-      auto mul = add_instr<IR::BinOp>(*ty, move(next_name()), *mul_lhs,
+      auto mul = add_instr<IR::BinOp>(*ty, next_name(), *mul_lhs,
                                       *mul_rhs, IR::BinOp::Mul);
-      auto sub = add_instr<IR::BinOp>(*ty, move(next_name()), *mul, *minuend,
+      auto sub = add_instr<IR::BinOp>(*ty, next_name(), *minuend, *mul,
                                       IR::BinOp::Sub);
       store(*sub);
       break;
