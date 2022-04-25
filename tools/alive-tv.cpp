@@ -712,29 +712,31 @@ IR::Value *cur_c{nullptr};
 set<int> s_flag = {
     AArch64::ADDSWrs, AArch64::ADDSWri, AArch64::ADDSXrs, AArch64::ADDSXri,
     AArch64::SUBSWrs, AArch64::SUBSWri, AArch64::SUBSXrs, AArch64::SUBSXri,
-    AArch64::ANDSWri, AArch64::ANDSXri,
+    AArch64::SUBSWrx, AArch64::SUBSXrx, AArch64::ANDSWri, AArch64::ANDSXri,
 };
 
 set<int> instrs_32 = {
-    AArch64::ADDWrx,   AArch64::ADDSWrs, AArch64::ADDSWri, AArch64::ADDWrs,
-    AArch64::ADDWri,   AArch64::ASRVWr,  AArch64::SUBWri,  AArch64::SUBWrs,
-    AArch64::SUBWrx,   AArch64::SUBSWrs, AArch64::SUBSWri, AArch64::SBFMWri,
-    AArch64::CSELWr,   AArch64::ANDWri,  AArch64::ANDWrr,  AArch64::MADDWrrr,
-    AArch64::MSUBWrrr, AArch64::EORWri,  AArch64::CSINVWr, AArch64::CSINCWr,
-    AArch64::MOVZWi,   AArch64::MOVNWi,  AArch64::MOVKWi,  AArch64::LSLVWr,
-    AArch64::LSRVWr,   AArch64::ORNWrs,  AArch64::UBFMWri, AArch64::BFMWri,
-    AArch64::ORRWrs,   AArch64::ORRWri,  AArch64::SDIVWr,  AArch64::UDIVWr,
+    AArch64::ADDWrx,  AArch64::ADDSWrs,  AArch64::ADDSWri,  AArch64::ADDWrs,
+    AArch64::ADDWri,  AArch64::ASRVWr,   AArch64::SUBWri,   AArch64::SUBWrs,
+    AArch64::SUBWrx,  AArch64::SUBSWrs,  AArch64::SUBSWri,  AArch64::SUBSWrx,
+    AArch64::SBFMWri, AArch64::CSELWr,   AArch64::ANDWri,   AArch64::ANDWrr,
+    AArch64::ANDSWri, AArch64::MADDWrrr, AArch64::MSUBWrrr, AArch64::EORWri,
+    AArch64::CSINVWr, AArch64::CSINCWr,  AArch64::MOVZWi,   AArch64::MOVNWi,
+    AArch64::MOVKWi,  AArch64::LSLVWr,   AArch64::LSRVWr,   AArch64::ORNWrs,
+    AArch64::UBFMWri, AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,
+    AArch64::SDIVWr,  AArch64::UDIVWr,   AArch64::EXTRWrri,
 };
 
 set<int> instrs_64 = {
-    AArch64::ADDXrx,   AArch64::ADDSXrs, AArch64::ADDSXri, AArch64::ADDXrs,
-    AArch64::ADDXri,   AArch64::ASRVXr,  AArch64::SUBXri,  AArch64::SUBXrs,
-    AArch64::SUBXrx,   AArch64::SUBSXrs, AArch64::SUBSXri, AArch64::SBFMXri,
-    AArch64::CSELXr,   AArch64::ANDXri,  AArch64::ANDXrr,  AArch64::MADDXrrr,
-    AArch64::MSUBXrrr, AArch64::EORXri,  AArch64::CSINVXr, AArch64::CSINCXr,
-    AArch64::MOVZXi,   AArch64::MOVNXi,  AArch64::MOVKXi,  AArch64::LSLVXr,
-    AArch64::LSRVXr,   AArch64::ORNXrs,  AArch64::UBFMXri, AArch64::BFMXri,
-    AArch64::ORRXrs,   AArch64::ORRXri,  AArch64::SDIVXr,  AArch64::UDIVXr,
+    AArch64::ADDXrx,  AArch64::ADDSXrs,  AArch64::ADDSXri,  AArch64::ADDXrs,
+    AArch64::ADDXri,  AArch64::ASRVXr,   AArch64::SUBXri,   AArch64::SUBXrs,
+    AArch64::SUBXrx,  AArch64::SUBSXrs,  AArch64::SUBSXri,  AArch64::SUBSXrx,
+    AArch64::SBFMXri, AArch64::CSELXr,   AArch64::ANDXri,   AArch64::ANDXrr,
+    AArch64::ANDSXri, AArch64::MADDXrrr, AArch64::MSUBXrrr, AArch64::EORXri,
+    AArch64::CSINVXr, AArch64::CSINCXr,  AArch64::MOVZXi,   AArch64::MOVNXi,
+    AArch64::MOVKXi,  AArch64::LSLVXr,   AArch64::LSRVXr,   AArch64::ORNXrs,
+    AArch64::UBFMXri, AArch64::BFMXri,   AArch64::ORRXrs,   AArch64::ORRXri,
+    AArch64::SDIVXr,  AArch64::UDIVXr,   AArch64::EXTRXrri,
 };
 
 bool has_s(int instr) {
@@ -1128,52 +1130,56 @@ public:
       // Since the types repeat byte, half word, word, etc. for signed and
       // unsigned extensions, we can use ((extendType % 4) + 1) * 8 to calculate
       // the byte size
-    case AArch64::SUBWrx:
-    case AArch64::SUBXrx: {
-      auto extendImm = mc_inst.getOperand(3).getImm();
-      auto extendType = ((extendImm >> 3) & 0x7);
-
-      auto isSigned = extendType / 4;
-      // FIXME: this is pretty hacky and we would get rid of it with alive-ssa
-      // auto extendSize = ((extendType % 4) + 1) * 8;
-      auto shift = extendImm & 0x7;
-
-      auto truncType = &get_int_type(32);
-      auto trunc = add_instr<IR::ConversionOp>(
-          *truncType, next_name(), *get_value(2), IR::ConversionOp::Trunc);
-
-      IR::Value *extended;
-      if (isSigned) {
-        extended = add_instr<IR::ConversionOp>(*ty, next_name(), *trunc,
-                                               IR::ConversionOp::SExt);
-      } else {
-        extended = add_instr<IR::ConversionOp>(*ty, next_name(), *trunc,
-                                               IR::ConversionOp::ZExt);
-      }
-
-      auto shifted =
-          add_instr<IR::BinOp>(*ty, next_name(), *extended,
-                               *make_intconst(shift, size), IR::BinOp::Shl);
-
-      auto sub = add_instr<IR::BinOp>(*ty, next_name(), *get_value(1), *shifted,
-                                      IR::BinOp::Sub);
-      store(*sub);
-      break;
-    }
     case AArch64::SUBWri:
     case AArch64::SUBWrs:
+    case AArch64::SUBWrx:
     case AArch64::SUBSWrs:
     case AArch64::SUBSWri:
+    case AArch64::SUBSWrx:
     case AArch64::SUBXri:
     case AArch64::SUBXrs:
+    case AArch64::SUBXrx:
     case AArch64::SUBSXrs:
-    case AArch64::SUBSXri: {
+    case AArch64::SUBSXri:
+    case AArch64::SUBSXrx:{
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
       assert(mc_inst.getOperand(3).isImm());
 
       // convert lhs, rhs operands to IR::Values
       auto a = get_value(1);
-      auto b = get_value(2, mc_inst.getOperand(3).getImm());
+      IR::Value* b;
+      switch (opcode) {
+      case AArch64::SUBWrx:
+      case AArch64::SUBSWrx:
+      case AArch64::SUBXrx:
+      case AArch64::SUBSXrx: {
+        auto extendImm = mc_inst.getOperand(3).getImm();
+        auto extendType = ((extendImm >> 3) & 0x7);
+
+        auto isSigned = extendType / 4;
+        // FIXME: this is pretty hacky and we would get rid of it with alive-ssa
+        // extendSize is necessary so that we can start with the word size
+        // ARM wants us to (byte, half, full) and then sign extend to a new
+        // size. Without extendSize being used for a trunc, a lot of masking
+        // and more manual work to sign extend would be necessary
+        auto extendSize = ((extendType % 4) + 1) * 8;
+        auto shift = extendImm & 0x7;
+
+        auto truncType = &get_int_type(extendSize:);
+        auto trunc = add_instr<IR::ConversionOp>(
+            *truncType, next_name(), *get_value(2), IR::ConversionOp::Trunc);
+
+        IR::Value *extended;
+        extended = add_instr<IR::ConversionOp>(
+            *ty, next_name(), *trunc,
+            isSigned ? IR::ConversionOp::SExt : IR::ConversionOp::ZExt);
+        b = add_instr<IR::BinOp>(*ty, next_name(), *extended,
+                                 *make_intconst(shift, size), IR::BinOp::Shl);
+        break;
+      }
+      default:
+        b = get_value(2, mc_inst.getOperand(3).getImm());
+      }
 
       // make sure that lhs and rhs conversion succeeded, type lookup succeeded
       if (!ty || !a || !b)
@@ -1666,7 +1672,7 @@ public:
       assert(false && "ORR with immediates not supported");
       auto lhs = get_value(1);
 
-      auto imm = mc_inst.getOperand(2).isImm();
+      auto imm = mc_inst.getOperand(2).getImm();
       auto [decoded, _] =
           decode_bit_mask(size == 64, imm & (-1 << 6), imm >> 6, true, size);
 
@@ -1706,6 +1712,17 @@ public:
 
       auto result =
           add_instr<IR::BinOp>(*ty, next_name(), *lhs, *rhs, IR::BinOp::UDiv);
+      store(*result);
+      break;
+    }
+    case AArch64::EXTRWrri:
+    case AArch64::EXTRXrri: {
+      auto op1 = get_value(1);
+      auto op2 = get_value(2);
+      auto shift = get_value(3);
+
+      auto result =
+          add_instr<IR::TernaryOp>(*ty, next_name(), *op1, *op2, *shift, IR::TernaryOp::FShr);
       store(*result);
       break;
     }
