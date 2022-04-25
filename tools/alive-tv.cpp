@@ -1165,7 +1165,7 @@ public:
         auto extendSize = ((extendType % 4) + 1) * 8;
         auto shift = extendImm & 0x7;
 
-        auto truncType = &get_int_type(extendSize:);
+        auto truncType = &get_int_type(extendSize);
         auto trunc = add_instr<IR::ConversionOp>(
             *truncType, next_name(), *get_value(2), IR::ConversionOp::Trunc);
 
