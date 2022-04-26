@@ -1647,11 +1647,7 @@ public:
         store(*dst);
         return;
       }
-      //        mvn     w8, w0
-      //        mov     x9, #-12
-      //        movk    x9, #32767, lsl #48
-      //        lsr     x0, x9, x8
-      //        ret
+
       // LSR is preferred when imms == 31 or 63 (size - 1)
       if (imms == size - 1) {
         auto dst =
