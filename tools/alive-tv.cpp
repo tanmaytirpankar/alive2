@@ -710,10 +710,30 @@ IR::Value *cur_n{nullptr};
 IR::Value *cur_c{nullptr};
 
 set<int> s_flag = {
-    AArch64::ADDSWrs, AArch64::ADDSWri, AArch64::ADDSXrs, AArch64::ADDSXri,
-    AArch64::SUBSWrs, AArch64::SUBSWri, AArch64::SUBSXrs, AArch64::SUBSXri,
-    AArch64::SUBSWrx, AArch64::SUBSXrx, AArch64::ANDSWri, AArch64::ANDSWrr,
-    AArch64::ANDSWrs, AArch64::ANDSXri, AArch64::ANDSXrr, AArch64::ANDSXrs,
+    // ADDSW
+    AArch64::ADDSWri,
+    AArch64::ADDSWrs,
+    AArch64::ADDSWrx,
+    // ADDSX
+    AArch64::ADDSXri,
+    AArch64::ADDSXrs,
+    AArch64::ADDSXrx,
+    // SUBSW
+    AArch64::SUBSWri,
+    AArch64::SUBSWrs,
+    AArch64::SUBSWrx,
+    // SUBSX
+    AArch64::SUBSXri,
+    AArch64::SUBSXrs,
+    AArch64::SUBSXrx,
+    // ANDSW
+    AArch64::ANDSWri,
+    AArch64::ANDSWrr,
+    AArch64::ANDSWrs,
+    // ANDSX
+    AArch64::ANDSXri,
+    AArch64::ANDSXrr,
+    AArch64::ANDSXrs,
 };
 
 set<int> instrs_32 = {
