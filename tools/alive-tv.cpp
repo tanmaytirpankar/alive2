@@ -712,31 +712,33 @@ IR::Value *cur_c{nullptr};
 set<int> s_flag = {
     AArch64::ADDSWrs, AArch64::ADDSWri, AArch64::ADDSXrs, AArch64::ADDSXri,
     AArch64::SUBSWrs, AArch64::SUBSWri, AArch64::SUBSXrs, AArch64::SUBSXri,
-    AArch64::SUBSWrx, AArch64::SUBSXrx, AArch64::ANDSWri, AArch64::ANDSXri,
+    AArch64::SUBSWrx, AArch64::SUBSXrx, AArch64::ANDSWri, AArch64::ANDSWrr,
+    AArch64::ANDSWrs, AArch64::ANDSXri, AArch64::ANDSXrr, AArch64::ANDSXrs,
 };
 
 set<int> instrs_32 = {
-    AArch64::ADDWrx,  AArch64::ADDSWrs,  AArch64::ADDSWri,  AArch64::ADDWrs,
-    AArch64::ADDWri,  AArch64::ASRVWr,   AArch64::SUBWri,   AArch64::SUBWrs,
-    AArch64::SUBWrx,  AArch64::SUBSWrs,  AArch64::SUBSWri,  AArch64::SUBSWrx,
-    AArch64::SBFMWri, AArch64::CSELWr,   AArch64::ANDWri,   AArch64::ANDWrr,
-    AArch64::ANDSWri, AArch64::MADDWrrr, AArch64::MSUBWrrr, AArch64::EORWri,
-    AArch64::CSINVWr, AArch64::CSINCWr,  AArch64::MOVZWi,   AArch64::MOVNWi,
-    AArch64::MOVKWi,  AArch64::LSLVWr,   AArch64::LSRVWr,   AArch64::ORNWrs,
-    AArch64::UBFMWri, AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,
-    AArch64::SDIVWr,  AArch64::UDIVWr,   AArch64::EXTRWrri,
+    AArch64::ADDWrx,   AArch64::ADDSWrs,  AArch64::ADDSWri, AArch64::ADDWrs,
+    AArch64::ADDWri,   AArch64::ASRVWr,   AArch64::SUBWri,  AArch64::SUBWrs,
+    AArch64::SUBWrx,   AArch64::SUBSWrs,  AArch64::SUBSWri, AArch64::SUBSWrx,
+    AArch64::SBFMWri,  AArch64::CSELWr,   AArch64::ANDWri,  AArch64::ANDWrr,
+    AArch64::ANDWrs,   AArch64::ANDSWri,  AArch64::ANDSWrr, AArch64::ANDSWrs,
+    AArch64::MADDWrrr, AArch64::MSUBWrrr, AArch64::EORWri,  AArch64::CSINVWr,
+    AArch64::CSINCWr,  AArch64::MOVZWi,   AArch64::MOVNWi,  AArch64::MOVKWi,
+    AArch64::LSLVWr,   AArch64::LSRVWr,   AArch64::ORNWrs,  AArch64::UBFMWri,
+    AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,  AArch64::SDIVWr,
+    AArch64::UDIVWr,   AArch64::EXTRWrri,
 };
 
 set<int> instrs_64 = {
-    AArch64::ADDXrx,  AArch64::ADDSXrs,  AArch64::ADDSXri,  AArch64::ADDXrs,
-    AArch64::ADDXri,  AArch64::ASRVXr,   AArch64::SUBXri,   AArch64::SUBXrs,
-    AArch64::SUBXrx,  AArch64::SUBSXrs,  AArch64::SUBSXri,  AArch64::SUBSXrx,
-    AArch64::SBFMXri, AArch64::CSELXr,   AArch64::ANDXri,   AArch64::ANDXrr,
-    AArch64::ANDSXri, AArch64::MADDXrrr, AArch64::MSUBXrrr, AArch64::EORXri,
-    AArch64::CSINVXr, AArch64::CSINCXr,  AArch64::MOVZXi,   AArch64::MOVNXi,
-    AArch64::MOVKXi,  AArch64::LSLVXr,   AArch64::LSRVXr,   AArch64::ORNXrs,
-    AArch64::UBFMXri, AArch64::BFMXri,   AArch64::ORRXrs,   AArch64::ORRXri,
-    AArch64::SDIVXr,  AArch64::UDIVXr,   AArch64::EXTRXrri,
+    AArch64::ADDXrx,   AArch64::ADDSXrs,  AArch64::ADDSXri, AArch64::ADDXrs,
+    AArch64::ADDXri,   AArch64::ASRVXr,   AArch64::SUBXri,  AArch64::SUBXrs,
+    AArch64::SUBXrx,   AArch64::SUBSXrs,  AArch64::SUBSXri, AArch64::SUBSXrx,
+    AArch64::SBFMXri,  AArch64::CSELXr,   AArch64::ANDXri,  AArch64::ANDXrr,
+    AArch64::ANDXrs,   AArch64::ANDSXri,  AArch64::ANDSXrr, AArch64::ANDSXrs,
+    AArch64::MADDXrrr, AArch64::MSUBXrrr, AArch64::EORXri,  AArch64::CSINVXr,
+    AArch64::CSINCXr,  AArch64::MOVZXi,   AArch64::MOVNXi,  AArch64::MOVKXi,
+    AArch64::LSLVXr,   AArch64::LSRVXr,   AArch64::ORNXrs,  AArch64::UBFMXri,
+    AArch64::BFMXri,   AArch64::ORRXrs,   AArch64::ORRXri,  AArch64::SDIVXr,  AArch64::UDIVXr,   AArch64::EXTRXrri,
 };
 
 bool has_s(int instr) {
@@ -786,6 +788,43 @@ class arm2alive_ {
     UNREACHABLE();
   }
 
+  // yoinked form getShiftType/getShiftValue:
+  // https://github.com/llvm/llvm-project/blob/93d1a623cecb6f732db7900baf230a13e6ac6c6a/llvm/lib/Target/AArch64/MCTargetDesc/AArch64AddressingModes.h#L74
+  // LLVM encodes its shifts into immediates (ARM doesn't, it has a shift
+  // field in the instruction)
+  IR::Value *reg_shift(IR::Value* value, int encodedShift) {
+    int shift_type = ((encodedShift >> 6) & 0x7);
+    auto typ = &value->getType();
+
+    IR::BinOp::Op op;
+
+    cout << "shift type: " << shift_type << "\n";
+    switch (shift_type) {
+    case 0:
+      op = IR::BinOp::Shl;
+      break;
+    case 1:
+      op = IR::BinOp::LShr;
+      break;
+    case 2:
+      op = IR::BinOp::AShr;
+    default:
+      // FIXME: handle other two cases (ror/msl)
+      assert(false && "shift type not supported");
+    }
+
+    cout << "typ->bits(): " << typ->bits() << "\n";
+
+    return add_instr<IR::BinOp>(*typ, next_name(), *value,
+                             *make_intconst(encodedShift & 0x3f, typ->bits()),
+                             op);
+  }
+
+  IR::Value *reg_shift(int value, int size, int encodedShift) {
+    auto v = make_intconst(value, size);
+    return reg_shift(v, encodedShift);
+  }
+
   IR::Value *getIdentifier(int reg, int id) {
     auto val = mc_get_operand(reg, id);
 
@@ -823,15 +862,7 @@ class arm2alive_ {
     }
 
     if (shift != 0) {
-      // yoinked form getShiftType/getShiftValue:
-      // https://github.com/llvm/llvm-project/blob/93d1a623cecb6f732db7900baf230a13e6ac6c6a/llvm/lib/Target/AArch64/MCTargetDesc/AArch64AddressingModes.h#L74
-      // LLVM encodes its shifts into immediates (ARM doesn't, it has a shift
-      // field in the instruction)
-      int shift_type = ((shift >> 6) & 0x7);
-      assert(shift_type == 0 && "shift type not supported on instruction");
-      v = add_instr<IR::BinOp>(*ty, next_name(), *v,
-                               *make_intconst(shift & 0x3f, size),
-                               IR::BinOp::Shl);
+      v = reg_shift(v, shift);
     }
 
     return v;
@@ -1031,47 +1062,64 @@ public:
     auto ty = &get_int_type(size);
 
     switch (opcode) {
-    case AArch64::ADDWrx:
-    case AArch64::ADDXrx: {
-      auto extendImm = mc_inst.getOperand(3).getImm();
-      auto extendType = ((extendImm >> 3) & 0x7);
-
-      auto isSigned = extendType / 4;
-      // FIXME: this is pretty hacky and we would get rid of it with alive-ssa
-      // auto extendSize = ((extendType % 4) + 1) * 8;
-      auto shift = extendImm & 0x7;
-
-      auto truncType = &get_int_type(32);
-      auto trunc = add_instr<IR::ConversionOp>(
-          *truncType, next_name(), *get_value(2), IR::ConversionOp::Trunc);
-
-      IR::Value *extended;
-      if (isSigned) {
-        extended = add_instr<IR::ConversionOp>(*ty, next_name(), *trunc,
-                                               IR::ConversionOp::SExt);
-      } else {
-        extended = add_instr<IR::ConversionOp>(*ty, next_name(), *trunc,
-                                               IR::ConversionOp::ZExt);
-      }
-
-      auto shifted =
-          add_instr<IR::BinOp>(*ty, next_name(), *extended,
-                               *make_intconst(shift, size), IR::BinOp::Shl);
-      auto add = add_instr<IR::BinOp>(*ty, next_name(), *get_value(1), *shifted,
-                                      IR::BinOp::Add);
-      store(*add);
-      return;
-    }
     case AArch64::ADDWrs:
     case AArch64::ADDWri:
+    case AArch64::ADDWrx:
     case AArch64::ADDSWrs:
     case AArch64::ADDSWri:
+    case AArch64::ADDSWrx:
     case AArch64::ADDXrs:
     case AArch64::ADDXri:
+    case AArch64::ADDXrx:
     case AArch64::ADDSXrs:
-    case AArch64::ADDSXri: {
+    case AArch64::ADDSXri:
+    case AArch64::ADDSXrx: {
       auto a = get_value(1);
-      auto b = get_value(2, mc_inst.getOperand(3).getImm());
+      IR::Value* b;
+
+      switch (opcode) {
+      case AArch64::ADDWrx:
+      case AArch64::ADDSWrx:
+      case AArch64::ADDXrx:
+      case AArch64::ADDSXrx: {
+        auto extendImm = mc_inst.getOperand(3).getImm();
+        auto extendType = ((extendImm >> 3) & 0x7);
+
+        cout << "extendImm: " << extendImm << ", extendType: " << extendType << "\n";
+
+        auto isSigned = extendType / 4;
+
+        // extendSize is necessary so that we can start with the word size
+        // ARM wants us to (byte, half, full) and then sign extend to a new
+        // size. Without extendSize being used for a trunc, a lot of masking
+        // and more manual work to sign extend would be necessary
+        unsigned int extendSize = 8 << (extendType % 4);
+        auto shift = extendImm & 0x7;
+
+        b = get_value(2);
+
+        // Make sure to not to trunc to the same size as the parameter.
+        // Sometimes ADDrx is generated using 32 bit registers and "extends" to
+        // a 32 bit value. This is seen as a type error in Alive, but is valid ARM
+        if (extendSize != ty->bits()) {
+          auto truncType = &get_int_type(extendSize);
+          b = add_instr<IR::ConversionOp>(
+              *truncType, next_name(), *b, IR::ConversionOp::Trunc);
+          b = add_instr<IR::ConversionOp>(
+              *ty, next_name(), *b,
+              isSigned ? IR::ConversionOp::SExt : IR::ConversionOp::ZExt);
+        }
+
+        // shift may not be there, it may just be the extend
+        if (shift != 0) {
+          b = add_instr<IR::BinOp>(*ty, next_name(), *b,
+                                   *make_intconst(shift, size), IR::BinOp::Shl);
+        }
+        break;}
+      default:
+        b = get_value(2, mc_inst.getOperand(3).getImm());
+        break;
+      }
 
       if (has_s(opcode)) {
         auto overflow_type = sadd_overflow_type(mc_inst.getOperand(1), size);
@@ -1098,7 +1146,6 @@ public:
         set_z(result);
 
         store(*result);
-        break;
       }
 
       auto result =
@@ -1128,8 +1175,8 @@ public:
       // 111 -> sxtx
       // To figure out if the extension is signed, we can use (extendType / 4)
       // Since the types repeat byte, half word, word, etc. for signed and
-      // unsigned extensions, we can use ((extendType % 4) + 1) * 8 to calculate
-      // the byte size
+      // unsigned extensions, we can use 8 << (extendType % 4) to calculate
+      // the extension's byte size
     case AArch64::SUBWri:
     case AArch64::SUBWrs:
     case AArch64::SUBWrx:
@@ -1157,24 +1204,32 @@ public:
         auto extendType = ((extendImm >> 3) & 0x7);
 
         auto isSigned = extendType / 4;
-        // FIXME: this is pretty hacky and we would get rid of it with alive-ssa
         // extendSize is necessary so that we can start with the word size
         // ARM wants us to (byte, half, full) and then sign extend to a new
         // size. Without extendSize being used for a trunc, a lot of masking
         // and more manual work to sign extend would be necessary
-        auto extendSize = ((extendType % 4) + 1) * 8;
+        unsigned int extendSize = 8 << (extendType % 4);
         auto shift = extendImm & 0x7;
 
-        auto truncType = &get_int_type(extendSize);
-        auto trunc = add_instr<IR::ConversionOp>(
-            *truncType, next_name(), *get_value(2), IR::ConversionOp::Trunc);
+        b = get_value(2);
 
-        IR::Value *extended;
-        extended = add_instr<IR::ConversionOp>(
-            *ty, next_name(), *trunc,
-            isSigned ? IR::ConversionOp::SExt : IR::ConversionOp::ZExt);
-        b = add_instr<IR::BinOp>(*ty, next_name(), *extended,
-                                 *make_intconst(shift, size), IR::BinOp::Shl);
+        // Make sure to not to trunc to the same size as the parameter.
+        // Sometimes SUBrx is generated using 32 bit registers and "extends" to
+        // a 32 bit value. This is seen as a type error in Alive, but is valid ARM
+        if (extendSize != ty->bits()) {
+          auto truncType = &get_int_type(extendSize);
+          b = add_instr<IR::ConversionOp>(
+              *truncType, next_name(), *b, IR::ConversionOp::Trunc);
+          b = add_instr<IR::ConversionOp>(
+              *ty, next_name(), *b,
+              isSigned ? IR::ConversionOp::SExt : IR::ConversionOp::ZExt);
+        }
+
+        // shift may not be there, it may just be the extend
+        if (shift != 0) {
+          b = add_instr<IR::BinOp>(*ty, next_name(), *b,
+                                   *make_intconst(shift, size), IR::BinOp::Shl);
+        }
         break;
       }
       default:
@@ -1234,16 +1289,30 @@ public:
     }
     case AArch64::ANDWri:
     case AArch64::ANDWrr:
+    case AArch64::ANDWrs:
+    case AArch64::ANDSWri:
+    case AArch64::ANDSWrr:
+    case AArch64::ANDSWrs:
     case AArch64::ANDXri:
     case AArch64::ANDXrr:
-    case AArch64::ANDSWri:
-    case AArch64::ANDSXri: {
+    case AArch64::ANDXrs:
+    case AArch64::ANDSXri:
+    case AArch64::ANDSXrr:
+    case AArch64::ANDSXrs:{
       IR::Value *rhs;
       if (mc_inst.getOperand(2).isImm()) {
         auto imm = decodeLogicalImmediate(mc_inst.getOperand(2).getImm(), size);
         rhs = make_intconst(imm, size);
+
       } else {
         rhs = get_value(2);
+      }
+
+      // We are in a ANDrs case. We need to handle a shift
+      if (mc_inst.getNumOperands() == 4) {
+        // the 4th operand (if it exists) must be an immediate
+        assert(mc_inst.getOperand(3).isImm());
+        rhs = reg_shift(rhs, mc_inst.getOperand(3).getImm());
       }
 
       auto and_op = add_instr<IR::BinOp>(*ty, next_name(), *get_value(1), *rhs,
@@ -1500,6 +1569,7 @@ public:
       auto lhs = get_value(1);
       auto rhs = get_value(2);
 
+
       auto exp = add_instr<IR::TernaryOp>(*ty, next_name(), *zero, *lhs, *rhs,
                                           IR::TernaryOp::FShr);
       store(*exp);
@@ -1525,7 +1595,7 @@ public:
       auto lhs = get_value(2, mc_inst.getOperand(3).getImm());
 
       auto bottom_bits = make_intconst(
-          ~(((uint64_t)0xFF) << mc_inst.getOperand(3).getImm()), size);
+          ~(((uint64_t)0xFFFF) << mc_inst.getOperand(3).getImm()), size);
       auto cleared = add_instr<IR::BinOp>(*ty, next_name(), *dest, *bottom_bits,
                                           IR::BinOp::And);
 
@@ -1557,7 +1627,11 @@ public:
         store(*dst);
         return;
       }
-
+      //        mvn     w8, w0
+      //        mov     x9, #-12
+      //        movk    x9, #32767, lsl #48
+      //        lsr     x0, x9, x8
+      //        ret
       // LSR is preferred when imms == 31 or 63 (size - 1)
       if (imms == size - 1) {
         auto dst =
