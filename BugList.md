@@ -92,4 +92,4 @@ Please contact us or submit a PR if something is missing or inaccurate.
 1. GlobalIsel miscompiles an llvm.fshl instruction (https://github.com/llvm/llvm-project/issues/55003)
 2. Incorrect optimization of sitofp/fptosi roundtrip (https://github.com/llvm/llvm-project/issues/55150)
 3. GlobalIsel miscompiles a zero-extended logical shift right (https://github.com/llvm/llvm-project/issues/55129)
-4. Miscompilation on a shift followed by an icmp instruction (TBD)
+4. Miscompilation on a shift followed by an icmp instruction (https://github.com/llvm/llvm-project/issues/55178)
