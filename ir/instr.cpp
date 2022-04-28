@@ -168,8 +168,9 @@ std::optional<IntConst> BinOp::fold() const {
      */
     if ((flags & NSW) || (flags & NUW))
       return {};
-    uint64_t mask = (1UL << (bits() - 1)) - 1;
-    auto folded = ((uint64_t)(*lhsVal) + (uint64_t)(*rhsVal)) & mask;
+    auto folded = (uint64_t)(*lhsVal) + (uint64_t)(*rhsVal);
+    if (bits() < 64)
+      folded &= (1UL << bits()) - 1;
     return IntConst(getType(), folded);
   }
   case And:
