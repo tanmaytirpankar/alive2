@@ -86,3 +86,10 @@ Please contact us or submit a PR if something is missing or inaccurate.
 11. Assertion violation in SMT equality propagation (https://github.com/Z3Prover/z3/issues/2879)
 12. Assertion violation in qe_lite (https://github.com/Z3Prover/z3/commit/bb5edb7c653f9351fe674630d63cdd2b10338277)
 13. SMT internalize doesn't respect the timeout (https://github.com/Z3Prover/z3/issues/4192)
+
+
+### Bugs found in AARCH64 Backend
+1. GlobalIsel miscompiles an llvm.fshl instruction (https://github.com/llvm/llvm-project/issues/55003)
+2. Incorrect optimization of sitofp/fptosi roundtrip (https://github.com/llvm/llvm-project/issues/55150)
+3. GlobalIsel miscompiles a zero-extended logical shift right (https://github.com/llvm/llvm-project/issues/55129)
+4. Miscompilation on a shift followed by an icmp instruction (TBD)
