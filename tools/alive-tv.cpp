@@ -1893,6 +1893,11 @@ public:
       if (!typ.isIntType())
         report_fatal_error("[Unsupported Function Argument]: Only int types "
                            "supported for now");
+      // FIXME: need to handle wider types
+      if (typ.bits() > 64) 
+        report_fatal_error("[Unsupported Function Argument]: Only int types 64 "
+                           "bits or smaller supported for now");
+      
       auto input_ptr = dynamic_cast<const IR::Input *>(&v);
       assert(input_ptr);
 
