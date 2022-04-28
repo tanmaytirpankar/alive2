@@ -1598,7 +1598,7 @@ public:
     case AArch64::ORNWrs:
     case AArch64::ORNXrs: {
       auto lhs = get_value(1);
-      auto rhs = get_value(2);
+      auto rhs = get_value(2, mc_inst.getOperand(3).getImm());
 
       auto neg_one = make_intconst(-1, size);
       auto not_rhs = add_instr<IR::BinOp>(*ty, next_name(), *rhs, *neg_one,
