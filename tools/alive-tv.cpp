@@ -828,6 +828,7 @@ class arm2alive_ {
       break;
     case 2:
       op = IR::BinOp::AShr;
+      break;
     default:
       // FIXME: handle other two cases (ror/msl)
       assert(false && "shift type not supported");
