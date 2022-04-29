@@ -1760,15 +1760,13 @@ public:
     }
     case AArch64::ORRWri:
     case AArch64::ORRXri: {
-      assert(false && "ORR with immediates not supported");
       auto lhs = get_value(1);
 
       auto imm = mc_inst.getOperand(2).getImm();
-      auto [decoded, _] =
-          decode_bit_mask(size == 64, imm & (-1 << 6), imm >> 6, true, size);
+      auto decoded = decodeLogicalImmediate(imm, size);
 
       auto result = add_instr<IR::BinOp>(
-          *ty, next_name(), *lhs, *make_intconst(decoded.getZExtValue(), size),
+          *ty, next_name(), *lhs, *make_intconst(decoded, size),
           IR::BinOp::Or);
       store(*result);
       break;
