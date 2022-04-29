@@ -1497,11 +1497,8 @@ public:
     }
     case AArch64::EORWrs:
     case AArch64::EORXrs: {
-      // don't support shifts because I'm lazy
-      assert(mc_inst.getOperand(3).getImm() == 0);
-
       auto lhs = get_value(1);
-      auto rhs = get_value(2);
+      auto rhs = get_value(2, mc_inst.getOperand(3).getImm());
 
       auto result =
           add_instr<IR::BinOp>(*ty, next_name(), *lhs, *rhs, IR::BinOp::Xor);
@@ -1787,11 +1784,8 @@ public:
     }
     case AArch64::ORRWrs:
     case AArch64::ORRXrs: {
-      // don't support shifts because I'm lazy
-      assert(mc_inst.getOperand(3).getImm() == 0);
-
       auto lhs = get_value(1);
-      auto rhs = get_value(2);
+      auto rhs = get_value(2, mc_inst.getOperand(3).getImm());
 
       auto result =
           add_instr<IR::BinOp>(*ty, next_name(), *lhs, *rhs, IR::BinOp::Or);
