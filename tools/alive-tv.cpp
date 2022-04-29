@@ -746,7 +746,7 @@ set<int> instrs_32 = {
     AArch64::CSINCWr,  AArch64::MOVZWi,   AArch64::MOVNWi,  AArch64::MOVKWi,
     AArch64::LSLVWr,   AArch64::LSRVWr,   AArch64::ORNWrs,  AArch64::UBFMWri,
     AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,  AArch64::SDIVWr,
-    AArch64::UDIVWr,   AArch64::EXTRWrri,
+    AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs
 };
 
 set<int> instrs_64 = {
@@ -758,7 +758,8 @@ set<int> instrs_64 = {
     AArch64::MADDXrrr, AArch64::MSUBXrrr, AArch64::EORXri,  AArch64::CSINVXr,
     AArch64::CSINCXr,  AArch64::MOVZXi,   AArch64::MOVNXi,  AArch64::MOVKXi,
     AArch64::LSLVXr,   AArch64::LSRVXr,   AArch64::ORNXrs,  AArch64::UBFMXri,
-    AArch64::BFMXri,   AArch64::ORRXrs,   AArch64::ORRXri,  AArch64::SDIVXr,  AArch64::UDIVXr,   AArch64::EXTRXrri,
+    AArch64::BFMXri,   AArch64::ORRXrs,   AArch64::ORRXri,  AArch64::SDIVXr,  
+    AArch64::UDIVXr,   AArch64::EXTRXrri, AArch64::EORXrs
 };
 
 bool has_s(int instr) {
@@ -1492,6 +1493,19 @@ public:
       auto res =
           add_instr<IR::BinOp>(*ty, next_name(), *a, *imm_val, IR::BinOp::Xor);
       store(*res);
+      break;
+    }
+    case AArch64::EORWrs:
+    case AArch64::EORXrs: {
+      // don't support shifts because I'm lazy
+      assert(mc_inst.getOperand(3).getImm() == 0);
+
+      auto lhs = get_value(1);
+      auto rhs = get_value(2);
+
+      auto result =
+          add_instr<IR::BinOp>(*ty, next_name(), *lhs, *rhs, IR::BinOp::Xor);
+      store(*result);
       break;
     }
     case AArch64::CSINVWr:
