@@ -1180,8 +1180,11 @@ public:
       auto a = get_value(1);
       auto b = get_value(2);
 
+      auto shift_amt = add_instr<IR::BinOp>(
+          *ty, next_name(), *b, *make_intconst(size, size), IR::BinOp::URem);
+          
       auto res =
-          add_instr<IR::BinOp>(*ty, next_name(), *a, *b, IR::BinOp::AShr);
+          add_instr<IR::BinOp>(*ty, next_name(), *a, *shift_amt, IR::BinOp::AShr);
       store(*res);
       break;
     }
