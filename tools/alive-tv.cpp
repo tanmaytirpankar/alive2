@@ -1853,10 +1853,10 @@ public:
   }
 
   std::optional<IR::Function> run() {
-    if (&srcFn->getType() == &IR::Type::voidTy) {
-      cout << "function is void type\n";
-    }
-    else if (!srcFn->getType().isIntType())
+    // if (&srcFn->getType() == &IR::Type::voidTy) {
+    //   cout << "function is void type\n";
+    // }
+    if (!srcFn->getType().isIntType())
       report_fatal_error("Only int types supported for now");
     auto func_return_type = &get_int_type(srcFn->getType().bits());
     if (!func_return_type)
@@ -3055,6 +3055,7 @@ bool backendTV() {
   }
 
   if (opt_asm_only) {
+    cout << "arm instruction count = " << Str.Insts.size() << "\n";
     cout.flush();
     llvm::errs().flush();
     cerr.flush();
