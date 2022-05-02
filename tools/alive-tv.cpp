@@ -784,6 +784,7 @@ class arm2alive_ {
 
   unsigned int instructionCount;
   unsigned int curId;
+  bool ret_void{false};
 
   std::vector<std::unique_ptr<IR::Instr>> visitError(MCInstWrapper &I) {
     // flush must happen before error is printed to make sure the error
@@ -1832,19 +1833,22 @@ public:
       break;
     }
     case AArch64::RET: {
-      // for now we're assuming that the function returns an integer value
-      assert(mc_inst.getNumOperands() == 1);
-      auto retTyp = &get_int_type(srcFn->getType().bits());
-
-      auto val =
-          getIdentifier(mc_inst.getOperand(0).getReg(), wrapper->getVarId(0));
-      if (retTyp->bits() < val->bits()) {
-        auto trunc = add_instr<IR::ConversionOp>(*retTyp, next_name(), *val,
-                                                 IR::ConversionOp::Trunc);
-        val = trunc;
+      // for now we're assuming that the function returns an integer or void
+      // value
+      if (!ret_void) {
+        auto retTyp = &get_int_type(srcFn->getType().bits());
+        auto val =
+            getIdentifier(mc_inst.getOperand(0).getReg(), wrapper->getVarId(0));
+        if (retTyp->bits() < val->bits()) {
+          auto trunc = add_instr<IR::ConversionOp>(*retTyp, next_name(), *val,
+                                                   IR::ConversionOp::Trunc);
+          val = trunc;
+        }
+        add_instr<IR::Return>(*retTyp, *val);
+      } else {
+        add_instr<IR::Return>(IR::Type::voidTy, IR::Value::voidVal);
       }
 
-      add_instr<IR::Return>(*retTyp, *val);
       break;
     }
     default:
@@ -1853,12 +1857,20 @@ public:
   }
 
   std::optional<IR::Function> run() {
-    // if (&srcFn->getType() == &IR::Type::voidTy) {
-    //   cout << "function is void type\n";
-    // }
-    if (!srcFn->getType().isIntType())
-      report_fatal_error("Only int types supported for now");
-    auto func_return_type = &get_int_type(srcFn->getType().bits());
+    if (&srcFn->getType() == &IR::Type::voidTy) {
+      cout << "function is void type\n";
+      ret_void = true;
+    } else if (!srcFn->getType().isIntType())
+      report_fatal_error("Only int/void return types supported for now");
+
+    IR::Type *func_return_type{nullptr};
+    if (ret_void) {
+      func_return_type = &IR::Type::voidTy;
+    } else {
+      // TODO: Will need to handle other return types here later
+      func_return_type = &get_int_type(srcFn->getType().bits());
+    }
+
     if (!func_return_type)
       return {};
 
@@ -3078,6 +3090,10 @@ bool backendTV() {
 
   AF->print(cout << "\n----------alive-ir-src.ll-file----------\n");
 
+  if (AF->isVarArgs()) {
+    report_fatal_error("Varargs not supported yet");
+  }
+
   Str.printBlocks();
   Str.removeEmptyBlocks(); // remove empty basic blocks, including .Lfunc_end
   Str.printBlocks();
@@ -3105,6 +3121,7 @@ bool backendTV() {
          << '\n';
     return false;
   }
+
 
   auto &MF = Str.MF;
   auto TF = arm2alive(MF, AF, IPtemp.get());
