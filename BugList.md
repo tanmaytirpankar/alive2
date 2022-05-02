@@ -93,3 +93,4 @@ Please contact us or submit a PR if something is missing or inaccurate.
 2. Incorrect optimization of sitofp/fptosi roundtrip (https://github.com/llvm/llvm-project/issues/55150)
 3. GlobalIsel miscompiles a zero-extended logical shift right (https://github.com/llvm/llvm-project/issues/55129)
 4. Miscompilation on a shift followed by an icmp instruction (https://github.com/llvm/llvm-project/issues/55178)
+5. Miscompilation when backend attempts to lower to a rotate instruction (https://github.com/llvm/llvm-project/issues/55201) 
