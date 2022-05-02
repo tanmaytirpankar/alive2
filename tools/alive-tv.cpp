@@ -113,6 +113,11 @@ llvm::cl::opt<bool>
                     llvm::cl::desc("Use Global Isel (default=false)"),
                     llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
 
+llvm::cl::opt<bool>
+    opt_asm_only("asm-only",
+                    llvm::cl::desc("Only generate assembly and exit (default=false)"),
+                    llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
+
 llvm::ExitOnError ExitOnErr;
 
 // adapted from llvm-dis.cpp
@@ -1848,7 +1853,10 @@ public:
   }
 
   std::optional<IR::Function> run() {
-    if (!srcFn->getType().isIntType())
+    if (&srcFn->getType() == &IR::Type::voidTy) {
+      cout << "function is void type\n";
+    }
+    else if (!srcFn->getType().isIntType())
       report_fatal_error("Only int types supported for now");
     auto func_return_type = &get_int_type(srcFn->getType().bits());
     if (!func_return_type)
@@ -3044,6 +3052,13 @@ bool backendTV() {
   for (auto I : Str.Insts) {
     I.dump_pretty(llvm::errs());
     llvm::errs() << '\n';
+  }
+
+  if (opt_asm_only) {
+    cout.flush();
+    llvm::errs().flush();
+    cerr.flush();
+    exit(0);
   }
 
   cout << "\n\n";
