@@ -153,11 +153,11 @@ ParamAttrs::encode(const State &s, const StateValue &val, const Type &ty) const 
                    derefOrNullBytes, align, has(NonNull), has(NoCapture));
 
   if (poisonImpliesUB()) {
-    UB.add(move(new_non_poison));
+    UB.add(std::move(new_non_poison));
     new_non_poison = true;
   }
 
-  return { move(UB), move(new_non_poison) };
+  return { std::move(UB), std::move(new_non_poison) };
 }
 
 
@@ -187,11 +187,11 @@ FnAttrs::encode(const State &s, const StateValue &val, const Type &ty) const {
                    derefOrNullBytes, align, has(NonNull), false);
 
   if (poisonImpliesUB()) {
-    UB.add(move(new_non_poison));
+    UB.add(std::move(new_non_poison));
     new_non_poison = true;
   }
 
-  return { move(UB), move(new_non_poison) };
+  return { std::move(UB), std::move(new_non_poison) };
 }
 
 
