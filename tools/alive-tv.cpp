@@ -764,7 +764,8 @@ set<int> instrs_64 = {
     AArch64::CSINCXr,  AArch64::MOVZXi,   AArch64::MOVNXi,  AArch64::MOVKXi,
     AArch64::LSLVXr,   AArch64::LSRVXr,   AArch64::ORNXrs,  AArch64::UBFMXri,
     AArch64::BFMXri,   AArch64::ORRXrs,   AArch64::ORRXri,  AArch64::SDIVXr,  
-    AArch64::UDIVXr,   AArch64::EXTRXrri, AArch64::EORXrs
+    AArch64::UDIVXr,   AArch64::EXTRXrri, AArch64::EORXrs, AArch64::SMADDLrrr,
+    AArch64::UMADDLrrr
 };
 
 bool has_s(int instr) {
@@ -825,7 +826,6 @@ class arm2alive_ {
 
     IR::BinOp::Op op;
 
-    cout << "shift type: " << shift_type << "\n";
     switch (shift_type) {
     case 0:
       op = IR::BinOp::Shl;
@@ -840,8 +840,6 @@ class arm2alive_ {
       // FIXME: handle other two cases (ror/msl)
       assert(false && "shift type not supported");
     }
-
-    cout << "typ->bits(): " << typ->bits() << "\n";
 
     return add_instr<IR::BinOp>(*typ, next_name(), *value,
                              *make_intconst(encodedShift & 0x3f, typ->bits()),
@@ -1361,7 +1359,8 @@ public:
       break;
     }
     case AArch64::MADDWrrr:
-    case AArch64::MADDXrrr: {
+    case AArch64::MADDXrrr:
+    case AArch64::UMADDLrrr: {
       auto mul_lhs = get_value(1, 0);
       auto mul_rhs = get_value(2, 0);
       auto addend = get_value(3, 0);
@@ -1636,7 +1635,7 @@ public:
       auto lhs = get_value(2, mc_inst.getOperand(3).getImm());
 
       auto bottom_bits = make_intconst(
-          ~(((uint64_t)0xFFFF) << mc_inst.getOperand(3).getImm()), size);
+          (((uint64_t)1) << mc_inst.getOperand(3).getImm()) - 1 , size);
       auto cleared = add_instr<IR::BinOp>(*ty, next_name(), *dest, *bottom_bits,
                                           IR::BinOp::And);
 
