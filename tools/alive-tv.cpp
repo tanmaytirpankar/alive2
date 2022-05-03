@@ -2970,6 +2970,25 @@ bool backendTV() {
   llvm_util::initializer llvm_util_init(*out, DL);
   smt_init.emplace();
 
+  cout << "\n\nConverting source llvm function to alive ir\n";
+  std::optional<IR::Function> AF;
+  // Only try to verify the first function in the module
+  for (auto &F : *M1.get()) {
+    if (F.isDeclaration())
+      continue;
+    if (!func_names.empty() && !func_names.count(F.getName().str()))
+      continue;
+    AF = llvm2alive(F, TLI.getTLI(F));
+    break;
+  }
+
+  if (!AF) {
+    report_fatal_error("Could not convert llvm function to alive ir") ;
+    exit(-1);
+  }
+  
+  AF->print(cout << "\n----------alive-ir-src.ll-file----------\n");
+
   LLVMInitializeAArch64TargetInfo();
   LLVMInitializeAArch64Target();
   LLVMInitializeAArch64TargetMC();
@@ -3075,20 +3094,6 @@ bool backendTV() {
   }
 
   cout << "\n\n";
-
-  cout << "\n\nConverting source llvm function to alive ir\n";
-  std::optional<IR::Function> AF;
-  // Only try to verify the first function in the module
-  for (auto &F : *M1.get()) {
-    if (F.isDeclaration())
-      continue;
-    if (!func_names.empty() && !func_names.count(F.getName().str()))
-      continue;
-    AF = llvm2alive(F, TLI.getTLI(F));
-    break;
-  }
-
-  AF->print(cout << "\n----------alive-ir-src.ll-file----------\n");
 
   if (AF->isVarArgs()) {
     report_fatal_error("Varargs not supported yet");
