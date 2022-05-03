@@ -856,7 +856,7 @@ class arm2alive_ {
   IR::Value *getIdentifier(int reg, int id) {
     auto val = mc_get_operand(reg, id);
 
-    assert(val != NULL);
+    //assert(val != NULL);
     return val;
   }
 
@@ -1839,12 +1839,18 @@ public:
         auto retTyp = &get_int_type(srcFn->getType().bits());
         auto val =
             getIdentifier(mc_inst.getOperand(0).getReg(), wrapper->getVarId(0));
-        if (retTyp->bits() < val->bits()) {
-          auto trunc = add_instr<IR::ConversionOp>(*retTyp, next_name(), *val,
-                                                   IR::ConversionOp::Trunc);
-          val = trunc;
+
+        if (val) {
+          if (retTyp->bits() < val->bits()) {
+            auto trunc = add_instr<IR::ConversionOp>(*retTyp, next_name(), *val,
+                                                     IR::ConversionOp::Trunc);
+            val = trunc;
+          }
+          add_instr<IR::Return>(*retTyp, *val);
+        } else { // Hacky solution to deal with functions where the assembly is
+                 // just a ret instruction
+          add_instr<IR::Return>(*retTyp, *make_intconst(0, retTyp->bits()));
         }
-        add_instr<IR::Return>(*retTyp, *val);
       } else {
         add_instr<IR::Return>(IR::Type::voidTy, IR::Value::voidVal);
       }
@@ -2986,7 +2992,7 @@ bool backendTV() {
     report_fatal_error("Could not convert llvm function to alive ir") ;
     exit(-1);
   }
-  
+
   AF->print(cout << "\n----------alive-ir-src.ll-file----------\n");
 
   LLVMInitializeAArch64TargetInfo();
