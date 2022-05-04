@@ -752,7 +752,7 @@ set<int> instrs_32 = {
     AArch64::LSLVWr,   AArch64::LSRVWr,   AArch64::ORNWrs,  AArch64::UBFMWri,
     AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,  AArch64::SDIVWr,
     AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs,  AArch64::RORVWr,
-    AArch64::RBITWr,   AArch64::CLZWr,    AArch64::REVWr
+    AArch64::RBITWr,   AArch64::CLZWr,    AArch64::REVWr,   AArch64::CSNEGWr
 };
 
 set<int> instrs_64 = {
@@ -767,7 +767,7 @@ set<int> instrs_64 = {
     AArch64::BFMXri,    AArch64::ORRXrs,   AArch64::ORRXri,  AArch64::SDIVXr,
     AArch64::UDIVXr,    AArch64::EXTRXrri, AArch64::EORXrs,  AArch64::SMADDLrrr,
     AArch64::UMADDLrrr, AArch64::RORVXr,   AArch64::RBITXr,  AArch64::CLZWr,
-    AArch64::REVXr
+    AArch64::REVXr,     AArch64::CSNEGXr
 };
 
 bool has_s(int instr) {
@@ -1516,7 +1516,9 @@ public:
       break;
     }
     case AArch64::CSINVWr:
-    case AArch64::CSINVXr: {
+    case AArch64::CSINVXr: 
+    case AArch64::CSNEGWr: 
+    case AArch64::CSNEGXr: {
       // csinv dst, a, b, cond
       // if (cond) a else ~b
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, cond
@@ -1534,11 +1536,20 @@ public:
         visitError(I);
 
       auto neg_one = make_intconst(-1, size);
-      auto negated_b =
+      auto inverted_b =
           add_instr<IR::BinOp>(*ty, next_name(), *b, *neg_one, IR::BinOp::Xor);
+      
+      if (opcode == AArch64::CSNEGWr || opcode == AArch64::CSNEGXr) {
+        auto negated_b =
+          add_instr<IR::BinOp>(*ty, next_name(), *inverted_b, *make_intconst(1, size), IR::BinOp::Add);
+         auto ret =
+          add_instr<IR::Select>(*ty, next_name(), *cond_val, *a, *negated_b);
+        store(*ret);
+        break;
+      }
 
       auto ret =
-          add_instr<IR::Select>(*ty, next_name(), *cond_val, *a, *negated_b);
+          add_instr<IR::Select>(*ty, next_name(), *cond_val, *a, *inverted_b);
       store(*ret);
       break;
     }
