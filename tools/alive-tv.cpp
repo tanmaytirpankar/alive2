@@ -752,7 +752,7 @@ set<int> instrs_32 = {
     AArch64::LSLVWr,   AArch64::LSRVWr,   AArch64::ORNWrs,  AArch64::UBFMWri,
     AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,  AArch64::SDIVWr,
     AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs,  AArch64::RORVWr,
-    AArch64::RBITWr,   AArch64::CLZWr
+    AArch64::RBITWr,   AArch64::CLZWr,    AArch64::REVWr
 };
 
 set<int> instrs_64 = {
@@ -766,7 +766,8 @@ set<int> instrs_64 = {
     AArch64::LSLVXr,    AArch64::LSRVXr,   AArch64::ORNXrs,  AArch64::UBFMXri,
     AArch64::BFMXri,    AArch64::ORRXrs,   AArch64::ORRXri,  AArch64::SDIVXr,
     AArch64::UDIVXr,    AArch64::EXTRXrri, AArch64::EORXrs,  AArch64::SMADDLrrr,
-    AArch64::UMADDLrrr, AArch64::RORVXr,   AArch64::RBITXr,  AArch64::CLZWr
+    AArch64::UMADDLrrr, AArch64::RORVXr,   AArch64::RBITXr,  AArch64::CLZWr,
+    AArch64::REVXr
 };
 
 bool has_s(int instr) {
@@ -1848,6 +1849,15 @@ public:
 
       auto result =
           add_instr<IR::UnaryOp>(*ty, next_name(), *op, IR::UnaryOp::BitReverse);
+      store(*result);
+      break;
+    }
+    case AArch64::REVWr:
+    case AArch64::REVXr: {
+      auto op = get_value(1);
+
+      auto result =
+          add_instr<IR::UnaryOp>(*ty, next_name(), *op, IR::UnaryOp::BSwap);
       store(*result);
       break;
     }
