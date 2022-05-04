@@ -751,21 +751,21 @@ set<int> instrs_32 = {
     AArch64::CSINCWr,  AArch64::MOVZWi,   AArch64::MOVNWi,  AArch64::MOVKWi,
     AArch64::LSLVWr,   AArch64::LSRVWr,   AArch64::ORNWrs,  AArch64::UBFMWri,
     AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,  AArch64::SDIVWr,
-    AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs
+    AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs,  AArch64::RORVWr
 };
 
 set<int> instrs_64 = {
-    AArch64::ADDXrx,   AArch64::ADDSXrs,  AArch64::ADDSXri, AArch64::ADDXrs,
-    AArch64::ADDXri,   AArch64::ASRVXr,   AArch64::SUBXri,  AArch64::SUBXrs,
-    AArch64::SUBXrx,   AArch64::SUBSXrs,  AArch64::SUBSXri, AArch64::SUBSXrx,
-    AArch64::SBFMXri,  AArch64::CSELXr,   AArch64::ANDXri,  AArch64::ANDXrr,
-    AArch64::ANDXrs,   AArch64::ANDSXri,  AArch64::ANDSXrr, AArch64::ANDSXrs,
-    AArch64::MADDXrrr, AArch64::MSUBXrrr, AArch64::EORXri,  AArch64::CSINVXr,
-    AArch64::CSINCXr,  AArch64::MOVZXi,   AArch64::MOVNXi,  AArch64::MOVKXi,
-    AArch64::LSLVXr,   AArch64::LSRVXr,   AArch64::ORNXrs,  AArch64::UBFMXri,
-    AArch64::BFMXri,   AArch64::ORRXrs,   AArch64::ORRXri,  AArch64::SDIVXr,  
-    AArch64::UDIVXr,   AArch64::EXTRXrri, AArch64::EORXrs, AArch64::SMADDLrrr,
-    AArch64::UMADDLrrr
+    AArch64::ADDXrx,    AArch64::ADDSXrs,  AArch64::ADDSXri, AArch64::ADDXrs,
+    AArch64::ADDXri,    AArch64::ASRVXr,   AArch64::SUBXri,  AArch64::SUBXrs,
+    AArch64::SUBXrx,    AArch64::SUBSXrs,  AArch64::SUBSXri, AArch64::SUBSXrx,
+    AArch64::SBFMXri,   AArch64::CSELXr,   AArch64::ANDXri,  AArch64::ANDXrr,
+    AArch64::ANDXrs,    AArch64::ANDSXri,  AArch64::ANDSXrr, AArch64::ANDSXrs,
+    AArch64::MADDXrrr,  AArch64::MSUBXrrr, AArch64::EORXri,  AArch64::CSINVXr,
+    AArch64::CSINCXr,   AArch64::MOVZXi,   AArch64::MOVNXi,  AArch64::MOVKXi,
+    AArch64::LSLVXr,    AArch64::LSRVXr,   AArch64::ORNXrs,  AArch64::UBFMXri,
+    AArch64::BFMXri,    AArch64::ORRXrs,   AArch64::ORRXri,  AArch64::SDIVXr,
+    AArch64::UDIVXr,    AArch64::EXTRXrri, AArch64::EORXrs,  AArch64::SMADDLrrr,
+    AArch64::UMADDLrrr, AArch64::RORVXr
 };
 
 bool has_s(int instr) {
@@ -1828,6 +1828,16 @@ public:
 
       auto result =
           add_instr<IR::TernaryOp>(*ty, next_name(), *op1, *op2, *shift, IR::TernaryOp::FShr);
+      store(*result);
+      break;
+    }
+    case AArch64::RORVWr:
+    case AArch64::RORVXr: {
+      auto op = get_value(1);
+      auto shift = get_value(2);
+
+      auto result =
+          add_instr<IR::TernaryOp>(*ty, next_name(), *op, *op, *shift, IR::TernaryOp::FShr);
       store(*result);
       break;
     }
