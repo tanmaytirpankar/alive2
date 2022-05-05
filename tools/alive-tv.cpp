@@ -1647,8 +1647,19 @@ public:
       auto dest = get_value(1);
       auto lhs = get_value(2, mc_inst.getOperand(3).getImm());
 
-      auto bottom_bits = make_intconst(
-          (((uint64_t)1) << mc_inst.getOperand(3).getImm()) - 1 , size);
+      uint64_t bitmask;
+      auto shift_amt = mc_inst.getOperand(3).getImm();
+
+      if (opcode == AArch64::MOVKWi) {
+        assert(shift_amt == 0 || shift_amt == 16);
+        bitmask = (shift_amt == 0) ? 0xffff0000 : 0xffff;
+      } else {
+        assert(shift_amt == 0 || shift_amt == 16 || shift_amt == 32 ||
+               shift_amt == 48);
+        bitmask = ~(((uint64_t)0xffff) << shift_amt);
+      }
+
+      auto bottom_bits = make_intconst(bitmask, size);
       auto cleared = add_instr<IR::BinOp>(*ty, next_name(), *dest, *bottom_bits,
                                           IR::BinOp::And);
 
