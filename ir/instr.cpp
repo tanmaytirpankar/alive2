@@ -155,10 +155,13 @@ std::optional<IntConst> BinOp::fold() const {
   IntConst *rhsConst = dynamic_cast<IntConst *>(rhs);
   if (!lhsConst || !rhsConst)
     return {};
-  auto *lhsVal = lhsConst->getInt();
-  auto *rhsVal = rhsConst->getInt();
-  if (!lhsVal || !rhsVal)
+  auto *lhsPtr = lhsConst->getInt();
+  auto *rhsPtr = rhsConst->getInt();
+  if (!lhsPtr || !rhsPtr)
     return {};
+  uint64_t lhsVal = *lhsPtr;
+  uint64_t rhsVal = *rhsPtr;
+  uint64_t mask = (1UL << bits()) - 1;
   switch (op) {
   case Add: {
     /*
@@ -168,15 +171,38 @@ std::optional<IntConst> BinOp::fold() const {
      */
     if ((flags & NSW) || (flags & NUW))
       return {};
-    auto folded = (uint64_t)(*lhsVal) + (uint64_t)(*rhsVal);
+    auto folded = lhsVal + rhsVal;
     if (bits() < 64)
-      folded &= (1UL << bits()) - 1;
+      folded &= mask;
     return IntConst(getType(), folded);
   }
   case And:
-    return IntConst(getType(), (uint64_t)(*lhsVal) & (uint64_t)(*rhsVal));
+    return IntConst(getType(), lhsVal & rhsVal);
   case Or:
-    return IntConst(getType(), (uint64_t)(*lhsVal) | (uint64_t)(*rhsVal));
+    return IntConst(getType(), lhsVal | rhsVal);
+  case Shl:
+    if (rhsVal < bits() && !(flags & (NSW|NUW))) {
+      auto folded = lhsVal << rhsVal;
+      if (bits() < 64)
+        folded &= mask;
+      return IntConst(getType(), folded);
+    } else {
+      return {};
+    }
+  case LShr:
+    if (rhsVal < bits() && !(flags & (Exact|NSW|NUW))) {
+      auto folded = lhsVal >> rhsVal;
+      return IntConst(getType(), folded);
+    } else {
+      return {};
+    }
+  case AShr:
+    if (rhsVal < bits() && !(flags & (Exact|NSW|NUW))) {
+      // FIXME
+      return {};
+    } else {
+      return {};
+    }
   default:
     return {};
   }
