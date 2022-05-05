@@ -1361,8 +1361,7 @@ public:
       break;
     }
     case AArch64::MADDWrrr:
-    case AArch64::MADDXrrr:
-    case AArch64::UMADDLrrr: {
+    case AArch64::MADDXrrr: {
       auto mul_lhs = get_value(1, 0);
       auto mul_rhs = get_value(2, 0);
       auto addend = get_value(3, 0);
@@ -1374,6 +1373,26 @@ public:
       store(*add);
       break;
     }
+    case AArch64::UMADDLrrr: {
+      auto mul_lhs = get_value(1, 0);
+      auto mul_rhs = get_value(2, 0);
+      auto addend = get_value(3, 0);
+
+      auto lhs_masked =
+          add_instr<IR::BinOp>(*ty, next_name(), *mul_lhs,
+                               *make_intconst((uint64_t)0xffffffff, size), IR::BinOp::And);
+
+      auto rhs_masked =
+          add_instr<IR::BinOp>(*ty, next_name(), *mul_rhs,
+                               *make_intconst((uint64_t)0xffffffff, size), IR::BinOp::And);
+
+      auto mul = add_instr<IR::BinOp>(*ty, next_name(), *lhs_masked, *rhs_masked,
+                                      IR::BinOp::Mul);
+      auto add =
+          add_instr<IR::BinOp>(*ty, next_name(), *mul, *addend, IR::BinOp::Add);
+      store(*add);
+      break;
+    } 
     case AArch64::MSUBWrrr:
     case AArch64::MSUBXrrr: {
       auto mul_lhs = get_value(1, 0);
