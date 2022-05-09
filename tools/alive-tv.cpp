@@ -753,7 +753,7 @@ set<int> instrs_32 = {
     AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,  AArch64::SDIVWr,
     AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs,  AArch64::RORVWr,
     AArch64::RBITWr,   AArch64::CLZWr,    AArch64::REVWr,   AArch64::CSNEGWr,
-    AArch64::BICWrs
+    AArch64::BICWrs,   AArch64::EONWrs
 };
 
 set<int> instrs_64 = {
@@ -768,7 +768,7 @@ set<int> instrs_64 = {
     AArch64::BFMXri,    AArch64::ORRXrs,   AArch64::ORRXri,  AArch64::SDIVXr,
     AArch64::UDIVXr,    AArch64::EXTRXrri, AArch64::EORXrs,  AArch64::SMADDLrrr,
     AArch64::UMADDLrrr, AArch64::RORVXr,   AArch64::RBITXr,  AArch64::CLZWr,
-    AArch64::REVXr,     AArch64::CSNEGXr,  AArch64::BICXrs
+    AArch64::REVXr,     AArch64::CSNEGXr,  AArch64::BICXrs,  AArch64::EONXrs
 };
 
 bool has_s(int instr) {
@@ -1913,9 +1913,15 @@ public:
       store(*result);
       break;
     }
+    case AArch64::EONWrs:
+    case AArch64::EONXrs:
     case AArch64::BICWrs:
     case AArch64::BICXrs: {
+      // BIC:
       // return = op1 AND NOT (optional shift) op2
+      // EON:
+      // return = op1 XOR NOT (optional shift) op2
+
       auto op1 = get_value(1);
       auto op2 = get_value(2);
 
@@ -1931,9 +1937,23 @@ public:
       auto inverted_op2 =
           add_instr<IR::BinOp>(*ty, next_name(), *op2, *neg_one, IR::BinOp::Xor);
 
-      // Perform AND
+      // Perform final Op: AND for BIC, XOR for EON
+      IR::BinOp::Op finalBinOp;
+      switch(opcode) {
+      case AArch64::BICWrs:
+      case AArch64::BICXrs: {
+        finalBinOp = IR::BinOp::And;
+        break;
+      }
+      case AArch64::EONWrs:
+      case AArch64::EONXrs: {
+        finalBinOp = IR::BinOp::Xor;
+        break;
+      }
+      }
+
       auto ret =
-          add_instr<IR::BinOp>(*ty, next_name(), *op1, *inverted_op2, IR::BinOp::And);
+          add_instr<IR::BinOp>(*ty, next_name(), *op1, *inverted_op2, finalBinOp);
       store(*ret);
       break;
     }
