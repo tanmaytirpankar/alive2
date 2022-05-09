@@ -2065,7 +2065,7 @@ public:
       auto operand = MCOperand::createReg(AArch64::X0 + (argNum++));
 
       std::string operand_name = "%" + std::to_string(operand.getReg());
-      IR::ParamAttrs attrs;
+      IR::ParamAttrs attrs(input_ptr->getAttributes());
 
       auto val = make_unique<IR::Input>(typ, move(operand_name), move(attrs));
       IR::Value *stored = val.get();
