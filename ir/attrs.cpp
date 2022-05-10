@@ -231,7 +231,7 @@ smt::expr FpRoundingMode::toSMT() const {
 }
 
 ostream& operator<<(std::ostream &os, FpRoundingMode rounding) {
-  const char *str;
+  const char *str = nullptr;
   switch (rounding.mode) {
   case FpRoundingMode::Dynamic: str = "dynamic"; break;
   case FpRoundingMode::RNE:     str = "tonearest"; break;
@@ -245,7 +245,7 @@ ostream& operator<<(std::ostream &os, FpRoundingMode rounding) {
 }
 
 ostream& operator<<(std::ostream &os, FpExceptionMode ex) {
-  const char *str;
+  const char *str = nullptr;
   switch (ex.mode) {
   case FpExceptionMode::Ignore:  str = "ignore"; break;
   case FpExceptionMode::MayTrap: str = "maytrap"; break;
