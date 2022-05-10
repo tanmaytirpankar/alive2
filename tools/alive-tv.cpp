@@ -839,8 +839,14 @@ class arm2alive_ {
     case 2:
       op = IR::BinOp::AShr;
       break;
+    case 3:
+      // ROR shift
+      return add_instr<IR::TernaryOp>(*typ, next_name(), *value, *value,
+                                    *make_intconst(encodedShift & 0x3f, typ->bits()),
+                                    IR::TernaryOp::FShr);
+      break;
     default:
-      // FIXME: handle other two cases (ror/msl)
+      // FIXME: handle other case (msl)
       assert(false && "shift type not supported");
     }
 
