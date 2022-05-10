@@ -5,7 +5,6 @@
 
 #include "ir/constant.h"
 #include "ir/value.h"
-#include "llvm/ADT/APInt.h"
 #include <optional>
 #include <string>
 #include <utility>
@@ -61,6 +60,7 @@ public:
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
   std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  Op getOp() const { return op; }
 };
 
 
@@ -376,7 +376,7 @@ private:
 public:
   FCmp(Type &type, std::string &&name, Cond cond, Value &a, Value &b,
        FastMathFlags fmath)
-    : Instr(type, move(name)), a(&a), b(&b), cond(cond), fmath(fmath) {}
+    : Instr(type, std::move(name)), a(&a), b(&b), cond(cond), fmath(fmath) {}
 
   std::vector<Value*> operands() const override;
   void rauw(const Value &what, Value &with) override;
@@ -549,7 +549,7 @@ public:
 
 class MemInstr : public Instr {
 public:
-  MemInstr(Type &type, std::string &&name) : Instr(type, move(name)) {}
+  MemInstr(Type &type, std::string &&name) : Instr(type, std::move(name)) {}
 
   // If this instruction allocates a memory block, return its size and
   //  alignment. Returns 0 if it doesn't allocate anything.
@@ -622,19 +622,18 @@ public:
 class Malloc final : public MemInstr {
   Value *ptr = nullptr, *size;
   uint64_t align;
-  // Is this malloc (or equivalent operation, like new()) never returning
-  // null?
   bool isNonNull = false;
 
 public:
   Malloc(Type &type, std::string &&name, Value &size, bool isNonNull,
-         uint64_t align = 0)
+         uint64_t align)
     : MemInstr(type, std::move(name)), size(&size), align(align),
       isNonNull(isNonNull) {}
 
   Malloc(Type &type, std::string &&name, Value &ptr, Value &size,
-         uint64_t align = 0)
-    : MemInstr(type, std::move(name)), ptr(&ptr), size(&size), align(align) {}
+         bool isNonNull, uint64_t align)
+    : MemInstr(type, std::move(name)), ptr(&ptr), size(&size), align(align),
+      isNonNull(isNonNull) {}
 
   Value& getSize() const { return *size; }
   uint64_t getAlign() const;

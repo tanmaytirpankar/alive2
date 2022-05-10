@@ -57,7 +57,7 @@ static expr simplify_const(expr &&e, const expr &input,
     cout << "\n[WARN] missing fold: " << e << "\n->\n" << e.simplify() << '\n';
   }
 #endif
-  return move(e);
+  return std::move(e);
 }
 
 static bool is_power2(const expr &e, unsigned &log) {
@@ -552,6 +552,10 @@ bool expr::isFPNeg(expr &val) const {
   return isUnOp(val, Z3_OP_FPA_NEG);
 }
 
+bool expr::isIsFPZero() const {
+  return isAppOf(Z3_OP_FPA_IS_ZERO);
+}
+
 bool expr::isNaNCheck(expr &fp) const {
   if (auto app = isAppOf(Z3_OP_FPA_IS_NAN)) {
     fp = Z3_get_app_arg(ctx(), app, 0);
@@ -979,15 +983,25 @@ expr expr::abs() const {
   return mkIf(sge(mkUInt(0, s)), *this, mkInt(-1, s) * *this);
 }
 
+#define fold_fp_neg(fn)                                  \
+  do {                                                   \
+  expr cond, neg, v, v2;                                 \
+  if (isIf(cond, neg, v) && neg.isFPNeg(v2) && v.eq(v2)) \
+    return v.fn();                                       \
+} while (0)
+
 expr expr::isNaN() const {
+  fold_fp_neg(isNaN);
   return unop_fold(Z3_mk_fpa_is_nan);
 }
 
 expr expr::isInf() const {
+  fold_fp_neg(isInf);
   return unop_fold(Z3_mk_fpa_is_infinite);
 }
 
 expr expr::isFPZero() const {
+  fold_fp_neg(isFPZero);
   return unop_fold(Z3_mk_fpa_is_zero);
 }
 
@@ -1040,6 +1054,7 @@ expr expr::fdiv(const expr &rhs, const expr &rm) const {
 }
 
 expr expr::fabs() const {
+  fold_fp_neg(fabs);
   return unop_fold(Z3_mk_fpa_abs);
 }
 
@@ -1671,7 +1686,7 @@ expr expr::extract(unsigned high, unsigned low, unsigned depth) const {
             return arg;
 
           if (first)
-            extracted = move(arg);
+            extracted = std::move(arg);
           else if (!arg.eq(extracted))
             extracted = expr();
           first = false;
@@ -1852,7 +1867,7 @@ expr expr::mkIf(const expr &cond, const expr &then, const expr &els) {
 
 expr expr::mkForAll(const set<expr> &vars, expr &&val) {
   if (vars.empty() || val.isConst() || !val.isValid())
-    return move(val);
+    return std::move(val);
 
   unique_ptr<Z3_app[]> vars_ast(new Z3_app[vars.size()]);
   unsigned i = 0;
@@ -1993,22 +2008,22 @@ set<expr> expr::leafs(unsigned max) const {
   unordered_set<Z3_ast> seen;
   set<expr> ret;
   do {
-    auto val = move(worklist.back());
+    auto val = std::move(worklist.back());
     worklist.pop_back();
     if (!seen.emplace(val()).second)
       continue;
 
     expr cond, then, els;
     if (val.isIf(cond, then, els)) {
-      worklist.emplace_back(move(then));
-      worklist.emplace_back(move(els));
+      worklist.emplace_back(std::move(then));
+      worklist.emplace_back(std::move(els));
     } else {
-      ret.emplace(move(val));
+      ret.emplace(std::move(val));
     }
 
     if (ret.size() + worklist.size() >= max) {
       for (auto &v : worklist)
-        ret.emplace(move(v));
+        ret.emplace(std::move(v));
       break;
     }
   } while (!worklist.empty());

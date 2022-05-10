@@ -35,6 +35,10 @@ ostream& operator<<(ostream &os, const ParamAttrs &attr) {
     os << "noalias ";
   if (attr.has(ParamAttrs::DereferenceableOrNull))
     os << "dereferenceable_or_null(" << attr.derefOrNullBytes << ") ";
+  if (attr.has(ParamAttrs::Zext))
+    os << "zeroext ";
+  if (attr.has(ParamAttrs::Sext))
+    os << "signext ";
   return os;
 }
 
@@ -149,11 +153,11 @@ ParamAttrs::encode(const State &s, const StateValue &val, const Type &ty) const 
                    derefOrNullBytes, align, has(NonNull), has(NoCapture));
 
   if (poisonImpliesUB()) {
-    UB.add(move(new_non_poison));
+    UB.add(std::move(new_non_poison));
     new_non_poison = true;
   }
 
-  return { move(UB), move(new_non_poison) };
+  return { std::move(UB), std::move(new_non_poison) };
 }
 
 
@@ -183,11 +187,11 @@ FnAttrs::encode(const State &s, const StateValue &val, const Type &ty) const {
                    derefOrNullBytes, align, has(NonNull), false);
 
   if (poisonImpliesUB()) {
-    UB.add(move(new_non_poison));
+    UB.add(std::move(new_non_poison));
     new_non_poison = true;
   }
 
-  return { move(UB), move(new_non_poison) };
+  return { std::move(UB), std::move(new_non_poison) };
 }
 
 
