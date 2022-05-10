@@ -839,8 +839,14 @@ class arm2alive_ {
     case 2:
       op = IR::BinOp::AShr;
       break;
+    case 3:
+      // ROR shift
+      return add_instr<IR::TernaryOp>(*typ, next_name(), *value, *value,
+                                    *make_intconst(encodedShift & 0x3f, typ->bits()),
+                                    IR::TernaryOp::FShr);
+      break;
     default:
-      // FIXME: handle other two cases (ror/msl)
+      // FIXME: handle other case (msl)
       assert(false && "shift type not supported");
     }
 
@@ -1393,7 +1399,41 @@ public:
           add_instr<IR::BinOp>(*ty, next_name(), *mul, *addend, IR::BinOp::Add);
       store(*add);
       break;
-    } 
+    }
+    case AArch64::SMADDLrrr: {
+      // Signed Multiply-Add Long multiplies two 32-bit register values,
+      // adds a 64-bit register value, and writes the result to the 64-bit destination register.
+      auto mul_lhs = get_value(1, 0);
+      auto mul_rhs = get_value(2, 0);
+      auto addend = get_value(3, 0);
+
+      auto i32 = &get_int_type(32);
+      auto i64 = &get_int_type(64);
+
+      // The inputs are automatically zero extended, but we want sign extension,
+      // so we need to truncate them back to i32s
+      auto lhs_trunc =
+          add_instr<IR::ConversionOp>(*i32, next_name(), *mul_lhs,
+                                      IR::ConversionOp::Trunc);
+      auto rhs_trunc =
+          add_instr<IR::ConversionOp>(*i32, next_name(), *mul_rhs,
+                                      IR::ConversionOp::Trunc);
+
+      // For signed multiplication, must sign extend the lhs and rhs to not overflow
+      auto lhs_extended =
+          add_instr<IR::ConversionOp>(*i64, next_name(), *lhs_trunc,
+                                      IR::ConversionOp::SExt);
+      auto rhs_extended =
+          add_instr<IR::ConversionOp>(*i64, next_name(), *rhs_trunc,
+                                      IR::ConversionOp::SExt);
+
+      auto mul = add_instr<IR::BinOp>(*ty, next_name(), *lhs_extended, *rhs_extended,
+                                      IR::BinOp::Mul);
+      auto add =
+          add_instr<IR::BinOp>(*ty, next_name(), *mul, *addend, IR::BinOp::Add);
+      store(*add);
+      break;
+    }
     case AArch64::MSUBWrrr:
     case AArch64::MSUBXrrr: {
       auto mul_lhs = get_value(1, 0);
