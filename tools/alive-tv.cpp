@@ -753,7 +753,7 @@ set<int> instrs_32 = {
     AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,  AArch64::SDIVWr,
     AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs,  AArch64::RORVWr,
     AArch64::RBITWr,   AArch64::CLZWr,    AArch64::REVWr,   AArch64::CSNEGWr,
-    AArch64::BICWrs,   AArch64::EONWrs
+    AArch64::BICWrs,   AArch64::EONWrs,   AArch64::REV16Wr
 };
 
 set<int> instrs_64 = {
@@ -768,7 +768,9 @@ set<int> instrs_64 = {
     AArch64::BFMXri,    AArch64::ORRXrs,   AArch64::ORRXri,  AArch64::SDIVXr,
     AArch64::UDIVXr,    AArch64::EXTRXrri, AArch64::EORXrs,  AArch64::SMADDLrrr,
     AArch64::UMADDLrrr, AArch64::RORVXr,   AArch64::RBITXr,  AArch64::CLZXr,
-    AArch64::REVXr,     AArch64::CSNEGXr,  AArch64::BICXrs,  AArch64::EONXrs
+    AArch64::REVXr,     AArch64::CSNEGXr,  AArch64::BICXrs,  AArch64::EONXrs,
+    AArch64::SMULHrr,   AArch64::UMULHrr,  AArch64::REV32Xr, AArch64::REV16Xr,
+    AArch64::SMSUBLrrr, AArch64::UMSUBLrrr
 };
 
 bool has_s(int instr) {
@@ -1434,6 +1436,88 @@ public:
       store(*add);
       break;
     }
+    case AArch64::SMSUBLrrr:
+    case AArch64::UMSUBLrrr: {
+      // SMSUBL: Signed Multiply-Subtract Long.
+      // UMSUBL: Unsigned Multiply-Subtract Long.
+      auto mul_lhs = get_value(1, 0);
+      auto mul_rhs = get_value(2, 0);
+      auto minuend = get_value(3, 0);
+
+      auto i32 = &get_int_type(32);
+      auto i64 = &get_int_type(64);
+
+      IR::Value *lhs_extended;
+      IR::Value *rhs_extended;
+
+      if(opcode == AArch64::SMSUBLrrr) {
+        // The inputs are automatically zero extended, but we want sign extension for signed, so we need to truncate them back to i32s
+        auto lhs_trunc = add_instr<IR::ConversionOp>(
+            *i32, next_name(), *mul_lhs, IR::ConversionOp::Trunc);
+        auto rhs_trunc = add_instr<IR::ConversionOp>(
+            *i32, next_name(), *mul_rhs, IR::ConversionOp::Trunc);
+
+        // For signed multiplication, must sign extend the lhs and rhs to not overflow
+        lhs_extended = add_instr<IR::ConversionOp>(
+            *i64, next_name(), *lhs_trunc, IR::ConversionOp::SExt);
+        rhs_extended = add_instr<IR::ConversionOp>(
+            *i64, next_name(), *rhs_trunc, IR::ConversionOp::SExt);
+      }
+      else {
+        // For unsigned multiplication, program automatically zero extends
+        lhs_extended = mul_lhs;
+        rhs_extended = mul_rhs;
+      }
+
+      auto mul = add_instr<IR::BinOp>(*ty, next_name(), *lhs_extended, *rhs_extended,
+                                      IR::BinOp::Mul);
+      auto subtract =
+          add_instr<IR::BinOp>(*ty, next_name(), *minuend, *mul, IR::BinOp::Sub);
+      store(*subtract);
+      break;
+    }
+    case AArch64::SMULHrr:
+    case AArch64::UMULHrr: {
+      // SMULH: Signed Multiply High
+      // UMULH: Unsigned Multiply High
+      auto mul_lhs = get_value(1, 0);
+      auto mul_rhs = get_value(2, 0);
+
+      auto i64 = &get_int_type(64);
+      auto i128 = &get_int_type(128);
+
+      IR::ConversionOp *lhs_extended;
+      IR::ConversionOp * rhs_extended;
+
+      // For unsigned multiplication, must zero extend the lhs and rhs to not overflow
+      // For signed multiplication, must sign extend the lhs and rhs to not overflow
+      if(opcode == AArch64::UMULHrr) {
+        lhs_extended =
+            add_instr<IR::ConversionOp>(*i128, next_name(), *mul_lhs,
+                                        IR::ConversionOp::ZExt);
+        rhs_extended =
+            add_instr<IR::ConversionOp>(*i128, next_name(), *mul_rhs,
+                                        IR::ConversionOp::ZExt);
+      }
+      else {
+        lhs_extended = add_instr<IR::ConversionOp>(*i128, next_name(), *mul_lhs,
+                                        IR::ConversionOp::SExt);
+        rhs_extended = add_instr<IR::ConversionOp>(*i128, next_name(), *mul_rhs,
+                                        IR::ConversionOp::SExt);
+      }
+
+      auto mul = add_instr<IR::BinOp>(*i128, next_name(), *lhs_extended, *rhs_extended,
+                                      IR::BinOp::Mul);
+      // After multiplying, shift down 64 bits to get the top half of the i128 into the bottom half
+      auto shift = add_instr<IR::BinOp>(*i128, next_name(), *mul,
+                                        *make_intconst(64, 128), IR::BinOp::LShr);
+
+      // Truncate to the proper size:
+      auto trunc = add_instr<IR::ConversionOp>(*i64, next_name(), *shift,
+                                      IR::ConversionOp::Trunc);
+      store(*trunc);
+      break;
+    }
     case AArch64::MSUBWrrr:
     case AArch64::MSUBXrrr: {
       auto mul_lhs = get_value(1, 0);
@@ -1994,6 +2078,52 @@ public:
 
       auto ret =
           add_instr<IR::BinOp>(*ty, next_name(), *op1, *inverted_op2, finalBinOp);
+      store(*ret);
+      break;
+    }
+    case AArch64::REV16Xr: {
+      // REV16Xr: Reverse bytes of 64 bit value in 16-bit half-words.
+      auto val = get_value(1);
+
+      auto first_part =
+          add_instr<IR::BinOp>(*ty, next_name(), *val,
+                                 *make_intconst(8, size), IR::BinOp::Shl);
+      auto first_part_and =
+          add_instr<IR::BinOp>(*ty, next_name(), *first_part,
+                               *make_intconst(0xFF00FF00FF00FF00, size), IR::BinOp::And);
+
+      auto second_part =
+          add_instr<IR::BinOp>(*ty, next_name(), *val,
+                               *make_intconst(8, size), IR::BinOp::LShr);
+      auto second_part_and =
+          add_instr<IR::BinOp>(*ty, next_name(), *second_part,
+                               *make_intconst(0x00FF00FF00FF00FF, size), IR::BinOp::And);
+
+      auto combined_val =
+          add_instr<IR::BinOp>(*ty, next_name(), *first_part_and, *second_part_and,
+                               IR::BinOp::Or);
+
+      store(*combined_val);
+      break;
+    }
+    case AArch64::REV16Wr:
+    case AArch64::REV32Xr: {
+      // REV16Wr: Reverse bytes of 32 bit value in 16-bit half-words.
+      // REV32Xr: Reverse bytes of 64 bit value in 32-bit words.
+      auto val = get_value(1);
+
+      // Reversing all of the bytes, then performing a rotation by half the width
+      // reverses bytes in 16-bit halfwords for a 32 bit int and
+      // reverses bytes in a 32-bit word for a 64 bit int
+      auto reverse_val =
+          add_instr<IR::UnaryOp>(*ty, next_name(), *val,
+                                 IR::UnaryOp::BSwap);
+
+      auto ret =
+          add_instr<IR::TernaryOp>(*ty, next_name(), *reverse_val, *reverse_val,
+                                      *make_intconst(size / 2, size),
+                                      IR::TernaryOp::FShr);
+
       store(*ret);
       break;
     }
