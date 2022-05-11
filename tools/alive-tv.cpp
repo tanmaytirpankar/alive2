@@ -768,7 +768,8 @@ set<int> instrs_64 = {
     AArch64::BFMXri,    AArch64::ORRXrs,   AArch64::ORRXri,  AArch64::SDIVXr,
     AArch64::UDIVXr,    AArch64::EXTRXrri, AArch64::EORXrs,  AArch64::SMADDLrrr,
     AArch64::UMADDLrrr, AArch64::RORVXr,   AArch64::RBITXr,  AArch64::CLZXr,
-    AArch64::REVXr,     AArch64::CSNEGXr,  AArch64::BICXrs,  AArch64::EONXrs
+    AArch64::REVXr,     AArch64::CSNEGXr,  AArch64::BICXrs,  AArch64::EONXrs,
+    AArch64::SMULHrr,   AArch64::UMULHrr
 };
 
 bool has_s(int instr) {
@@ -1432,6 +1433,48 @@ public:
       auto add =
           add_instr<IR::BinOp>(*ty, next_name(), *mul, *addend, IR::BinOp::Add);
       store(*add);
+      break;
+    }
+    case AArch64::SMULHrr:
+    case AArch64::UMULHrr: {
+      // SMULH: Signed Multiply High
+      // UMULH: Unsigned Multiply High
+      auto mul_lhs = get_value(1, 0);
+      auto mul_rhs = get_value(2, 0);
+
+      auto i64 = &get_int_type(64);
+      auto i128 = &get_int_type(128);
+
+      IR::ConversionOp *lhs_extended;
+      IR::ConversionOp * rhs_extended;
+
+      // For unsigned multiplication, must zero extend the lhs and rhs to not overflow
+      // For signed multiplication, must sign extend the lhs and rhs to not overflow
+      if(opcode == AArch64::UMULHrr) {
+        lhs_extended =
+            add_instr<IR::ConversionOp>(*i128, next_name(), *mul_lhs,
+                                        IR::ConversionOp::ZExt);
+        rhs_extended =
+            add_instr<IR::ConversionOp>(*i128, next_name(), *mul_rhs,
+                                        IR::ConversionOp::ZExt);
+      }
+      else {
+        lhs_extended = add_instr<IR::ConversionOp>(*i128, next_name(), *mul_lhs,
+                                        IR::ConversionOp::SExt);
+        rhs_extended = add_instr<IR::ConversionOp>(*i128, next_name(), *mul_rhs,
+                                        IR::ConversionOp::SExt);
+      }
+
+      auto mul = add_instr<IR::BinOp>(*i128, next_name(), *lhs_extended, *rhs_extended,
+                                      IR::BinOp::Mul);
+      // After multiplying, shift down 64 bits to get the top half of the i128 into the bottom half
+      auto shift = add_instr<IR::BinOp>(*i128, next_name(), *mul,
+                                        *make_intconst(64, 128), IR::BinOp::LShr);
+
+      // Truncate to the proper size:
+      auto trunc = add_instr<IR::ConversionOp>(*i64, next_name(), *shift,
+                                      IR::ConversionOp::Trunc);
+      store(*trunc);
       break;
     }
     case AArch64::MSUBWrrr:
