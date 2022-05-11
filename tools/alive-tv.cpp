@@ -753,7 +753,7 @@ set<int> instrs_32 = {
     AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,  AArch64::SDIVWr,
     AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs,  AArch64::RORVWr,
     AArch64::RBITWr,   AArch64::CLZWr,    AArch64::REVWr,   AArch64::CSNEGWr,
-    AArch64::BICWrs,   AArch64::EONWrs
+    AArch64::BICWrs,   AArch64::EONWrs,   AArch64::REV16Wr
 };
 
 set<int> instrs_64 = {
@@ -769,7 +769,7 @@ set<int> instrs_64 = {
     AArch64::UDIVXr,    AArch64::EXTRXrri, AArch64::EORXrs,  AArch64::SMADDLrrr,
     AArch64::UMADDLrrr, AArch64::RORVXr,   AArch64::RBITXr,  AArch64::CLZXr,
     AArch64::REVXr,     AArch64::CSNEGXr,  AArch64::BICXrs,  AArch64::EONXrs,
-    AArch64::SMULHrr,   AArch64::UMULHrr
+    AArch64::SMULHrr,   AArch64::UMULHrr,  AArch64::REV32Xr, AArch64::REV16Xr
 };
 
 bool has_s(int instr) {
@@ -2037,6 +2037,52 @@ public:
 
       auto ret =
           add_instr<IR::BinOp>(*ty, next_name(), *op1, *inverted_op2, finalBinOp);
+      store(*ret);
+      break;
+    }
+    case AArch64::REV16Xr: {
+      // REV16Xr: Reverse bytes of 64 bit value in 16-bit half-words.
+      auto val = get_value(1);
+
+      auto first_part =
+          add_instr<IR::BinOp>(*ty, next_name(), *val,
+                                 *make_intconst(8, size), IR::BinOp::Shl);
+      auto first_part_and =
+          add_instr<IR::BinOp>(*ty, next_name(), *first_part,
+                               *make_intconst(0xFF00FF00FF00FF00, size), IR::BinOp::And);
+
+      auto second_part =
+          add_instr<IR::BinOp>(*ty, next_name(), *val,
+                               *make_intconst(8, size), IR::BinOp::LShr);
+      auto second_part_and =
+          add_instr<IR::BinOp>(*ty, next_name(), *second_part,
+                               *make_intconst(0x00FF00FF00FF00FF, size), IR::BinOp::And);
+
+      auto combined_val =
+          add_instr<IR::BinOp>(*ty, next_name(), *first_part_and, *second_part_and,
+                               IR::BinOp::Or);
+
+      store(*combined_val);
+      break;
+    }
+    case AArch64::REV16Wr:
+    case AArch64::REV32Xr: {
+      // REV16Wr: Reverse bytes of 32 bit value in 16-bit half-words.
+      // REV32Xr: Reverse bytes of 64 bit value in 32-bit words.
+      auto val = get_value(1);
+
+      // Reversing all of the bytes, then performing a rotation by half the width
+      // reverses bytes in 16-bit halfwords for a 32 bit int and
+      // reverses bytes in a 32-bit word for a 64 bit int
+      auto reverse_val =
+          add_instr<IR::UnaryOp>(*ty, next_name(), *val,
+                                 IR::UnaryOp::BSwap);
+
+      auto ret =
+          add_instr<IR::TernaryOp>(*ty, next_name(), *reverse_val, *reverse_val,
+                                      *make_intconst(size / 2, size),
+                                      IR::TernaryOp::FShr);
+
       store(*ret);
       break;
     }
