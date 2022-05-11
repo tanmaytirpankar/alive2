@@ -769,7 +769,8 @@ set<int> instrs_64 = {
     AArch64::UDIVXr,    AArch64::EXTRXrri, AArch64::EORXrs,  AArch64::SMADDLrrr,
     AArch64::UMADDLrrr, AArch64::RORVXr,   AArch64::RBITXr,  AArch64::CLZXr,
     AArch64::REVXr,     AArch64::CSNEGXr,  AArch64::BICXrs,  AArch64::EONXrs,
-    AArch64::SMULHrr,   AArch64::UMULHrr,  AArch64::REV32Xr, AArch64::REV16Xr
+    AArch64::SMULHrr,   AArch64::UMULHrr,  AArch64::REV32Xr, AArch64::REV16Xr,
+    AArch64::SMSUBLrrr, AArch64::UMSUBLrrr
 };
 
 bool has_s(int instr) {
@@ -1433,6 +1434,46 @@ public:
       auto add =
           add_instr<IR::BinOp>(*ty, next_name(), *mul, *addend, IR::BinOp::Add);
       store(*add);
+      break;
+    }
+    case AArch64::SMSUBLrrr:
+    case AArch64::UMSUBLrrr: {
+      // SMSUBL: Signed Multiply-Subtract Long.
+      // UMSUBL: Unsigned Multiply-Subtract Long.
+      auto mul_lhs = get_value(1, 0);
+      auto mul_rhs = get_value(2, 0);
+      auto minuend = get_value(3, 0);
+
+      auto i32 = &get_int_type(32);
+      auto i64 = &get_int_type(64);
+
+      IR::Value *lhs_extended;
+      IR::Value *rhs_extended;
+
+      if(opcode == AArch64::SMSUBLrrr) {
+        // The inputs are automatically zero extended, but we want sign extension for signed, so we need to truncate them back to i32s
+        auto lhs_trunc = add_instr<IR::ConversionOp>(
+            *i32, next_name(), *mul_lhs, IR::ConversionOp::Trunc);
+        auto rhs_trunc = add_instr<IR::ConversionOp>(
+            *i32, next_name(), *mul_rhs, IR::ConversionOp::Trunc);
+
+        // For signed multiplication, must sign extend the lhs and rhs to not overflow
+        lhs_extended = add_instr<IR::ConversionOp>(
+            *i64, next_name(), *lhs_trunc, IR::ConversionOp::SExt);
+        rhs_extended = add_instr<IR::ConversionOp>(
+            *i64, next_name(), *rhs_trunc, IR::ConversionOp::SExt);
+      }
+      else {
+        // For unsigned multiplication, program automatically zero extends
+        lhs_extended = mul_lhs;
+        rhs_extended = mul_rhs;
+      }
+
+      auto mul = add_instr<IR::BinOp>(*ty, next_name(), *lhs_extended, *rhs_extended,
+                                      IR::BinOp::Mul);
+      auto subtract =
+          add_instr<IR::BinOp>(*ty, next_name(), *minuend, *mul, IR::BinOp::Sub);
+      store(*subtract);
       break;
     }
     case AArch64::SMULHrr:
