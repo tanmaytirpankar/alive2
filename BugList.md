@@ -99,3 +99,5 @@ Please contact us or submit a PR if something is missing or inaccurate.
 8. urem and udiv miscompile with global isel set on arm64 (https://github.com/llvm/llvm-project/issues/55287)
 9. fshl-related miscompile by arm64 and x86-64 backends (https://github.com/llvm/llvm-project/issues/55296)
 10. Miscompilation of arithmetic binops with constant params (https://github.com/llvm/llvm-project/issues/55342)
+11. Miscompilation in multiple backends including arm64 and x86-64 (https://github.com/llvm/llvm-project/issues/55484)
+12. Miscompilation involving arithmentic binops (https://github.com/llvm/llvm-project/issues/55490)
