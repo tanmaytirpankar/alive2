@@ -605,6 +605,7 @@ auto uadd_overflow_type(MCOperand op, int size) {
   return ty;
 }
 
+// Add IR value to cache
 void mc_add_identifier(int reg, int version, IR::Value &v) {
   cache.emplace(std::make_pair(reg, version), &v);
 }
@@ -786,7 +787,7 @@ class arm2alive_ {
   MCInstPrinter *instrPrinter;
   // MCRegisterInfo *registerInfo;
 
-  MCInstWrapper *wrapper;
+  MCInstWrapper *wrapper{nullptr};
 
   unsigned int instructionCount;
   unsigned int curId;
@@ -865,7 +866,10 @@ class arm2alive_ {
   IR::Value *getIdentifier(int reg, int id) {
     auto val = mc_get_operand(reg, id);
 
-    //assert(val != NULL);
+    // if (val == nullptr) {
+    //   cout << "getIdentifier: " << reg << " " << id << endl;
+    // }
+    // assert(val != nullptr && "getIdentifier: null operand");
     return val;
   }
 
@@ -905,9 +909,16 @@ class arm2alive_ {
     return v;
   }
 
+  // Generates string name for the next alive instruction
   std::string next_name() {
-    return "%x" + std::to_string(instructionCount) + "x" +
-           std::to_string(++curId);
+    return "%x" + std::to_string(wrapper->getMCInst().getOperand(0).getReg()) +
+           "." + std::to_string(wrapper->getVarId(0));// +
+           //"_" + std::to_string(++curId);
+  }
+
+  std::string next_name(unsigned reg_num, unsigned id_num) {
+    return "%x" + std::to_string(reg_num) + "." + std::to_string(id_num);// +
+           //"_" + std::to_string(++curId);
   }
 
   void add_identifier(IR::Value &v) {
@@ -2132,9 +2143,19 @@ public:
       // value
       if (!ret_void) {
         auto retTyp = &get_int_type(srcFn->getType().bits());
-        auto val =
-            getIdentifier(mc_inst.getOperand(0).getReg(), wrapper->getVarId(0));
 
+        int latest_id = 0;
+        // Hacky way to find the latest use of the return value
+        for (auto &[reg_pair, _] : cache) {
+          if (reg_pair.first == mc_inst.getOperand(0).getReg())
+            latest_id =
+                latest_id < reg_pair.second ? reg_pair.second : latest_id;
+        }
+        auto val = getIdentifier(mc_inst.getOperand(0).getReg(), latest_id);
+
+        if (val == nullptr) {
+          cout << "null val" << endl;
+        }
         if (val) {
           if (retTyp->bits() < val->bits()) {
             auto trunc = add_instr<IR::ConversionOp>(*retTyp, next_name(), *val,
@@ -2231,7 +2252,8 @@ public:
       
       auto input_ptr = dynamic_cast<const IR::Input *>(&v);
       assert(input_ptr);
-
+      //generate names and values for the input arguments
+      //FIXME this is pretty convulated and needs to be cleaned up
       auto operand = MCOperand::createReg(AArch64::X0 + (argNum++));
 
       std::string operand_name = "%" + std::to_string(operand.getReg());
@@ -2240,20 +2262,21 @@ public:
       auto val = make_unique<IR::Input>(typ, move(operand_name), move(attrs));
       IR::Value *stored = val.get();
 
-      stored = add_instr<IR::Freeze>(typ, next_name(), *stored);
+      stored = add_instr<IR::Freeze>(typ, next_name(operand.getReg(), 1), *stored);
+      mc_add_identifier(operand.getReg(), 1, *stored);
       if (typ.bits() < 64) {
 
         auto extended_type = &get_int_type(64);
         if (input_ptr->getAttributes().has(IR::ParamAttrs::Sext))
-          stored = add_instr<IR::ConversionOp>(*extended_type, next_name(),
+          stored = add_instr<IR::ConversionOp>(*extended_type, next_name(operand.getReg(),2),
                                                *stored, IR::ConversionOp::SExt);
         else
-          stored = add_instr<IR::ConversionOp>(*extended_type, next_name(),
+          stored = add_instr<IR::ConversionOp>(*extended_type, next_name(operand.getReg(),2),
                                                *stored, IR::ConversionOp::ZExt);
       }
 
       instructionCount++;
-      mc_add_identifier(operand.getReg(), 0, *stored);
+      mc_add_identifier(operand.getReg(), 2, *stored);
       Fn.addInput(move(val));
     }
 
@@ -2770,7 +2793,7 @@ public:
 
     auto pushFresh = [&](const MCOperand &op) {
       if (counters.find(op) == counters.end()) {
-        counters[op] = 0;
+        counters[op] = 2; //Set the stack to 2 to account for input registers and renaming (freeze + extension)
       }
       auto fresh_id = counters[op]++;
       auto &var_stack = stack[op];
