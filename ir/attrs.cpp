@@ -35,6 +35,10 @@ ostream& operator<<(ostream &os, const ParamAttrs &attr) {
     os << "noalias ";
   if (attr.has(ParamAttrs::DereferenceableOrNull))
     os << "dereferenceable_or_null(" << attr.derefOrNullBytes << ") ";
+  if (attr.has(ParamAttrs::Zext))
+    os << "zeroext ";
+  if (attr.has(ParamAttrs::Sext))
+    os << "signext ";
   return os;
 }
 

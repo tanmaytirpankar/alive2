@@ -19,7 +19,8 @@ public:
   enum Attribute { None = 0, NonNull = 1<<0, ByVal = 1<<1, NoCapture = 1<<2,
                    NoRead = 1<<3, NoWrite = 1<<4, Dereferenceable = 1<<5,
                    NoUndef = 1<<6, Align = 1<<7, Returned = 1<<8,
-                   NoAlias = 1<<9, DereferenceableOrNull = 1<<10 };
+                   NoAlias = 1<<9, DereferenceableOrNull = 1<<10, 
+                   Zext = 1<<11, Sext = 1<<12};
 
   ParamAttrs(unsigned bits = None) : bits(bits) {}
 
@@ -92,6 +93,8 @@ struct FastMathFlags final {
   unsigned flags = None;
 
   bool isNone() const { return flags == None; }
+  bool isNNan() const { return flags & NNaN; }
+  bool isNInf() const {return flags & NInf;}
   friend std::ostream& operator<<(std::ostream &os, const FastMathFlags &fm);
 };
 
