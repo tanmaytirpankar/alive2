@@ -885,12 +885,20 @@ public:
     }
     case llvm::Intrinsic::fshl:
     case llvm::Intrinsic::fshr:
+    case llvm::Intrinsic::smul_fix:
+    case llvm::Intrinsic::umul_fix:
+    case llvm::Intrinsic::smul_fix_sat:
+    case llvm::Intrinsic::umul_fix_sat:
     {
       PARSE_TRIOP();
       TernaryOp::Op op;
       switch (i.getIntrinsicID()) {
       case llvm::Intrinsic::fshl: op = TernaryOp::FShl; break;
       case llvm::Intrinsic::fshr: op = TernaryOp::FShr; break;
+      case llvm::Intrinsic::smul_fix: op = TernaryOp::SMulFix; break;
+      case llvm::Intrinsic::umul_fix: op = TernaryOp::UMulFix; break;
+      case llvm::Intrinsic::smul_fix_sat: op = TernaryOp::SMulFixSat; break;
+      case llvm::Intrinsic::umul_fix_sat: op = TernaryOp::UMulFixSat; break;
       default: UNREACHABLE();
       }
       RETURN_IDENTIFIER(
@@ -1530,10 +1538,12 @@ public:
         // introduce a new BB even if not always needed.
         auto val = i->getIncomingValue(idx);
         if (has_constant_expr(val)) {
+          auto bridge  = predecessor(i, idx);
+          auto &pred   = getBB(i->getIncomingBlock(idx));
+          BB = &Fn.insertBBAfter(bridge, pred);
+
           auto &phi_bb = getBB(i->getParent());
-          auto bridge = predecessor(i, idx);
-          BB = &Fn.insertBBBefore(bridge, phi_bb);
-          getBB(i->getIncomingBlock(idx)).replaceTargetWith(&phi_bb, BB);
+          pred.replaceTargetWith(&phi_bb, BB);
           if (auto op = get_operand(val)) {
             phi->addValue(*op, std::move(bridge));
             BB->addInstr(make_unique<Branch>(phi_bb));
