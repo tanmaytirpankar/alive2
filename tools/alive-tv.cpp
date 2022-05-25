@@ -2714,12 +2714,23 @@ public:
   // FIXME: this will probably have some uninteded consequences that we need to
   // identify
   void rewriteOperands() {
+    
+    // FIXME: this lambda is pretty hacky and brittle
+    auto in_range_rewrite = [](MCOperand &op) {
+      if (op.isReg()) {
+        if (op.getReg() >= AArch64::W0 &&
+            op.getReg() <= AArch64::W28) { // FIXME: Why 28?
+          op.setReg(op.getReg() + AArch64::X0 - AArch64::W0);
+        } else if (!(op.getReg() >= AArch64::X0 &&
+                     op.getReg() <= AArch64::X28) &&
+                   !(op.getReg() <= AArch64::XZR)) {
+          report_fatal_error("Unsupported registers detected in the Assembly");
+        }
+      }
+    };
 
     for (auto &fn_arg : fn_args) {
-      if (fn_arg.getReg() >= AArch64::W0 &&
-          fn_arg.getReg() <= AArch64::W28) { // FIXME: Why 28?
-        fn_arg.setReg(fn_arg.getReg() + AArch64::X0 - AArch64::W0);
-      }
+      in_range_rewrite(fn_arg);
     }
 
     for (auto &block : MF.BBs) {
@@ -2727,10 +2738,7 @@ public:
         auto &mc_instr = w_instr.getMCInst();
         for (unsigned i = 0; i < mc_instr.getNumOperands(); ++i) {
           auto &operand = mc_instr.getOperand(i);
-          if (operand.isReg() && operand.getReg() >= AArch64::W0 &&
-              operand.getReg() <= AArch64::W28) { // FIXME: Why 28?
-            operand.setReg(operand.getReg() + AArch64::X0 - AArch64::W0);
-          }
+          in_range_rewrite(operand);
         }
       }
     }
@@ -3285,7 +3293,6 @@ bool backendTV() {
 
   if (!AF) {
     report_fatal_error("Could not convert llvm function to alive ir") ;
-    exit(-1);
   }
 
   AF->print(cout << "\n----------alive-ir-src.ll-file----------\n");
