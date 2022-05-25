@@ -2667,7 +2667,7 @@ void Phi::replace(const string &predecessor, Value &newval) {
 }
 
 void Phi::print(ostream &os) const {
-  os << getName() << " = phi " << print_type(getType());
+  os << getName() << " = phi " << fmath << print_type(getType());
 
   bool first = true;
   for (auto &[val, bb] : values) {
@@ -2691,7 +2691,10 @@ StateValue Phi::toSMT(State &s) const {
       ret.add(I->second, (*pre)());
     }
   }
-  return *ret();
+
+  StateValue sv = *ret();
+  auto identity = [](const expr &x) { return x; };
+  return fm_poison(s, sv.value, sv.non_poison, identity, fmath, true);
 }
 
 expr Phi::getTypeConstraints(const Function &f) const {
