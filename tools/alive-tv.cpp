@@ -688,7 +688,7 @@ std::tuple<llvm::APInt, llvm::APInt> decode_bit_mask(bool immNBit,
   assert(len >= 1);
   assert(M >= (1 << len));
 
-  auto levels = llvm::APInt::getAllOnes(len).zextOrSelf(6);
+  auto levels = llvm::APInt::getAllOnes(len).zext(6);
 
   auto S = (imms & levels);
   auto R = (immr & levels);
@@ -699,13 +699,13 @@ std::tuple<llvm::APInt, llvm::APInt> decode_bit_mask(bool immNBit,
   auto d = llvm::APInt(len - 1, diff.getZExtValue());
 
   auto welem =
-      llvm::APInt::getAllOnes(S.getZExtValue() + 1).zextOrSelf(esize).rotr(R);
-  auto telem = llvm::APInt::getAllOnes(d.getZExtValue() + 1).zextOrSelf(esize);
+      llvm::APInt::getAllOnes(S.getZExtValue() + 1).zext(esize).rotr(R);
+  auto telem = llvm::APInt::getAllOnes(d.getZExtValue() + 1).zext(esize);
 
   auto wmask = replicate(welem, esize);
   auto tmask = replicate(telem, esize);
 
-  return {welem.truncOrSelf(M), telem.truncOrSelf(M)};
+  return {welem.trunc(M), telem.trunc(M)};
 }
 
 // Values currently holding ZNCV bits, respectively
