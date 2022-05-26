@@ -1,7 +1,6 @@
 // Copyright (c) 2018-present The Alive2 Authors.
 // Distributed under the MIT license that can be found in the LICENSE file.
 
-#include "llvm/MC/MCAsmInfo.h" // include first to avoid ambiguity for comparison operator from util/spaceship.h
 #include "ir/instr.h"
 #include "ir/type.h"
 #include "llvm_util/llvm2alive.h"
@@ -10,6 +9,7 @@
 #include "tools/transform.h"
 #include "util/sort.h"
 #include "util/version.h"
+#include "llvm/MC/MCAsmInfo.h" // include first to avoid ambiguity for comparison operator from util/spaceship.h
 
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseSet.h"
@@ -107,11 +107,6 @@ llvm::cl::opt<bool> opt_backend_tv(
     LLVM_ARGS_PREFIX "backend-tv",
     llvm::cl::desc("Verify operation of a backend (default=false)"),
     llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
-
-llvm::cl::opt<bool>
-    opt_global_isel("use-global-isel",
-                    llvm::cl::desc("Use Global Isel (default=false)"),
-                    llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
 
 llvm::cl::opt<bool> opt_asm_only(
     "asm-only",
@@ -3309,10 +3304,6 @@ bool backendTV() {
   const char *CPU = "apple-a12";
   auto RM = llvm::Optional<llvm::Reloc::Model>();
   auto TM = Target->createTargetMachine(TripleName, CPU, "", Opt, RM);
-  // TODO add later to check with global-isel enabled
-  if (opt_global_isel) {
-    TM->setGlobalISel(true);
-  }
 
   llvm::SmallString<1024> Asm;
   llvm::raw_svector_ostream Dest(Asm);
