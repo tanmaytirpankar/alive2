@@ -2391,8 +2391,6 @@ public:
                     llvm::SMLoc Loc = llvm::SMLoc()) override {}
   void emitGPRel32Value(const llvm::MCExpr *Value) override {}
   void BeginCOFFSymbolDef(const llvm::MCSymbol *Symbol) override {}
-  void EmitCOFFSymbolStorageClass(int StorageClass) override {}
-  void EmitCOFFSymbolType(int Type) override {}
   void EndCOFFSymbolDef() override {}
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
     // Assuming the first label encountered is the function's name
