@@ -1,6 +1,7 @@
 // Copyright (c) 2018-present The Alive2 Authors.
 // Distributed under the MIT license that can be found in the LICENSE file.
 
+#include "llvm/MC/MCAsmInfo.h" // include first to avoid ambiguity for comparison operator from util/spaceship.h
 #include "ir/instr.h"
 #include "ir/type.h"
 #include "llvm_util/llvm2alive.h"
@@ -9,7 +10,6 @@
 #include "tools/transform.h"
 #include "util/sort.h"
 #include "util/version.h"
-#include "llvm/MC/MCAsmInfo.h" // include first to avoid ambiguity for comparison operator from util/spaceship.h
 
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseSet.h"
@@ -552,7 +552,9 @@ struct MCOperandEqual {
 
 // Some variables that we need to maintain as we're performing arm-tv
 static std::map<std::pair<int, int>, IR::Value *> cache;
-static std::unordered_map<MCOperand, unique_ptr<IR::StructType>, MCOperandHash, MCOperandEqual> overflow_aggregate_types;
+static std::unordered_map<MCOperand, unique_ptr<IR::StructType>, MCOperandHash,
+                          MCOperandEqual>
+    overflow_aggregate_types;
 
 // Mapping between machine value and IR::value used when translating asm to
 // Alive IR
@@ -592,12 +594,12 @@ static IR::Type *sadd_overflow_type(MCOperand op, int size) {
 
 // static IR::Type *uadd_overflow_type(MCOperand op, int size) {
 //   assert(op.isReg());
-// 
+//
 //   auto p = overflow_aggregate_types.try_emplace(op);
 //   auto &st = p.first->second;
 //   vector<IR::Type *> elems;
 //   vector<bool> is_padding{false, false, true};
-// 
+//
 //   if (p.second) {
 //     auto add_res_ty = &get_int_type(size);
 //     auto add_ov_ty = &get_int_type(1);
@@ -748,34 +750,34 @@ set<int> s_flag = {
 };
 
 set<int> instrs_32 = {
-    AArch64::ADDWrx,   AArch64::ADDSWrs,  AArch64::ADDSWri, AArch64::ADDWrs,
-    AArch64::ADDWri,   AArch64::ASRVWr,   AArch64::SUBWri,  AArch64::SUBWrs,
-    AArch64::SUBWrx,   AArch64::SUBSWrs,  AArch64::SUBSWri, AArch64::SUBSWrx,
-    AArch64::SBFMWri,  AArch64::CSELWr,   AArch64::ANDWri,  AArch64::ANDWrr,
-    AArch64::ANDWrs,   AArch64::ANDSWri,  AArch64::ANDSWrr, AArch64::ANDSWrs,
-    AArch64::MADDWrrr, AArch64::MSUBWrrr, AArch64::EORWri,  AArch64::CSINVWr,
-    AArch64::CSINCWr,  AArch64::MOVZWi,   AArch64::MOVNWi,  AArch64::MOVKWi,
-    AArch64::LSLVWr,   AArch64::LSRVWr,   AArch64::ORNWrs,  AArch64::UBFMWri,
-    AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,  AArch64::SDIVWr,
-    AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs,  AArch64::RORVWr,
-    AArch64::RBITWr,   AArch64::CLZWr,    AArch64::REVWr,   AArch64::CSNEGWr,
-    AArch64::BICWrs,   AArch64::EONWrs,   AArch64::REV16Wr};
+    AArch64::ADDWrx,  AArch64::ADDSWrs,  AArch64::ADDSWri,  AArch64::ADDWrs,
+    AArch64::ADDWri,  AArch64::ADDSWrx,  AArch64::ASRVWr,   AArch64::SUBWri,
+    AArch64::SUBWrs,  AArch64::SUBWrx,   AArch64::SUBSWrs,  AArch64::SUBSWri,
+    AArch64::SUBSWrx, AArch64::SBFMWri,  AArch64::CSELWr,   AArch64::ANDWri,
+    AArch64::ANDWrr,  AArch64::ANDWrs,   AArch64::ANDSWri,  AArch64::ANDSWrr,
+    AArch64::ANDSWrs, AArch64::MADDWrrr, AArch64::MSUBWrrr, AArch64::EORWri,
+    AArch64::CSINVWr, AArch64::CSINCWr,  AArch64::MOVZWi,   AArch64::MOVNWi,
+    AArch64::MOVKWi,  AArch64::LSLVWr,   AArch64::LSRVWr,   AArch64::ORNWrs,
+    AArch64::UBFMWri, AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,
+    AArch64::SDIVWr,  AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs,
+    AArch64::RORVWr,  AArch64::RBITWr,   AArch64::CLZWr,    AArch64::REVWr,
+    AArch64::CSNEGWr, AArch64::BICWrs,   AArch64::EONWrs,   AArch64::REV16Wr};
 
 set<int> instrs_64 = {
-    AArch64::ADDXrx,    AArch64::ADDSXrs,  AArch64::ADDSXri, AArch64::ADDXrs,
-    AArch64::ADDXri,    AArch64::ASRVXr,   AArch64::SUBXri,  AArch64::SUBXrs,
-    AArch64::SUBXrx,    AArch64::SUBSXrs,  AArch64::SUBSXri, AArch64::SUBSXrx,
-    AArch64::SBFMXri,   AArch64::CSELXr,   AArch64::ANDXri,  AArch64::ANDXrr,
-    AArch64::ANDXrs,    AArch64::ANDSXri,  AArch64::ANDSXrr, AArch64::ANDSXrs,
-    AArch64::MADDXrrr,  AArch64::MSUBXrrr, AArch64::EORXri,  AArch64::CSINVXr,
-    AArch64::CSINCXr,   AArch64::MOVZXi,   AArch64::MOVNXi,  AArch64::MOVKXi,
-    AArch64::LSLVXr,    AArch64::LSRVXr,   AArch64::ORNXrs,  AArch64::UBFMXri,
-    AArch64::BFMXri,    AArch64::ORRXrs,   AArch64::ORRXri,  AArch64::SDIVXr,
-    AArch64::UDIVXr,    AArch64::EXTRXrri, AArch64::EORXrs,  AArch64::SMADDLrrr,
-    AArch64::UMADDLrrr, AArch64::RORVXr,   AArch64::RBITXr,  AArch64::CLZXr,
-    AArch64::REVXr,     AArch64::CSNEGXr,  AArch64::BICXrs,  AArch64::EONXrs,
-    AArch64::SMULHrr,   AArch64::UMULHrr,  AArch64::REV32Xr, AArch64::REV16Xr,
-    AArch64::SMSUBLrrr, AArch64::UMSUBLrrr};
+    AArch64::ADDXrx,    AArch64::ADDSXrs,   AArch64::ADDSXri,  AArch64::ADDXrs,
+    AArch64::ADDXri,    AArch64::ADDSXrx,   AArch64::ASRVXr,   AArch64::SUBXri,
+    AArch64::SUBXrs,    AArch64::SUBXrx,    AArch64::SUBSXrs,  AArch64::SUBSXri,
+    AArch64::SUBSXrx,   AArch64::SBFMXri,   AArch64::CSELXr,   AArch64::ANDXri,
+    AArch64::ANDXrr,    AArch64::ANDXrs,    AArch64::ANDSXri,  AArch64::ANDSXrr,
+    AArch64::ANDSXrs,   AArch64::MADDXrrr,  AArch64::MSUBXrrr, AArch64::EORXri,
+    AArch64::CSINVXr,   AArch64::CSINCXr,   AArch64::MOVZXi,   AArch64::MOVNXi,
+    AArch64::MOVKXi,    AArch64::LSLVXr,    AArch64::LSRVXr,   AArch64::ORNXrs,
+    AArch64::UBFMXri,   AArch64::BFMXri,    AArch64::ORRXrs,   AArch64::ORRXri,
+    AArch64::SDIVXr,    AArch64::UDIVXr,    AArch64::EXTRXrri, AArch64::EORXrs,
+    AArch64::SMADDLrrr, AArch64::UMADDLrrr, AArch64::RORVXr,   AArch64::RBITXr,
+    AArch64::CLZXr,     AArch64::REVXr,     AArch64::CSNEGXr,  AArch64::BICXrs,
+    AArch64::EONXrs,    AArch64::SMULHrr,   AArch64::UMULHrr,  AArch64::REV32Xr,
+    AArch64::REV16Xr,   AArch64::SMSUBLrrr, AArch64::UMSUBLrrr};
 
 bool has_s(int instr) {
   return s_flag.contains(instr);
@@ -802,7 +804,8 @@ class arm2alive_ {
     cout.flush();
 
     llvm::errs() << "ERROR: Unsupported arm instruction: "
-                 << instrPrinter->getOpcodeName(I.getMCInst().getOpcode());
+                 << instrPrinter->getOpcodeName(I.getMCInst().getOpcode())
+                 << "\n";
     llvm::errs().flush();
     cerr.flush();
     exit(1); // for now lets exit the program if the arm instruction is not
@@ -821,6 +824,7 @@ class arm2alive_ {
     if (instr == AArch64::RET)
       return 0;
 
+    cout << "get_size encountered unknown instruction" << endl;
     visitError(*wrapper);
     UNREACHABLE();
   }
@@ -1170,7 +1174,7 @@ public:
         auto overflow_type = sadd_overflow_type(mc_inst.getOperand(1), size);
         auto sadd = add_instr<IR::BinOp>(*overflow_type, next_name(), *a, *b,
                                          IR::BinOp::SAdd_Overflow);
-        
+
         auto result = add_instr<IR::ExtractValue>(*ty, next_name(), *sadd);
         result->addIdx(0);
 
@@ -3312,7 +3316,8 @@ bool backendTV() {
   llvm::TargetOptions Opt;
   const char *CPU = "apple-a12";
   auto RM = llvm::Optional<llvm::Reloc::Model>();
-  std::unique_ptr<llvm::TargetMachine> TM(Target->createTargetMachine(TripleName, CPU, "", Opt, RM));
+  std::unique_ptr<llvm::TargetMachine> TM(
+      Target->createTargetMachine(TripleName, CPU, "", Opt, RM));
   llvm::SmallString<1024> Asm;
   llvm::raw_svector_ostream Dest(Asm);
 
@@ -3433,7 +3438,7 @@ bool backendTV() {
   auto TF = arm2alive(MF, AF, IPtemp.get());
   if (TF)
     TF->print(cout << "\n----------alive-lift-arm-target----------\n");
-  
+
   auto r = backend_verify(AF, TF, TLI, true);
 
   if (r.status == Results::ERROR) {
