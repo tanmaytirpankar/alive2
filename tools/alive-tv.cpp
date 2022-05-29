@@ -551,7 +551,8 @@ struct MCOperandEqual {
 // changed to map from MCInstWrapper to Value.
 
 // Some variables that we need to maintain as we're performing arm-tv
-std::map<std::pair<int, int>, IR::Value *> cache;
+static std::map<std::pair<int, int>, IR::Value *> cache;
+static std::unordered_map<MCOperand, unique_ptr<IR::StructType>, MCOperandHash, MCOperandEqual> overflow_aggregate_types;
 
 // Mapping between machine value and IR::value used when translating asm to
 // Alive IR
@@ -568,37 +569,47 @@ unsigned type_id_counter{0};
 // objects that are defined there further I'm not sure if the padding matters at
 // this point but the code is based on utils.cpp llvm_type2alive function that
 // uses padding for struct types
-auto sadd_overflow_type(MCOperand op, int size) {
+static IR::Type *sadd_overflow_type(MCOperand op, int size) {
+  assert(op.isReg());
+
+  auto p = overflow_aggregate_types.try_emplace(op);
+  auto &st = p.first->second;
   vector<IR::Type *> elems;
   vector<bool> is_padding{false, false, true};
 
-  assert(op.isReg());
-  auto add_res_ty = &get_int_type(size);
-  auto add_ov_ty = &get_int_type(1);
-  auto padding_ty = &get_int_type(24);
-  elems.push_back(add_res_ty);
-  elems.push_back(add_ov_ty);
-  elems.push_back(padding_ty);
-  auto ty = new IR::StructType("ty_" + to_string(type_id_counter++),
-                               move(elems), move(is_padding));
-  return ty;
+  if (p.second) {
+    auto add_res_ty = &get_int_type(size);
+    auto add_ov_ty = &get_int_type(1);
+    auto padding_ty = &get_int_type(24);
+    elems.push_back(add_res_ty);
+    elems.push_back(add_ov_ty);
+    elems.push_back(padding_ty);
+    st = make_unique<IR::StructType>("ty_" + to_string(type_id_counter++),
+                                     move(elems), move(is_padding));
+  }
+  return st.get();
 }
 
-auto uadd_overflow_type(MCOperand op, int size) {
-  vector<IR::Type *> elems;
-  vector<bool> is_padding{false, false, true};
-
-  assert(op.isReg());
-  auto add_res_ty = &get_int_type(size);
-  auto add_ov_ty = &get_int_type(1);
-  auto padding_ty = &get_int_type(24);
-  elems.push_back(add_res_ty);
-  elems.push_back(add_ov_ty);
-  elems.push_back(padding_ty);
-  auto ty = new IR::StructType("ty_" + to_string(type_id_counter++),
-                               move(elems), move(is_padding));
-  return ty;
-}
+// static IR::Type *uadd_overflow_type(MCOperand op, int size) {
+//   assert(op.isReg());
+// 
+//   auto p = overflow_aggregate_types.try_emplace(op);
+//   auto &st = p.first->second;
+//   vector<IR::Type *> elems;
+//   vector<bool> is_padding{false, false, true};
+// 
+//   if (p.second) {
+//     auto add_res_ty = &get_int_type(size);
+//     auto add_ov_ty = &get_int_type(1);
+//     auto padding_ty = &get_int_type(24);
+//     elems.push_back(add_res_ty);
+//     elems.push_back(add_ov_ty);
+//     elems.push_back(padding_ty);
+//     st = make_unique<IR::StructType>("ty_" + to_string(type_id_counter++),
+//                                  move(elems), move(is_padding));
+//   }
+//   return st.get();
+// }
 
 void mc_add_identifier(int reg, int version, IR::Value &v) {
   cache.emplace(std::make_pair(reg, version), &v);
@@ -1159,7 +1170,7 @@ public:
         auto overflow_type = sadd_overflow_type(mc_inst.getOperand(1), size);
         auto sadd = add_instr<IR::BinOp>(*overflow_type, next_name(), *a, *b,
                                          IR::BinOp::SAdd_Overflow);
-
+        
         auto result = add_instr<IR::ExtractValue>(*ty, next_name(), *sadd);
         result->addIdx(0);
 
@@ -2249,7 +2260,7 @@ public:
 
     for (auto &[alive_bb, mc_bb] : sorted_bbs) {
       BB = alive_bb;
-      auto mc_instrs = mc_bb->getInstrs();
+      auto &mc_instrs = mc_bb->getInstrs();
       for (auto &mc_instr : mc_instrs) {
         mc_visit(mc_instr);
       }
@@ -3301,8 +3312,7 @@ bool backendTV() {
   llvm::TargetOptions Opt;
   const char *CPU = "apple-a12";
   auto RM = llvm::Optional<llvm::Reloc::Model>();
-  auto TM = Target->createTargetMachine(TripleName, CPU, "", Opt, RM);
-
+  std::unique_ptr<llvm::TargetMachine> TM(Target->createTargetMachine(TripleName, CPU, "", Opt, RM));
   llvm::SmallString<1024> Asm;
   llvm::raw_svector_ostream Dest(Asm);
 
@@ -3423,7 +3433,7 @@ bool backendTV() {
   auto TF = arm2alive(MF, AF, IPtemp.get());
   if (TF)
     TF->print(cout << "\n----------alive-lift-arm-target----------\n");
-
+  
   auto r = backend_verify(AF, TF, TLI, true);
 
   if (r.status == Results::ERROR) {
