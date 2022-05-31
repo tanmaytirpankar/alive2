@@ -1872,7 +1872,13 @@ public:
 
       // UXTB
       if (immr == 0 && imms == 7) {
-        assert(false && "UXTB not supported");
+        auto mask = ((uint64_t)1 << 8) - 1;
+        auto masked = add_instr<IR::BinOp>(
+            *ty, next_name(), *src, *make_intconst(mask, size), IR::BinOp::And);
+        auto zexted = add_instr<IR::ConversionOp>(*ty, next_name(), *masked,
+                                                  IR::ConversionOp::ZExt);
+        store(*zexted);
+        // assert(false && "UXTB not supported");
         return;
       }
       // UXTH
