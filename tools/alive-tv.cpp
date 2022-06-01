@@ -349,6 +349,10 @@ public:
     op_ids[index] = id;
   }
 
+  unsigned getOpId(unsigned index) {
+    return op_ids[index];
+  }
+
   unsigned getVarId(unsigned index) {
     return op_ids[index];
   }
@@ -556,7 +560,7 @@ struct MCOperandEqual {
 // changed to map from MCInstWrapper to Value.
 
 // Some variables that we need to maintain as we're performing arm-tv
-std::map<std::pair<int, int>, IR::Value *> cache;
+std::map<std::pair<unsigned, unsigned>, IR::Value *> cache;
 
 // Mapping between machine value and IR::value used when translating asm to
 // Alive IR
@@ -606,11 +610,11 @@ auto uadd_overflow_type(MCOperand op, int size) {
 }
 
 // Add IR value to cache
-void mc_add_identifier(int reg, int version, IR::Value &v) {
+void mc_add_identifier(unsigned reg, unsigned version, IR::Value &v) {
   cache.emplace(std::make_pair(reg, version), &v);
 }
 
-IR::Value *mc_get_operand(int reg, int version) {
+IR::Value *mc_get_operand(unsigned reg, unsigned version) {
   if (auto I = cache.find(std::make_pair(reg, version)); I != cache.end())
     return I->second;
   return nullptr;
@@ -656,7 +660,7 @@ static inline uint64_t decodeLogicalImmediate(uint64_t val, unsigned regSize) {
 // of size M, and duplicates it N times, returning a bit-vector of size M*N
 // reference:
 // https://developer.arm.com/documentation/ddi0596/2020-12/Shared-Pseudocode/Shared-Functions?lang=en#impl-shared.Replicate.2
-llvm::APInt replicate(llvm::APInt bits, unsigned int N) {
+llvm::APInt replicate(llvm::APInt bits, unsigned N) {
   auto bitsWidth = bits.getBitWidth();
 
   auto newInt = llvm::APInt(bitsWidth * N, 0);
@@ -754,8 +758,8 @@ set<int> instrs_32 = {
     AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,  AArch64::SDIVWr,
     AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs,  AArch64::RORVWr,
     AArch64::RBITWr,   AArch64::CLZWr,    AArch64::REVWr,   AArch64::CSNEGWr,
-    AArch64::BICWrs,   AArch64::EONWrs,   AArch64::REV16Wr
-};
+    AArch64::BICWrs,   AArch64::EONWrs,   AArch64::REV16Wr, AArch64::Bcc
+  };
 
 set<int> instrs_64 = {
     AArch64::ADDXrx,    AArch64::ADDSXrs,  AArch64::ADDSXri, AArch64::ADDXrs,
@@ -771,7 +775,11 @@ set<int> instrs_64 = {
     AArch64::UMADDLrrr, AArch64::RORVXr,   AArch64::RBITXr,  AArch64::CLZXr,
     AArch64::REVXr,     AArch64::CSNEGXr,  AArch64::BICXrs,  AArch64::EONXrs,
     AArch64::SMULHrr,   AArch64::UMULHrr,  AArch64::REV32Xr, AArch64::REV16Xr,
-    AArch64::SMSUBLrrr, AArch64::UMSUBLrrr
+    AArch64::SMSUBLrrr, AArch64::UMSUBLrrr, AArch64::PHI
+};
+
+set<int> instrs_no_write = {
+  AArch64::Bcc
 };
 
 bool has_s(int instr) {
@@ -783,14 +791,16 @@ class arm2alive_ {
   // const llvm::DataLayout &DL;
   std::optional<IR::Function> &srcFn;
   IR::BasicBlock *BB;
+  unsigned blockCount{0};
 
   MCInstPrinter *instrPrinter;
-  // MCRegisterInfo *registerInfo;
+  MCRegisterInfo *registerInfo;
+  std::vector<std::pair<IR::Phi*,MCInstWrapper*>> lift_todo_phis;
 
   MCInstWrapper *wrapper{nullptr};
 
-  unsigned int instructionCount;
-  unsigned int curId;
+  unsigned instructionCount;
+  unsigned curId;
   bool ret_void{false};
 
   std::vector<std::unique_ptr<IR::Instr>> visitError(MCInstWrapper &I) {
@@ -799,7 +809,8 @@ class arm2alive_ {
     cout.flush();
 
     llvm::errs() << "ERROR: Unsupported arm instruction: "
-                 << instrPrinter->getOpcodeName(I.getMCInst().getOpcode());
+                 << instrPrinter->getOpcodeName(I.getMCInst().getOpcode())
+                 << "\n";
     llvm::errs().flush();
     cerr.flush();
     exit(1); // for now lets exit the program if the arm instruction is not
@@ -863,7 +874,7 @@ class arm2alive_ {
     return reg_shift(v, encodedShift);
   }
 
-  IR::Value *getIdentifier(int reg, int id) {
+  IR::Value *getIdentifier(unsigned reg, unsigned id) {
     auto val = mc_get_operand(reg, id);
 
     // if (val == nullptr) {
@@ -911,14 +922,41 @@ class arm2alive_ {
 
   // Generates string name for the next alive instruction
   std::string next_name() {
-    return "%x" + std::to_string(wrapper->getMCInst().getOperand(0).getReg()) +
-           "." + std::to_string(wrapper->getVarId(0));// +
-           //"_" + std::to_string(++curId);
+    std::stringstream ss;
+    if (instrs_no_write.contains(wrapper->getOpcode())) {
+      ss << "tx" << ++curId << "x" << blockCount;
+    }
+    else {
+      ss << registerInfo->getName(wrapper->getMCInst().getOperand(0).getReg())
+         << "_" << wrapper->getVarId(0) << "x" << ++curId << "x" << blockCount;
+    }
+    return ss.str();
   }
 
   std::string next_name(unsigned reg_num, unsigned id_num) {
-    return "%x" + std::to_string(reg_num) + "." + std::to_string(id_num);// +
-           //"_" + std::to_string(++curId);
+    std::stringstream ss;
+    ss << registerInfo->getName(reg_num) << "_" << id_num;
+    return ss.str();
+  }
+
+  void add_phi_params(IR::Phi *phi_instr, MCInstWrapper *phi_mc_wrapper) {
+    // auto val = mc_get_operand(reg, id);
+    assert(phi_mc_wrapper->getOpcode() == AArch64::PHI &&
+           "cannot add params to non-phi instr");
+    for (unsigned i = 1; i < phi_mc_wrapper->getMCInst().getNumOperands(); i++) {
+      assert(phi_mc_wrapper->getMCInst().getOperand(i).isReg());
+      cout << "<Phi arg>:[(" << phi_mc_wrapper->getMCInst().getOperand(i).getReg()
+           << "," << phi_mc_wrapper->getOpId(i) << ")," << phi_mc_wrapper->getOpPhiBlock(i)
+           << "]>\n";
+      string block_name(phi_mc_wrapper->getOpPhiBlock(i));
+      auto val = mc_get_operand(phi_mc_wrapper->getMCInst().getOperand(i).getReg(),
+                                phi_mc_wrapper->getOpId(i));
+      assert(val != nullptr);
+      cout << "block name = " << block_name << endl;
+      phi_instr->addValue(*val, std::move(block_name));
+      cout << "i is = " << i << endl;
+    }
+    cout << "exiting add_phi_params \n";
   }
 
   void add_identifier(IR::Value &v) {
@@ -1090,8 +1128,8 @@ class arm2alive_ {
 
 public:
   arm2alive_(MCFunction &MF, std::optional<IR::Function> &srcFn,
-             MCInstPrinter *instrPrinter)
-      : MF(MF), srcFn(srcFn), instrPrinter(instrPrinter), instructionCount(0),
+             MCInstPrinter *instrPrinter, MCRegisterInfo *registerInfo)
+      : MF(MF), srcFn(srcFn), instrPrinter(instrPrinter), registerInfo(registerInfo), instructionCount(0),
         curId(0) {}
 
   // Rudimentary function to visit an MCInstWrapper instructions and convert it
@@ -1099,7 +1137,7 @@ public:
   // simplicity to get the initial prototype.
   // FIXME add support for more arm instructions
   // FIXME generate code for setting NZCV flags and other changes to arm PSTATE
-  void mc_visit(MCInstWrapper &I) {
+  void mc_visit(MCInstWrapper &I, IR::Function &Fn) {
     std::vector<std::unique_ptr<IR::Instr>> res;
     auto opcode = I.getOpcode();
     auto &mc_inst = I.getMCInst();
@@ -1141,7 +1179,7 @@ public:
         // ARM wants us to (byte, half, full) and then sign extend to a new
         // size. Without extendSize being used for a trunc, a lot of masking
         // and more manual work to sign extend would be necessary
-        unsigned int extendSize = 8 << (extendType % 4);
+        unsigned extendSize = 8 << (extendType % 4);
         auto shift = extendImm & 0x7;
 
         b = get_value(2);
@@ -1259,7 +1297,7 @@ public:
         // ARM wants us to (byte, half, full) and then sign extend to a new
         // size. Without extendSize being used for a trunc, a lot of masking
         // and more manual work to sign extend would be necessary
-        unsigned int extendSize = 8 << (extendType % 4);
+        unsigned extendSize = 8 << (extendType % 4);
         auto shift = extendImm & 0x7;
 
         b = get_value(2);
@@ -2144,7 +2182,7 @@ public:
       if (!ret_void) {
         auto retTyp = &get_int_type(srcFn->getType().bits());
 
-        int latest_id = 0;
+        unsigned latest_id = 0;
         // Hacky way to find the latest use of the return value
         for (auto &[reg_pair, _] : cache) {
           if (reg_pair.first == mc_inst.getOperand(0).getReg())
@@ -2173,7 +2211,42 @@ public:
 
       break;
     }
+    case AArch64::Bcc: {
+    
+      auto cond_val_imm = mc_inst.getOperand(0).getImm();
+      auto cond_val = evaluate_condition(cond_val_imm);
+      
+      auto &bb_order = Fn.getBBs();
+      assert(bb_order.size() > blockCount && "next block not found");
+      auto &jmp_tgt_op = mc_inst.getOperand(1);
+      assert(jmp_tgt_op.isExpr() && "expected expression");
+      assert((jmp_tgt_op.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
+             "expected symbol ref as bcc operand");
+      const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt_op.getExpr());
+      const MCSymbol &Sym = SRE.getSymbol();
+      cout << "bcc target: " << Sym.getName().str() << '\n';
+      auto &dst_true = Fn.getBB(Sym.getName());
+      auto &dst_false = *bb_order[blockCount];
+      
+      add_instr<IR::Branch>(*cond_val, dst_true, dst_false);
+      //Fn.print(cout << "\nError detected----------partially-lifted-arm-target----------\n");
+      //visitError(I);
+      break;
+    }
+    case AArch64::PHI: {
+      auto result =
+          add_instr<IR::Phi>(*ty, next_name());
+      //add_phi_params(result);
+      cout << "pushing phi in todo : " << endl;
+      wrapper->print();
+      lift_todo_phis.emplace_back(result, wrapper);
+      store(*result);
+      //Fn.print(cout << "\nphi instruction detected----------partially-lifted-arm-target----------\n");
+      //visitError(I);
+      break;
+    }
     default:
+      Fn.print(cout << "\nError detected----------partially-lifted-arm-target----------\n");
       visitError(I);
     }
   }
@@ -2238,7 +2311,6 @@ public:
 
     // setup BB so subsequent add_instr calls work
     BB = sorted_bbs[0].first;
-
     int argNum = 0;
     for (auto &v : srcFn->getInputs()) {
       auto &typ = v.getType();
@@ -2256,7 +2328,7 @@ public:
       //FIXME this is pretty convulated and needs to be cleaned up
       auto operand = MCOperand::createReg(AArch64::X0 + (argNum++));
 
-      std::string operand_name = "%" + std::to_string(operand.getReg());
+      std::string operand_name(registerInfo->getName(operand.getReg()));
       IR::ParamAttrs attrs(input_ptr->getAttributes());
 
       auto val = make_unique<IR::Input>(typ, move(operand_name), move(attrs));
@@ -2282,9 +2354,15 @@ public:
 
     for (auto &[alive_bb, mc_bb] : sorted_bbs) {
       BB = alive_bb;
-      auto mc_instrs = mc_bb->getInstrs();
+      cout << "----------\n";
+      cout << "printing block\n";
+      mc_bb->print();
+      cout << "----------\n";
+      auto &mc_instrs = mc_bb->getInstrs();
       for (auto &mc_instr : mc_instrs) {
-        mc_visit(mc_instr);
+        cout << "before visit\n";
+        mc_instr.print();
+        mc_visit(mc_instr, Fn);
       }
 
       auto instrs = BB->instrs();
@@ -2293,10 +2371,21 @@ public:
         continue;
       }
 
+      blockCount++;
       Fn.print(cout << "\n----------partially-lifted-arm-target----------\n");
       return {};
     }
 
+    Fn.print(cout << "\n----------lifted-arm-target-missing-phi-params----------\n");
+    cout << "lift_todo_phis.size() = " << lift_todo_phis.size() << "\n";
+
+    int tmp_index = 0;
+    for (auto &[phi, phi_mc_wrapper] : lift_todo_phis) {
+      cout << "index = " << tmp_index << "opcode =" <<  phi_mc_wrapper->getOpcode() << endl;
+      tmp_index++;
+      add_phi_params(phi, phi_mc_wrapper);
+
+    }
     return move(Fn);
   }
 };
@@ -2307,8 +2396,8 @@ public:
 // types of arguments.
 std::optional<IR::Function> arm2alive(MCFunction &MF,
                                       std::optional<IR::Function> &srcFn,
-                                      MCInstPrinter *instrPrinter) {
-  return arm2alive_(MF, srcFn, instrPrinter).run();
+                                      MCInstPrinter *instrPrinter, MCRegisterInfo *registerInfo) {
+  return arm2alive_(MF, srcFn, instrPrinter, registerInfo).run();
 }
 
 // We're overriding MCStreamerWrapper to generate an MCFunction
@@ -3445,18 +3534,20 @@ bool backendTV() {
   cout << "after SSA conversion\n";
   Str.printBlocks();
 
-  if (Str.MF.BBs.size() > 1) {
-    cout << "ERROR: we don't generate SSA for this type of arm function yet"
-         << '\n';
-    return false;
-  }
+  // if (Str.MF.BBs.size() > 1) {
+  //   cout << "ERROR: we don't generate SSA for this type of arm function yet"
+  //        << '\n';
+  //   return false;
+  // }
 
 
   auto &MF = Str.MF;
-  auto TF = arm2alive(MF, AF, IPtemp.get());
+  auto TF = arm2alive(MF, AF, IPtemp.get(), MRI.get());
   if (TF)
     TF->print(cout << "\n----------alive-lift-arm-target----------\n");
 
+  //cout << "exiting for valgrind\n";
+  //return false;
   auto r = backend_verify(AF, TF, TLI, true);
 
   if (r.status == Results::ERROR) {
