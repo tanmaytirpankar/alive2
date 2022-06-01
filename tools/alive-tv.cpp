@@ -108,15 +108,10 @@ llvm::cl::opt<bool> opt_backend_tv(
     llvm::cl::desc("Verify operation of a backend (default=false)"),
     llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
 
-llvm::cl::opt<bool>
-    opt_global_isel("use-global-isel",
-                    llvm::cl::desc("Use Global Isel (default=false)"),
-                    llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
-
-llvm::cl::opt<bool>
-    opt_asm_only("asm-only",
-                    llvm::cl::desc("Only generate assembly and exit (default=false)"),
-                    llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
+llvm::cl::opt<bool> opt_asm_only(
+    "asm-only",
+    llvm::cl::desc("Only generate assembly and exit (default=false)"),
+    llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
 
 llvm::ExitOnError ExitOnErr;
 
@@ -433,7 +428,12 @@ public:
     Instrs.push_back(inst);
   }
 
-  void addInstBegin(MCInstWrapper &inst) {
+  //void addInstBegin(MCInstWrapper &inst) {
+  //  Instrs.insert(Instrs.begin(), inst);
+  //}
+
+  void addInstBegin(MCInstWrapper &&inst) {
+    cout << "moving inst\n";
     Instrs.insert(Instrs.begin(), inst);
   }
 
@@ -560,7 +560,10 @@ struct MCOperandEqual {
 // changed to map from MCInstWrapper to Value.
 
 // Some variables that we need to maintain as we're performing arm-tv
-std::map<std::pair<unsigned, unsigned>, IR::Value *> cache;
+static std::map<std::pair<unsigned, unsigned>, IR::Value *> cache;
+static std::unordered_map<MCOperand, unique_ptr<IR::StructType>, MCOperandHash,
+                          MCOperandEqual>
+    overflow_aggregate_types;
 
 // Mapping between machine value and IR::value used when translating asm to
 // Alive IR
@@ -577,37 +580,47 @@ unsigned type_id_counter{0};
 // objects that are defined there further I'm not sure if the padding matters at
 // this point but the code is based on utils.cpp llvm_type2alive function that
 // uses padding for struct types
-auto sadd_overflow_type(MCOperand op, int size) {
+static IR::Type *sadd_overflow_type(MCOperand op, int size) {
+  assert(op.isReg());
+
+  auto p = overflow_aggregate_types.try_emplace(op);
+  auto &st = p.first->second;
   vector<IR::Type *> elems;
   vector<bool> is_padding{false, false, true};
 
-  assert(op.isReg());
-  auto add_res_ty = &get_int_type(size);
-  auto add_ov_ty = &get_int_type(1);
-  auto padding_ty = &get_int_type(24);
-  elems.push_back(add_res_ty);
-  elems.push_back(add_ov_ty);
-  elems.push_back(padding_ty);
-  auto ty = new IR::StructType("ty_" + to_string(type_id_counter++),
-                               move(elems), move(is_padding));
-  return ty;
+  if (p.second) {
+    auto add_res_ty = &get_int_type(size);
+    auto add_ov_ty = &get_int_type(1);
+    auto padding_ty = &get_int_type(24);
+    elems.push_back(add_res_ty);
+    elems.push_back(add_ov_ty);
+    elems.push_back(padding_ty);
+    st = make_unique<IR::StructType>("ty_" + to_string(type_id_counter++),
+                                     move(elems), move(is_padding));
+  }
+  return st.get();
 }
 
-auto uadd_overflow_type(MCOperand op, int size) {
-  vector<IR::Type *> elems;
-  vector<bool> is_padding{false, false, true};
-
-  assert(op.isReg());
-  auto add_res_ty = &get_int_type(size);
-  auto add_ov_ty = &get_int_type(1);
-  auto padding_ty = &get_int_type(24);
-  elems.push_back(add_res_ty);
-  elems.push_back(add_ov_ty);
-  elems.push_back(padding_ty);
-  auto ty = new IR::StructType("ty_" + to_string(type_id_counter++),
-                               move(elems), move(is_padding));
-  return ty;
-}
+// static IR::Type *uadd_overflow_type(MCOperand op, int size) {
+//   assert(op.isReg());
+//
+//   auto p = overflow_aggregate_types.try_emplace(op);
+//   auto &st = p.first->second;
+//   vector<IR::Type *> elems;
+//   vector<bool> is_padding{false, false, true};
+//
+//   if (p.second) {
+//     auto add_res_ty = &get_int_type(size);
+//     auto add_ov_ty = &get_int_type(1);
+//     auto padding_ty = &get_int_type(24);
+//     elems.push_back(add_res_ty);
+//     elems.push_back(add_ov_ty);
+//     elems.push_back(padding_ty);
+//     st = make_unique<IR::StructType>("ty_" + to_string(type_id_counter++),
+//                                  move(elems), move(is_padding));
+//   }
+//   return st.get();
+// }
 
 // Add IR value to cache
 void mc_add_identifier(unsigned reg, unsigned version, IR::Value &v) {
@@ -693,7 +706,7 @@ std::tuple<llvm::APInt, llvm::APInt> decode_bit_mask(bool immNBit,
   assert(len >= 1);
   assert(M >= (1 << len));
 
-  auto levels = llvm::APInt::getAllOnes(len).zextOrSelf(6);
+  auto levels = llvm::APInt::getAllOnes(len).zext(6);
 
   auto S = (imms & levels);
   auto R = (immr & levels);
@@ -704,13 +717,13 @@ std::tuple<llvm::APInt, llvm::APInt> decode_bit_mask(bool immNBit,
   auto d = llvm::APInt(len - 1, diff.getZExtValue());
 
   auto welem =
-      llvm::APInt::getAllOnes(S.getZExtValue() + 1).zextOrSelf(esize).rotr(R);
-  auto telem = llvm::APInt::getAllOnes(d.getZExtValue() + 1).zextOrSelf(esize);
+      llvm::APInt::getAllOnes(S.getZExtValue() + 1).zext(esize).rotr(R);
+  auto telem = llvm::APInt::getAllOnes(d.getZExtValue() + 1).zext(esize);
 
   auto wmask = replicate(welem, esize);
   auto tmask = replicate(telem, esize);
 
-  return {welem.truncOrSelf(M), telem.truncOrSelf(M)};
+  return {welem.trunc(M), telem.trunc(M)};
 }
 
 // Values currently holding ZNCV bits, respectively
@@ -748,7 +761,7 @@ set<int> s_flag = {
 
 set<int> instrs_32 = {
     AArch64::ADDWrx,   AArch64::ADDSWrs,  AArch64::ADDSWri, AArch64::ADDWrs,
-    AArch64::ADDWri,   AArch64::ASRVWr,   AArch64::SUBWri,  AArch64::SUBWrs,
+    AArch64::ADDWri,   AArch64::ADDSWrx,  AArch64::ASRVWr,   AArch64::SUBWri,  AArch64::SUBWrs,
     AArch64::SUBWrx,   AArch64::SUBSWrs,  AArch64::SUBSWri, AArch64::SUBSWrx,
     AArch64::SBFMWri,  AArch64::CSELWr,   AArch64::ANDWri,  AArch64::ANDWrr,
     AArch64::ANDWrs,   AArch64::ANDSWri,  AArch64::ANDSWrr, AArch64::ANDSWrs,
@@ -763,7 +776,7 @@ set<int> instrs_32 = {
 
 set<int> instrs_64 = {
     AArch64::ADDXrx,    AArch64::ADDSXrs,  AArch64::ADDSXri, AArch64::ADDXrs,
-    AArch64::ADDXri,    AArch64::ASRVXr,   AArch64::SUBXri,  AArch64::SUBXrs,
+    AArch64::ADDXri,    AArch64::ADDSXrx,  AArch64::ASRVXr,   AArch64::SUBXri,  AArch64::SUBXrs,
     AArch64::SUBXrx,    AArch64::SUBSXrs,  AArch64::SUBSXri, AArch64::SUBSXrx,
     AArch64::SBFMXri,   AArch64::CSELXr,   AArch64::ANDXri,  AArch64::ANDXrr,
     AArch64::ANDXrs,    AArch64::ANDSXri,  AArch64::ANDSXrr, AArch64::ANDSXrs,
@@ -829,6 +842,7 @@ class arm2alive_ {
     if (instr == AArch64::RET)
       return 0;
 
+    cout << "get_size encountered unknown instruction" << endl;
     visitError(*wrapper);
     UNREACHABLE();
   }
@@ -837,7 +851,7 @@ class arm2alive_ {
   // https://github.com/llvm/llvm-project/blob/93d1a623cecb6f732db7900baf230a13e6ac6c6a/llvm/lib/Target/AArch64/MCTargetDesc/AArch64AddressingModes.h#L74
   // LLVM encodes its shifts into immediates (ARM doesn't, it has a shift
   // field in the instruction)
-  IR::Value *reg_shift(IR::Value* value, int encodedShift) {
+  IR::Value *reg_shift(IR::Value *value, int encodedShift) {
     int shift_type = ((encodedShift >> 6) & 0x7);
     auto typ = &value->getType();
 
@@ -855,18 +869,19 @@ class arm2alive_ {
       break;
     case 3:
       // ROR shift
-      return add_instr<IR::TernaryOp>(*typ, next_name(), *value, *value,
-                                    *make_intconst(encodedShift & 0x3f, typ->bits()),
-                                    IR::TernaryOp::FShr);
+      return add_instr<IR::TernaryOp>(
+          *typ, next_name(), *value, *value,
+          *make_intconst(encodedShift & 0x3f, typ->bits()),
+          IR::TernaryOp::FShr);
       break;
     default:
       // FIXME: handle other case (msl)
       assert(false && "shift type not supported");
     }
 
-    return add_instr<IR::BinOp>(*typ, next_name(), *value,
-                             *make_intconst(encodedShift & 0x3f, typ->bits()),
-                             op);
+    return add_instr<IR::BinOp>(
+        *typ, next_name(), *value,
+        *make_intconst(encodedShift & 0x3f, typ->bits()), op);
   }
 
   IR::Value *reg_shift(int value, int size, int encodedShift) {
@@ -1161,7 +1176,7 @@ public:
     case AArch64::ADDSXri:
     case AArch64::ADDSXrx: {
       auto a = get_value(1);
-      IR::Value* b;
+      IR::Value *b;
 
       switch (opcode) {
       case AArch64::ADDWrx:
@@ -1171,7 +1186,8 @@ public:
         auto extendImm = mc_inst.getOperand(3).getImm();
         auto extendType = ((extendImm >> 3) & 0x7);
 
-        cout << "extendImm: " << extendImm << ", extendType: " << extendType << "\n";
+        cout << "extendImm: " << extendImm << ", extendType: " << extendType
+             << "\n";
 
         auto isSigned = extendType / 4;
 
@@ -1186,14 +1202,15 @@ public:
 
         // Make sure to not to trunc to the same size as the parameter.
         // Sometimes ADDrx is generated using 32 bit registers and "extends" to
-        // a 32 bit value. This is seen as a type error in Alive, but is valid ARM
+        // a 32 bit value. This is seen as a type error in Alive, but is valid
+        // ARM
         if (extendSize != ty->bits()) {
           auto truncType = &get_int_type(extendSize);
-          b = add_instr<IR::ConversionOp>(
-              *truncType, next_name(), *b, IR::ConversionOp::Trunc);
-          b = add_instr<IR::ConversionOp>(
-              *ty, next_name(), *b,
-              isSigned ? IR::ConversionOp::SExt : IR::ConversionOp::ZExt);
+          b = add_instr<IR::ConversionOp>(*truncType, next_name(), *b,
+                                          IR::ConversionOp::Trunc);
+          b = add_instr<IR::ConversionOp>(*ty, next_name(), *b,
+                                          isSigned ? IR::ConversionOp::SExt
+                                                   : IR::ConversionOp::ZExt);
         }
 
         // shift may not be there, it may just be the extend
@@ -1201,7 +1218,8 @@ public:
           b = add_instr<IR::BinOp>(*ty, next_name(), *b,
                                    *make_intconst(shift, size), IR::BinOp::Shl);
         }
-        break;}
+        break;
+      }
       default:
         b = get_value(2, mc_inst.getOperand(3).getImm());
         break;
@@ -1246,9 +1264,9 @@ public:
 
       auto shift_amt = add_instr<IR::BinOp>(
           *ty, next_name(), *b, *make_intconst(size, size), IR::BinOp::URem);
-          
-      auto res =
-          add_instr<IR::BinOp>(*ty, next_name(), *a, *shift_amt, IR::BinOp::AShr);
+
+      auto res = add_instr<IR::BinOp>(*ty, next_name(), *a, *shift_amt,
+                                      IR::BinOp::AShr);
       store(*res);
       break;
     }
@@ -1277,13 +1295,13 @@ public:
     case AArch64::SUBXrx:
     case AArch64::SUBSXrs:
     case AArch64::SUBSXri:
-    case AArch64::SUBSXrx:{
+    case AArch64::SUBSXrx: {
       assert(mc_inst.getNumOperands() == 4); // dst, lhs, rhs, shift amt
       assert(mc_inst.getOperand(3).isImm());
 
       // convert lhs, rhs operands to IR::Values
       auto a = get_value(1);
-      IR::Value* b;
+      IR::Value *b;
       switch (opcode) {
       case AArch64::SUBWrx:
       case AArch64::SUBSWrx:
@@ -1304,14 +1322,15 @@ public:
 
         // Make sure to not to trunc to the same size as the parameter.
         // Sometimes SUBrx is generated using 32 bit registers and "extends" to
-        // a 32 bit value. This is seen as a type error in Alive, but is valid ARM
+        // a 32 bit value. This is seen as a type error in Alive, but is valid
+        // ARM
         if (extendSize != ty->bits()) {
           auto truncType = &get_int_type(extendSize);
-          b = add_instr<IR::ConversionOp>(
-              *truncType, next_name(), *b, IR::ConversionOp::Trunc);
-          b = add_instr<IR::ConversionOp>(
-              *ty, next_name(), *b,
-              isSigned ? IR::ConversionOp::SExt : IR::ConversionOp::ZExt);
+          b = add_instr<IR::ConversionOp>(*truncType, next_name(), *b,
+                                          IR::ConversionOp::Trunc);
+          b = add_instr<IR::ConversionOp>(*ty, next_name(), *b,
+                                          isSigned ? IR::ConversionOp::SExt
+                                                   : IR::ConversionOp::ZExt);
         }
 
         // shift may not be there, it may just be the extend
@@ -1387,7 +1406,7 @@ public:
     case AArch64::ANDXrs:
     case AArch64::ANDSXri:
     case AArch64::ANDSXrr:
-    case AArch64::ANDSXrs:{
+    case AArch64::ANDSXrs: {
       IR::Value *rhs;
       if (mc_inst.getOperand(2).isImm()) {
         auto imm = decodeLogicalImmediate(mc_inst.getOperand(2).getImm(), size);
@@ -1436,16 +1455,16 @@ public:
       auto mul_rhs = get_value(2, 0);
       auto addend = get_value(3, 0);
 
-      auto lhs_masked =
-          add_instr<IR::BinOp>(*ty, next_name(), *mul_lhs,
-                               *make_intconst((uint64_t)0xffffffff, size), IR::BinOp::And);
+      auto lhs_masked = add_instr<IR::BinOp>(
+          *ty, next_name(), *mul_lhs,
+          *make_intconst((uint64_t)0xffffffff, size), IR::BinOp::And);
 
-      auto rhs_masked =
-          add_instr<IR::BinOp>(*ty, next_name(), *mul_rhs,
-                               *make_intconst((uint64_t)0xffffffff, size), IR::BinOp::And);
+      auto rhs_masked = add_instr<IR::BinOp>(
+          *ty, next_name(), *mul_rhs,
+          *make_intconst((uint64_t)0xffffffff, size), IR::BinOp::And);
 
-      auto mul = add_instr<IR::BinOp>(*ty, next_name(), *lhs_masked, *rhs_masked,
-                                      IR::BinOp::Mul);
+      auto mul = add_instr<IR::BinOp>(*ty, next_name(), *lhs_masked,
+                                      *rhs_masked, IR::BinOp::Mul);
       auto add =
           add_instr<IR::BinOp>(*ty, next_name(), *mul, *addend, IR::BinOp::Add);
       store(*add);
@@ -1453,7 +1472,8 @@ public:
     }
     case AArch64::SMADDLrrr: {
       // Signed Multiply-Add Long multiplies two 32-bit register values,
-      // adds a 64-bit register value, and writes the result to the 64-bit destination register.
+      // adds a 64-bit register value, and writes the result to the 64-bit
+      // destination register.
       auto mul_lhs = get_value(1, 0);
       auto mul_rhs = get_value(2, 0);
       auto addend = get_value(3, 0);
@@ -1463,23 +1483,20 @@ public:
 
       // The inputs are automatically zero extended, but we want sign extension,
       // so we need to truncate them back to i32s
-      auto lhs_trunc =
-          add_instr<IR::ConversionOp>(*i32, next_name(), *mul_lhs,
-                                      IR::ConversionOp::Trunc);
-      auto rhs_trunc =
-          add_instr<IR::ConversionOp>(*i32, next_name(), *mul_rhs,
-                                      IR::ConversionOp::Trunc);
+      auto lhs_trunc = add_instr<IR::ConversionOp>(*i32, next_name(), *mul_lhs,
+                                                   IR::ConversionOp::Trunc);
+      auto rhs_trunc = add_instr<IR::ConversionOp>(*i32, next_name(), *mul_rhs,
+                                                   IR::ConversionOp::Trunc);
 
-      // For signed multiplication, must sign extend the lhs and rhs to not overflow
-      auto lhs_extended =
-          add_instr<IR::ConversionOp>(*i64, next_name(), *lhs_trunc,
-                                      IR::ConversionOp::SExt);
-      auto rhs_extended =
-          add_instr<IR::ConversionOp>(*i64, next_name(), *rhs_trunc,
-                                      IR::ConversionOp::SExt);
+      // For signed multiplication, must sign extend the lhs and rhs to not
+      // overflow
+      auto lhs_extended = add_instr<IR::ConversionOp>(
+          *i64, next_name(), *lhs_trunc, IR::ConversionOp::SExt);
+      auto rhs_extended = add_instr<IR::ConversionOp>(
+          *i64, next_name(), *rhs_trunc, IR::ConversionOp::SExt);
 
-      auto mul = add_instr<IR::BinOp>(*ty, next_name(), *lhs_extended, *rhs_extended,
-                                      IR::BinOp::Mul);
+      auto mul = add_instr<IR::BinOp>(*ty, next_name(), *lhs_extended,
+                                      *rhs_extended, IR::BinOp::Mul);
       auto add =
           add_instr<IR::BinOp>(*ty, next_name(), *mul, *addend, IR::BinOp::Add);
       store(*add);
@@ -1499,29 +1516,30 @@ public:
       IR::Value *lhs_extended;
       IR::Value *rhs_extended;
 
-      if(opcode == AArch64::SMSUBLrrr) {
-        // The inputs are automatically zero extended, but we want sign extension for signed, so we need to truncate them back to i32s
+      if (opcode == AArch64::SMSUBLrrr) {
+        // The inputs are automatically zero extended, but we want sign
+        // extension for signed, so we need to truncate them back to i32s
         auto lhs_trunc = add_instr<IR::ConversionOp>(
             *i32, next_name(), *mul_lhs, IR::ConversionOp::Trunc);
         auto rhs_trunc = add_instr<IR::ConversionOp>(
             *i32, next_name(), *mul_rhs, IR::ConversionOp::Trunc);
 
-        // For signed multiplication, must sign extend the lhs and rhs to not overflow
+        // For signed multiplication, must sign extend the lhs and rhs to not
+        // overflow
         lhs_extended = add_instr<IR::ConversionOp>(
             *i64, next_name(), *lhs_trunc, IR::ConversionOp::SExt);
         rhs_extended = add_instr<IR::ConversionOp>(
             *i64, next_name(), *rhs_trunc, IR::ConversionOp::SExt);
-      }
-      else {
+      } else {
         // For unsigned multiplication, program automatically zero extends
         lhs_extended = mul_lhs;
         rhs_extended = mul_rhs;
       }
 
-      auto mul = add_instr<IR::BinOp>(*ty, next_name(), *lhs_extended, *rhs_extended,
-                                      IR::BinOp::Mul);
-      auto subtract =
-          add_instr<IR::BinOp>(*ty, next_name(), *minuend, *mul, IR::BinOp::Sub);
+      auto mul = add_instr<IR::BinOp>(*ty, next_name(), *lhs_extended,
+                                      *rhs_extended, IR::BinOp::Mul);
+      auto subtract = add_instr<IR::BinOp>(*ty, next_name(), *minuend, *mul,
+                                           IR::BinOp::Sub);
       store(*subtract);
       break;
     }
@@ -1536,34 +1554,33 @@ public:
       auto i128 = &get_int_type(128);
 
       IR::ConversionOp *lhs_extended;
-      IR::ConversionOp * rhs_extended;
+      IR::ConversionOp *rhs_extended;
 
-      // For unsigned multiplication, must zero extend the lhs and rhs to not overflow
-      // For signed multiplication, must sign extend the lhs and rhs to not overflow
-      if(opcode == AArch64::UMULHrr) {
-        lhs_extended =
-            add_instr<IR::ConversionOp>(*i128, next_name(), *mul_lhs,
-                                        IR::ConversionOp::ZExt);
-        rhs_extended =
-            add_instr<IR::ConversionOp>(*i128, next_name(), *mul_rhs,
-                                        IR::ConversionOp::ZExt);
-      }
-      else {
+      // For unsigned multiplication, must zero extend the lhs and rhs to not
+      // overflow For signed multiplication, must sign extend the lhs and rhs to
+      // not overflow
+      if (opcode == AArch64::UMULHrr) {
         lhs_extended = add_instr<IR::ConversionOp>(*i128, next_name(), *mul_lhs,
-                                        IR::ConversionOp::SExt);
+                                                   IR::ConversionOp::ZExt);
         rhs_extended = add_instr<IR::ConversionOp>(*i128, next_name(), *mul_rhs,
-                                        IR::ConversionOp::SExt);
+                                                   IR::ConversionOp::ZExt);
+      } else {
+        lhs_extended = add_instr<IR::ConversionOp>(*i128, next_name(), *mul_lhs,
+                                                   IR::ConversionOp::SExt);
+        rhs_extended = add_instr<IR::ConversionOp>(*i128, next_name(), *mul_rhs,
+                                                   IR::ConversionOp::SExt);
       }
 
-      auto mul = add_instr<IR::BinOp>(*i128, next_name(), *lhs_extended, *rhs_extended,
-                                      IR::BinOp::Mul);
-      // After multiplying, shift down 64 bits to get the top half of the i128 into the bottom half
-      auto shift = add_instr<IR::BinOp>(*i128, next_name(), *mul,
-                                        *make_intconst(64, 128), IR::BinOp::LShr);
+      auto mul = add_instr<IR::BinOp>(*i128, next_name(), *lhs_extended,
+                                      *rhs_extended, IR::BinOp::Mul);
+      // After multiplying, shift down 64 bits to get the top half of the i128
+      // into the bottom half
+      auto shift = add_instr<IR::BinOp>(
+          *i128, next_name(), *mul, *make_intconst(64, 128), IR::BinOp::LShr);
 
       // Truncate to the proper size:
       auto trunc = add_instr<IR::ConversionOp>(*i64, next_name(), *shift,
-                                      IR::ConversionOp::Trunc);
+                                               IR::ConversionOp::Trunc);
       store(*trunc);
       break;
     }
@@ -1573,8 +1590,8 @@ public:
       auto mul_rhs = get_value(2, 0);
       auto minuend = get_value(3, 0);
 
-      auto mul = add_instr<IR::BinOp>(*ty, next_name(), *mul_lhs,
-                                      *mul_rhs, IR::BinOp::Mul);
+      auto mul = add_instr<IR::BinOp>(*ty, next_name(), *mul_lhs, *mul_rhs,
+                                      IR::BinOp::Mul);
       auto sub = add_instr<IR::BinOp>(*ty, next_name(), *minuend, *mul,
                                       IR::BinOp::Sub);
       store(*sub);
@@ -1709,8 +1726,8 @@ public:
       break;
     }
     case AArch64::CSINVWr:
-    case AArch64::CSINVXr: 
-    case AArch64::CSNEGWr: 
+    case AArch64::CSINVXr:
+    case AArch64::CSNEGWr:
     case AArch64::CSNEGXr: {
       // csinv dst, a, b, cond
       // if (cond) a else ~b
@@ -1731,12 +1748,13 @@ public:
       auto neg_one = make_intconst(-1, size);
       auto inverted_b =
           add_instr<IR::BinOp>(*ty, next_name(), *b, *neg_one, IR::BinOp::Xor);
-      
+
       if (opcode == AArch64::CSNEGWr || opcode == AArch64::CSNEGXr) {
         auto negated_b =
-          add_instr<IR::BinOp>(*ty, next_name(), *inverted_b, *make_intconst(1, size), IR::BinOp::Add);
-         auto ret =
-          add_instr<IR::Select>(*ty, next_name(), *cond_val, *a, *negated_b);
+            add_instr<IR::BinOp>(*ty, next_name(), *inverted_b,
+                                 *make_intconst(1, size), IR::BinOp::Add);
+        auto ret =
+            add_instr<IR::Select>(*ty, next_name(), *cond_val, *a, *negated_b);
         store(*ret);
         break;
       }
@@ -1814,7 +1832,6 @@ public:
       auto zero = make_intconst(0, size);
       auto lhs = get_value(1);
       auto rhs = get_value(2);
-
 
       auto exp = add_instr<IR::TernaryOp>(*ty, next_name(), *zero, *lhs, *rhs,
                                           IR::TernaryOp::FShr);
@@ -1910,7 +1927,13 @@ public:
 
       // UXTB
       if (immr == 0 && imms == 7) {
-        assert(false && "UXTB not supported");
+        auto mask = ((uint64_t)1 << 8) - 1;
+        auto masked = add_instr<IR::BinOp>(
+            *ty, next_name(), *src, *make_intconst(mask, size), IR::BinOp::And);
+        auto zexted = add_instr<IR::ConversionOp>(*ty, next_name(), *masked,
+                                                  IR::ConversionOp::ZExt);
+        store(*zexted);
+        // assert(false && "UXTB not supported");
         return;
       }
       // UXTH
@@ -2002,8 +2025,7 @@ public:
       auto decoded = decodeLogicalImmediate(imm, size);
 
       auto result = add_instr<IR::BinOp>(
-          *ty, next_name(), *lhs, *make_intconst(decoded, size),
-          IR::BinOp::Or);
+          *ty, next_name(), *lhs, *make_intconst(decoded, size), IR::BinOp::Or);
       store(*result);
       break;
     }
@@ -2043,8 +2065,8 @@ public:
       auto op2 = get_value(2);
       auto shift = get_value(3);
 
-      auto result =
-          add_instr<IR::TernaryOp>(*ty, next_name(), *op1, *op2, *shift, IR::TernaryOp::FShr);
+      auto result = add_instr<IR::TernaryOp>(*ty, next_name(), *op1, *op2,
+                                             *shift, IR::TernaryOp::FShr);
       store(*result);
       break;
     }
@@ -2053,8 +2075,8 @@ public:
       auto op = get_value(1);
       auto shift = get_value(2);
 
-      auto result =
-          add_instr<IR::TernaryOp>(*ty, next_name(), *op, *op, *shift, IR::TernaryOp::FShr);
+      auto result = add_instr<IR::TernaryOp>(*ty, next_name(), *op, *op, *shift,
+                                             IR::TernaryOp::FShr);
       store(*result);
       break;
     }
@@ -2062,8 +2084,8 @@ public:
     case AArch64::RBITXr: {
       auto op = get_value(1);
 
-      auto result =
-          add_instr<IR::UnaryOp>(*ty, next_name(), *op, IR::UnaryOp::BitReverse);
+      auto result = add_instr<IR::UnaryOp>(*ty, next_name(), *op,
+                                           IR::UnaryOp::BitReverse);
       store(*result);
       break;
     }
@@ -2107,12 +2129,12 @@ public:
 
       // Perform NOT
       auto neg_one = make_intconst(-1, size);
-      auto inverted_op2 =
-          add_instr<IR::BinOp>(*ty, next_name(), *op2, *neg_one, IR::BinOp::Xor);
+      auto inverted_op2 = add_instr<IR::BinOp>(*ty, next_name(), *op2, *neg_one,
+                                               IR::BinOp::Xor);
 
       // Perform final Op: AND for BIC, XOR for EON
       IR::BinOp::Op finalBinOp;
-      switch(opcode) {
+      switch (opcode) {
       case AArch64::BICWrs:
       case AArch64::BICXrs: {
         finalBinOp = IR::BinOp::And;
@@ -2125,8 +2147,8 @@ public:
       }
       }
 
-      auto ret =
-          add_instr<IR::BinOp>(*ty, next_name(), *op1, *inverted_op2, finalBinOp);
+      auto ret = add_instr<IR::BinOp>(*ty, next_name(), *op1, *inverted_op2,
+                                      finalBinOp);
       store(*ret);
       break;
     }
@@ -2134,23 +2156,20 @@ public:
       // REV16Xr: Reverse bytes of 64 bit value in 16-bit half-words.
       auto val = get_value(1);
 
-      auto first_part =
-          add_instr<IR::BinOp>(*ty, next_name(), *val,
-                                 *make_intconst(8, size), IR::BinOp::Shl);
-      auto first_part_and =
-          add_instr<IR::BinOp>(*ty, next_name(), *first_part,
-                               *make_intconst(0xFF00FF00FF00FF00, size), IR::BinOp::And);
+      auto first_part = add_instr<IR::BinOp>(
+          *ty, next_name(), *val, *make_intconst(8, size), IR::BinOp::Shl);
+      auto first_part_and = add_instr<IR::BinOp>(
+          *ty, next_name(), *first_part,
+          *make_intconst(0xFF00FF00FF00FF00, size), IR::BinOp::And);
 
-      auto second_part =
-          add_instr<IR::BinOp>(*ty, next_name(), *val,
-                               *make_intconst(8, size), IR::BinOp::LShr);
-      auto second_part_and =
-          add_instr<IR::BinOp>(*ty, next_name(), *second_part,
-                               *make_intconst(0x00FF00FF00FF00FF, size), IR::BinOp::And);
+      auto second_part = add_instr<IR::BinOp>(
+          *ty, next_name(), *val, *make_intconst(8, size), IR::BinOp::LShr);
+      auto second_part_and = add_instr<IR::BinOp>(
+          *ty, next_name(), *second_part,
+          *make_intconst(0x00FF00FF00FF00FF, size), IR::BinOp::And);
 
-      auto combined_val =
-          add_instr<IR::BinOp>(*ty, next_name(), *first_part_and, *second_part_and,
-                               IR::BinOp::Or);
+      auto combined_val = add_instr<IR::BinOp>(
+          *ty, next_name(), *first_part_and, *second_part_and, IR::BinOp::Or);
 
       store(*combined_val);
       break;
@@ -2161,17 +2180,15 @@ public:
       // REV32Xr: Reverse bytes of 64 bit value in 32-bit words.
       auto val = get_value(1);
 
-      // Reversing all of the bytes, then performing a rotation by half the width
-      // reverses bytes in 16-bit halfwords for a 32 bit int and
-      // reverses bytes in a 32-bit word for a 64 bit int
+      // Reversing all of the bytes, then performing a rotation by half the
+      // width reverses bytes in 16-bit halfwords for a 32 bit int and reverses
+      // bytes in a 32-bit word for a 64 bit int
       auto reverse_val =
-          add_instr<IR::UnaryOp>(*ty, next_name(), *val,
-                                 IR::UnaryOp::BSwap);
+          add_instr<IR::UnaryOp>(*ty, next_name(), *val, IR::UnaryOp::BSwap);
 
-      auto ret =
-          add_instr<IR::TernaryOp>(*ty, next_name(), *reverse_val, *reverse_val,
-                                      *make_intconst(size / 2, size),
-                                      IR::TernaryOp::FShr);
+      auto ret = add_instr<IR::TernaryOp>(
+          *ty, next_name(), *reverse_val, *reverse_val,
+          *make_intconst(size / 2, size), IR::TernaryOp::FShr);
 
       store(*ret);
       break;
@@ -2318,10 +2335,10 @@ public:
         report_fatal_error("[Unsupported Function Argument]: Only int types "
                            "supported for now");
       // FIXME: need to handle wider types
-      if (typ.bits() > 64) 
+      if (typ.bits() > 64)
         report_fatal_error("[Unsupported Function Argument]: Only int types 64 "
                            "bits or smaller supported for now");
-      
+
       auto input_ptr = dynamic_cast<const IR::Input *>(&v);
       assert(input_ptr);
       //generate names and values for the input arguments
@@ -2513,8 +2530,6 @@ public:
                     llvm::SMLoc Loc = llvm::SMLoc()) override {}
   void emitGPRel32Value(const llvm::MCExpr *Value) override {}
   void BeginCOFFSymbolDef(const llvm::MCSymbol *Symbol) override {}
-  void EmitCOFFSymbolStorageClass(int StorageClass) override {}
-  void EmitCOFFSymbolType(int Type) override {}
   void EndCOFFSymbolDef() override {}
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
     // Assuming the first label encountered is the function's name
@@ -2827,11 +2842,22 @@ public:
   // identify
   void rewriteOperands() {
 
-    for (auto &fn_arg : fn_args) {
-      if (fn_arg.getReg() >= AArch64::W0 &&
-          fn_arg.getReg() <= AArch64::W28) { // FIXME: Why 28?
-        fn_arg.setReg(fn_arg.getReg() + AArch64::X0 - AArch64::W0);
+    // FIXME: this lambda is pretty hacky and brittle
+    auto in_range_rewrite = [](MCOperand &op) {
+      if (op.isReg()) {
+        if (op.getReg() >= AArch64::W0 &&
+            op.getReg() <= AArch64::W28) { // FIXME: Why 28?
+          op.setReg(op.getReg() + AArch64::X0 - AArch64::W0);
+        } else if (!(op.getReg() >= AArch64::X0 &&
+                     op.getReg() <= AArch64::X28) &&
+                   !(op.getReg() <= AArch64::XZR)) {
+          report_fatal_error("Unsupported registers detected in the Assembly");
+        }
       }
+    };
+
+    for (auto &fn_arg : fn_args) {
+      in_range_rewrite(fn_arg);
     }
 
     for (auto &block : MF.BBs) {
@@ -2839,10 +2865,7 @@ public:
         auto &mc_instr = w_instr.getMCInst();
         for (unsigned i = 0; i < mc_instr.getNumOperands(); ++i) {
           auto &operand = mc_instr.getOperand(i);
-          if (operand.isReg() && operand.getReg() >= AArch64::W0 &&
-              operand.getReg() <= AArch64::W28) { // FIXME: Why 28?
-            operand.setReg(operand.getReg() + AArch64::X0 - AArch64::W0);
-          }
+          in_range_rewrite(operand);
         }
       }
     }
@@ -2897,15 +2920,18 @@ public:
       block->print();
       cout << "----\n";
       for (auto &phi_var : phis[block]) {
-        auto phi_dst_id = pushFresh(phi_var);
+        
         MCInst new_phi_instr;
         new_phi_instr.setOpcode(AArch64::PHI);
         new_phi_instr.addOperand(MCOperand::createReg(phi_var.getReg()));
         new_phi_instr.dump_pretty(errs(), IP_ptr, " ", MRI_ptr);
-        cout << "phi_dst_id: " << phi_dst_id << "\n";
+        
         MCInstWrapper new_w_instr(new_phi_instr);
-        new_w_instr.setOpId(0, phi_dst_id);
-        block->addInstBegin(new_w_instr);
+        block->addInstBegin(std::move(new_w_instr));
+        auto phi_dst_id = pushFresh(phi_var);
+        cout << "phi_dst_id: " << phi_dst_id << "\n";
+        block->getInstrs()[0].setOpId(0, phi_dst_id);
+        //new_w_instr.setOpId(0, phi_dst_id);
       }
       cout << "after phis\n";
       block->print();
@@ -3396,8 +3422,7 @@ bool backendTV() {
   }
 
   if (!AF) {
-    report_fatal_error("Could not convert llvm function to alive ir") ;
-    exit(-1);
+    report_fatal_error("Could not convert llvm function to alive ir");
   }
 
   AF->print(cout << "\n----------alive-ir-src.ll-file----------\n");
@@ -3418,12 +3443,8 @@ bool backendTV() {
   llvm::TargetOptions Opt;
   const char *CPU = "apple-a12";
   auto RM = llvm::Optional<llvm::Reloc::Model>();
-  auto TM = Target->createTargetMachine(TripleName, CPU, "", Opt, RM);
-  // TODO add later to check with global-isel enabled
-  if (opt_global_isel) {
-    TM->setGlobalISel(true);
-  }
-
+  std::unique_ptr<llvm::TargetMachine> TM(
+      Target->createTargetMachine(TripleName, CPU, "", Opt, RM));
   llvm::SmallString<1024> Asm;
   llvm::raw_svector_ostream Dest(Asm);
 
@@ -3539,7 +3560,6 @@ bool backendTV() {
   //        << '\n';
   //   return false;
   // }
-
 
   auto &MF = Str.MF;
   auto TF = arm2alive(MF, AF, IPtemp.get(), MRI.get());
