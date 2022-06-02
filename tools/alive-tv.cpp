@@ -339,8 +339,8 @@ public:
   llvm::MCInst &getMCInst() {
     return instr;
   }
-  
-  //use to assign ids when adding the arugments to phi-nodes
+
+  // use to assign ids when adding the arugments to phi-nodes
   void pushOpId(unsigned id) {
     op_ids.push_back(id);
   }
@@ -434,9 +434,9 @@ public:
     Instrs.push_back(inst);
   }
 
-  //void addInstBegin(MCInstWrapper &inst) {
-  //  Instrs.insert(Instrs.begin(), inst);
-  //}
+  // void addInstBegin(MCInstWrapper &inst) {
+  //   Instrs.insert(Instrs.begin(), inst);
+  // }
 
   void addInstBegin(MCInstWrapper &&inst) {
     Instrs.insert(Instrs.begin(), std::move(inst));
@@ -765,40 +765,42 @@ set<int> s_flag = {
 };
 
 set<int> instrs_32 = {
-    AArch64::ADDWrx,   AArch64::ADDSWrs,  AArch64::ADDSWri, AArch64::ADDWrs,
-    AArch64::ADDWri,   AArch64::ADDSWrx,  AArch64::ASRVWr,   AArch64::SUBWri,  AArch64::SUBWrs,
-    AArch64::SUBWrx,   AArch64::SUBSWrs,  AArch64::SUBSWri, AArch64::SUBSWrx,
-    AArch64::SBFMWri,  AArch64::CSELWr,   AArch64::ANDWri,  AArch64::ANDWrr,
-    AArch64::ANDWrs,   AArch64::ANDSWri,  AArch64::ANDSWrr, AArch64::ANDSWrs,
-    AArch64::MADDWrrr, AArch64::MSUBWrrr, AArch64::EORWri,  AArch64::CSINVWr,
-    AArch64::CSINCWr,  AArch64::MOVZWi,   AArch64::MOVNWi,  AArch64::MOVKWi,
-    AArch64::LSLVWr,   AArch64::LSRVWr,   AArch64::ORNWrs,  AArch64::UBFMWri,
-    AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,  AArch64::SDIVWr,
-    AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs,  AArch64::RORVWr,
-    AArch64::RBITWr,   AArch64::CLZWr,    AArch64::REVWr,   AArch64::CSNEGWr,
-    AArch64::BICWrs,   AArch64::EONWrs,   AArch64::REV16Wr, AArch64::Bcc
-  };
+    AArch64::ADDWrx,  AArch64::ADDSWrs,  AArch64::ADDSWri,  AArch64::ADDWrs,
+    AArch64::ADDWri,  AArch64::ADDSWrx,  AArch64::ASRVWr,   AArch64::SUBWri,
+    AArch64::SUBWrs,  AArch64::SUBWrx,   AArch64::SUBSWrs,  AArch64::SUBSWri,
+    AArch64::SUBSWrx, AArch64::SBFMWri,  AArch64::CSELWr,   AArch64::ANDWri,
+    AArch64::ANDWrr,  AArch64::ANDWrs,   AArch64::ANDSWri,  AArch64::ANDSWrr,
+    AArch64::ANDSWrs, AArch64::MADDWrrr, AArch64::MSUBWrrr, AArch64::EORWri,
+    AArch64::CSINVWr, AArch64::CSINCWr,  AArch64::MOVZWi,   AArch64::MOVNWi,
+    AArch64::MOVKWi,  AArch64::LSLVWr,   AArch64::LSRVWr,   AArch64::ORNWrs,
+    AArch64::UBFMWri, AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,
+    AArch64::SDIVWr,  AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs,
+    AArch64::RORVWr,  AArch64::RBITWr,   AArch64::CLZWr,    AArch64::REVWr,
+    AArch64::CSNEGWr, AArch64::BICWrs,   AArch64::EONWrs,   AArch64::REV16Wr,
+    AArch64::Bcc};
 
 set<int> instrs_64 = {
-    AArch64::ADDXrx,    AArch64::ADDSXrs,  AArch64::ADDSXri, AArch64::ADDXrs,
-    AArch64::ADDXri,    AArch64::ADDSXrx,  AArch64::ASRVXr,   AArch64::SUBXri,  AArch64::SUBXrs,
-    AArch64::SUBXrx,    AArch64::SUBSXrs,  AArch64::SUBSXri, AArch64::SUBSXrx,
-    AArch64::SBFMXri,   AArch64::CSELXr,   AArch64::ANDXri,  AArch64::ANDXrr,
-    AArch64::ANDXrs,    AArch64::ANDSXri,  AArch64::ANDSXrr, AArch64::ANDSXrs,
-    AArch64::MADDXrrr,  AArch64::MSUBXrrr, AArch64::EORXri,  AArch64::CSINVXr,
-    AArch64::CSINCXr,   AArch64::MOVZXi,   AArch64::MOVNXi,  AArch64::MOVKXi,
-    AArch64::LSLVXr,    AArch64::LSRVXr,   AArch64::ORNXrs,  AArch64::UBFMXri,
-    AArch64::BFMXri,    AArch64::ORRXrs,   AArch64::ORRXri,  AArch64::SDIVXr,
-    AArch64::UDIVXr,    AArch64::EXTRXrri, AArch64::EORXrs,  AArch64::SMADDLrrr,
-    AArch64::UMADDLrrr, AArch64::RORVXr,   AArch64::RBITXr,  AArch64::CLZXr,
-    AArch64::REVXr,     AArch64::CSNEGXr,  AArch64::BICXrs,  AArch64::EONXrs,
-    AArch64::SMULHrr,   AArch64::UMULHrr,  AArch64::REV32Xr, AArch64::REV16Xr,
-    AArch64::SMSUBLrrr, AArch64::UMSUBLrrr, AArch64::PHI
-};
+    AArch64::ADDXrx,    AArch64::ADDSXrs,   AArch64::ADDSXri,
+    AArch64::ADDXrs,    AArch64::ADDXri,    AArch64::ADDSXrx,
+    AArch64::ASRVXr,    AArch64::SUBXri,    AArch64::SUBXrs,
+    AArch64::SUBXrx,    AArch64::SUBSXrs,   AArch64::SUBSXri,
+    AArch64::SUBSXrx,   AArch64::SBFMXri,   AArch64::CSELXr,
+    AArch64::ANDXri,    AArch64::ANDXrr,    AArch64::ANDXrs,
+    AArch64::ANDSXri,   AArch64::ANDSXrr,   AArch64::ANDSXrs,
+    AArch64::MADDXrrr,  AArch64::MSUBXrrr,  AArch64::EORXri,
+    AArch64::CSINVXr,   AArch64::CSINCXr,   AArch64::MOVZXi,
+    AArch64::MOVNXi,    AArch64::MOVKXi,    AArch64::LSLVXr,
+    AArch64::LSRVXr,    AArch64::ORNXrs,    AArch64::UBFMXri,
+    AArch64::BFMXri,    AArch64::ORRXrs,    AArch64::ORRXri,
+    AArch64::SDIVXr,    AArch64::UDIVXr,    AArch64::EXTRXrri,
+    AArch64::EORXrs,    AArch64::SMADDLrrr, AArch64::UMADDLrrr,
+    AArch64::RORVXr,    AArch64::RBITXr,    AArch64::CLZXr,
+    AArch64::REVXr,     AArch64::CSNEGXr,   AArch64::BICXrs,
+    AArch64::EONXrs,    AArch64::SMULHrr,   AArch64::UMULHrr,
+    AArch64::REV32Xr,   AArch64::REV16Xr,   AArch64::SMSUBLrrr,
+    AArch64::UMSUBLrrr, AArch64::PHI};
 
-set<int> instrs_no_write = {
-  AArch64::Bcc
-};
+set<int> instrs_no_write = {AArch64::Bcc};
 
 bool has_s(int instr) {
   return s_flag.contains(instr);
@@ -813,7 +815,7 @@ class arm2alive_ {
 
   MCInstPrinter *instrPrinter;
   MCRegisterInfo *registerInfo;
-  std::vector<std::pair<IR::Phi*,MCInstWrapper*>> lift_todo_phis;
+  std::vector<std::pair<IR::Phi *, MCInstWrapper *>> lift_todo_phis;
 
   MCInstWrapper *wrapper{nullptr};
 
@@ -945,8 +947,7 @@ class arm2alive_ {
     std::stringstream ss;
     if (instrs_no_write.contains(wrapper->getOpcode())) {
       ss << "tx" << ++curId << "x" << blockCount;
-    }
-    else {
+    } else {
       ss << registerInfo->getName(wrapper->getMCInst().getOperand(0).getReg())
          << "_" << wrapper->getVarId(0) << "x" << ++curId << "x" << blockCount;
     }
@@ -963,14 +964,17 @@ class arm2alive_ {
     // auto val = mc_get_operand(reg, id);
     assert(phi_mc_wrapper->getOpcode() == AArch64::PHI &&
            "cannot add params to non-phi instr");
-    for (unsigned i = 1; i < phi_mc_wrapper->getMCInst().getNumOperands(); i++) {
+    for (unsigned i = 1; i < phi_mc_wrapper->getMCInst().getNumOperands();
+         i++) {
       assert(phi_mc_wrapper->getMCInst().getOperand(i).isReg());
-      cout << "<Phi arg>:[(" << phi_mc_wrapper->getMCInst().getOperand(i).getReg()
-           << "," << phi_mc_wrapper->getOpId(i) << ")," << phi_mc_wrapper->getOpPhiBlock(i)
-           << "]>\n";
+      cout << "<Phi arg>:[("
+           << phi_mc_wrapper->getMCInst().getOperand(i).getReg() << ","
+           << phi_mc_wrapper->getOpId(i) << "),"
+           << phi_mc_wrapper->getOpPhiBlock(i) << "]>\n";
       string block_name(phi_mc_wrapper->getOpPhiBlock(i));
-      auto val = mc_get_operand(phi_mc_wrapper->getMCInst().getOperand(i).getReg(),
-                                phi_mc_wrapper->getOpId(i));
+      auto val =
+          mc_get_operand(phi_mc_wrapper->getMCInst().getOperand(i).getReg(),
+                         phi_mc_wrapper->getOpId(i));
       assert(val != nullptr);
       cout << "block name = " << block_name << endl;
       phi_instr->addValue(*val, std::move(block_name));
@@ -1149,8 +1153,8 @@ class arm2alive_ {
 public:
   arm2alive_(MCFunction &MF, std::optional<IR::Function> &srcFn,
              MCInstPrinter *instrPrinter, MCRegisterInfo *registerInfo)
-      : MF(MF), srcFn(srcFn), instrPrinter(instrPrinter), registerInfo(registerInfo), instructionCount(0),
-        curId(0) {}
+      : MF(MF), srcFn(srcFn), instrPrinter(instrPrinter),
+        registerInfo(registerInfo), instructionCount(0), curId(0) {}
 
   // Rudimentary function to visit an MCInstWrapper instructions and convert it
   // to alive IR Ideally would want a nicer designed interface, but I opted for
@@ -2234,10 +2238,10 @@ public:
       break;
     }
     case AArch64::Bcc: {
-    
+
       auto cond_val_imm = mc_inst.getOperand(0).getImm();
       auto cond_val = evaluate_condition(cond_val_imm);
-      
+
       auto &bb_order = Fn.getBBs();
       auto &jmp_tgt_op = mc_inst.getOperand(1);
       assert(jmp_tgt_op.isExpr() && "expected expression");
@@ -2248,26 +2252,31 @@ public:
       cout << "bcc target: " << Sym.getName().str() << '\n';
       auto &dst_true = Fn.getBB(Sym.getName());
       assert((bb_order.size() > blockCount + 1) && "next block does not exist");
-      auto &dst_false = *bb_order[blockCount+1]; // FIXME, double check this and use successors instaed
-      
+      auto &dst_false =
+          *bb_order[blockCount +
+                    1]; // FIXME, double check this and use successors instaed
+
       add_instr<IR::Branch>(*cond_val, dst_true, dst_false);
-      //Fn.print(cout << "\nError detected----------partially-lifted-arm-target----------\n");
-      //visitError(I);
+      // Fn.print(cout << "\nError
+      // detected----------partially-lifted-arm-target----------\n");
+      // visitError(I);
       break;
     }
     case AArch64::PHI: {
-      auto result =
-          add_instr<IR::Phi>(*ty, next_name());
+      auto result = add_instr<IR::Phi>(*ty, next_name());
       cout << "pushing phi in todo : " << endl;
       wrapper->print();
       lift_todo_phis.emplace_back(result, wrapper);
       store(*result);
-      //Fn.print(cout << "\nphi instruction detected----------partially-lifted-arm-target----------\n");
-      //visitError(I);
+      // Fn.print(cout << "\nphi instruction
+      // detected----------partially-lifted-arm-target----------\n");
+      // visitError(I);
       break;
     }
     default:
-      Fn.print(cout << "\nError detected----------partially-lifted-arm-target----------\n");
+      Fn.print(
+          cout << "\nError "
+                  "detected----------partially-lifted-arm-target----------\n");
       visitError(I);
     }
   }
@@ -2345,8 +2354,8 @@ public:
 
       auto input_ptr = dynamic_cast<const IR::Input *>(&v);
       assert(input_ptr);
-      //generate names and values for the input arguments
-      //FIXME this is pretty convulated and needs to be cleaned up
+      // generate names and values for the input arguments
+      // FIXME this is pretty convulated and needs to be cleaned up
       auto operand = MCOperand::createReg(AArch64::X0 + (argNum++));
 
       std::string operand_name(registerInfo->getName(operand.getReg()));
@@ -2355,16 +2364,19 @@ public:
       auto val = make_unique<IR::Input>(typ, move(operand_name), move(attrs));
       IR::Value *stored = val.get();
 
-      stored = add_instr<IR::Freeze>(typ, next_name(operand.getReg(), 1), *stored);
+      stored =
+          add_instr<IR::Freeze>(typ, next_name(operand.getReg(), 1), *stored);
       mc_add_identifier(operand.getReg(), 1, *stored);
       if (typ.bits() < 64) {
 
         auto extended_type = &get_int_type(64);
         if (input_ptr->getAttributes().has(IR::ParamAttrs::Sext))
-          stored = add_instr<IR::ConversionOp>(*extended_type, next_name(operand.getReg(),2),
+          stored = add_instr<IR::ConversionOp>(*extended_type,
+                                               next_name(operand.getReg(), 2),
                                                *stored, IR::ConversionOp::SExt);
         else
-          stored = add_instr<IR::ConversionOp>(*extended_type, next_name(operand.getReg(),2),
+          stored = add_instr<IR::ConversionOp>(*extended_type,
+                                               next_name(operand.getReg(), 2),
                                                *stored, IR::ConversionOp::ZExt);
       }
 
@@ -2372,15 +2384,15 @@ public:
       mc_add_identifier(operand.getReg(), 2, *stored);
       Fn.addInput(move(val));
     }
-    
+
     for (auto &[alive_bb, mc_bb] : sorted_bbs) {
       BB = alive_bb;
-      //cout << "----------\n";
-      //cout << "printing block\n";
-      //mc_bb->print();
-      //cout << "----------\n";
+      // cout << "----------\n";
+      // cout << "printing block\n";
+      // mc_bb->print();
+      // cout << "----------\n";
       auto &mc_instrs = mc_bb->getInstrs();
-      
+
       for (auto &mc_instr : mc_instrs) {
         cout << "before visit\n";
         mc_instr.print();
@@ -2389,16 +2401,17 @@ public:
 
       blockCount++;
     }
-    
-    Fn.print(cout << "\n----------lifted-arm-target-missing-phi-params----------\n");
+
+    Fn.print(
+        cout << "\n----------lifted-arm-target-missing-phi-params----------\n");
     cout << "lift_todo_phis.size() = " << lift_todo_phis.size() << "\n";
 
     int tmp_index = 0;
     for (auto &[phi, phi_mc_wrapper] : lift_todo_phis) {
-      cout << "index = " << tmp_index << "opcode =" <<  phi_mc_wrapper->getOpcode() << endl;
+      cout << "index = " << tmp_index
+           << "opcode =" << phi_mc_wrapper->getOpcode() << endl;
       tmp_index++;
       add_phi_params(phi, phi_mc_wrapper);
-
     }
     return move(Fn);
   }
@@ -2410,7 +2423,8 @@ public:
 // types of arguments.
 std::optional<IR::Function> arm2alive(MCFunction &MF,
                                       std::optional<IR::Function> &srcFn,
-                                      MCInstPrinter *instrPrinter, MCRegisterInfo *registerInfo) {
+                                      MCInstPrinter *instrPrinter,
+                                      MCRegisterInfo *registerInfo) {
   return arm2alive_(MF, srcFn, instrPrinter, registerInfo).run();
 }
 
@@ -2902,7 +2916,8 @@ public:
 
     auto pushFresh = [&](const MCOperand &op) {
       if (counters.find(op) == counters.end()) {
-        counters[op] = 2; //Set the stack to 2 to account for input registers and renaming (freeze + extension)
+        counters[op] = 2; // Set the stack to 2 to account for input registers
+                          // and renaming (freeze + extension)
       }
       auto fresh_id = counters[op]++;
       auto &var_stack = stack[op];
@@ -2917,12 +2932,12 @@ public:
       block->print();
       cout << "----\n";
       for (auto &phi_var : phis[block]) {
-        
+
         MCInst new_phi_instr;
         new_phi_instr.setOpcode(AArch64::PHI);
         new_phi_instr.addOperand(MCOperand::createReg(phi_var.getReg()));
         new_phi_instr.dump_pretty(errs(), IP_ptr, " ", MRI_ptr);
-        
+
         MCInstWrapper new_w_instr(new_phi_instr);
         block->addInstBegin(std::move(new_w_instr));
         auto phi_dst_id = pushFresh(phi_var);
@@ -3548,7 +3563,7 @@ bool backendTV() {
   Str.generateDomTree();
   Str.ssaRename();
   Str.adjustReturns();
-  
+
   cout << "after SSA conversion\n";
   Str.printBlocks();
   // if (Str.MF.BBs.size() > 1) {
@@ -3564,8 +3579,8 @@ bool backendTV() {
 
   auto r = backend_verify(AF, TF, TLI, true);
 
-  //cout << "exiting for valgrind\n";
-  //return false;
+  // cout << "exiting for valgrind\n";
+  // return false;
   if (r.status == Results::ERROR) {
     *out << "ERROR: " << r.error;
     ++num_errors;
