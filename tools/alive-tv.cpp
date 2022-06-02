@@ -339,8 +339,14 @@ public:
   llvm::MCInst &getMCInst() {
     return instr;
   }
+  
+  //use to assign ids when adding the arugments to phi-nodes
+  void pushOpId(unsigned id) {
+    op_ids.push_back(id);
+  }
 
   void setOpId(unsigned index, unsigned id) {
+    assert(op_ids.size() > index && "Invalid index");
     op_ids[index] = id;
   }
 
@@ -433,8 +439,7 @@ public:
   //}
 
   void addInstBegin(MCInstWrapper &&inst) {
-    cout << "moving inst\n";
-    Instrs.insert(Instrs.begin(), inst);
+    Instrs.insert(Instrs.begin(), std::move(inst));
   }
 
   void addSucc(MCBasicBlock *succ_block) {
@@ -2234,7 +2239,6 @@ public:
       auto cond_val = evaluate_condition(cond_val_imm);
       
       auto &bb_order = Fn.getBBs();
-      assert(bb_order.size() > blockCount && "next block not found");
       auto &jmp_tgt_op = mc_inst.getOperand(1);
       assert(jmp_tgt_op.isExpr() && "expected expression");
       assert((jmp_tgt_op.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
@@ -2243,7 +2247,8 @@ public:
       const MCSymbol &Sym = SRE.getSymbol();
       cout << "bcc target: " << Sym.getName().str() << '\n';
       auto &dst_true = Fn.getBB(Sym.getName());
-      auto &dst_false = *bb_order[blockCount];
+      assert((bb_order.size() > blockCount + 1) && "next block does not exist");
+      auto &dst_false = *bb_order[blockCount+1]; // FIXME, double check this and use successors instaed
       
       add_instr<IR::Branch>(*cond_val, dst_true, dst_false);
       //Fn.print(cout << "\nError detected----------partially-lifted-arm-target----------\n");
@@ -2253,7 +2258,6 @@ public:
     case AArch64::PHI: {
       auto result =
           add_instr<IR::Phi>(*ty, next_name());
-      //add_phi_params(result);
       cout << "pushing phi in todo : " << endl;
       wrapper->print();
       lift_todo_phis.emplace_back(result, wrapper);
@@ -2368,31 +2372,24 @@ public:
       mc_add_identifier(operand.getReg(), 2, *stored);
       Fn.addInput(move(val));
     }
-
+    
     for (auto &[alive_bb, mc_bb] : sorted_bbs) {
       BB = alive_bb;
-      cout << "----------\n";
-      cout << "printing block\n";
-      mc_bb->print();
-      cout << "----------\n";
+      //cout << "----------\n";
+      //cout << "printing block\n";
+      //mc_bb->print();
+      //cout << "----------\n";
       auto &mc_instrs = mc_bb->getInstrs();
+      
       for (auto &mc_instr : mc_instrs) {
         cout << "before visit\n";
         mc_instr.print();
         mc_visit(mc_instr, Fn);
       }
 
-      auto instrs = BB->instrs();
-      if (instrs.begin() != instrs.end()) {
-        // if there are any instructions in the BB, keep processing
-        continue;
-      }
-
       blockCount++;
-      Fn.print(cout << "\n----------partially-lifted-arm-target----------\n");
-      return {};
     }
-
+    
     Fn.print(cout << "\n----------lifted-arm-target-missing-phi-params----------\n");
     cout << "lift_todo_phis.size() = " << lift_todo_phis.size() << "\n";
 
@@ -2931,7 +2928,6 @@ public:
         auto phi_dst_id = pushFresh(phi_var);
         cout << "phi_dst_id: " << phi_dst_id << "\n";
         block->getInstrs()[0].setOpId(0, phi_dst_id);
-        //new_w_instr.setOpId(0, phi_dst_id);
       }
       cout << "after phis\n";
       block->print();
@@ -3047,11 +3043,12 @@ public:
 
         auto phi_var = mc_instr.getOperand(0);
         unsigned index = 1;
+        cout << "phi arg size " << phi_args[block][phi_var].size() << "\n";
         for (auto var_id_label_pair : phi_args[block][phi_var]) {
           cout << "index = " << index
                << ", var_id = " << var_id_label_pair.first << "\n";
           mc_instr.addOperand(MCOperand::createReg(phi_var.getReg()));
-          w_instr.setOpId(index, var_id_label_pair.first);
+          w_instr.pushOpId(var_id_label_pair.first);
           w_instr.setOpPhiBlock(index, var_id_label_pair.second);
           w_instr.print();
           index++;
@@ -3551,10 +3548,9 @@ bool backendTV() {
   Str.generateDomTree();
   Str.ssaRename();
   Str.adjustReturns();
-
+  
   cout << "after SSA conversion\n";
   Str.printBlocks();
-
   // if (Str.MF.BBs.size() > 1) {
   //   cout << "ERROR: we don't generate SSA for this type of arm function yet"
   //        << '\n';
@@ -3566,10 +3562,10 @@ bool backendTV() {
   if (TF)
     TF->print(cout << "\n----------alive-lift-arm-target----------\n");
 
-  //cout << "exiting for valgrind\n";
-  //return false;
   auto r = backend_verify(AF, TF, TLI, true);
 
+  //cout << "exiting for valgrind\n";
+  //return false;
   if (r.status == Results::ERROR) {
     *out << "ERROR: " << r.error;
     ++num_errors;
