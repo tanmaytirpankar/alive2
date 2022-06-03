@@ -354,10 +354,6 @@ public:
     return op_ids[index];
   }
 
-  unsigned getVarId(unsigned index) {
-    return op_ids[index];
-  }
-
   void setOpPhiBlock(unsigned index, const std::string &block_name) {
     phi_blocks[index] = block_name;
   }
@@ -926,9 +922,9 @@ class arm2alive_ {
     } else if (op.getReg() == AArch64::WZR) {
       v = make_intconst(0, 32);
     } else if (size == 64) {
-      v = getIdentifier(op.getReg(), wrapper->getVarId(idx));
+      v = getIdentifier(op.getReg(), wrapper->getOpId(idx));
     } else if (size == 32) {
-      auto tmp = getIdentifier(op.getReg(), wrapper->getVarId(idx));
+      auto tmp = getIdentifier(op.getReg(), wrapper->getOpId(idx));
       v = add_instr<IR::ConversionOp>(*ty, next_name(), *tmp,
                                       IR::ConversionOp::Trunc);
     } else {
@@ -946,10 +942,11 @@ class arm2alive_ {
   std::string next_name() {
     std::stringstream ss;
     if (instrs_no_write.contains(wrapper->getOpcode())) {
-      ss << "tx" << ++curId << "x" << blockCount;
+      ss << "\%tx" << ++curId << "x" << blockCount;
     } else {
-      ss << registerInfo->getName(wrapper->getMCInst().getOperand(0).getReg())
-         << "_" << wrapper->getVarId(0) << "x" << ++curId << "x" << blockCount;
+      ss << "\%"
+         << registerInfo->getName(wrapper->getMCInst().getOperand(0).getReg())
+         << "_" << wrapper->getOpId(0) << "x" << ++curId << "x" << blockCount;
     }
     return ss.str();
   }
@@ -985,7 +982,7 @@ class arm2alive_ {
 
   void add_identifier(IR::Value &v) {
     auto reg = wrapper->getMCInst().getOperand(0).getReg();
-    auto version = wrapper->getVarId(0);
+    auto version = wrapper->getOpId(0);
     // TODO: this probably should be in visit
     instructionCount++;
     mc_add_identifier(reg, version, v);
@@ -2208,14 +2205,15 @@ public:
       if (!ret_void) {
         auto retTyp = &get_int_type(srcFn->getType().bits());
 
-        unsigned latest_id = 0;
+        // unsigned latest_id = 0;
         // Hacky way to find the latest use of the return value
-        for (auto &[reg_pair, _] : cache) {
-          if (reg_pair.first == mc_inst.getOperand(0).getReg())
-            latest_id =
-                latest_id < reg_pair.second ? reg_pair.second : latest_id;
-        }
-        auto val = getIdentifier(mc_inst.getOperand(0).getReg(), latest_id);
+        // FIXME: this will not work in a setting with multiple blocks
+        // for (auto &[reg_pair, _] : cache) {
+        //   if (reg_pair.first == mc_inst.getOperand(0).getReg())
+        //     latest_id =
+        //         latest_id < reg_pair.second ? reg_pair.second : latest_id;
+        // }
+        auto val = getIdentifier(mc_inst.getOperand(0).getReg(), I.getOpId(0));
 
         if (val == nullptr) {
           cout << "null val" << endl;
@@ -3226,7 +3224,7 @@ public:
           auto inst = it->getMCInst();
           auto firstOp = inst.getOperand(0);
           if (firstOp.isReg() && firstOp.getReg() == AArch64::X0) {
-            return it->getVarId(0);
+            return it->getOpId(0);
           }
         }
         for (auto &new_b : dom_tree[b]) {
