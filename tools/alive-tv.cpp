@@ -795,12 +795,27 @@ set<int> instrs_64 = {
     AArch64::EONXrs,    AArch64::SMULHrr,   AArch64::UMULHrr,
     AArch64::REV32Xr,   AArch64::REV16Xr,   AArch64::SMSUBLrrr,
     AArch64::UMSUBLrrr, AArch64::PHI,       AArch64::TBZW,
-    AArch64::TBZX};
+    AArch64::TBZX,      AArch64::TBNZW,     AArch64::TBNZX,
+    AArch64::B,         AArch64::CBZW,      AArch64::CBZX,
+    AArch64::CBNZW,     AArch64::CBNZX};
 
-set<int> instrs_no_write = {AArch64::Bcc, AArch64::TBZW, AArch64::TBZX};
+set<int> instrs_no_write = {AArch64::Bcc,  AArch64::B,     AArch64::TBZW,
+                            AArch64::TBZX, AArch64::TBNZW, AArch64::TBNZX,
+                            AArch64::CBZW, AArch64::CBZX, AArch64::CBNZW, AArch64::CBNZX};
 
 bool has_s(int instr) {
   return s_flag.contains(instr);
+}
+
+IR::BasicBlock* get_basic_block(IR::Function& f, MCOperand& jmp_tgt)  {
+  assert(jmp_tgt.isExpr() && "[get_basic_block] expected expression operand");
+  assert((jmp_tgt.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
+             "[get_basic_block] expected symbol ref as jump operand");
+  const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt.getExpr());
+  const MCSymbol &Sym = SRE.getSymbol();
+  cout << "jump target: " << Sym.getName().str() << '\n';
+  auto target_bb = &f.getBB(Sym.getName());
+  return target_bb;
 }
 
 class arm2alive_ {
@@ -2236,6 +2251,11 @@ public:
 
       break;
     }
+    case AArch64::B: {
+      auto dst = get_basic_block(Fn, mc_inst.getOperand(0));
+      add_instr<IR::Branch>(*dst);
+      break;
+    }
     case AArch64::Bcc: {
       auto cond_val_imm = mc_inst.getOperand(0).getImm();
       auto cond_val = evaluate_condition(cond_val_imm);
@@ -2260,8 +2280,38 @@ public:
       // visitError(I);
       break;
     }
+    case AArch64::CBZW: 
+    case AArch64::CBZX: {
+      auto operand = get_value(0);
+      assert(operand != nullptr && "operand is null");
+      auto cond_val = add_instr<IR::ICmp>(get_int_type(1), next_name(), IR::ICmp::EQ, *operand,
+                                        *make_intconst(0, size));
+      
+      auto dst_true = get_basic_block(Fn, mc_inst.getOperand(1));
+      auto &bb_order = Fn.getBBs();
+      assert((bb_order.size() > blockCount + 1) && "next block does not exist");
+      auto &dst_false = *bb_order[blockCount + 1];
+      add_instr<IR::Branch>(*cond_val, *dst_true, dst_false);
+      break;
+    }
+    case AArch64::CBNZW: 
+    case AArch64::CBNZX: {
+      auto operand = get_value(0);
+      assert(operand != nullptr && "operand is null");
+      auto cond_val = add_instr<IR::ICmp>(get_int_type(1), next_name(), IR::ICmp::NE, *operand,
+                                        *make_intconst(0, size));
+      
+      auto dst_true = get_basic_block(Fn, mc_inst.getOperand(1));
+      auto &bb_order = Fn.getBBs();
+      assert((bb_order.size() > blockCount + 1) && "next block does not exist");
+      auto &dst_false = *bb_order[blockCount + 1];
+      add_instr<IR::Branch>(*cond_val, *dst_true, dst_false);
+      break;
+    }
     case AArch64::TBZW:
-    case AArch64::TBZX: {
+    case AArch64::TBZX:
+    case AArch64::TBNZW: 
+    case AArch64::TBNZX: {
       auto operand = get_value(0);
       assert(operand != nullptr && "operand is null");
       auto bit_pos = mc_inst.getOperand(1).getImm();
@@ -2287,8 +2337,15 @@ public:
           *bb_order[blockCount +
                     1]; // FIXME, double check this and use successors instaed
 
-      add_instr<IR::Branch>(*cond_val, dst_true, dst_false);
-
+      switch(opcode) {
+        case AArch64::TBNZW: 
+        case AArch64::TBNZX: {
+          add_instr<IR::Branch>(*cond_val, dst_false, dst_true);
+        }
+        default:
+          add_instr<IR::Branch>(*cond_val, dst_true, dst_false);
+      }
+      
       break;
     }
     case AArch64::PHI: {
