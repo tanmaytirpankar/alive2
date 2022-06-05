@@ -794,9 +794,10 @@ set<int> instrs_64 = {
     AArch64::REVXr,     AArch64::CSNEGXr,   AArch64::BICXrs,
     AArch64::EONXrs,    AArch64::SMULHrr,   AArch64::UMULHrr,
     AArch64::REV32Xr,   AArch64::REV16Xr,   AArch64::SMSUBLrrr,
-    AArch64::UMSUBLrrr, AArch64::PHI};
+    AArch64::UMSUBLrrr, AArch64::PHI,       AArch64::TBZW,
+    AArch64::TBZX};
 
-set<int> instrs_no_write = {AArch64::Bcc};
+set<int> instrs_no_write = {AArch64::Bcc, AArch64::TBZW, AArch64::TBZX};
 
 bool has_s(int instr) {
   return s_flag.contains(instr);
@@ -2236,7 +2237,6 @@ public:
       break;
     }
     case AArch64::Bcc: {
-
       auto cond_val_imm = mc_inst.getOperand(0).getImm();
       auto cond_val = evaluate_condition(cond_val_imm);
 
@@ -2260,15 +2260,43 @@ public:
       // visitError(I);
       break;
     }
+    case AArch64::TBZW:
+    case AArch64::TBZX: {
+      auto operand = get_value(0);
+      assert(operand != nullptr && "operand is null");
+      auto bit_pos = mc_inst.getOperand(1).getImm();
+      auto shift =
+          add_instr<IR::BinOp>(*ty, next_name(), *operand,
+                               *make_intconst(bit_pos, size), IR::BinOp::LShr);
+      auto cond_val = add_instr<IR::ConversionOp>(
+          get_int_type(1), next_name(), *shift, IR::ConversionOp::Trunc);
+
+      auto &jmp_tgt_op = mc_inst.getOperand(2);
+      assert(jmp_tgt_op.isExpr() && "expected expression");
+      assert((jmp_tgt_op.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
+             "expected symbol ref as bcc operand");
+      const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt_op.getExpr());
+      const MCSymbol &Sym =
+          SRE.getSymbol(); // FIXME refactor this into a function
+      auto &dst_false = Fn.getBB(Sym.getName());
+
+      auto &bb_order = Fn.getBBs();
+      assert((bb_order.size() > blockCount + 1) &&
+             "tbz next block does not exist");
+      auto &dst_true =
+          *bb_order[blockCount +
+                    1]; // FIXME, double check this and use successors instaed
+
+      add_instr<IR::Branch>(*cond_val, dst_true, dst_false);
+
+      break;
+    }
     case AArch64::PHI: {
       auto result = add_instr<IR::Phi>(*ty, next_name());
       cout << "pushing phi in todo : " << endl;
       wrapper->print();
       lift_todo_phis.emplace_back(result, wrapper);
       store(*result);
-      // Fn.print(cout << "\nphi instruction
-      // detected----------partially-lifted-arm-target----------\n");
-      // visitError(I);
       break;
     }
     default:
@@ -2395,6 +2423,14 @@ public:
         cout << "before visit\n";
         mc_instr.print();
         mc_visit(mc_instr, Fn);
+      }
+
+      auto jump_instr = dynamic_cast<IR::JumpInstr *>(&BB->back());
+      auto ret_instr = dynamic_cast<IR::Return *>(&BB->back());
+      if (!jump_instr && !ret_instr) {
+        cout << "Last basicBlock instruction is not a terminator!\n";
+        auto &dst = *sorted_bbs[blockCount + 1].first;
+        add_instr<IR::Branch>(dst);
       }
 
       blockCount++;
@@ -2966,7 +3002,13 @@ public:
         errs() << "printing stack\n";
         printStack(stack);
         errs() << "printing operands\n";
-        for (unsigned i = 1; i < mc_instr.getNumOperands(); ++i) {
+        unsigned i = 1;
+        if (instrs_no_write.contains(mc_instr.getOpcode())) {
+          cout << "iterating from first element in rename\n";
+          i = 0;
+        }
+
+        for (; i < mc_instr.getNumOperands(); ++i) {
           auto &op = mc_instr.getOperand(i);
           if (!op.isReg()) {
             continue;
@@ -2984,6 +3026,9 @@ public:
           w_instr.setOpId(i, arg_id);
         }
         errs() << "printing operands done\n";
+        if (instrs_no_write.contains(mc_instr.getOpcode()))
+          continue;
+
         errs() << "renaming dst\n";
         auto &dst_op = mc_instr.getOperand(0);
         dst_op.print(errs(), MRI_ptr);
