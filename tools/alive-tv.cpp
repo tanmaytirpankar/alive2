@@ -801,16 +801,17 @@ set<int> instrs_64 = {
 
 set<int> instrs_no_write = {AArch64::Bcc,  AArch64::B,     AArch64::TBZW,
                             AArch64::TBZX, AArch64::TBNZW, AArch64::TBNZX,
-                            AArch64::CBZW, AArch64::CBZX, AArch64::CBNZW, AArch64::CBNZX};
+                            AArch64::CBZW, AArch64::CBZX,  AArch64::CBNZW,
+                            AArch64::CBNZX};
 
 bool has_s(int instr) {
   return s_flag.contains(instr);
 }
 
-IR::BasicBlock* get_basic_block(IR::Function& f, MCOperand& jmp_tgt)  {
+IR::BasicBlock *get_basic_block(IR::Function &f, MCOperand &jmp_tgt) {
   assert(jmp_tgt.isExpr() && "[get_basic_block] expected expression operand");
   assert((jmp_tgt.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
-             "[get_basic_block] expected symbol ref as jump operand");
+         "[get_basic_block] expected symbol ref as jump operand");
   const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt.getExpr());
   const MCSymbol &Sym = SRE.getSymbol();
   cout << "jump target: " << Sym.getName().str() << '\n';
@@ -2280,13 +2281,14 @@ public:
       // visitError(I);
       break;
     }
-    case AArch64::CBZW: 
+    case AArch64::CBZW:
     case AArch64::CBZX: {
       auto operand = get_value(0);
       assert(operand != nullptr && "operand is null");
-      auto cond_val = add_instr<IR::ICmp>(get_int_type(1), next_name(), IR::ICmp::EQ, *operand,
-                                        *make_intconst(0, size));
-      
+      auto cond_val =
+          add_instr<IR::ICmp>(get_int_type(1), next_name(), IR::ICmp::EQ,
+                              *operand, *make_intconst(0, size));
+
       auto dst_true = get_basic_block(Fn, mc_inst.getOperand(1));
       auto &bb_order = Fn.getBBs();
       assert((bb_order.size() > blockCount + 1) && "next block does not exist");
@@ -2294,13 +2296,14 @@ public:
       add_instr<IR::Branch>(*cond_val, *dst_true, dst_false);
       break;
     }
-    case AArch64::CBNZW: 
+    case AArch64::CBNZW:
     case AArch64::CBNZX: {
       auto operand = get_value(0);
       assert(operand != nullptr && "operand is null");
-      auto cond_val = add_instr<IR::ICmp>(get_int_type(1), next_name(), IR::ICmp::NE, *operand,
-                                        *make_intconst(0, size));
-      
+      auto cond_val =
+          add_instr<IR::ICmp>(get_int_type(1), next_name(), IR::ICmp::NE,
+                              *operand, *make_intconst(0, size));
+
       auto dst_true = get_basic_block(Fn, mc_inst.getOperand(1));
       auto &bb_order = Fn.getBBs();
       assert((bb_order.size() > blockCount + 1) && "next block does not exist");
@@ -2310,7 +2313,7 @@ public:
     }
     case AArch64::TBZW:
     case AArch64::TBZX:
-    case AArch64::TBNZW: 
+    case AArch64::TBNZW:
     case AArch64::TBNZX: {
       auto operand = get_value(0);
       assert(operand != nullptr && "operand is null");
@@ -2337,15 +2340,15 @@ public:
           *bb_order[blockCount +
                     1]; // FIXME, double check this and use successors instaed
 
-      switch(opcode) {
-        case AArch64::TBNZW: 
-        case AArch64::TBNZX: {
-          add_instr<IR::Branch>(*cond_val, dst_false, dst_true);
-        }
-        default:
-          add_instr<IR::Branch>(*cond_val, dst_true, dst_false);
+      switch (opcode) {
+      case AArch64::TBNZW:
+      case AArch64::TBNZX: {
+        add_instr<IR::Branch>(*cond_val, dst_false, dst_true);
       }
-      
+      default:
+        add_instr<IR::Branch>(*cond_val, dst_true, dst_false);
+      }
+
       break;
     }
     case AArch64::PHI: {
@@ -2668,7 +2671,16 @@ public:
 
   // Make sure that we have an entry label with no predecessors
   void addEntryBlock() {
-    assert(!MF.BBs.empty());
+    // If we have an empty assembly function, we need to add an entry block with
+    // a return instruction
+    if (MF.BBs.empty()) {
+      auto new_block = MF.addBlock("entry");
+      MCInst ret_instr;
+      ret_instr.setOpcode(AArch64::RET);
+      ret_instr.addOperand(MCOperand::createReg(AArch64::X0));
+      new_block->addInstBegin(std::move(ret_instr));
+    }
+
     if (MF.BBs.size() == 1)
       return;
     MCBasicBlock *firstBlockPtr = &MF.BBs[0];
@@ -2952,7 +2964,10 @@ public:
           op.setReg(op.getReg() + AArch64::X0 - AArch64::W0);
         } else if (!(op.getReg() >= AArch64::X0 &&
                      op.getReg() <= AArch64::X28) &&
-                   !(op.getReg() <= AArch64::XZR)) {
+                   !(op.getReg() <= AArch64::XZR &&
+                     op.getReg() >= AArch64::WZR) &&
+                   !(op.getReg() == AArch64::NoRegister) &&
+                   !(op.getReg() == AArch64::LR)) {
           report_fatal_error("Unsupported registers detected in the Assembly");
         }
       }
@@ -3323,8 +3338,8 @@ public:
         auto instrs = b->getInstrs();
         for (auto it = instrs.rbegin(); it != instrs.rend();
              it++) { // iterate backwards looking for writes
-          auto inst = it->getMCInst();
-          auto firstOp = inst.getOperand(0);
+          const auto &inst = it->getMCInst();
+          const auto &firstOp = inst.getOperand(0);
           if (firstOp.isReg() && firstOp.getReg() == AArch64::X0) {
             return it->getOpId(0);
           }
@@ -3336,9 +3351,9 @@ public:
       to_search = next_search;
     }
 
-    // if we've found no write to X0, we just need to return version 0,
-    // which corresponds to the initial argument passed in
-    return 0;
+    // if we've found no write to X0, we just need to return version 2,
+    // which corresponds to the function argument X0 after freeze
+    return 2;
   }
 
   // TODO: @Nader this should just fall out of our SSA implementation
@@ -3362,10 +3377,10 @@ public:
   }
 };
 
-static unsigned id_{0};
-unsigned getId() {
-  return ++id_;
-}
+// static unsigned id_{0};
+// unsigned getId() {
+//   return ++id_;
+// }
 
 // Used for performing LVN
 struct SymValue {
