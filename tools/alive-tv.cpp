@@ -2633,9 +2633,7 @@ public:
   void emitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol = nullptr,
                     uint64_t Size = 0, unsigned ByteAlignment = 0,
                     llvm::SMLoc Loc = llvm::SMLoc()) override {}
-  void emitGPRel32Value(const llvm::MCExpr *Value) override {}
-  void BeginCOFFSymbolDef(const llvm::MCSymbol *Symbol) override {}
-  void EndCOFFSymbolDef() override {}
+  
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
     // Assuming the first label encountered is the function's name
     // Need to figure out if there is a better way to get access to the
