@@ -2343,6 +2343,7 @@ public:
       case AArch64::TBNZW:
       case AArch64::TBNZX: {
         add_instr<IR::Branch>(*cond_val, dst_false, dst_true);
+        break;
       }
       default:
         add_instr<IR::Branch>(*cond_val, dst_true, dst_false);
