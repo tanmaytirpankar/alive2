@@ -2261,7 +2261,7 @@ public:
       auto cond_val_imm = mc_inst.getOperand(0).getImm();
       auto cond_val = evaluate_condition(cond_val_imm);
 
-      auto &bb_order = Fn.getBBs();
+      auto &mc_bb_order = MF.BBs;
       auto &jmp_tgt_op = mc_inst.getOperand(1);
       assert(jmp_tgt_op.isExpr() && "expected expression");
       assert((jmp_tgt_op.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
@@ -2270,10 +2270,10 @@ public:
       const MCSymbol &Sym = SRE.getSymbol();
       cout << "bcc target: " << Sym.getName().str() << '\n';
       auto &dst_true = Fn.getBB(Sym.getName());
-      assert((bb_order.size() > blockCount + 1) && "next block does not exist");
-      auto &dst_false =
-          *bb_order[blockCount +
-                    1]; // FIXME, double check this and use successors instaed
+
+      auto &dst_false = Fn.getBB(mc_bb_order[blockCount + 1].getName());
+      assert((mc_bb_order.size() > blockCount + 1) &&
+             "next block does not exist");
 
       add_instr<IR::Branch>(*cond_val, dst_true, dst_false);
       // Fn.print(cout << "\nError
@@ -2290,9 +2290,10 @@ public:
                               *operand, *make_intconst(0, size));
 
       auto dst_true = get_basic_block(Fn, mc_inst.getOperand(1));
-      auto &bb_order = Fn.getBBs();
-      assert((bb_order.size() > blockCount + 1) && "next block does not exist");
-      auto &dst_false = *bb_order[blockCount + 1];
+      auto &mc_bb_order = MF.BBs;
+      assert((mc_bb_order.size() > blockCount + 1) &&
+             "next block does not exist");
+      auto &dst_false = Fn.getBB(mc_bb_order[blockCount + 1].getName());
       add_instr<IR::Branch>(*cond_val, *dst_true, dst_false);
       break;
     }
@@ -2305,9 +2306,10 @@ public:
                               *operand, *make_intconst(0, size));
 
       auto dst_true = get_basic_block(Fn, mc_inst.getOperand(1));
-      auto &bb_order = Fn.getBBs();
-      assert((bb_order.size() > blockCount + 1) && "next block does not exist");
-      auto &dst_false = *bb_order[blockCount + 1];
+      auto &mc_bb_order = MF.BBs;
+      assert((mc_bb_order.size() > blockCount + 1) &&
+             "next block does not exist");
+      auto &dst_false = Fn.getBB(mc_bb_order[blockCount + 1].getName());
       add_instr<IR::Branch>(*cond_val, *dst_true, dst_false);
       break;
     }
@@ -2332,13 +2334,10 @@ public:
       const MCSymbol &Sym =
           SRE.getSymbol(); // FIXME refactor this into a function
       auto &dst_false = Fn.getBB(Sym.getName());
-
-      auto &bb_order = Fn.getBBs();
-      assert((bb_order.size() > blockCount + 1) &&
+      auto &mc_bb_order = MF.BBs;
+      assert((mc_bb_order.size() > blockCount + 1) &&
              "tbz next block does not exist");
-      auto &dst_true =
-          *bb_order[blockCount +
-                    1]; // FIXME, double check this and use successors instaed
+      auto &dst_true = Fn.getBB(mc_bb_order[blockCount + 1].getName());
 
       switch (opcode) {
       case AArch64::TBNZW:
@@ -2473,10 +2472,6 @@ public:
 
     for (auto &[alive_bb, mc_bb] : sorted_bbs) {
       BB = alive_bb;
-      // cout << "----------\n";
-      // cout << "printing block\n";
-      // mc_bb->print();
-      // cout << "----------\n";
       auto &mc_instrs = mc_bb->getInstrs();
 
       for (auto &mc_instr : mc_instrs) {
@@ -2633,7 +2628,7 @@ public:
   void emitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol = nullptr,
                     uint64_t Size = 0, unsigned ByteAlignment = 0,
                     llvm::SMLoc Loc = llvm::SMLoc()) override {}
-  
+
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
     // Assuming the first label encountered is the function's name
     // Need to figure out if there is a better way to get access to the
