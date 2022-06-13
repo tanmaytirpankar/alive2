@@ -25,7 +25,6 @@ public:
   virtual bool propagatesPoison() const;
   virtual std::optional<IntConst> fold() const;
   virtual Value* peep() const;
-  virtual void rauw(const Value &what, Value &with) = 0;
   smt::expr getTypeConstraints() const override;
   virtual smt::expr getTypeConstraints(const Function &f) const = 0;
   virtual std::unique_ptr<Instr> dup(Function &f,
