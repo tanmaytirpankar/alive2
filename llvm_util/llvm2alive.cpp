@@ -1241,10 +1241,14 @@ public:
 
       switch (llvmattr.getKindAsEnum()) {
       case llvm::Attribute::InReg:
-      case llvm::Attribute::SExt:
-      case llvm::Attribute::ZExt:
         // TODO: not important for IR verification, but we should check that
         // they don't change
+        continue;
+      case llvm::Attribute::SExt:
+        attrs.set(ParamAttrs::Sext);
+        continue;
+      case llvm::Attribute::ZExt:
+        attrs.set(ParamAttrs::Zext);
         continue;
 
       case llvm::Attribute::ByVal: {

@@ -89,3 +89,20 @@ Please contact us or submit a PR if something is missing or inaccurate.
 11. Assertion violation in SMT equality propagation (https://github.com/Z3Prover/z3/issues/2879)
 12. Assertion violation in qe_lite (https://github.com/Z3Prover/z3/commit/bb5edb7c653f9351fe674630d63cdd2b10338277)
 13. SMT internalize doesn't respect the timeout (https://github.com/Z3Prover/z3/issues/4192)
+
+
+### Bugs found in ARM64 Backend
+1. GlobalIsel miscompiles an llvm.fshl instruction (https://github.com/llvm/llvm-project/issues/55003)
+2. GlobalIsel miscompiles a zero-extended logical shift right (https://github.com/llvm/llvm-project/issues/55129)
+3. Incorrect optimization of sitofp/fptosi roundtrip (https://github.com/llvm/llvm-project/issues/55150)
+4. Miscompilation on a shift followed by an icmp instruction (https://github.com/llvm/llvm-project/issues/55178)
+5. Miscompilation when backend attempts to lower to a rotate instruction (https://github.com/llvm/llvm-project/issues/55201) 
+6. Miscompilation with urem and undef (https://github.com/llvm/llvm-project/issues/55271)
+7. or followed by and miscompile with global isel on arm64 (https://github.com/llvm/llvm-project/issues/55284)
+8. urem and udiv miscompile with global isel set on arm64 (https://github.com/llvm/llvm-project/issues/55287)
+9. fshl-related miscompile by arm64 and x86-64 backends (https://github.com/llvm/llvm-project/issues/55296)
+10. Miscompilation of arithmetic binops with constant params (https://github.com/llvm/llvm-project/issues/55342)
+11. Miscompilation in multiple backends including arm64 and x86-64 (https://github.com/llvm/llvm-project/issues/55484)
+12. Miscompilation involving arithmentic binops (https://github.com/llvm/llvm-project/issues/55490)
+13. Miscompilation of non-canonical add+icmp (https://github.com/llvm/llvm-project/issues/55627)
+14. Miscompilation of smul.with.overflow.i2 (https://github.com/llvm/llvm-project/issues/55644)

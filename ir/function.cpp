@@ -59,6 +59,15 @@ void BasicBlock::delInstr(Instr *i) {
   }
 }
 
+void BasicBlock::delInstr(const Instr *i) {
+  for (auto I = m_instrs.begin(), E = m_instrs.end(); I != E; ++I) {
+    if (I->get() == i) {
+      m_instrs.erase(I);
+      return;
+    }
+  }
+}
+
 vector<Phi*> BasicBlock::phis() const {
   vector<Phi*> phis;
   for (auto &i : m_instrs) {
@@ -125,6 +134,11 @@ expr Function::getTypeConstraints() const {
   return t;
 }
 
+void Function::rauw(const Value &what, Value &with) {
+  for (auto bb : getBBs())
+    bb->rauw(what, with);
+}
+
 void Function::fixupTypes(const Model &m) {
   for (auto bb : getBBs()) {
     bb->fixupTypes(m);
@@ -182,6 +196,27 @@ void Function::removeBB(BasicBlock &BB) {
       break;
     }
   }
+}
+
+bool Function::hasOneUse(const Instr &target) {
+  long uses = 0;
+  for (auto *bb : getBBs()) {
+    for (auto &i : bb->instrs()) {
+      for (auto op : i.operands()) {
+        auto ip = dynamic_cast<Instr*>(op);
+        if (ip != nullptr && &target == ip)
+          uses++;
+      }
+    }
+  }
+  for (auto &agg : aggregates) {
+    for (auto val : agg->getVals()) {
+      auto ip = dynamic_cast<Instr*>(val);
+      if (ip != nullptr && &target == ip)
+        uses++;
+    }
+  }
+  return uses == 1;
 }
 
 void Function::addConstant(unique_ptr<Value> &&c) {
