@@ -28,7 +28,8 @@ public:
   virtual void rauw(const Value &what, Value &with) = 0;
   smt::expr getTypeConstraints() const override;
   virtual smt::expr getTypeConstraints(const Function &f) const = 0;
-  virtual std::unique_ptr<Instr> dup(const std::string &suffix) const = 0;
+  virtual std::unique_ptr<Instr> dup(Function &f,
+                                     const std::string &suffix) const = 0;
 };
 
 
@@ -59,7 +60,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
   Op getOp() const { return op; }
 };
 
@@ -88,7 +90,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -114,7 +117,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -144,7 +148,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -169,7 +174,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -192,7 +198,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -220,7 +227,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -242,7 +250,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -266,7 +275,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -292,7 +302,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -312,7 +323,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -329,7 +341,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -346,7 +359,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -381,7 +395,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -405,7 +420,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -420,7 +436,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -445,7 +462,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr> 
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -502,7 +520,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -527,7 +546,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -541,7 +561,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -568,7 +589,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -640,7 +662,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -675,7 +698,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -702,7 +726,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -723,7 +748,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -745,7 +771,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -773,7 +800,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -798,7 +826,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -825,7 +854,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -851,7 +881,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -871,7 +902,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -900,7 +932,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -925,7 +958,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -948,7 +982,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -981,7 +1016,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -1001,7 +1037,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -1014,7 +1051,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -1028,7 +1066,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -1042,7 +1081,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -1056,7 +1096,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -1070,7 +1111,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 
@@ -1086,7 +1128,8 @@ public:
   void print(std::ostream &os) const override;
   StateValue toSMT(State &s) const override;
   smt::expr getTypeConstraints(const Function &f) const override;
-  std::unique_ptr<Instr> dup(const std::string &suffix) const override;
+  std::unique_ptr<Instr>
+    dup(Function &f, const std::string &suffix) const override;
 };
 
 

@@ -5,7 +5,7 @@
 #include "ir/instr.h"
 #include "ir/type.h"
 #include "llvm_util/llvm2alive.h"
-#include "llvm_util/utils.h"
+#include "llvm_util/llvm_optimizer.h"
 #include "smt/smt.h"
 #include "tools/transform.h"
 #include "util/sort.h"
@@ -102,6 +102,14 @@ llvm::cl::opt<std::string>
     opt_tgt_fn(LLVM_ARGS_PREFIX "tgt-fn",
                llvm::cl::desc("Name of tgt function (without @)"),
                llvm::cl::cat(alive_cmdargs), llvm::cl::init("tgt"));
+
+llvm::cl::opt<string>
+    optPass(LLVM_ARGS_PREFIX "passes",
+            llvm::cl::value_desc("optimization passes"),
+            llvm::cl::desc("Specify which LLVM passes to run (default=O2). "
+                           "The syntax is described at "
+                           "https://llvm.org/docs/NewPassManager.html#invoking-opt"),
+            llvm::cl::cat(alive_cmdargs), llvm::cl::init("O2"));
 
 llvm::cl::opt<bool> opt_backend_tv(
     LLVM_ARGS_PREFIX "backend-tv",
@@ -288,26 +296,6 @@ bool compareFunctions(llvm::Function &F1, llvm::Function &F2,
     }
   }
   return true;
-}
-
-void optimizeModule(llvm::Module *M) {
-  llvm::LoopAnalysisManager LAM;
-  llvm::FunctionAnalysisManager FAM;
-  llvm::CGSCCAnalysisManager CGAM;
-  llvm::ModuleAnalysisManager MAM;
-
-  llvm::PassBuilder PB;
-  PB.registerModuleAnalyses(MAM);
-  PB.registerCGSCCAnalyses(CGAM);
-  PB.registerFunctionAnalyses(FAM);
-  PB.registerLoopAnalyses(LAM);
-  PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
-
-  llvm::FunctionPassManager FPM = PB.buildFunctionSimplificationPipeline(
-      llvm::OptimizationLevel::O2, llvm::ThinOrFullLTOPhase::None);
-  llvm::ModulePassManager MPM;
-  MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
-  MPM.run(*M, MAM);
 }
 
 llvm::Function *findFunction(llvm::Module &M, const string &FName) {
