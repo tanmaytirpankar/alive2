@@ -6,6 +6,7 @@
 #include "ir/type.h"
 #include "llvm_util/llvm2alive.h"
 #include "llvm_util/llvm_optimizer.h"
+#include "llvm_util/utils.h"
 #include "smt/smt.h"
 #include "tools/transform.h"
 #include "util/sort.h"
@@ -3781,7 +3782,7 @@ void bitcodeTV() {
       return;
     } else {
       M2 = CloneModule(*M1);
-      optimizeModule(M2.get());
+      optimize_module(M2.get(), optPass);
     }
   } else {
     M2 = openInputFile(Context, opt_file2);
