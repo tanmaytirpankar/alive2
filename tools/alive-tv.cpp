@@ -1821,10 +1821,7 @@ public:
       auto not_lhs = add_instr<IR::BinOp>(*ty, next_name(), *lhs, *neg_one,
                                           IR::BinOp::Xor);
 
-      auto rhs = make_intconst(0, size);
-      auto ident = add_instr<IR::BinOp>(*ty, next_name(), *not_lhs, *rhs,
-                                        IR::BinOp::Add);
-      store(*ident);
+      store(*not_lhs);
       break;
     }
     case AArch64::LSLVWr:
@@ -2542,7 +2539,9 @@ public:
   std::unordered_map<MCBasicBlock *, BlockSetTy> dom;
   std::unordered_map<MCBasicBlock *, BlockSetTy> dom_frontier;
   std::unordered_map<MCBasicBlock *, BlockSetTy>
-      dom_tree; // CHECK I may have made a mistake here
+      dom_tree; 
+  std::unordered_map<MCBasicBlock *, BlockSetTy>
+      dom_tree_inv; 
   std::unordered_map<MCOperand, BlockSetTy, MCOperandHash, MCOperandEqual> defs;
   std::unordered_map<
       MCBasicBlock *,
@@ -2826,6 +2825,11 @@ public:
 
     cout << "printing dom_tree\n";
     printGraph(dom_tree);
+    cout << "-----------------\n";
+
+    dom_tree_inv = invertGraph(dom_tree);
+    cout << "printing dom_tree_inv\n";
+    printGraph(dom_tree_inv);
     cout << "-----------------\n";
   }
 
@@ -3329,7 +3333,7 @@ public:
             return it->getOpId(0);
           }
         }
-        for (auto &new_b : dom_tree[b]) {
+        for (auto &new_b : dom_tree_inv[b]) {
           next_search.insert(new_b);
         }
       }
