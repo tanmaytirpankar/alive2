@@ -14,6 +14,7 @@
 
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
@@ -386,7 +387,7 @@ public:
 class MCBasicBlock {
 private:
   std::string name;
-  using SetTy = llvm::DenseSet<MCBasicBlock *>;
+  using SetTy = llvm::SetVector<MCBasicBlock *>;
   std::vector<MCInstWrapper> Instrs;
   SetTy Succs;
   SetTy Preds;
@@ -959,7 +960,7 @@ class arm2alive_ {
 
   std::string next_name(unsigned reg_num, unsigned id_num) {
     std::stringstream ss;
-    ss << registerInfo->getName(reg_num) << "_" << id_num;
+    ss << "\%" << registerInfo->getName(reg_num) << "_" << id_num;
     return ss.str();
   }
 
@@ -2433,10 +2434,11 @@ public:
       // FIXME this is pretty convulated and needs to be cleaned up
       auto operand = MCOperand::createReg(AArch64::X0 + (argNum++));
 
-      std::string operand_name(registerInfo->getName(operand.getReg()));
+      std::stringstream ss;
+      ss << "\%" << registerInfo->getName(operand.getReg());
       IR::ParamAttrs attrs(input_ptr->getAttributes());
 
-      auto val = make_unique<IR::Input>(typ, move(operand_name), move(attrs));
+      auto val = make_unique<IR::Input>(typ, ss.str(), move(attrs));
       IR::Value *stored = val.get();
 
       stored =
@@ -2536,7 +2538,7 @@ public:
   std::vector<llvm::MCInst>
       Insts; // CHECK this should go as it's only being used for pretty printing
              // which makes it unused after fixing MCInstWrapper::print
-  using BlockSetTy = llvm::DenseSet<MCBasicBlock *>;
+  using BlockSetTy = llvm::SetVector<MCBasicBlock *>;
   std::unordered_map<MCBasicBlock *, BlockSetTy> dom;
   std::unordered_map<MCBasicBlock *, BlockSetTy> dom_frontier;
   std::unordered_map<MCBasicBlock *, BlockSetTy>
