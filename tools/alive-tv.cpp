@@ -1392,12 +1392,7 @@ std::tuple<llvm::APInt, llvm::APInt> decode_bit_mask(bool immNBit,
   return {welem.trunc(M), telem.trunc(M)};
 }
 
-// Values currently holding ZNCV bits, respectively
-IR::Value *cur_v{nullptr};
-IR::Value *cur_z{nullptr};
-IR::Value *cur_n{nullptr};
-IR::Value *cur_c{nullptr};
-
+// Values currently holding ZNCV bits, for each basicblock respectively
 unordered_map<MCBasicBlock *, IR::Value *>cur_vs;
 unordered_map<MCBasicBlock *, IR::Value *>cur_zs;
 unordered_map<MCBasicBlock *, IR::Value *>cur_ns;
@@ -1647,12 +1642,41 @@ class arm2alive_ {
     add_identifier(*new_val);
   }
 
-  IR::Value *evaluate_condition(uint64_t cond, MCBasicBlock *bb=nullptr) {
+  IR::Value *retrieve_pstate(unordered_map<MCBasicBlock *, IR::Value *> &pstate_map, MCBasicBlock *bb) {
+    assert(bb->getPreds().size() == 1 && "pstate can only be retrieved for blocks with up to one predecessor");
+    auto pred_bb = bb->getPreds().front();
+    auto pred_pstate = pstate_map[pred_bb];
+    assert(pred_pstate != nullptr && "pstate must be defined for predecessor");
+    pstate_map[bb] = pred_pstate;
+    return pred_pstate;
+  }
+
+  IR::Value *evaluate_condition(uint64_t cond, MCBasicBlock *bb) {
     // cond<0> == '1' && cond != '1111'
     auto invert_bit = (cond & 1) && (cond != 15);
 
     cond >>= 1;
+    
+    auto cur_v = cur_vs[bb];
+    auto cur_z = cur_zs[bb];
+    auto cur_n = cur_ns[bb];
+    auto cur_c = cur_cs[bb];
 
+    if (!cur_v)
+      cur_v = retrieve_pstate(cur_vs, bb);
+  
+    if (!cur_z) 
+      cur_z = retrieve_pstate(cur_zs, bb);
+
+    if (!cur_n)
+      cur_n = retrieve_pstate(cur_ns, bb);
+
+    if (!cur_c)
+      cur_c = retrieve_pstate(cur_cs, bb);
+
+    assert(cur_v != nullptr && cur_z != nullptr && cur_n != nullptr &&
+           cur_c != nullptr && "condition not initialized");
+    
     IR::Value *res = nullptr;
     switch (cond) {
     case 0:
@@ -1734,17 +1758,16 @@ class arm2alive_ {
     auto z =
         add_instr<IR::ICmp>(*typ, next_name(), IR::ICmp::Cond::EQ, *val, *zero);
 
-    cur_z = z;
+    cur_zs[&MF.BBs[blockCount]] = z;
   }
 
   void set_n(IR::Value *val) {
-    cout << val->bits() << "\n";
     auto typ = &get_int_type(1);
     auto zero = make_intconst(0, val->bits());
 
     auto n = add_instr<IR::ICmp>(*typ, next_name(), IR::ICmp::Cond::SLT, *val,
                                  *zero);
-    cur_n = n;
+    cur_ns[&MF.BBs[blockCount]] = n;
   }
 
   // add_instr is a thin wrapper around make_unique which adds an instruction to
@@ -1862,8 +1885,9 @@ public:
         auto new_c = add_instr<IR::ExtractValue>(*i1, next_name(), *uadd);
         new_c->addIdx(1);
 
-        cur_v = new_v;
-        cur_c = new_c;
+        cur_cs[&MF.BBs[blockCount]] = new_c;
+        cur_vs[&MF.BBs[blockCount]] = new_v;
+        
         set_n(result);
         set_z(result);
 
@@ -1979,11 +2003,9 @@ public:
         auto new_v = add_instr<IR::ExtractValue>(*ty_i1, next_name(), *ssub);
         new_v->addIdx(1);
 
-        cur_c = add_instr<IR::ICmp>(*ty_i1, next_name(), IR::ICmp::UGE, *a, *b);
-
-        cur_z = add_instr<IR::ICmp>(*ty_i1, next_name(), IR::ICmp::EQ, *a, *b);
-
-        cur_v = new_v;
+        cur_cs[&MF.BBs[blockCount]] = add_instr<IR::ICmp>(*ty_i1, next_name(), IR::ICmp::UGE, *a, *b);
+        cur_zs[&MF.BBs[blockCount]] = add_instr<IR::ICmp>(*ty_i1, next_name(), IR::ICmp::EQ, *a, *b);
+        cur_vs[&MF.BBs[blockCount]] = new_v;
         set_n(result);
         store(*result);
         break;
@@ -2004,7 +2026,7 @@ public:
       auto b = get_value(2);
 
       auto cond_val_imm = mc_inst.getOperand(3).getImm();
-      auto cond_val = evaluate_condition(cond_val_imm);
+      auto cond_val = evaluate_condition(cond_val_imm, &MF.BBs[blockCount]);
 
       if (!ty || !a || !b)
         visitError(I);
@@ -2047,9 +2069,8 @@ public:
       if (has_s(opcode)) {
         set_n(and_op);
         set_z(and_op);
-
-        cur_c = make_intconst(0, 1);
-        cur_v = make_intconst(0, 1);
+        cur_cs[&MF.BBs[blockCount]] = make_intconst(0, 1);
+        cur_vs[&MF.BBs[blockCount]] = make_intconst(0, 1);
       }
 
       store(*and_op);
@@ -2358,7 +2379,7 @@ public:
       auto b = get_value(2);
 
       auto cond_val_imm = mc_inst.getOperand(3).getImm();
-      auto cond_val = evaluate_condition(cond_val_imm);
+      auto cond_val = evaluate_condition(cond_val_imm, &MF.BBs[blockCount]);
 
       if (!ty || !a || !b)
         visitError(I);
@@ -2391,7 +2412,7 @@ public:
       auto b = get_value(2);
 
       auto cond_val_imm = mc_inst.getOperand(3).getImm();
-      auto cond_val = evaluate_condition(cond_val_imm);
+      auto cond_val = evaluate_condition(cond_val_imm, &MF.BBs[blockCount]);
 
       auto inc = add_instr<IR::BinOp>(
           *ty, next_name(), *b, *make_intconst(1, ty->bits()), IR::BinOp::Add);
@@ -2851,7 +2872,7 @@ public:
     }
     case AArch64::Bcc: {
       auto cond_val_imm = mc_inst.getOperand(0).getImm();
-      auto cond_val = evaluate_condition(cond_val_imm);
+      auto cond_val = evaluate_condition(cond_val_imm, &MF.BBs[blockCount]);
 
       auto &mc_bb_order = MF.BBs;
       auto &jmp_tgt_op = mc_inst.getOperand(1);
