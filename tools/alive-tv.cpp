@@ -1414,6 +1414,7 @@ class arm2alive_ {
   // const llvm::DataLayout &DL;
   std::optional<IR::Function> &srcFn;
   IR::BasicBlock *BB; // the current block
+  MCBasicBlock *MCBB; // the current machine block
   unsigned blockCount{0};
 
   MCInstPrinter *instrPrinter;
@@ -1549,11 +1550,11 @@ class arm2alive_ {
   std::string next_name() {
     std::stringstream ss;
     if (instrs_no_write.contains(wrapper->getOpcode())) {
-      ss << "\%tx" << ++curId << "x" << blockCount;
+      ss << "\%tx" << ++curId << "x" << instructionCount << "x" << blockCount;
     } else {
       ss << "\%"
          << registerInfo->getName(wrapper->getMCInst().getOperand(0).getReg())
-         << "_" << wrapper->getOpId(0) << "x" << ++curId << "x" << blockCount;
+         << "_" << wrapper->getOpId(0) << "x" << ++curId << "x" << instructionCount << "x" << blockCount;
     }
     return ss.str();
   }
@@ -1758,7 +1759,7 @@ class arm2alive_ {
     auto z =
         add_instr<IR::ICmp>(*typ, next_name(), IR::ICmp::Cond::EQ, *val, *zero);
 
-    cur_zs[&MF.BBs[blockCount]] = z;
+    cur_zs[MCBB] = z;
   }
 
   void set_n(IR::Value *val) {
@@ -1767,7 +1768,7 @@ class arm2alive_ {
 
     auto n = add_instr<IR::ICmp>(*typ, next_name(), IR::ICmp::Cond::SLT, *val,
                                  *zero);
-    cur_ns[&MF.BBs[blockCount]] = n;
+    cur_ns[MCBB] = n;
   }
 
   // add_instr is a thin wrapper around make_unique which adds an instruction to
@@ -1885,8 +1886,8 @@ public:
         auto new_c = add_instr<IR::ExtractValue>(*i1, next_name(), *uadd);
         new_c->addIdx(1);
 
-        cur_cs[&MF.BBs[blockCount]] = new_c;
-        cur_vs[&MF.BBs[blockCount]] = new_v;
+        cur_cs[MCBB] = new_c;
+        cur_vs[MCBB] = new_v;
         
         set_n(result);
         set_z(result);
@@ -2003,9 +2004,9 @@ public:
         auto new_v = add_instr<IR::ExtractValue>(*ty_i1, next_name(), *ssub);
         new_v->addIdx(1);
 
-        cur_cs[&MF.BBs[blockCount]] = add_instr<IR::ICmp>(*ty_i1, next_name(), IR::ICmp::UGE, *a, *b);
-        cur_zs[&MF.BBs[blockCount]] = add_instr<IR::ICmp>(*ty_i1, next_name(), IR::ICmp::EQ, *a, *b);
-        cur_vs[&MF.BBs[blockCount]] = new_v;
+        cur_cs[MCBB] = add_instr<IR::ICmp>(*ty_i1, next_name(), IR::ICmp::UGE, *a, *b);
+        cur_zs[MCBB] = add_instr<IR::ICmp>(*ty_i1, next_name(), IR::ICmp::EQ, *a, *b);
+        cur_vs[MCBB] = new_v;
         set_n(result);
         store(*result);
         break;
@@ -2026,7 +2027,7 @@ public:
       auto b = get_value(2);
 
       auto cond_val_imm = mc_inst.getOperand(3).getImm();
-      auto cond_val = evaluate_condition(cond_val_imm, &MF.BBs[blockCount]);
+      auto cond_val = evaluate_condition(cond_val_imm, MCBB);
 
       if (!ty || !a || !b)
         visitError(I);
@@ -2069,8 +2070,8 @@ public:
       if (has_s(opcode)) {
         set_n(and_op);
         set_z(and_op);
-        cur_cs[&MF.BBs[blockCount]] = make_intconst(0, 1);
-        cur_vs[&MF.BBs[blockCount]] = make_intconst(0, 1);
+        cur_cs[MCBB] = make_intconst(0, 1);
+        cur_vs[MCBB] = make_intconst(0, 1);
       }
 
       store(*and_op);
@@ -2379,7 +2380,7 @@ public:
       auto b = get_value(2);
 
       auto cond_val_imm = mc_inst.getOperand(3).getImm();
-      auto cond_val = evaluate_condition(cond_val_imm, &MF.BBs[blockCount]);
+      auto cond_val = evaluate_condition(cond_val_imm, MCBB);
 
       if (!ty || !a || !b)
         visitError(I);
@@ -2412,7 +2413,7 @@ public:
       auto b = get_value(2);
 
       auto cond_val_imm = mc_inst.getOperand(3).getImm();
-      auto cond_val = evaluate_condition(cond_val_imm, &MF.BBs[blockCount]);
+      auto cond_val = evaluate_condition(cond_val_imm, MCBB);
 
       auto inc = add_instr<IR::BinOp>(
           *ty, next_name(), *b, *make_intconst(1, ty->bits()), IR::BinOp::Add);
@@ -2872,9 +2873,8 @@ public:
     }
     case AArch64::Bcc: {
       auto cond_val_imm = mc_inst.getOperand(0).getImm();
-      auto cond_val = evaluate_condition(cond_val_imm, &MF.BBs[blockCount]);
+      auto cond_val = evaluate_condition(cond_val_imm, MCBB);
 
-      auto &mc_bb_order = MF.BBs;
       auto &jmp_tgt_op = mc_inst.getOperand(1);
       assert(jmp_tgt_op.isExpr() && "expected expression");
       assert((jmp_tgt_op.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
@@ -2884,14 +2884,19 @@ public:
       cout << "bcc target: " << Sym.getName().str() << '\n';
       auto &dst_true = Fn.getBB(Sym.getName());
 
-      auto &dst_false = Fn.getBB(mc_bb_order[blockCount + 1].getName());
-      assert((mc_bb_order.size() > blockCount + 1) &&
-             "next block does not exist");
-
+      assert(MCBB->getSuccs().size() == 2 &&
+             "expected 2 successors");
+      const std::string* dst_false_name;
+      for(auto &succ : MCBB->getSuccs()) {
+        if (succ->getName() != Sym.getName()) {
+          dst_false_name = &succ->getName();
+          break;
+        }
+        
+      }
+      auto &dst_false = Fn.getBB(*dst_false_name);
+      
       add_instr<IR::Branch>(*cond_val, dst_true, dst_false);
-      // Fn.print(cout << "\nError
-      // detected----------partially-lifted-arm-target----------\n");
-      // visitError(I);
       break;
     }
     case AArch64::CBZW:
@@ -2903,10 +2908,18 @@ public:
                               *operand, *make_intconst(0, size));
 
       auto dst_true = get_basic_block(Fn, mc_inst.getOperand(1));
-      auto &mc_bb_order = MF.BBs;
-      assert((mc_bb_order.size() > blockCount + 1) &&
-             "next block does not exist");
-      auto &dst_false = Fn.getBB(mc_bb_order[blockCount + 1].getName());
+      assert(MCBB->getSuccs().size() == 2 &&
+             "expected 2 successors");
+      
+      const std::string* dst_false_name;
+      for(auto &succ : MCBB->getSuccs()) {
+        if (succ->getName() != dst_true->getName()) {
+          dst_false_name = &succ->getName();
+          break;
+        }
+        
+      }      
+      auto &dst_false = Fn.getBB(*dst_false_name);
       add_instr<IR::Branch>(*cond_val, *dst_true, dst_false);
       break;
     }
@@ -2919,10 +2932,18 @@ public:
                               *operand, *make_intconst(0, size));
 
       auto dst_true = get_basic_block(Fn, mc_inst.getOperand(1));
-      auto &mc_bb_order = MF.BBs;
-      assert((mc_bb_order.size() > blockCount + 1) &&
-             "next block does not exist");
-      auto &dst_false = Fn.getBB(mc_bb_order[blockCount + 1].getName());
+      assert(MCBB->getSuccs().size() == 2 &&
+             "expected 2 successors");
+      
+      const std::string* dst_false_name;
+      for(auto &succ : MCBB->getSuccs()) {
+        if (succ->getName() != dst_true->getName()) {
+          dst_false_name = &succ->getName();
+          break;
+        }
+        
+      }      
+      auto &dst_false = Fn.getBB(*dst_false_name);
       add_instr<IR::Branch>(*cond_val, *dst_true, dst_false);
       break;
     }
@@ -2947,10 +2968,22 @@ public:
       const MCSymbol &Sym =
           SRE.getSymbol(); // FIXME refactor this into a function
       auto &dst_false = Fn.getBB(Sym.getName());
-      auto &mc_bb_order = MF.BBs;
-      assert((mc_bb_order.size() > blockCount + 1) &&
-             "tbz next block does not exist");
-      auto &dst_true = Fn.getBB(mc_bb_order[blockCount + 1].getName());
+
+      cout << "current mcblock = " << MCBB->getName() << endl;
+      cout << "BB=" << BB->getName() << endl;
+      cout << "jump target = " << Sym.getName().str() << endl;
+      assert(MCBB->getSuccs().size() == 2 &&
+             "expected 2 successors");
+      
+      const std::string* dst_true_name;
+      for(auto &succ : MCBB->getSuccs()) {
+        if (succ->getName() != Sym.getName()) {
+          dst_true_name = &succ->getName();
+          break;
+        }
+        
+      }
+      auto &dst_true = Fn.getBB(*dst_true_name);
 
       switch (opcode) {
       case AArch64::TBNZW:
@@ -3087,6 +3120,7 @@ public:
 
     for (auto &[alive_bb, mc_bb] : sorted_bbs) {
       BB = alive_bb;
+      MCBB = mc_bb;
       auto &mc_instrs = mc_bb->getInstrs();
 
       for (auto &mc_instr : mc_instrs) {
@@ -3099,6 +3133,8 @@ public:
       auto ret_instr = dynamic_cast<IR::Return *>(&BB->back());
       if (!jump_instr && !ret_instr) {
         cout << "Last basicBlock instruction is not a terminator!\n";
+        assert(MCBB->getSuccs().size() == 1 &&
+             "expected 1 successor for block with no terminator");
         auto &dst = *sorted_bbs[blockCount + 1].first;
         add_instr<IR::Branch>(dst);
       }
