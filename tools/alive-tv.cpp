@@ -1644,6 +1644,7 @@ class arm2alive_ {
   }
 
   IR::Value *retrieve_pstate(unordered_map<MCBasicBlock *, IR::Value *> &pstate_map, MCBasicBlock *bb) {
+    cout << "retrieving pstate for block " << bb->getName() << endl;
     assert(bb->getPreds().size() == 1 && "pstate can only be retrieved for blocks with up to one predecessor");
     auto pred_bb = bb->getPreds().front();
     auto pred_pstate = pstate_map[pred_bb];
@@ -3135,7 +3136,7 @@ public:
         cout << "Last basicBlock instruction is not a terminator!\n";
         assert(MCBB->getSuccs().size() == 1 &&
              "expected 1 successor for block with no terminator");
-        auto &dst = *sorted_bbs[blockCount + 1].first;
+        auto &dst = Fn.getBB(MCBB->getSuccs()[0]->getName());
         add_instr<IR::Branch>(dst);
       }
 
@@ -3418,9 +3419,12 @@ public:
   // successors for each basic block
   void generateSuccessors() {
     cout << "generating basic block successors" << '\n';
-    for (unsigned i = 0; i < MF.BBs.size() - 1; ++i) {
+    for (unsigned i = 0; i < MF.BBs.size(); ++i) {
       auto &cur_bb = MF.BBs[i];
-      auto next_bb_ptr = &MF.BBs[i + 1];
+      MCBasicBlock *next_bb_ptr = nullptr;
+      if (i < MF.BBs.size() - 1) 
+        next_bb_ptr = &MF.BBs[i + 1];
+
       if (cur_bb.size() == 0) {
         cout
             << "generateSuccessors, encountered basic block with 0 instructions"
@@ -3432,14 +3436,15 @@ public:
         std::string target = findTargetLabel(last_mc_instr);
         auto target_bb = MF.findBlockByName(target);
         cur_bb.addSucc(target_bb);
-        cur_bb.addSucc(next_bb_ptr);
+        if (next_bb_ptr)
+          cur_bb.addSucc(next_bb_ptr);
       } else if (Ana_ptr->isUnconditionalBranch(last_mc_instr)) {
         std::string target = findTargetLabel(last_mc_instr);
         auto target_bb = MF.findBlockByName(target);
         cur_bb.addSucc(target_bb);
       } else if (Ana_ptr->isReturn(last_mc_instr)) {
         continue;
-      } else { // add edge to next block
+      } else if (next_bb_ptr) { // add edge to next block
         cur_bb.addSucc(next_bb_ptr);
       }
     }
