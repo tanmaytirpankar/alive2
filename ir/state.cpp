@@ -818,8 +818,8 @@ State::addFnCall(const string &name, vector<StateValue> &&inputs,
 
   if (writes_memory) {
     for (auto &v : ptr_inputs) {
-      if (!v.byval && !v.nocapture && !v.val.non_poison.isFalse())
-        memory.escapeLocalPtr(v.val.value);
+      if (!v.byval && !v.nocapture)
+        memory.escapeLocalPtr(v.val.value, v.val.non_poison);
     }
   }
 
@@ -997,6 +997,14 @@ void State::finishInitializer() {
   is_initialization_phase = false;
 }
 
+void State::saveReturnedInput() {
+  assert(isSource());
+  if (auto *ret = getFn().getReturnedInput()) {
+    returned_input = (*this)[*ret];
+    resetUndefVars();
+  }
+}
+
 expr State::sinkDomain() const {
   auto I = predecessor_data.find(&f.getSinkBB());
   if (I == predecessor_data.end())
@@ -1046,6 +1054,8 @@ void State::syncSEdataWithSrc(const State &src) {
   glbvar_bids = src.glbvar_bids;
   for (auto &itm : glbvar_bids)
     itm.second.second = false;
+
+  returned_input = src.returned_input;
 
   fn_call_data = src.fn_call_data;
   inaccessiblemem_bids = src.inaccessiblemem_bids;
