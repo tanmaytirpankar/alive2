@@ -12,6 +12,7 @@
 #include "util/sort.h"
 #include "util/version.h"
 
+
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/SetVector.h"
@@ -105,13 +106,12 @@ llvm::cl::opt<std::string>
                llvm::cl::desc("Name of tgt function (without @)"),
                llvm::cl::cat(alive_cmdargs), llvm::cl::init("tgt"));
 
-llvm::cl::opt<string>
-    optPass(LLVM_ARGS_PREFIX "passes",
-            llvm::cl::value_desc("optimization passes"),
-            llvm::cl::desc("Specify which LLVM passes to run (default=O2). "
-                           "The syntax is described at "
-                           "https://llvm.org/docs/NewPassManager.html#invoking-opt"),
-            llvm::cl::cat(alive_cmdargs), llvm::cl::init("O2"));
+llvm::cl::opt<string> optPass(
+    LLVM_ARGS_PREFIX "passes", llvm::cl::value_desc("optimization passes"),
+    llvm::cl::desc("Specify which LLVM passes to run (default=O2). "
+                   "The syntax is described at "
+                   "https://llvm.org/docs/NewPassManager.html#invoking-opt"),
+    llvm::cl::cat(alive_cmdargs), llvm::cl::init("O2"));
 
 llvm::cl::opt<bool> opt_backend_tv(
     LLVM_ARGS_PREFIX "backend-tv",
@@ -546,10 +546,6 @@ public:
     Instrs.push_back(inst);
   }
 
-  // void addInstBegin(MCInstWrapper &inst) {
-  //   Instrs.insert(Instrs.begin(), inst);
-  // }
-
   void addInstBegin(MCInstWrapper &&inst) {
     Instrs.insert(Instrs.begin(), std::move(inst));
   }
@@ -592,29 +588,28 @@ class MCFunction {
   using BlockSetTy = llvm::SetVector<MCBasicBlock *>;
   std::unordered_map<MCBasicBlock *, BlockSetTy> dom;
   std::unordered_map<MCBasicBlock *, BlockSetTy> dom_frontier;
-  std::unordered_map<MCBasicBlock *, BlockSetTy>
-      dom_tree; 
-  
+  std::unordered_map<MCBasicBlock *, BlockSetTy> dom_tree;
+
   std::unordered_map<MCOperand, BlockSetTy, MCOperandHash, MCOperandEqual> defs;
   std::unordered_map<
       MCBasicBlock *,
       std::unordered_set<MCOperand, MCOperandHash, MCOperandEqual>>
       phis; // map from block to variable names that need phi-nodes in those
             // blocks
-    std::unordered_map<
+  std::unordered_map<
       MCBasicBlock *,
       std::unordered_map<MCOperand,
                          std::vector<std::pair<unsigned, std::string>>,
                          MCOperandHash, MCOperandEqual>>
       phi_args;
   std::vector<MCOperand> fn_args;
+
 public:
   llvm::MCInstrAnalysis *Ana_ptr;
   llvm::MCInstPrinter *IP_ptr;
   llvm::MCRegisterInfo *MRI_ptr;
   std::vector<MCBasicBlock> BBs;
-  std::unordered_map<MCBasicBlock *, BlockSetTy>
-      dom_tree_inv;
+  std::unordered_map<MCBasicBlock *, BlockSetTy> dom_tree_inv;
 
   MCFunction() {}
   MCFunction(std::string _name) : name(_name) {}
@@ -623,7 +618,7 @@ public:
     name = _name;
   }
 
-    MCBasicBlock *addBlock(std::string b_name) {
+  MCBasicBlock *addBlock(std::string b_name) {
     return &BBs.emplace_back(b_name);
   }
 
@@ -644,7 +639,7 @@ public:
     return nullptr;
   }
 
-    // Make sure that we have an entry label with no predecessors
+  // Make sure that we have an entry label with no predecessors
   void addEntryBlock() {
     // If we have an empty assembly function, we need to add an entry block with
     // a return instruction
@@ -698,7 +693,7 @@ public:
     return postOrder;
   }
 
-    // compute the domination relation
+  // compute the domination relation
   void generateDominator() {
     auto blocks = postOrder();
     std::reverse(blocks.begin(), blocks.end());
@@ -859,12 +854,8 @@ public:
       cout << "\n";
     }
   }
-  // std::unordered_map<MCBasicBlock*, BlockSetTy> phis;
-  void findPhis() {
-    // for (auto &block : MF.BBs) {
-    //   phis[&block] = VarSetTy();
-    // }
 
+  void findPhis() {
     for (auto &[var, block_set] : defs) {
       vector<MCBasicBlock *> block_list(block_set.begin(), block_set.end());
       for (unsigned i = 0; i < block_list.size(); ++i) {
@@ -971,7 +962,8 @@ public:
 
     cout << "SSA rename\n";
 
-    // auto printStack = [&](std::unordered_map<MCOperand, std::vector<unsigned>,
+    // auto printStack = [&](std::unordered_map<MCOperand,
+    // std::vector<unsigned>,
     //                                          MCOperandHash, MCOperandEqual>
     //                           s) {
     //   for (auto &[var, stack_vec] : s) {
@@ -1034,11 +1026,11 @@ public:
           continue;
         }
 
-        //mc_instr.dump_pretty(errs(), IP_ptr, " ", MRI_ptr);
-        //errs() << "\n";
-        //errs() << "printing stack\n";
-        //printStack(stack);
-        //errs() << "printing operands\n";
+        // mc_instr.dump_pretty(errs(), IP_ptr, " ", MRI_ptr);
+        // errs() << "\n";
+        // errs() << "printing stack\n";
+        // printStack(stack);
+        // errs() << "printing operands\n";
         unsigned i = 1;
         if (instrs_no_write.contains(mc_instr.getOpcode())) {
           cout << "iterating from first element in rename\n";
@@ -1221,19 +1213,11 @@ public:
   }
 };
 
-// CHECK @Ryan. Do we need this anymore? after the SSA conversion each
-// MCInstWrapper should represent a unique value. Hence mc_value_cache can be
-// changed to map from MCInstWrapper to Value.
-
 // Some variables that we need to maintain as we're performing arm-tv
 static std::map<std::pair<unsigned, unsigned>, IR::Value *> cache;
 static std::unordered_map<MCOperand, unique_ptr<IR::StructType>, MCOperandHash,
                           MCOperandEqual>
     overflow_aggregate_types;
-
-// Mapping between machine value and IR::value used when translating asm to
-// Alive IR
-
 unsigned type_id_counter{0};
 
 // Generate the required struct type for an alive2 *_overflow instructions
@@ -1393,10 +1377,10 @@ std::tuple<llvm::APInt, llvm::APInt> decode_bit_mask(bool immNBit,
 }
 
 // Values currently holding ZNCV bits, for each basicblock respectively
-unordered_map<MCBasicBlock *, IR::Value *>cur_vs;
-unordered_map<MCBasicBlock *, IR::Value *>cur_zs;
-unordered_map<MCBasicBlock *, IR::Value *>cur_ns;
-unordered_map<MCBasicBlock *, IR::Value *>cur_cs;
+unordered_map<MCBasicBlock *, IR::Value *> cur_vs;
+unordered_map<MCBasicBlock *, IR::Value *> cur_zs;
+unordered_map<MCBasicBlock *, IR::Value *> cur_ns;
+unordered_map<MCBasicBlock *, IR::Value *> cur_cs;
 
 IR::BasicBlock *get_basic_block(IR::Function &f, MCOperand &jmp_tgt) {
   assert(jmp_tgt.isExpr() && "[get_basic_block] expected expression operand");
@@ -1554,7 +1538,8 @@ class arm2alive_ {
     } else {
       ss << "\%"
          << registerInfo->getName(wrapper->getMCInst().getOperand(0).getReg())
-         << "_" << wrapper->getOpId(0) << "x" << ++curId << "x" << instructionCount << "x" << blockCount;
+         << "_" << wrapper->getOpId(0) << "x" << ++curId << "x"
+         << instructionCount << "x" << blockCount;
     }
     return ss.str();
   }
@@ -1643,9 +1628,13 @@ class arm2alive_ {
     add_identifier(*new_val);
   }
 
-  IR::Value *retrieve_pstate(unordered_map<MCBasicBlock *, IR::Value *> &pstate_map, MCBasicBlock *bb) {
+  IR::Value *
+  retrieve_pstate(unordered_map<MCBasicBlock *, IR::Value *> &pstate_map,
+                  MCBasicBlock *bb) {
     cout << "retrieving pstate for block " << bb->getName() << endl;
-    assert(bb->getPreds().size() == 1 && "pstate can only be retrieved for blocks with up to one predecessor");
+    assert(
+        bb->getPreds().size() == 1 &&
+        "pstate can only be retrieved for blocks with up to one predecessor");
     auto pred_bb = bb->getPreds().front();
     auto pred_pstate = pstate_map[pred_bb];
     assert(pred_pstate != nullptr && "pstate must be defined for predecessor");
@@ -1658,7 +1647,7 @@ class arm2alive_ {
     auto invert_bit = (cond & 1) && (cond != 15);
 
     cond >>= 1;
-    
+
     auto cur_v = cur_vs[bb];
     auto cur_z = cur_zs[bb];
     auto cur_n = cur_ns[bb];
@@ -1666,8 +1655,8 @@ class arm2alive_ {
 
     if (!cur_v)
       cur_v = retrieve_pstate(cur_vs, bb);
-  
-    if (!cur_z) 
+
+    if (!cur_z)
       cur_z = retrieve_pstate(cur_zs, bb);
 
     if (!cur_n)
@@ -1678,7 +1667,7 @@ class arm2alive_ {
 
     assert(cur_v != nullptr && cur_z != nullptr && cur_n != nullptr &&
            cur_c != nullptr && "condition not initialized");
-    
+
     IR::Value *res = nullptr;
     switch (cond) {
     case 0:
@@ -1790,11 +1779,7 @@ public:
       : MF(MF), srcFn(srcFn), instrPrinter(instrPrinter),
         registerInfo(registerInfo), instructionCount(0), curId(0) {}
 
-  // Rudimentary function to visit an MCInstWrapper instructions and convert it
-  // to alive IR Ideally would want a nicer designed interface, but I opted for
-  // simplicity to get the initial prototype.
-  // FIXME add support for more arm instructions
-  // FIXME generate code for setting NZCV flags and other changes to arm PSTATE
+  // Visit an MCInstWrapper instructions and convert it to alive IR
   void mc_visit(MCInstWrapper &I, IR::Function &Fn) {
     std::vector<std::unique_ptr<IR::Instr>> res;
     auto opcode = I.getOpcode();
@@ -1889,7 +1874,7 @@ public:
 
         cur_cs[MCBB] = new_c;
         cur_vs[MCBB] = new_v;
-        
+
         set_n(result);
         set_z(result);
 
@@ -2005,8 +1990,10 @@ public:
         auto new_v = add_instr<IR::ExtractValue>(*ty_i1, next_name(), *ssub);
         new_v->addIdx(1);
 
-        cur_cs[MCBB] = add_instr<IR::ICmp>(*ty_i1, next_name(), IR::ICmp::UGE, *a, *b);
-        cur_zs[MCBB] = add_instr<IR::ICmp>(*ty_i1, next_name(), IR::ICmp::EQ, *a, *b);
+        cur_cs[MCBB] =
+            add_instr<IR::ICmp>(*ty_i1, next_name(), IR::ICmp::UGE, *a, *b);
+        cur_zs[MCBB] =
+            add_instr<IR::ICmp>(*ty_i1, next_name(), IR::ICmp::EQ, *a, *b);
         cur_vs[MCBB] = new_v;
         set_n(result);
         store(*result);
@@ -2885,18 +2872,16 @@ public:
       cout << "bcc target: " << Sym.getName().str() << '\n';
       auto &dst_true = Fn.getBB(Sym.getName());
 
-      assert(MCBB->getSuccs().size() == 2 &&
-             "expected 2 successors");
-      const std::string* dst_false_name;
-      for(auto &succ : MCBB->getSuccs()) {
+      assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
+      const std::string *dst_false_name;
+      for (auto &succ : MCBB->getSuccs()) {
         if (succ->getName() != Sym.getName()) {
           dst_false_name = &succ->getName();
           break;
         }
-        
       }
       auto &dst_false = Fn.getBB(*dst_false_name);
-      
+
       add_instr<IR::Branch>(*cond_val, dst_true, dst_false);
       break;
     }
@@ -2909,17 +2894,15 @@ public:
                               *operand, *make_intconst(0, size));
 
       auto dst_true = get_basic_block(Fn, mc_inst.getOperand(1));
-      assert(MCBB->getSuccs().size() == 2 &&
-             "expected 2 successors");
-      
-      const std::string* dst_false_name;
-      for(auto &succ : MCBB->getSuccs()) {
+      assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
+
+      const std::string *dst_false_name;
+      for (auto &succ : MCBB->getSuccs()) {
         if (succ->getName() != dst_true->getName()) {
           dst_false_name = &succ->getName();
           break;
         }
-        
-      }      
+      }
       auto &dst_false = Fn.getBB(*dst_false_name);
       add_instr<IR::Branch>(*cond_val, *dst_true, dst_false);
       break;
@@ -2933,17 +2916,15 @@ public:
                               *operand, *make_intconst(0, size));
 
       auto dst_true = get_basic_block(Fn, mc_inst.getOperand(1));
-      assert(MCBB->getSuccs().size() == 2 &&
-             "expected 2 successors");
-      
-      const std::string* dst_false_name;
-      for(auto &succ : MCBB->getSuccs()) {
+      assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
+
+      const std::string *dst_false_name;
+      for (auto &succ : MCBB->getSuccs()) {
         if (succ->getName() != dst_true->getName()) {
           dst_false_name = &succ->getName();
           break;
         }
-        
-      }      
+      }
       auto &dst_false = Fn.getBB(*dst_false_name);
       add_instr<IR::Branch>(*cond_val, *dst_true, dst_false);
       break;
@@ -2973,16 +2954,14 @@ public:
       cout << "current mcblock = " << MCBB->getName() << endl;
       cout << "BB=" << BB->getName() << endl;
       cout << "jump target = " << Sym.getName().str() << endl;
-      assert(MCBB->getSuccs().size() == 2 &&
-             "expected 2 successors");
-      
-      const std::string* dst_true_name;
-      for(auto &succ : MCBB->getSuccs()) {
+      assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
+
+      const std::string *dst_true_name;
+      for (auto &succ : MCBB->getSuccs()) {
         if (succ->getName() != Sym.getName()) {
           dst_true_name = &succ->getName();
           break;
         }
-        
       }
       auto &dst_true = Fn.getBB(*dst_true_name);
 
@@ -3135,7 +3114,7 @@ public:
       if (!jump_instr && !ret_instr) {
         cout << "Last basicBlock instruction is not a terminator!\n";
         assert(MCBB->getSuccs().size() == 1 &&
-             "expected 1 successor for block with no terminator");
+               "expected 1 successor for block with no terminator");
         auto &dst = Fn.getBB(MCBB->getSuccs()[0]->getName());
         add_instr<IR::Branch>(dst);
       }
@@ -3199,16 +3178,16 @@ public:
       Insts; // CHECK this should go as it's only being used for pretty printing
              // which makes it unused after fixing MCInstWrapper::print
   using BlockSetTy = llvm::SetVector<MCBasicBlock *>;
-  
+
   MCStreamerWrapper(llvm::MCContext &Context, llvm::MCInstrAnalysis *_Ana_ptr,
                     llvm::MCInstPrinter *_IP_ptr,
                     llvm::MCRegisterInfo *_MRI_ptr)
       : MCStreamer(Context), Ana_ptr(_Ana_ptr), IP_ptr(_IP_ptr),
         MRI_ptr(_MRI_ptr) {
-          MF.Ana_ptr = Ana_ptr;
-          MF.IP_ptr = IP_ptr;
-          MF.MRI_ptr = MRI_ptr;
-        }
+    MF.Ana_ptr = Ana_ptr;
+    MF.IP_ptr = IP_ptr;
+    MF.MRI_ptr = MRI_ptr;
+  }
 
   // We only want to intercept the emission of new instructions.
   virtual void
@@ -3346,7 +3325,7 @@ public:
   void findDefiningBlocks() {
     MF.findDefiningBlocks();
   }
-  // std::unordered_map<MCBasicBlock*, BlockSetTy> phis;
+
   void findPhis() {
     MF.findPhis();
   }
@@ -3356,9 +3335,6 @@ public:
     MF.findArgs(src_fn);
   }
 
-  // go over 32 bit registers and replace them with the corresponding 64 bit
-  // FIXME: this will probably have some uninteded consequences that we need to
-  // identify
   void rewriteOperands() {
     MF.rewriteOperands();
   }
@@ -3422,7 +3398,7 @@ public:
     for (unsigned i = 0; i < MF.BBs.size(); ++i) {
       auto &cur_bb = MF.BBs[i];
       MCBasicBlock *next_bb_ptr = nullptr;
-      if (i < MF.BBs.size() - 1) 
+      if (i < MF.BBs.size() - 1)
         next_bb_ptr = &MF.BBs[i + 1];
 
       if (cur_bb.size() == 0) {
@@ -3555,48 +3531,6 @@ public:
   }
 };
 
-// static unsigned id_{0};
-// unsigned getId() {
-//   return ++id_;
-// }
-
-// Used for performing LVN
-struct SymValue {
-  unsigned opcode{0};
-  // std::vector<MCOperand> operands;
-  std::vector<unsigned> operands;
-};
-
-// FIXME we should probably remove these and go with the default <=>
-// implementation as this implementation is neither nice nor performant
-struct SymValueHash {
-  size_t operator()(const SymValue &op) const {
-    // auto op_hasher = MCOperandHash();
-    // Is this the right way to go about this
-    unsigned combined_val = 41; // start with some prime number
-    // Is this too expensive?
-    for (auto &e : op.operands) {
-      combined_val += e;
-    }
-    return std::hash<unsigned long>()(op.opcode + combined_val);
-  }
-};
-
-struct SymValueEqual {
-  enum Kind { reg = (1 << 2) - 1, immedidate = (1 << 3) - 1 };
-  bool operator()(const SymValue &lhs, const SymValue &rhs) const {
-    if (lhs.opcode != rhs.opcode ||
-        lhs.operands.size() != rhs.operands.size()) {
-      return false;
-    }
-    for (unsigned i = 0; i < rhs.operands.size(); ++i) {
-      if (lhs.operands[i] != rhs.operands[i])
-        return false;
-    }
-    return true;
-  }
-};
-
 // Return variables that are read before being written in the basic block
 auto FindReadBeforeWritten(std::vector<MCInst> &instrs,
                            llvm::MCInstrAnalysis *Ana_ptr) {
@@ -3723,14 +3657,16 @@ bool backendTV() {
     f_def_cnt++;
   }
 
-  // FIXME: temporarily here to pass tests with multiple functions in the VM test cases
+  // FIXME: temporarily here to pass tests with multiple functions in the VM
+  // test cases
   if (f_def_cnt != 1) {
-    cout << "defined functions = " << M1.get()->getFunctionList().size() << "\n" ;
+    cout << "defined functions = " << M1.get()->getFunctionList().size()
+         << "\n";
     cout << "Transformation seems to be correct!\n\n";
     ++num_correct;
     return false;
   }
-  
+
   // Only try to verify the first function in the module
   for (auto &F : *M1.get()) {
     if (F.isDeclaration())
