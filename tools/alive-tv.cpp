@@ -2882,8 +2882,9 @@ public:
       break;
     }
     case AArch64::B: {
-      const auto& op = mc_inst.getOperand(0);
-      if (op.isImm()) { // handles the case when we add an entry block with no predecessors
+      const auto &op = mc_inst.getOperand(0);
+      if (op.isImm()) { // handles the case when we add an entry block with no
+                        // predecessors
         auto &dst_name = MF.BBs[mc_inst.getOperand(0).getImm()].getName();
         auto &dst = Fn.getBB(dst_name);
         add_instr<IR::Branch>(dst);
@@ -3121,7 +3122,7 @@ public:
         if (input_ptr->getAttributes().has(IR::ParamAttrs::Sext))
           stored = add_instr<IR::ConversionOp>(*extended_type,
                                                next_name(operand.getReg(), 2),
-                                               *stored, IR::ConversionOp::SExt);
+                                               *stored, IR::ConversionOp::ZExt);
         else
           stored = add_instr<IR::ConversionOp>(*extended_type,
                                                next_name(operand.getReg(), 2),
@@ -3444,11 +3445,12 @@ public:
         continue;
       }
       auto &last_mc_instr = cur_bb.getInstrs().back().getMCInst();
-      // handle the special case of adding where we have added a new entry block with 
-      // no predecessors. This is hacky because I don't know the API to create and MCExpr
-      // and have to create a branch with an immediate operand instead
-      if (i == 0 && (Ana_ptr->isUnconditionalBranch(last_mc_instr)) 
-                 && last_mc_instr.getOperand(0).isImm()) {
+      // handle the special case of adding where we have added a new entry block
+      // with no predecessors. This is hacky because I don't know the API to
+      // create and MCExpr and have to create a branch with an immediate operand
+      // instead
+      if (i == 0 && (Ana_ptr->isUnconditionalBranch(last_mc_instr)) &&
+          last_mc_instr.getOperand(0).isImm()) {
         cur_bb.addSucc(next_bb_ptr);
         continue;
       }
