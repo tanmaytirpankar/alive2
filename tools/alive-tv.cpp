@@ -482,6 +482,23 @@ public:
     return instr.getOpcode();
   }
 
+  std::string findTargetLabel() {
+    auto num_operands = instr.getNumOperands();
+    for (unsigned i = 0; i < num_operands; ++i) {
+      auto op = instr.getOperand(i);
+      if (op.isExpr()) {
+        auto expr = op.getExpr();
+        if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
+          const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*expr);
+          const MCSymbol &Sym = SRE.getSymbol();
+          return Sym.getName().str();
+        }
+      }
+    }
+
+    assert(false && "Could not find target label in arm branch instruction");
+    UNREACHABLE();
+  }
   // FIXME: for phi instructions and figure out to use register names rather
   // than numbers
   void print() const {
@@ -653,19 +670,29 @@ public:
 
     if (BBs.size() == 1)
       return;
-    MCBasicBlock *firstBlockPtr = &BBs[0];
-    bool addEntryBlock = false;
-    for (unsigned i = 1; i < BBs.size(); ++i) {
-      auto &curBlock = BBs[i];
-      if (curBlock.getSuccs().count(firstBlockPtr) == 1) {
-        addEntryBlock = true;
-        break;
+
+    bool add_entry_block = false;
+    const auto &first_block = BBs[0];
+    for (unsigned i = 0; i < BBs.size(); ++i) {
+      auto &cur_bb = BBs[i];
+      auto &last_mc_instr = cur_bb.getInstrs().back();
+      if (Ana_ptr->isConditionalBranch(last_mc_instr.getMCInst()) ||
+          Ana_ptr->isUnconditionalBranch(last_mc_instr.getMCInst())) {
+        std::string target = last_mc_instr.findTargetLabel();
+        if (target == first_block.getName()) {
+          add_entry_block = true;
+          break;
+        }
       }
     }
 
-    if (addEntryBlock) { // FIXME
-      cerr << "ERROR: we need to add an entry block with no predecessors\n";
-      exit(1);
+    if (add_entry_block) {
+      cout << "Added arm_tv_entry block\n";
+      BBs.emplace(BBs.begin(), "arm_tv_entry");
+      MCInst jmp_instr;
+      jmp_instr.setOpcode(AArch64::B);
+      jmp_instr.addOperand(MCOperand::createImm(1));
+      BBs[0].addInstBegin(std::move(jmp_instr));
     }
 
     return;
@@ -2855,8 +2882,16 @@ public:
       break;
     }
     case AArch64::B: {
-      auto dst = get_basic_block(Fn, mc_inst.getOperand(0));
-      add_instr<IR::Branch>(*dst);
+      const auto& op = mc_inst.getOperand(0);
+      if (op.isImm()) { // handles the case when we add an entry block with no predecessors
+        auto &dst_name = MF.BBs[mc_inst.getOperand(0).getImm()].getName();
+        auto &dst = Fn.getBB(dst_name);
+        add_instr<IR::Branch>(dst);
+        break;
+      }
+
+      auto dst_ptr = get_basic_block(Fn, mc_inst.getOperand(0));
+      add_instr<IR::Branch>(*dst_ptr);
       break;
     }
     case AArch64::Bcc: {
@@ -2891,7 +2926,7 @@ public:
       assert(operand != nullptr && "operand is null");
       auto cond_val =
           add_instr<IR::ICmp>(get_int_type(1), next_name(), IR::ICmp::EQ,
-                              *operand, *make_intconst(0, size));
+                              *operand, *make_intconst(0, operand->bits()));
 
       auto dst_true = get_basic_block(Fn, mc_inst.getOperand(1));
       assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
@@ -2913,7 +2948,7 @@ public:
       assert(operand != nullptr && "operand is null");
       auto cond_val =
           add_instr<IR::ICmp>(get_int_type(1), next_name(), IR::ICmp::NE,
-                              *operand, *make_intconst(0, size));
+                              *operand, *make_intconst(0, operand->bits()));
 
       auto dst_true = get_basic_block(Fn, mc_inst.getOperand(1));
       assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
@@ -3099,6 +3134,7 @@ public:
     }
 
     for (auto &[alive_bb, mc_bb] : sorted_bbs) {
+      cout << "visitng bb: " << mc_bb->getName() << endl;
       BB = alive_bb;
       MCBB = mc_bb;
       auto &mc_instrs = mc_bb->getInstrs();
@@ -3408,6 +3444,14 @@ public:
         continue;
       }
       auto &last_mc_instr = cur_bb.getInstrs().back().getMCInst();
+      // handle the special case of adding where we have added a new entry block with 
+      // no predecessors. This is hacky because I don't know the API to create and MCExpr
+      // and have to create a branch with an immediate operand instead
+      if (i == 0 && (Ana_ptr->isUnconditionalBranch(last_mc_instr)) 
+                 && last_mc_instr.getOperand(0).isImm()) {
+        cur_bb.addSucc(next_bb_ptr);
+        continue;
+      }
       if (Ana_ptr->isConditionalBranch(last_mc_instr)) {
         std::string target = findTargetLabel(last_mc_instr);
         auto target_bb = MF.findBlockByName(target);
