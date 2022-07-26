@@ -12,7 +12,6 @@
 #include "util/sort.h"
 #include "util/version.h"
 
-
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/SetVector.h"
@@ -2161,24 +2160,34 @@ public:
     case AArch64::UMSUBLrrr: {
       // SMSUBL: Signed Multiply-Subtract Long.
       // UMSUBL: Unsigned Multiply-Subtract Long.
-      auto mul_lhs = get_value(1, 0);
-      auto mul_rhs = get_value(2, 0);
-      auto minuend = get_value(3, 0);
+      IR::Value *mul_lhs;
+      IR::Value *mul_rhs;
+      if (wrapper->getMCInst().getOperand(1).getReg() == AArch64::WZR) {
+        mul_lhs = make_intconst(0, size);
+      } else {
+        mul_lhs = get_value(1, 0);
+      }
 
+      if (wrapper->getMCInst().getOperand(2).getReg() == AArch64::WZR) {
+        mul_rhs = make_intconst(0, size);
+      } else {
+        mul_rhs = get_value(2, 0);
+      }
+      auto minuend = get_value(3, 0);
       auto i32 = &get_int_type(32);
       auto i64 = &get_int_type(64);
 
       IR::Value *lhs_extended;
       IR::Value *rhs_extended;
 
-      if (opcode == AArch64::SMSUBLrrr) {
-        // The inputs are automatically zero extended, but we want sign
-        // extension for signed, so we need to truncate them back to i32s
-        auto lhs_trunc = add_instr<IR::ConversionOp>(
-            *i32, next_name(), *mul_lhs, IR::ConversionOp::Trunc);
-        auto rhs_trunc = add_instr<IR::ConversionOp>(
-            *i32, next_name(), *mul_rhs, IR::ConversionOp::Trunc);
+      // The inputs are automatically zero extended, but we want sign
+      // extension for signed, so we need to truncate them back to i32s
+      auto lhs_trunc = add_instr<IR::ConversionOp>(*i32, next_name(), *mul_lhs,
+                                                   IR::ConversionOp::Trunc);
+      auto rhs_trunc = add_instr<IR::ConversionOp>(*i32, next_name(), *mul_rhs,
+                                                   IR::ConversionOp::Trunc);
 
+      if (opcode == AArch64::SMSUBLrrr) {
         // For signed multiplication, must sign extend the lhs and rhs to not
         // overflow
         lhs_extended = add_instr<IR::ConversionOp>(
@@ -2186,9 +2195,10 @@ public:
         rhs_extended = add_instr<IR::ConversionOp>(
             *i64, next_name(), *rhs_trunc, IR::ConversionOp::SExt);
       } else {
-        // For unsigned multiplication, program automatically zero extends
-        lhs_extended = mul_lhs;
-        rhs_extended = mul_rhs;
+        lhs_extended = add_instr<IR::ConversionOp>(
+            *i64, next_name(), *lhs_trunc, IR::ConversionOp::ZExt);
+        rhs_extended = add_instr<IR::ConversionOp>(
+            *i64, next_name(), *rhs_trunc, IR::ConversionOp::ZExt);
       }
 
       auto mul = add_instr<IR::BinOp>(*ty, next_name(), *lhs_extended,
