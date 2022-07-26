@@ -3132,7 +3132,7 @@ public:
         if (input_ptr->getAttributes().has(IR::ParamAttrs::Sext))
           stored = add_instr<IR::ConversionOp>(*extended_type,
                                                next_name(operand.getReg(), 2),
-                                               *stored, IR::ConversionOp::ZExt);
+                                               *stored, IR::ConversionOp::SExt);
         else
           stored = add_instr<IR::ConversionOp>(*extended_type,
                                                next_name(operand.getReg(), 2),
