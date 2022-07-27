@@ -1246,6 +1246,10 @@ static std::unordered_map<MCOperand, unique_ptr<IR::StructType>, MCOperandHash,
     overflow_aggregate_types;
 unsigned type_id_counter{0};
 
+// Keep track of which oprands had their type adjusted and their original
+// bitwidth
+std::vector<std::pair<unsigned, unsigned>> new_input_idx_bitwidth;
+
 // Generate the required struct type for an alive2 *_overflow instructions
 // FIXME: @ryan-berger padding may change, hardcoding 24 bits is a bad idea
 // FIXME these type object generators should be either grouped in one class or
@@ -3099,7 +3103,8 @@ public:
 
     // setup BB so subsequent add_instr calls work
     BB = sorted_bbs[0].first;
-    int argNum = 0;
+    unsigned argNum = 0;
+    unsigned idx = 0;
     for (auto &v : srcFn->getInputs()) {
       auto &typ = v.getType();
 
@@ -3107,7 +3112,7 @@ public:
       assert(input_ptr);
       // generate names and values for the input arguments
       // FIXME this is pretty convulated and needs to be cleaned up
-      auto operand = MCOperand::createReg(AArch64::X0 + (argNum++));
+      auto operand = MCOperand::createReg(AArch64::X0 + (argNum));
 
       std::stringstream ss;
       ss << "\%" << registerInfo->getName(operand.getReg());
@@ -3135,10 +3140,33 @@ public:
       //                                         *stored,
       //                                         IR::ConversionOp::ZExt);
       //}
+      if (!new_input_idx_bitwidth.empty() &&
+          (argNum == new_input_idx_bitwidth[idx].first)) {
+        IR::ConversionOp::Op op;
+        bool flag{false};
+        if (input_ptr->getAttributes().has(IR::ParamAttrs::Sext)) {
+          op = IR::ConversionOp::SExt;
+          flag = true;
+        } else if (input_ptr->getAttributes().has(IR::ParamAttrs::Zext)) {
+          op = IR::ConversionOp::ZExt;
+          flag = true;
+        }
 
+        if (flag) {
+          auto trunced_type = &get_int_type(new_input_idx_bitwidth[idx].second);
+          stored = add_instr<IR::ConversionOp>(
+              *trunced_type, next_name(operand.getReg(), 2), *stored,
+              IR::ConversionOp::Trunc);
+          auto extended_type = &get_int_type(64);
+          stored = add_instr<IR::ConversionOp>(
+              *extended_type, next_name(operand.getReg(), 2), *stored, op);
+        }
+        idx++;
+      }
       instructionCount++;
       mc_add_identifier(operand.getReg(), 2, *stored);
       Fn.addInput(move(val));
+      argNum++;
     }
 
     for (auto &[alive_bb, mc_bb] : sorted_bbs) {
@@ -3677,7 +3705,6 @@ Results backend_verify(std::optional<IR::Function> &fn1,
 
 void adjustSrcInputs(std::optional<IR::Function> &srcFn) {
   std::vector<std::unique_ptr<IR::Value>> new_inputs;
-  std::vector<unsigned> new_input_idx;
   unsigned idx = 0;
 
   for (auto &v : srcFn->getInputs()) {
@@ -3706,7 +3733,7 @@ void adjustSrcInputs(std::optional<IR::Function> &srcFn) {
     // Do we need to update the value_cache?
     new_inputs.emplace_back(make_unique<IR::Input>(
         *extended_type, std::move(name), std::move(attrs)));
-    new_input_idx.push_back(idx);
+    new_input_idx_bitwidth.emplace_back(idx, orig_typ.bits());
     idx++;
   }
 
@@ -3717,9 +3744,9 @@ void adjustSrcInputs(std::optional<IR::Function> &srcFn) {
     auto new_ir = make_unique<IR::ConversionOp>(
         srcFn->getInput(i).getType(), std::move(input_trunc),
         *new_inputs[i].get(), IR::ConversionOp::Trunc);
-    srcFn->rauw(srcFn->getInput(new_input_idx[i]), *new_ir);
+    srcFn->rauw(srcFn->getInput(new_input_idx_bitwidth[i].first), *new_ir);
     srcFn->getFirstBB().addInstr(std::move(new_ir), true);
-    srcFn->addInputAt(move(new_inputs[i]), new_input_idx[i]);
+    srcFn->addInputAt(move(new_inputs[i]), new_input_idx_bitwidth[i].first);
   }
 
   // cout << "After adjusting inputs:\n";
