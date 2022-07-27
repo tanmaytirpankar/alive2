@@ -3126,18 +3126,20 @@ public:
       stored =
           add_instr<IR::Freeze>(typ, next_name(operand.getReg(), 1), *stored);
       mc_add_identifier(operand.getReg(), 1, *stored);
-      if (typ.bits() < 64) {
+      assert(typ.bits() == 64 && "at this point input type should be 64 bits");
+      
+      //if (typ.bits() < 64) {
 
-        auto extended_type = &get_int_type(64);
-        if (input_ptr->getAttributes().has(IR::ParamAttrs::Sext))
-          stored = add_instr<IR::ConversionOp>(*extended_type,
-                                               next_name(operand.getReg(), 2),
-                                               *stored, IR::ConversionOp::SExt);
-        else
-          stored = add_instr<IR::ConversionOp>(*extended_type,
-                                               next_name(operand.getReg(), 2),
-                                               *stored, IR::ConversionOp::ZExt);
-      }
+      //  auto extended_type = &get_int_type(64);
+      //  if (input_ptr->getAttributes().has(IR::ParamAttrs::Sext))
+      //    stored = add_instr<IR::ConversionOp>(*extended_type,
+      //                                         next_name(operand.getReg(), 2),
+      //                                         *stored, IR::ConversionOp::SExt);
+      //  else
+      //    stored = add_instr<IR::ConversionOp>(*extended_type,
+      //                                         next_name(operand.getReg(), 2),
+      //                                         *stored, IR::ConversionOp::ZExt);
+      //}
 
       instructionCount++;
       mc_add_identifier(operand.getReg(), 2, *stored);
@@ -3678,6 +3680,52 @@ Results backend_verify(std::optional<IR::Function> &fn1,
   return r;
 }
 
+void adjustSrcInputs(std::optional<IR::Function> &srcFn) {
+  std::vector<std::unique_ptr<IR::Value>> new_inputs;
+  std::vector<unsigned> new_input_idx;
+  unsigned idx=0;
+
+  for (auto &v : srcFn->getInputs()) {
+    auto &orig_typ = v.getType();
+    // FIXME: need to handle wider types
+    if (orig_typ.bits() > 64)
+        report_fatal_error("[Unsupported Function Argument]: Only int types 64 "
+                           "bits or smaller supported for now");
+
+    if (orig_typ.bits() == 64) {
+      idx++;
+      continue;
+    }
+
+    auto input_ptr = dynamic_cast<const IR::Input *>(&v);
+    assert(input_ptr);
+    auto extended_type = &get_int_type(64);
+    string name(v.getName().substr(v.getName().rfind('%')));
+    // cout << "***" << endl;
+    // cout << name << endl;
+    IR::ParamAttrs attrs(input_ptr->getAttributes());
+    // Do we need to update the value_cache?
+    new_inputs.emplace_back(make_unique<IR::Input>(*extended_type, std::move(name), std::move(attrs))); 
+    new_input_idx.push_back(idx);
+    idx++;
+  }
+
+  for (unsigned i=0; i < new_inputs.size(); ++i) {
+    string input_trunc(new_inputs[i]->getName().substr(new_inputs[i]->getName().rfind('%')) + "_t");
+    auto new_ir = make_unique<IR::ConversionOp>(srcFn->getInput(i).getType(), std::move(input_trunc), *new_inputs[i].get(), IR::ConversionOp::Trunc);
+    srcFn->rauw(srcFn->getInput(new_input_idx[i]), *new_ir);
+    srcFn->getFirstBB().addInstr(std::move(new_ir), true);
+    srcFn->addInputAt(move(new_inputs[i]), new_input_idx[i]);
+  }
+
+  // cout << "After adjusting inputs:\n";
+  // for (auto &v : srcFn->getInputs()) {
+  //   cout << v.getName() << endl;
+  // }
+
+  
+}
+
 bool backendTV() {
   if (!opt_file2.empty()) {
     cerr << "Please only specify one bitcode file when validating a backend\n";
@@ -3738,6 +3786,8 @@ bool backendTV() {
   }
 
   AF->print(cout << "\n----------alive-ir-src.ll-file----------\n");
+  adjustSrcInputs(AF);
+  AF->print(cout << "\n----------alive-ir-src.ll-file----changed-input-\n");
 
   LLVMInitializeAArch64TargetInfo();
   LLVMInitializeAArch64Target();
@@ -3768,6 +3818,7 @@ bool backendTV() {
   pass.run(*M1);
 
   // FIXME only do this in verbose mode, or something
+  cout << "\n----------arm asm----------\n\n";
   for (size_t i = 0; i < Asm.size(); ++i)
     cout << Asm[i];
   cout << "-------------\n";
@@ -3866,11 +3917,6 @@ bool backendTV() {
 
   cout << "after SSA conversion\n";
   Str.printBlocks();
-  // if (Str.MF.BBs.size() > 1) {
-  //   cout << "ERROR: we don't generate SSA for this type of arm function yet"
-  //        << '\n';
-  //   return false;
-  // }
 
   auto &MF = Str.MF;
   auto TF = arm2alive(MF, AF, IPtemp.get(), MRI.get());

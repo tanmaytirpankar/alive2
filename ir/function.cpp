@@ -258,6 +258,10 @@ void Function::addInput(unique_ptr<Value> &&i) {
   inputs.emplace_back(std::move(i));
 }
 
+void Function::addInputAt(std::unique_ptr<Value> &&c, unsigned idx) {
+  inputs[idx] = std::move(c);
+}
+
 bool Function::hasReturn() const {
   for (auto &i : instrs()) {
     if (dynamic_cast<const Return *>(&i))
