@@ -3102,13 +3102,6 @@ public:
     int argNum = 0;
     for (auto &v : srcFn->getInputs()) {
       auto &typ = v.getType();
-      if (!typ.isIntType())
-        report_fatal_error("[Unsupported Function Argument]: Only int types "
-                           "supported for now");
-      // FIXME: need to handle wider types
-      if (typ.bits() > 64)
-        report_fatal_error("[Unsupported Function Argument]: Only int types 64 "
-                           "bits or smaller supported for now");
 
       auto input_ptr = dynamic_cast<const IR::Input *>(&v);
       assert(input_ptr);
@@ -3127,18 +3120,20 @@ public:
           add_instr<IR::Freeze>(typ, next_name(operand.getReg(), 1), *stored);
       mc_add_identifier(operand.getReg(), 1, *stored);
       assert(typ.bits() == 64 && "at this point input type should be 64 bits");
-      
-      //if (typ.bits() < 64) {
+
+      // if (typ.bits() < 64) {
 
       //  auto extended_type = &get_int_type(64);
       //  if (input_ptr->getAttributes().has(IR::ParamAttrs::Sext))
       //    stored = add_instr<IR::ConversionOp>(*extended_type,
       //                                         next_name(operand.getReg(), 2),
-      //                                         *stored, IR::ConversionOp::SExt);
+      //                                         *stored,
+      //                                         IR::ConversionOp::SExt);
       //  else
       //    stored = add_instr<IR::ConversionOp>(*extended_type,
       //                                         next_name(operand.getReg(), 2),
-      //                                         *stored, IR::ConversionOp::ZExt);
+      //                                         *stored,
+      //                                         IR::ConversionOp::ZExt);
       //}
 
       instructionCount++;
@@ -3683,14 +3678,18 @@ Results backend_verify(std::optional<IR::Function> &fn1,
 void adjustSrcInputs(std::optional<IR::Function> &srcFn) {
   std::vector<std::unique_ptr<IR::Value>> new_inputs;
   std::vector<unsigned> new_input_idx;
-  unsigned idx=0;
+  unsigned idx = 0;
 
   for (auto &v : srcFn->getInputs()) {
     auto &orig_typ = v.getType();
+
+    if (!orig_typ.isIntType())
+      report_fatal_error("[Unsupported Function Argument]: Only int types "
+                         "supported for now");
     // FIXME: need to handle wider types
     if (orig_typ.bits() > 64)
-        report_fatal_error("[Unsupported Function Argument]: Only int types 64 "
-                           "bits or smaller supported for now");
+      report_fatal_error("[Unsupported Function Argument]: Only int types 64 "
+                         "bits or smaller supported for now");
 
     if (orig_typ.bits() == 64) {
       idx++;
@@ -3705,14 +3704,19 @@ void adjustSrcInputs(std::optional<IR::Function> &srcFn) {
     // cout << name << endl;
     IR::ParamAttrs attrs(input_ptr->getAttributes());
     // Do we need to update the value_cache?
-    new_inputs.emplace_back(make_unique<IR::Input>(*extended_type, std::move(name), std::move(attrs))); 
+    new_inputs.emplace_back(make_unique<IR::Input>(
+        *extended_type, std::move(name), std::move(attrs)));
     new_input_idx.push_back(idx);
     idx++;
   }
 
-  for (unsigned i=0; i < new_inputs.size(); ++i) {
-    string input_trunc(new_inputs[i]->getName().substr(new_inputs[i]->getName().rfind('%')) + "_t");
-    auto new_ir = make_unique<IR::ConversionOp>(srcFn->getInput(i).getType(), std::move(input_trunc), *new_inputs[i].get(), IR::ConversionOp::Trunc);
+  for (unsigned i = 0; i < new_inputs.size(); ++i) {
+    string input_trunc(
+        new_inputs[i]->getName().substr(new_inputs[i]->getName().rfind('%')) +
+        "_t");
+    auto new_ir = make_unique<IR::ConversionOp>(
+        srcFn->getInput(i).getType(), std::move(input_trunc),
+        *new_inputs[i].get(), IR::ConversionOp::Trunc);
     srcFn->rauw(srcFn->getInput(new_input_idx[i]), *new_ir);
     srcFn->getFirstBB().addInstr(std::move(new_ir), true);
     srcFn->addInputAt(move(new_inputs[i]), new_input_idx[i]);
@@ -3722,8 +3726,6 @@ void adjustSrcInputs(std::optional<IR::Function> &srcFn) {
   // for (auto &v : srcFn->getInputs()) {
   //   cout << v.getName() << endl;
   // }
-
-  
 }
 
 bool backendTV() {
