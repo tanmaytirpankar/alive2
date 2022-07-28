@@ -203,7 +203,7 @@ set<int> instrs_32 = {
     AArch64::SDIVWr,  AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs,
     AArch64::RORVWr,  AArch64::RBITWr,   AArch64::CLZWr,    AArch64::REVWr,
     AArch64::CSNEGWr, AArch64::BICWrs,   AArch64::EONWrs,   AArch64::REV16Wr,
-    AArch64::Bcc};
+    AArch64::Bcc,     AArch64::CCMPWr,   AArch64::CCMPWi};
 
 set<int> instrs_64 = {
     AArch64::ADDXrx,    AArch64::ADDSXrs,   AArch64::ADDSXri,
@@ -227,12 +227,14 @@ set<int> instrs_64 = {
     AArch64::UMSUBLrrr, AArch64::PHI,       AArch64::TBZW,
     AArch64::TBZX,      AArch64::TBNZW,     AArch64::TBNZX,
     AArch64::B,         AArch64::CBZW,      AArch64::CBZX,
-    AArch64::CBNZW,     AArch64::CBNZX};
+    AArch64::CBNZW,     AArch64::CBNZX,     AArch64::CCMPXr,
+    AArch64::CCMPXi};
 
-set<int> instrs_no_write = {AArch64::Bcc,  AArch64::B,     AArch64::TBZW,
-                            AArch64::TBZX, AArch64::TBNZW, AArch64::TBNZX,
-                            AArch64::CBZW, AArch64::CBZX,  AArch64::CBNZW,
-                            AArch64::CBNZX};
+set<int> instrs_no_write = {AArch64::Bcc,    AArch64::B,      AArch64::TBZW,
+                            AArch64::TBZX,   AArch64::TBNZW,  AArch64::TBNZX,
+                            AArch64::CBZW,   AArch64::CBZX,   AArch64::CBNZW,
+                            AArch64::CBNZX,  AArch64::CCMPWr, AArch64::CCMPWi,
+                            AArch64::CCMPXr, AArch64::CCMPXi};
 
 bool has_s(int instr) {
   return s_flag.contains(instr);
@@ -1661,6 +1663,10 @@ class arm2alive_ {
   IR::Value *
   retrieve_pstate(unordered_map<MCBasicBlock *, IR::Value *> &pstate_map,
                   MCBasicBlock *bb) {
+    auto pstate_val = pstate_map[bb];
+    if (pstate_val) {
+      return pstate_val;
+    }
     cout << "retrieving pstate for block " << bb->getName() << endl;
     assert(
         bb->getPreds().size() == 1 &&
@@ -1678,22 +1684,10 @@ class arm2alive_ {
 
     cond >>= 1;
 
-    auto cur_v = cur_vs[bb];
-    auto cur_z = cur_zs[bb];
-    auto cur_n = cur_ns[bb];
-    auto cur_c = cur_cs[bb];
-
-    if (!cur_v)
-      cur_v = retrieve_pstate(cur_vs, bb);
-
-    if (!cur_z)
-      cur_z = retrieve_pstate(cur_zs, bb);
-
-    if (!cur_n)
-      cur_n = retrieve_pstate(cur_ns, bb);
-
-    if (!cur_c)
-      cur_c = retrieve_pstate(cur_cs, bb);
+    auto cur_v = retrieve_pstate(cur_vs, bb);
+    auto cur_z = retrieve_pstate(cur_zs, bb);
+    auto cur_n = retrieve_pstate(cur_ns, bb);
+    auto cur_c = retrieve_pstate(cur_cs, bb);
 
     assert(cur_v != nullptr && cur_z != nullptr && cur_n != nullptr &&
            cur_c != nullptr && "condition not initialized");
@@ -2365,6 +2359,68 @@ public:
           *make_intconst(size - width + pos, size), IR::BinOp::AShr);
       store(*shifted_res);
       return;
+    }
+    case AArch64::CCMPWi:
+    case AArch64::CCMPWr:
+    case AArch64::CCMPXi:
+    case AArch64::CCMPXr: {
+      assert(mc_inst.getNumOperands() == 4);
+
+      auto lhs = get_value(0);
+      auto imm_rhs = get_value(1);
+
+      if (!ty || !lhs || !imm_rhs)
+        visitError(I);
+
+      auto imm_flags = mc_inst.getOperand(2).getImm();
+      auto imm_v_val = make_intconst((imm_flags & 1) ? 1 : 0, 1);
+      auto imm_c_val = make_intconst((imm_flags & 2) ? 1 : 0, 1);
+      auto imm_z_val = make_intconst((imm_flags & 4) ? 1 : 0, 1);
+      auto imm_n_val = make_intconst((imm_flags & 8) ? 1 : 0, 1);
+
+      auto cond_val_imm = mc_inst.getOperand(3).getImm();
+      auto cond_val = evaluate_condition(cond_val_imm, MCBB);
+
+      auto ty_ptr = sadd_overflow_type(mc_inst.getOperand(0), size);
+
+      auto ssub = add_instr<IR::BinOp>(*ty_ptr, next_name(), *lhs, *imm_rhs,
+                                       IR::BinOp::SSub_Overflow);
+      auto result = add_instr<IR::ExtractValue>(*ty, next_name(), *ssub);
+      result->addIdx(0);
+      auto ty_i1 = &get_int_type(1);
+      auto zero_val = make_intconst(0, result->bits());
+
+      auto new_n = add_instr<IR::ICmp>(*ty_i1, next_name(), IR::ICmp::SLT,
+                                       *result, *zero_val);
+      auto new_z = add_instr<IR::ICmp>(*ty_i1, next_name(), IR::ICmp::EQ, *lhs,
+                                       *imm_rhs);
+
+      auto new_c = add_instr<IR::ICmp>(*ty_i1, next_name(), IR::ICmp::UGE, *lhs,
+                                       *imm_rhs);
+
+      auto new_v = add_instr<IR::ExtractValue>(*ty_i1, next_name(), *ssub);
+      new_v->addIdx(1);
+
+      auto new_n_flag = add_instr<IR::Select>(*ty_i1, next_name(), *cond_val,
+                                              *new_n, *imm_n_val);
+
+      auto new_z_flag = add_instr<IR::Select>(*ty_i1, next_name(), *cond_val,
+                                              *new_z, *imm_z_val);
+
+      auto new_c_flag = add_instr<IR::Select>(*ty_i1, next_name(), *cond_val,
+                                              *new_c, *imm_c_val);
+
+      auto new_v_flag = add_instr<IR::Select>(*ty_i1, next_name(), *cond_val,
+                                              *new_v, *imm_v_val);
+      store(*new_n_flag);
+      cur_ns[MCBB] = new_n_flag;
+      store(*new_z_flag);
+      cur_zs[MCBB] = new_z_flag;
+      store(*new_c_flag);
+      cur_cs[MCBB] = new_c_flag;
+      store(*new_v_flag);
+      cur_vs[MCBB] = new_v_flag;
+      break;
     }
     case AArch64::EORWri:
     case AArch64::EORXri: {
@@ -3143,19 +3199,19 @@ public:
       if (!new_input_idx_bitwidth.empty() &&
           (argNum == new_input_idx_bitwidth[idx].first)) {
         IR::ConversionOp::Op op(IR::ConversionOp::ZExt);
-        
+
         if (input_ptr->getAttributes().has(IR::ParamAttrs::Sext)) {
           op = IR::ConversionOp::SExt;
-        } 
+        }
 
         auto trunced_type = &get_int_type(new_input_idx_bitwidth[idx].second);
-        stored = add_instr<IR::ConversionOp>(
-            *trunced_type, next_name(operand.getReg(), 2), *stored,
-            IR::ConversionOp::Trunc);
+        stored = add_instr<IR::ConversionOp>(*trunced_type,
+                                             next_name(operand.getReg(), 2),
+                                             *stored, IR::ConversionOp::Trunc);
         auto extended_type = &get_int_type(64);
         stored = add_instr<IR::ConversionOp>(
             *extended_type, next_name(operand.getReg(), 2), *stored, op);
-        
+
         idx++;
       }
       instructionCount++;
