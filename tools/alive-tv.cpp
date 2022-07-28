@@ -3142,25 +3142,20 @@ public:
       //}
       if (!new_input_idx_bitwidth.empty() &&
           (argNum == new_input_idx_bitwidth[idx].first)) {
-        IR::ConversionOp::Op op;
-        bool flag{false};
+        IR::ConversionOp::Op op(IR::ConversionOp::ZExt);
+        
         if (input_ptr->getAttributes().has(IR::ParamAttrs::Sext)) {
           op = IR::ConversionOp::SExt;
-          flag = true;
-        } else if (input_ptr->getAttributes().has(IR::ParamAttrs::Zext)) {
-          op = IR::ConversionOp::ZExt;
-          flag = true;
-        }
+        } 
 
-        if (flag) {
-          auto trunced_type = &get_int_type(new_input_idx_bitwidth[idx].second);
-          stored = add_instr<IR::ConversionOp>(
-              *trunced_type, next_name(operand.getReg(), 2), *stored,
-              IR::ConversionOp::Trunc);
-          auto extended_type = &get_int_type(64);
-          stored = add_instr<IR::ConversionOp>(
-              *extended_type, next_name(operand.getReg(), 2), *stored, op);
-        }
+        auto trunced_type = &get_int_type(new_input_idx_bitwidth[idx].second);
+        stored = add_instr<IR::ConversionOp>(
+            *trunced_type, next_name(operand.getReg(), 2), *stored,
+            IR::ConversionOp::Trunc);
+        auto extended_type = &get_int_type(64);
+        stored = add_instr<IR::ConversionOp>(
+            *extended_type, next_name(operand.getReg(), 2), *stored, op);
+        
         idx++;
       }
       instructionCount++;
