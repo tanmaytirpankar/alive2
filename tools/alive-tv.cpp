@@ -3210,7 +3210,7 @@ public:
                                              *stored, IR::ConversionOp::Trunc);
         auto extended_type = &get_int_type(64);
         stored = add_instr<IR::ConversionOp>(
-            *extended_type, next_name(operand.getReg(), 2), *stored, op);
+            *extended_type, next_name(operand.getReg(), 3), *stored, op);
 
         idx++;
       }
