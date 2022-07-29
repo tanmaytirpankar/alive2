@@ -122,6 +122,11 @@ llvm::cl::opt<bool> opt_asm_only(
     llvm::cl::desc("Only generate assembly and exit (default=false)"),
     llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
 
+llvm::cl::opt<bool> asm_input(
+    "asm-input",
+    llvm::cl::desc("use 2nd positional argument as asm input (default=false)"),
+    llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
+
 llvm::ExitOnError ExitOnErr;
 
 // adapted from llvm-dis.cpp
@@ -3807,9 +3812,13 @@ void adjustSrcInputs(std::optional<IR::Function> &srcFn) {
 }
 
 bool backendTV() {
-  if (!opt_file2.empty()) {
-    cerr << "Please only specify one bitcode file when validating a backend\n";
-    exit(-1);
+  if (asm_input) {
+    if (opt_file2.empty()) {
+      cerr << "Missing asm input file" << endl;
+      exit(-1);
+    }
+    cout << "Using file " << opt_file2 << " as asm input" << endl;
+    // exit(-1);
   }
 
   llvm::LLVMContext Context;
@@ -3920,11 +3929,23 @@ bool backendTV() {
   assert(STI->isCPUStringValid(CPU) && "Invalid CPU!");
 
   llvm::MCContext Ctx(TheTriple, MAI.get(), MRI.get(), STI.get());
-
   llvm::SourceMgr SrcMgr;
-  auto Buf = llvm::MemoryBuffer::getMemBuffer(Asm.c_str());
-  assert(Buf);
-  SrcMgr.AddNewSourceBuffer(std::move(Buf), llvm::SMLoc());
+
+  if (asm_input) {
+    auto MB_Asm =
+        ExitOnErr(errorOrToExpected(llvm::MemoryBuffer::getFile(opt_file2)));
+    assert(MB_Asm);
+    cout << "reading asm from file\n";
+    for (auto it = MB_Asm->getBuffer().begin(); it != MB_Asm->getBuffer().end();
+         ++it) {
+      cout << *it;
+    }
+    cout << "-------------\n";
+    SrcMgr.AddNewSourceBuffer(std::move(MB_Asm), llvm::SMLoc());
+  } else {
+    auto Buf = llvm::MemoryBuffer::getMemBuffer(Asm.c_str());
+    SrcMgr.AddNewSourceBuffer(std::move(Buf), llvm::SMLoc());
+  }
 
   std::unique_ptr<llvm::MCInstrInfo> MCII(Target->createMCInstrInfo());
   assert(MCII && "Unable to create instruction info!");
