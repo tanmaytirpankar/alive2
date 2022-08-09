@@ -75,7 +75,8 @@ public:
                    DereferenceableOrNull = 1 << 13,
                    InaccessibleMemOnly = 1 << 14,
                    NullPointerIsValid = 1 << 15,
-                   AllocSize = 1 << 16 };
+                   AllocSize = 1 << 16, Zext = 1<<17, 
+                   Sext = 1<<18 };
 
   FnAttrs(unsigned bits = None) : bits(bits) {}
 

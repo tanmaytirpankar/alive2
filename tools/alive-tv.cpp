@@ -1256,6 +1256,7 @@ unsigned type_id_counter{0};
 // Keep track of which oprands had their type adjusted and their original
 // bitwidth
 std::vector<std::pair<unsigned, unsigned>> new_input_idx_bitwidth;
+unsigned int original_ret_bitwidth{64};
 
 // Generate the required struct type for an alive2 *_overflow instructions
 // FIXME: @ryan-berger padding may change, hardcoding 24 bits is a bad idea
@@ -3811,6 +3812,52 @@ void adjustSrcInputs(std::optional<IR::Function> &srcFn) {
   // }
 }
 
+void adjustSourceReturn(std::optional<IR::Function> &srcFn) {
+  // Do nothing if the return operand attribute does not include signext/zeroext
+  auto &ret_typ = srcFn->getType();
+  auto &fnAttrs = srcFn->getFnAttrs();
+  cout << "fn attrs=" << fnAttrs << endl;
+  if (!fnAttrs.has(IR::FnAttrs::Sext)) {
+    return;
+  }
+  cout << "adjustSourceReturn" << endl;
+  if (!ret_typ.isIntType())
+    report_fatal_error("[Unsupported Function Return]: Only int types "
+                       "supported for now");
+
+  if (ret_typ.bits() > 64)
+    report_fatal_error("[Unsupported Function Return]: Only int types 64 "
+                       "bits or smaller supported for now");
+
+  if (ret_typ.bits() == 64)
+    return;
+
+  original_ret_bitwidth = ret_typ.bits();
+
+  cout << "printing instrs!!!\n";
+  auto extended_type = &get_int_type(64);
+  srcFn->setType(*extended_type);
+  for (auto bb : srcFn->getBBs()) {
+
+    for (auto &i : bb->instrs()) {
+      if (dynamic_cast<const IR::Return *>(&i)) {
+        auto v_op = i.operands();
+        assert(v_op.size() == 1);
+        string val_name(v_op[0]->getName() + "_ext");
+        auto new_ir =
+            make_unique<IR::ConversionOp>(*extended_type, std::move(val_name),
+                                          *v_op[0], IR::ConversionOp::SExt);
+        auto new_ret = make_unique<IR::Return>(get_int_type(64), *new_ir);
+
+        bb->addInstrAt(std::move(new_ir), &i, true);
+        bb->addInstrAt(std::move(new_ret), &i, false);
+        bb->delInstr(&i);
+        break;
+      }
+    }
+  }
+}
+
 bool backendTV() {
   if (asm_input) {
     if (opt_file2.empty()) {
@@ -3877,6 +3924,8 @@ bool backendTV() {
   AF->print(cout << "\n----------alive-ir-src.ll-file----------\n");
   adjustSrcInputs(AF);
   AF->print(cout << "\n----------alive-ir-src.ll-file----changed-input-\n");
+  adjustSourceReturn(AF);
+  AF->print(cout << "\n----------alive-ir-src.ll-file----changed-return-\n");
 
   LLVMInitializeAArch64TargetInfo();
   LLVMInitializeAArch64Target();

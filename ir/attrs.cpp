@@ -93,6 +93,10 @@ ostream& operator<<(ostream &os, const FnAttrs &attr) {
     os << " inaccessiblememonly";
   if (attr.has(FnAttrs::NullPointerIsValid))
     os << " null_pointer_is_valid";
+  if (attr.has(FnAttrs::Zext))
+    os << " zeroext";
+  if (attr.has(FnAttrs::Sext))
+    os << " signext";
   if (attr.has(FnAttrs::AllocSize)) {
     os << " allocsize(" << attr.allocsize_0;
     if (attr.allocsize_1 != -1u)
