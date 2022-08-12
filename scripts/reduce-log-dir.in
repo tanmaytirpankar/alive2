@@ -1,0 +1,130 @@
+#!/usr/bin/perl -w
+
+use strict;
+use File::Basename;
+use File::Copy;
+use Sys::CPU;
+
+my $LLVMBINDIR = "/home/regehr/llvm-project-regehr/build/bin";
+#my $LLVMBINDIR = "/home/regehr/llvm-project/for-alive/bin";
+
+my $ALIVEBINDIR = "/home/regehr/alive2-regehr/build";
+my $TIMEOUT = 300;
+
+#my $ABORT = "--abort-on-invalid-reduction";
+my $ABORT = "";
+
+my $REDUCEDIR = "./reduced";
+my $OPT = "${LLVMBINDIR}/opt";
+my $LLVMDIS = "${LLVMBINDIR}/llvm-dis";
+my $PLUGIN = "${ALIVEBINDIR}/tv/tv.so";
+my $LLVMREDUCE = "${LLVMBINDIR}/llvm-reduce";
+
+# my $QUIET = " >/dev/null 2>&1";
+my $QUIET = "";
+
+my %PASSMAP = (
+    "LoopVectorizePass" => "-loop-vectorize",
+    "SROAPass" => "-sroa",
+    "SimplifyCFGPass" => "-simplifycfg",
+    "LoopRotatePass" => "-loop-rotate",
+    "GVNPass" => "-gvn",
+    "SROAPass" => "-sroa",
+    "InstCombinePass" => "-instcombine",
+    );
+
+sub repro($) {
+    (my $bcfile) = @_;
+    my $root = $bcfile;
+    die unless $root =~ s/\.bc$//;
+    my $logfile = "${root}.txt";
+    my $dir = File::Basename::dirname($root);
+    my $base = File::Basename::basename($root);
+    my $reduced = "${REDUCEDIR}/${base}.ll";
+
+    my $pass;
+    my $command;
+    my $bitcode;
+    open my $INF, "<$logfile" or die;
+    while (my $line = <$INF>) {
+        chomp $line;
+        if ($line =~ /^Pass: (.*)$/) {
+            $pass = $1;
+        }
+        if ($line =~ /^Command line: (.*)$/) {
+            $command = $1;
+        }
+        if ($line =~ /^Wrote bitcode to: \"(.*)\"$/) {
+            $bitcode = $1;
+        }
+    }
+    close $INF;
+    print "  $pass\n";
+    print "  $command\n";
+    print "  $bitcode $bcfile\n";
+    die unless defined($pass) && defined($command) && defined($bitcode);
+
+    # FIXME
+    # - reuse command line args
+    # - dedup before reducing
+    # - dedup after reducing
+    
+    my $testfn = "${REDUCEDIR}/${base}-test.sh";
+    my $reducefn = "${REDUCEDIR}/${base}-reduce.sh";
+    my $logfn = "${REDUCEDIR}/${base}-log.txt";
+    open my $TESTF, ">$testfn" or die;
+    my $passopt = $PASSMAP{$pass};
+    die unless defined($passopt);
+    print $TESTF "timeout $TIMEOUT $OPT -load $PLUGIN -load-pass-plugin $PLUGIN -tv $passopt -tv -tv-disable-undef-input -tv-disable-poison-input -o /dev/null \$1 2>&1 | grep \\\(unsound\\\)\n";
+    close $TESTF;
+    system("chmod u+x $testfn");
+    system("${OPT} -S -strip $bcfile -o $reduced");
+    system("$testfn $reduced > ${logfn} 2>&1");
+    my $ret = $? >> 8;
+    if ($ret != 0) {
+        open my $LOG, ">>${logfn}" or die;
+        print $LOG "yikes!!! cannot repro\n";
+        close $LOG;
+        return;
+    }
+
+    my $cmd = "${LLVMREDUCE} $ABORT --in-place --test=/bin/bash --test-arg=$testfn $reduced $QUIET";
+    open my $REDUCE, ">$reducefn" or die;
+    print $REDUCE "${cmd}\n";
+    close $REDUCE;
+    system("chmod u+x $reducefn");
+    
+    system("${cmd} >> ${logfn} 2>&1");
+    $ret = $? >> 8;
+}
+
+###############################################################################
+
+my $num_running = 0;
+my $opid = $$;
+my $NPROCS = Sys::CPU::cpu_count();
+
+sub wait_for_one() {
+    my $xpid = wait();
+    die if $xpid == -1;
+    $num_running--;
+    print "num_running = ${num_running}\n";
+}
+
+mkdir($REDUCEDIR);
+
+my @bcfiles = glob "./*.bc";
+
+foreach my $bcfile (@bcfiles) {
+    wait_for_one() unless $num_running < $NPROCS;
+    die unless $num_running < $NPROCS;
+    my $pid = fork();
+    die unless $pid >= 0;
+    if ($pid == 0) {
+        repro($bcfile);
+        exit(0);
+    }
+    die unless $$ == $opid;
+    $num_running++;
+}
+wait_for_one() while ($num_running > 0);
