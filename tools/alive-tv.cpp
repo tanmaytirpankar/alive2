@@ -3215,8 +3215,17 @@ public:
                                              next_name(operand.getReg(), 2),
                                              *stored, IR::ConversionOp::Trunc);
         auto extended_type = &get_int_type(64);
-        stored = add_instr<IR::ConversionOp>(
-            *extended_type, next_name(operand.getReg(), 3), *stored, op);
+        if (trunced_type->bits() == 1) {
+          cout << "encounterd 1 bit input\n";
+          stored = add_instr<IR::ConversionOp>(get_int_type(8),
+                                               next_name(operand.getReg(), 3),
+                                               *stored, IR::ConversionOp::ZExt);
+          stored = add_instr<IR::ConversionOp>(
+              *extended_type, next_name(operand.getReg(), 4), *stored, op);
+        } else {
+          stored = add_instr<IR::ConversionOp>(
+              *extended_type, next_name(operand.getReg(), 3), *stored, op);
+        }
 
         idx++;
       }
@@ -3784,8 +3793,7 @@ void adjustSrcInputs(std::optional<IR::Function> &srcFn) {
     assert(input_ptr);
     auto extended_type = &get_int_type(64);
     string name(v.getName().substr(v.getName().rfind('%')));
-    // cout << "***" << endl;
-    // cout << name << endl;
+
     IR::ParamAttrs attrs(input_ptr->getAttributes());
     // Do we need to update the value_cache?
     new_inputs.emplace_back(make_unique<IR::Input>(
@@ -3816,11 +3824,11 @@ void adjustSourceReturn(std::optional<IR::Function> &srcFn) {
   // Do nothing if the return operand attribute does not include signext/zeroext
   auto &ret_typ = srcFn->getType();
   auto &fnAttrs = srcFn->getFnAttrs();
-  cout << "fn attrs=" << fnAttrs << endl;
+
   if (!fnAttrs.has(IR::FnAttrs::Sext)) {
     return;
   }
-  cout << "adjustSourceReturn" << endl;
+
   if (!ret_typ.isIntType())
     report_fatal_error("[Unsupported Function Return]: Only int types "
                        "supported for now");
@@ -3834,22 +3842,25 @@ void adjustSourceReturn(std::optional<IR::Function> &srcFn) {
 
   original_ret_bitwidth = ret_typ.bits();
 
-  cout << "printing instrs!!!\n";
-  auto extended_type = &get_int_type(64);
-  srcFn->setType(*extended_type);
+  auto sext_type = &get_int_type(32);
+  auto zext_type = &get_int_type(64);
+  srcFn->setType(*zext_type);
   for (auto bb : srcFn->getBBs()) {
 
     for (auto &i : bb->instrs()) {
       if (dynamic_cast<const IR::Return *>(&i)) {
         auto v_op = i.operands();
         assert(v_op.size() == 1);
-        string val_name(v_op[0]->getName() + "_ext");
-        auto new_ir =
-            make_unique<IR::ConversionOp>(*extended_type, std::move(val_name),
-                                          *v_op[0], IR::ConversionOp::SExt);
-        auto new_ret = make_unique<IR::Return>(get_int_type(64), *new_ir);
+        string val_name(v_op[0]->getName() + "_sext");
+        string val_name_2(v_op[0]->getName() + "_zext");
+        auto new_ir = make_unique<IR::ConversionOp>(
+            *sext_type, std::move(val_name), *v_op[0], IR::ConversionOp::SExt);
+        auto new_ir_2 = make_unique<IR::ConversionOp>(
+            *zext_type, std::move(val_name_2), *new_ir, IR::ConversionOp::ZExt);
+        auto new_ret = make_unique<IR::Return>(get_int_type(64), *new_ir_2);
 
         bb->addInstrAt(std::move(new_ir), &i, true);
+        bb->addInstrAt(std::move(new_ir_2), &i, true);
         bb->addInstrAt(std::move(new_ret), &i, false);
         bb->delInstr(&i);
         break;
