@@ -30,9 +30,9 @@ namespace {
 
 FpRoundingMode parse_rounding(llvm::Instruction &i) {
   auto *fp = dyn_cast<llvm::ConstrainedFPIntrinsic>(&i);
-  if (!fp || !fp->getRoundingMode().hasValue())
+  if (!fp || !fp->getRoundingMode().has_value())
     return {};
-  switch (fp->getRoundingMode().getValue()) {
+  switch (*fp->getRoundingMode()) {
   case llvm::RoundingMode::Dynamic:           return FpRoundingMode::Dynamic;
   case llvm::RoundingMode::NearestTiesToAway: return FpRoundingMode::RNA;
   case llvm::RoundingMode::NearestTiesToEven: return FpRoundingMode::RNE;
@@ -45,9 +45,9 @@ FpRoundingMode parse_rounding(llvm::Instruction &i) {
 
 FpExceptionMode parse_exceptions(llvm::Instruction &i) {
   auto *fp = dyn_cast<llvm::ConstrainedFPIntrinsic>(&i);
-  if (!fp || !fp->getExceptionBehavior().hasValue())
+  if (!fp || !fp->getExceptionBehavior().has_value())
     return {};
-  switch (fp->getExceptionBehavior().getValue()) {
+  switch (*fp->getExceptionBehavior()) {
   case llvm::fp::ebIgnore:  return FpExceptionMode::Ignore;
   case llvm::fp::ebMayTrap: return FpExceptionMode::MayTrap;
   case llvm::fp::ebStrict:  return FpExceptionMode::Strict;
@@ -672,12 +672,12 @@ public:
     llvm::SmallVector<const llvm::Value *> Objs;
     llvm::getUnderlyingObjects(Ptr, Objs);
 
-    if (llvm::all_of(Objs, [this](const llvm::Value *V) {
+    if (llvm::all_of(Objs, [](const llvm::Value *V) {
         // Stack coloring algorithm doesn't assign slots for global variables
         // or objects passed as pointer arguments
-        return llvm::isa<llvm::Argument>(V) ||
-               llvm::isa<llvm::GlobalVariable>(V) ||
-               llvm::isAllocLikeFn(V, &TLI); }))
+        return llvm::isa<llvm::Argument,
+                         llvm::GlobalVariable,
+                         llvm::CallInst>(V); }))
       return LIFETIME_FILLPOISON;
 
     Objs.clear();
@@ -1065,7 +1065,7 @@ public:
         BB->addInstr(make_unique<StartLifetime>(*b));
         RETURN_IDENTIFIER(make_unique<FillPoison>(*b));
       case LIFETIME_FREE:
-        RETURN_IDENTIFIER(make_unique<Free>(*b, false));
+        RETURN_IDENTIFIER(make_unique<EndLifetime>(*b));
       case LIFETIME_FILLPOISON:
         RETURN_IDENTIFIER(make_unique<FillPoison>(*b));
       case LIFETIME_NOP:
@@ -1080,7 +1080,8 @@ public:
       attrs.set(FnAttrs::InaccessibleMemOnly);
       attrs.set(FnAttrs::WillReturn);
       attrs.set(FnAttrs::NoThrow);
-      return make_unique<FnCall>(Type::voidTy, "", "#sideeffect", std::move(attrs));
+      return
+        make_unique<FnCall>(Type::voidTy, "", "#sideeffect", std::move(attrs));
     }
     case llvm::Intrinsic::trap: {
       FnAttrs attrs;
@@ -1314,6 +1315,14 @@ public:
         attrs.set(ParamAttrs::Returned);
         break;
 
+      case llvm::Attribute::AllocatedPointer:
+        attrs.set(ParamAttrs::AllocPtr);
+        break;
+
+      case llvm::Attribute::AllocAlign:
+        attrs.set(ParamAttrs::AllocAlign);
+        break;
+
       default:
         // If it is call site, it should be added at approximation list
         if (!is_callsite)
@@ -1350,8 +1359,7 @@ public:
 
       case llvm::Attribute::Alignment:
         attrs.set(FnAttrs::Align);
-        attrs.align = max(attrs.align,
-                          (unsigned)llvmattr.getAlignment()->value());
+        attrs.align = max(attrs.align, llvmattr.getAlignment()->value());
         break;
 
       default: break;
@@ -1387,6 +1395,8 @@ public:
           attrs.setFPDenormal(parse_fp_denormal(val));
         } else if (str == "denormal-fp-math-f32") {
           attrs.setFPDenormal(parse_fp_denormal(val), 32);
+        } else if (str == "alloc-family") {
+          attrs.allocfamily = val;
         }
       }
 
@@ -1422,13 +1432,29 @@ public:
         attrs.set(FnAttrs::NoFree);
         break;
 
-
       case llvm::Attribute::AllocSize: {
         attrs.set(FnAttrs::AllocSize);
         auto args = llvmattr.getAllocSizeArgs();
         attrs.allocsize_0 = args.first;
         if (args.second)
           attrs.allocsize_1 = *args.second;
+        break;
+      }
+      case llvm::Attribute::AllocKind: {
+        auto kind = llvmattr.getAllocKind();
+        if ((kind & llvm::AllocFnKind::Alloc) != llvm::AllocFnKind::Unknown)
+          attrs.add(AllocKind::Alloc);
+        if ((kind & llvm::AllocFnKind::Realloc) != llvm::AllocFnKind::Unknown)
+          attrs.add(AllocKind::Realloc);
+        if ((kind & llvm::AllocFnKind::Free) != llvm::AllocFnKind::Unknown)
+          attrs.add(AllocKind::Free);
+        if ((kind & llvm::AllocFnKind::Uninitialized)
+              != llvm::AllocFnKind::Unknown)
+          attrs.add(AllocKind::Uninitialized);
+        if ((kind & llvm::AllocFnKind::Zeroed) != llvm::AllocFnKind::Unknown)
+          attrs.add(AllocKind::Zeroed);
+        if ((kind & llvm::AllocFnKind::Aligned) != llvm::AllocFnKind::Unknown)
+          attrs.add(AllocKind::Aligned);
         break;
       }
       case llvm::Attribute::NoReturn:
@@ -1487,8 +1513,6 @@ public:
 
     auto &attrs = Fn.getFnAttrs();
     vector<ParamAttrs> param_attrs;
-    (void)llvm_implict_attrs(f, TLI, attrs, param_attrs);
-
     llvm::AttributeList attrlist = f.getAttributes();
 
     for (unsigned idx = 0; idx < f.arg_size(); ++idx) {
@@ -1497,8 +1521,7 @@ public:
           attrlist.getAttributes(llvm::AttributeList::FirstArgIndex + idx);
 
       auto ty = llvm_type2alive(arg.getType());
-      ParamAttrs attrs = idx < param_attrs.size() ? param_attrs[idx]
-                                                  : ParamAttrs();
+      ParamAttrs attrs;
       if (!ty || !handleParamAttrs(argattr, attrs, false))
         return {};
       auto val = make_unique<Input>(*ty, value_name(arg), std::move(attrs));
@@ -1511,7 +1534,22 @@ public:
       }
       Fn.addInput(std::move(val));
     }
+    {
+      vector<Value*> args;
+      for (auto &in : Fn.getInputs()) {
+        args.emplace_back(const_cast<Value*>(&in));
+      }
+      vector<ParamAttrs> param_attrs;
+      (void)llvm_implict_attrs(f, TLI, attrs, param_attrs, args);
 
+      // merge param attrs computed above
+      unsigned idx = 0;
+      for (auto *in : args) {
+        if (idx == param_attrs.size())
+          break;
+        static_cast<Input*>(in)->merge(param_attrs[idx++]);
+      }
+    }
     const auto &ridx = llvm::AttributeList::ReturnIndex;
     const auto &fnidx = llvm::AttributeList::FunctionIndex;
     handleRetAttrs(attrlist.getAttributes(ridx), attrs);

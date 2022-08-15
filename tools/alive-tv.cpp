@@ -4166,6 +4166,7 @@ bool backendTV() {
 
 void bitcodeTV() {
   llvm::LLVMContext Context;
+  unsigned M1_anon_count = 0;
   auto M1 = openInputFile(Context, opt_file1);
   if (!M1.get()) {
     cerr << "Could not read bitcode from '" << opt_file1 << "'\n";
@@ -4211,16 +4212,25 @@ void bitcodeTV() {
   for (auto &F1 : *M1.get()) {
     if (F1.isDeclaration())
       continue;
+    if (F1.getName().empty())
+      M1_anon_count++;
     if (!func_names.empty() && !func_names.count(F1.getName().str()))
       continue;
+    unsigned M2_anon_count = 0;
     for (auto &F2 : *M2.get()) {
-      if (F2.isDeclaration() || F1.getName() != F2.getName())
+      if (F2.isDeclaration())
         continue;
-      if (!compareFunctions(F1, F2, TLI))
-        if (opt_error_fatal)
-          return;
-      break;
+      if (F2.getName().empty())
+        M2_anon_count++;
+      if ((F1.getName().empty() && (M1_anon_count == M2_anon_count)) ||
+          (F1.getName() == F2.getName())) {
+        if (!compareFunctions(F1, F2, TLI))
+          if (opt_error_fatal)
+            return;
+        break;
+      }
     }
+
   }
 }
 
@@ -4231,7 +4241,7 @@ int main(int argc, char **argv) {
   llvm::PrettyStackTraceProgram X(argc, argv);
   llvm::EnableDebugBuffering = true;
   llvm::llvm_shutdown_obj llvm_shutdown; // Call llvm_shutdown() on exit.
-
+  
   std::string Usage =
       R"EOF(Alive2 stand-alone translation validator:
 version )EOF";
