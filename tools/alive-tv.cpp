@@ -3210,12 +3210,12 @@ public:
           op = IR::ConversionOp::SExt;
         }
 
-        auto trunced_type = &get_int_type(new_input_idx_bitwidth[idx].second);
-        stored = add_instr<IR::ConversionOp>(*trunced_type,
+        auto truncated_type = &get_int_type(new_input_idx_bitwidth[idx].second);
+        stored = add_instr<IR::ConversionOp>(*truncated_type,
                                              next_name(operand.getReg(), 2),
                                              *stored, IR::ConversionOp::Trunc);
         auto extended_type = &get_int_type(64);
-        if (trunced_type->bits() == 1) {
+        if (truncated_type->bits() == 1) {
           cout << "encounterd 1 bit input\n";
           stored = add_instr<IR::ConversionOp>(get_int_type(8),
                                                next_name(operand.getReg(), 3),
@@ -3223,8 +3223,16 @@ public:
           stored = add_instr<IR::ConversionOp>(
               *extended_type, next_name(operand.getReg(), 4), *stored, op);
         } else {
-          stored = add_instr<IR::ConversionOp>(
-              *extended_type, next_name(operand.getReg(), 3), *stored, op);
+          if (truncated_type->bits() < 32) {
+            stored = add_instr<IR::ConversionOp>(
+                get_int_type(32), next_name(operand.getReg(), 3), *stored, op);
+            stored = add_instr<IR::ConversionOp>(
+                *extended_type, next_name(operand.getReg(), 4), *stored,
+                IR::ConversionOp::ZExt);
+          } else {
+            stored = add_instr<IR::ConversionOp>(
+                *extended_type, next_name(operand.getReg(), 4), *stored, op);
+          }
         }
 
         idx++;
@@ -4230,7 +4238,6 @@ void bitcodeTV() {
         break;
       }
     }
-
   }
 }
 
@@ -4241,7 +4248,7 @@ int main(int argc, char **argv) {
   llvm::PrettyStackTraceProgram X(argc, argv);
   llvm::EnableDebugBuffering = true;
   llvm::llvm_shutdown_obj llvm_shutdown; // Call llvm_shutdown() on exit.
-  
+
   std::string Usage =
       R"EOF(Alive2 stand-alone translation validator:
 version )EOF";

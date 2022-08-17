@@ -1445,7 +1445,7 @@ bool Transform::fold(IR::Function &fn) {
       if (folded) {
         auto newI = make_unique<IntConst>(*folded);
         fn.rauw(i1, *newI);
-        fn.addConstant(move(newI));
+        fn.addConstant(std::move(newI));
         bb->delInstr(&i1);
         changed = true;
         goto again;
@@ -1506,7 +1506,7 @@ bool Transform::cleanupTruncExt(IR::Function &fn) {
                                                  extInst->getOp() :
                                                  ConversionOp::Trunc);
 	fn.rauw(i, *newConv);
-        bb->addInstrAt(move(newConv), &i, true);
+        bb->addInstrAt(std::move(newConv), &i, true);
       }
       changed = true;
       bb->delInstr(truncInst);
