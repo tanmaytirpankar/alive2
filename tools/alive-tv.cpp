@@ -1257,6 +1257,7 @@ unsigned type_id_counter{0};
 // bitwidth
 std::vector<std::pair<unsigned, unsigned>> new_input_idx_bitwidth;
 unsigned int original_ret_bitwidth{64};
+bool has_ret_attr{false};
 
 // Generate the required struct type for an alive2 *_overflow instructions
 // FIXME: @ryan-berger padding may change, hardcoding 24 bits is a bad idea
@@ -2946,6 +2947,16 @@ public:
                                                      IR::ConversionOp::Trunc);
             val = trunc;
           }
+
+          // for don't care bits we need to mask them off before returning
+          if (has_ret_attr && (original_ret_bitwidth < 32)) {
+            assert(retTyp->bits() >= original_ret_bitwidth);
+            assert(retTyp->bits() == 64);
+            auto trunc = add_instr<IR::ConversionOp>(
+                get_int_type(32), next_name(), *val, IR::ConversionOp::Trunc);
+            val = add_instr<IR::ConversionOp>(get_int_type(64), next_name(),
+                                              *trunc, IR::ConversionOp::ZExt);
+          }
           add_instr<IR::Return>(*retTyp, *val);
         } else { // Hacky solution to deal with functions where the assembly is
                  // just a ret instruction
@@ -3845,32 +3856,48 @@ void adjustSourceReturn(std::optional<IR::Function> &srcFn) {
     report_fatal_error("[Unsupported Function Return]: Only int types 64 "
                        "bits or smaller supported for now");
 
-  if (ret_typ.bits() == 64)
+  // don't need to do any extension if the return type is exactly 32 bits
+  if (ret_typ.bits() == 64 || ret_typ.bits() == 32)
     return;
 
+  has_ret_attr = true;
   original_ret_bitwidth = ret_typ.bits();
 
-  auto sext_type = &get_int_type(32);
-  auto zext_type = &get_int_type(64);
-  srcFn->setType(*zext_type);
+  srcFn->setType(get_int_type(64));
   for (auto bb : srcFn->getBBs()) {
 
     for (auto &i : bb->instrs()) {
       if (dynamic_cast<const IR::Return *>(&i)) {
         auto v_op = i.operands();
         assert(v_op.size() == 1);
-        string val_name(v_op[0]->getName() + "_sext");
-        string val_name_2(v_op[0]->getName() + "_zext");
-        auto new_ir = make_unique<IR::ConversionOp>(
-            *sext_type, std::move(val_name), *v_op[0], IR::ConversionOp::SExt);
-        auto new_ir_2 = make_unique<IR::ConversionOp>(
-            *zext_type, std::move(val_name_2), *new_ir, IR::ConversionOp::ZExt);
-        auto new_ret = make_unique<IR::Return>(get_int_type(64), *new_ir_2);
 
-        bb->addInstrAt(std::move(new_ir), &i, true);
-        bb->addInstrAt(std::move(new_ir_2), &i, true);
-        bb->addInstrAt(std::move(new_ret), &i, false);
-        bb->delInstr(&i);
+        if (original_ret_bitwidth < 32) {
+          string val_name(v_op[0]->getName() + "_sext");
+          string val_name_2(v_op[0]->getName() + "_zext");
+          auto new_ir = make_unique<IR::ConversionOp>(
+              get_int_type(32), std::move(val_name), *v_op[0],
+              IR::ConversionOp::SExt);
+          auto new_ir_2 = make_unique<IR::ConversionOp>(
+              get_int_type(64), std::move(val_name_2), *new_ir,
+              IR::ConversionOp::ZExt);
+          auto new_ret = make_unique<IR::Return>(get_int_type(64), *new_ir_2);
+
+          bb->addInstrAt(std::move(new_ir), &i, true);
+          bb->addInstrAt(std::move(new_ir_2), &i, true);
+          bb->addInstrAt(std::move(new_ret), &i, false);
+          bb->delInstr(&i);
+        } else {
+          string val_name(v_op[0]->getName() + "_sext");
+          auto new_ir = make_unique<IR::ConversionOp>(
+              get_int_type(64), std::move(val_name), *v_op[0],
+              IR::ConversionOp::SExt);
+
+          auto new_ret = make_unique<IR::Return>(get_int_type(64), *new_ir);
+
+          bb->addInstrAt(std::move(new_ir), &i, true);
+          bb->addInstrAt(std::move(new_ret), &i, false);
+          bb->delInstr(&i);
+        }
         break;
       }
     }
