@@ -106,3 +106,6 @@ Please contact us or submit a PR if something is missing or inaccurate.
 12. Miscompilation involving arithmentic binops (https://github.com/llvm/llvm-project/issues/55490)
 13. Miscompilation of non-canonical add+icmp (https://github.com/llvm/llvm-project/issues/55627)
 14. Miscompilation of smul.with.overflow.i2 (https://github.com/llvm/llvm-project/issues/55644)
+15. Funnel shift related miscompile by ARM64 backend with global isel (https://github.com/llvm/llvm-project/issues/56664)
+16. Possible miscompile of signext-of-i1 by aarch64 backend (https://github.com/llvm/llvm-project/issues/57181)
+17. GlobalIsel backend miscompiles funnel shift with undef amount (https://github.com/llvm/llvm-project/issues/57256)
