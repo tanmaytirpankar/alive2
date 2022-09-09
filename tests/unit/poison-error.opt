@@ -1,4 +1,0 @@
-; ERROR: Target is more poisonous than source
-  %x = shl i2 %i, 1
-=>
-  %x = add nsw %i, 3

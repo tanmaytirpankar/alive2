@@ -1,6 +1,0 @@
-Name: t0
-%t = abs i8 undef, i1 0
-  =>
-%t = undef
-
-; ERROR: Value mismatch for i8 %t

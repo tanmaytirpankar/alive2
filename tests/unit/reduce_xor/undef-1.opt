@@ -1,4 +1,0 @@
-Name: t0
-%r = reduce_xor <2 x i8> undef
-  =>
-%r = undef

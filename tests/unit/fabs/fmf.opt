@@ -1,5 +1,0 @@
-Name: nnan
-%negnan = fdiv float 0.0, -0.0
-%r = fabs nnan float %negnan
-  =>
-%r = undef

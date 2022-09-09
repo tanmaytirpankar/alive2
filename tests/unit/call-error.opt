@@ -1,4 +1,0 @@
-; ERROR: Source is more defined
-%call = call i32 @f(i32 32)
-  =>
-%call = call i32 @f(i32 poison)
