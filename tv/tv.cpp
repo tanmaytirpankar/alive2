@@ -43,3 +43,4 @@ struct TVLegacyPass final : public llvm::ModulePass {
 
 char TVLegacyPass::ID = 0;
 llvm::RegisterPass<TVLegacyPass> X("tv", "Translation Validator", false, false);
+
