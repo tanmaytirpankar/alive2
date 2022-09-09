@@ -27,16 +27,11 @@ struct TVLegacyPass final : public llvm::ModulePass {
   TVLegacyPass() : ModulePass(ID) {}
 
   bool runOnModule(llvm::Module &M) override {
-    for (auto &F : M)
-      runOnFunction(F);
-    return false;
-  }
-
-  bool runOnFunction(llvm::Function &F) {
-    if (F.isDeclaration())
-      return false;
-
-    string name = F.getName().str();
+    llvm::outs() << "hello from tv plugin!\n";
+    for (auto &F : M) {
+      if (!F.isDeclaration())
+	llvm::outs() << F.getName() << " ";
+    }
     return false;
   }
 

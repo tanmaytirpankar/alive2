@@ -51,8 +51,6 @@ include(AddLLVM)
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
-set(ALIVE_LIBS_LLVM llvm_util ${ALIVE_LIBS})
-
 message(STATUS "Compiling translation validation plugin")
 add_subdirectory(tv)
 set(FOR_ALIVE2_TEST 0)
