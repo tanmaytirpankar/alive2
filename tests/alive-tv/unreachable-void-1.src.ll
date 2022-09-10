@@ -1,3 +1,0 @@
-define void @f() {
-  unreachable
-}

@@ -1,4 +1,0 @@
-Name: t0
-%t = umax i8 undef, i8 undef
-  =>
-%t = undef

@@ -1,5 +1,6 @@
 add_llvm_library(tv MODULE tv.cpp)
 
+<<<<<<< HEAD
 configure_file(
   ${CMAKE_SOURCE_DIR}/scripts/alivecc.in
   ${CMAKE_BINARY_DIR}/alivecc
@@ -22,6 +23,9 @@ configure_file(
 )
 
 target_link_libraries(tv PRIVATE ${ALIVE_LIBS_LLVM} ${Z3_LIBRARIES} ${HIREDIS_LIBRARIES})
+=======
+target_link_libraries(tv PRIVATE ${ALIVE_LIBS_LLVM})
+>>>>>>> 9021866161d283a2df4d0f86dab32174bba46a48
 
 if(APPLE)
     set_target_properties(tv PROPERTIES
