@@ -73,6 +73,8 @@ Please contact us or submit a PR if something is missing or inaccurate.
 66. SLPVectorizer replaces add nsw undef with add poison (https://llvm.org/PR55653)
 67. InstCombine swaps inbounds geps originating OOB pointer (https://llvm.org/PR55722)
 68. SLP vectorizer's reduce_and formation introduces poison (https://llvm.org/PR55734)
+69. IRCE introduces UB by changing order of condition checks (https://llvm.org/PR57523)
+70. LoopIdiomRecognizer creates memset_pattern16 with incorrect size type with custom dl (https://llvm.org/PR57679)
 
 
 ### Bugs found in Z3
@@ -89,7 +91,8 @@ Please contact us or submit a PR if something is missing or inaccurate.
 11. Assertion violation in SMT equality propagation (https://github.com/Z3Prover/z3/issues/2879)
 12. Assertion violation in qe_lite (https://github.com/Z3Prover/z3/commit/bb5edb7c653f9351fe674630d63cdd2b10338277)
 13. SMT internalize doesn't respect the timeout (https://github.com/Z3Prover/z3/issues/4192)
-
+14. Unsoundness with smt.bv.size_reduce=true (https://github.com/Z3Prover/z3/issues/6314)
+15. Incorrect sort after lambda rewrite (https://github.com/Z3Prover/z3/issues/6340)
 
 ### Bugs found in ARM64 Backend
 1. GlobalIsel miscompiles an llvm.fshl instruction (https://github.com/llvm/llvm-project/issues/55003)

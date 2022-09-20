@@ -4,6 +4,7 @@
 #include "llvm/MC/MCAsmInfo.h" // include first to avoid ambiguity for comparison operator from util/spaceship.h
 #include "ir/instr.h"
 #include "ir/type.h"
+#include "cache/cache.h"
 #include "llvm_util/llvm2alive.h"
 #include "llvm_util/llvm_optimizer.h"
 #include "llvm_util/utils.h"
@@ -146,6 +147,7 @@ std::unique_ptr<llvm::Module> openInputFile(llvm::LLVMContext &Context,
 }
 
 optional<smt::smt_initializer> smt_init;
+unique_ptr<Cache> cache;
 
 struct Results {
   Transform t;
@@ -247,13 +249,14 @@ bool has_s(int instr) {
 
 Results verify(llvm::Function &F1, llvm::Function &F2,
                llvm::TargetLibraryInfoWrapperPass &TLI,
-               bool print_transform = false, bool always_verify = false) {
-  auto fn1 = llvm2alive(F1, TLI.getTLI(F1));
+               bool print_transform = false,
+               bool always_verify = false) {
+  auto fn1 = llvm2alive(F1, TLI.getTLI(F1), true);
   if (!fn1)
     return Results::Error("Could not translate '" + F1.getName().str() +
                           "' to Alive IR\n");
 
-  auto fn2 = llvm2alive(F2, TLI.getTLI(F2), fn1->getGlobalVarNames());
+  auto fn2 = llvm2alive(F2, TLI.getTLI(F2), false, fn1->getGlobalVarNames());
   if (!fn2)
     return Results::Error("Could not translate '" + F2.getName().str() +
                           "' to Alive IR\n");
@@ -266,7 +269,7 @@ Results verify(llvm::Function &F1, llvm::Function &F2,
     stringstream ss1, ss2;
     r.t.src.print(ss1);
     r.t.tgt.print(ss2);
-    if (ss1.str() == ss2.str()) {
+    if (std::move(ss1).str() == std::move(ss2).str()) {
       if (print_transform)
         r.t.print(*out, {});
       r.status = Results::SYNTACTIC_EQ;
@@ -1247,7 +1250,7 @@ public:
 };
 
 // Some variables that we need to maintain as we're performing arm-tv
-static std::map<std::pair<unsigned, unsigned>, IR::Value *> cache;
+static std::map<std::pair<unsigned, unsigned>, IR::Value *> mc_cache;
 static std::unordered_map<MCOperand, unique_ptr<IR::StructType>, MCOperandHash,
                           MCOperandEqual>
     overflow_aggregate_types;
@@ -1313,11 +1316,11 @@ static IR::Type *sadd_overflow_type(MCOperand op, int size) {
 
 // Add IR value to cache
 void mc_add_identifier(unsigned reg, unsigned version, IR::Value &v) {
-  cache.emplace(std::make_pair(reg, version), &v);
+  mc_cache.emplace(std::make_pair(reg, version), &v);
 }
 
 IR::Value *mc_get_operand(unsigned reg, unsigned version) {
-  if (auto I = cache.find(std::make_pair(reg, version)); I != cache.end())
+  if (auto I = mc_cache.find(std::make_pair(reg, version)); I != mc_cache.end())
     return I->second;
   return nullptr;
 }
@@ -3959,7 +3962,7 @@ bool backendTV() {
       continue;
     if (!func_names.empty() && !func_names.count(F.getName().str()))
       continue;
-    AF = llvm2alive(F, TLI.getTLI(F));
+    AF = llvm2alive(F, TLI.getTLI(F), true);
     break;
   }
 
