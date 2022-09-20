@@ -2,9 +2,9 @@
 // Distributed under the MIT license that can be found in the LICENSE file.
 
 #include "llvm/MC/MCAsmInfo.h" // include first to avoid ambiguity for comparison operator from util/spaceship.h
+#include "cache/cache.h"
 #include "ir/instr.h"
 #include "ir/type.h"
-#include "cache/cache.h"
 #include "llvm_util/llvm2alive.h"
 #include "llvm_util/llvm_optimizer.h"
 #include "llvm_util/utils.h"
@@ -249,8 +249,7 @@ bool has_s(int instr) {
 
 Results verify(llvm::Function &F1, llvm::Function &F2,
                llvm::TargetLibraryInfoWrapperPass &TLI,
-               bool print_transform = false,
-               bool always_verify = false) {
+               bool print_transform = false, bool always_verify = false) {
   auto fn1 = llvm2alive(F1, TLI.getTLI(F1), true);
   if (!fn1)
     return Results::Error("Could not translate '" + F1.getName().str() +
@@ -3230,12 +3229,16 @@ public:
                                              *stored, IR::ConversionOp::Trunc);
         auto extended_type = &get_int_type(64);
         if (truncated_type->bits() == 1) {
-          cout << "encounterd 1 bit input\n";
-          stored = add_instr<IR::ConversionOp>(get_int_type(8),
-                                               next_name(operand.getReg(), 3),
-                                               *stored, IR::ConversionOp::ZExt);
+          // cout << "encounterd 1 bit input\n";
+          // stored = add_instr<IR::ConversionOp>(get_int_type(8),
+          //                                      next_name(operand.getReg(),
+          //                                      3), *stored,
+          //                                      IR::ConversionOp::ZExt);
           stored = add_instr<IR::ConversionOp>(
-              *extended_type, next_name(operand.getReg(), 4), *stored, op);
+              get_int_type(32), next_name(operand.getReg(), 3), *stored, op);
+          stored = add_instr<IR::ConversionOp>(*extended_type,
+                                               next_name(operand.getReg(), 4),
+                                               *stored, IR::ConversionOp::ZExt);
         } else {
           if (truncated_type->bits() < 32) {
             stored = add_instr<IR::ConversionOp>(
