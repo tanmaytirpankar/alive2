@@ -151,22 +151,15 @@ void emitCommandLine(ostream *out) {
 #endif
 }
 
-struct TVLegacyPass final : public llvm::ModulePass {
+struct TVLegacyPass final : public llvm::FunctionPass {
   static char ID;
   bool skip_verify = false;
   bool onlyif_src_exists = false; // Verify this pair only if src exists
   const function<llvm::TargetLibraryInfo*(llvm::Function&)> *TLI_override
     = nullptr;
-  unsigned anon_count;
+  unsigned anon_count = 0;
 
-  TVLegacyPass() : ModulePass(ID) {}
-
-  bool runOnModule(llvm::Module &M) override {
-    anon_count = 0;
-    for (auto &F: M)
-      runOnFunction(F);
-    return false;
-  }
+  TVLegacyPass() : FunctionPass(ID) {}
 
   bool runOnFunction(llvm::Function &F) {
     if (F.isDeclaration())
@@ -456,6 +449,17 @@ const llvm::Module * unwrapModule(llvm::Any IR) {
   llvm_unreachable("Unknown IR unit");
 }
 
+const llvm::Function *unwrapFunction(llvm::Any IR) {
+  using namespace llvm;
+
+  if (any_isa<const llvm::Function *>(IR))
+    return any_cast<const llvm::Function *>(IR);
+  else if (any_isa<const Loop *>(IR))
+    return any_cast<const Loop *>(IR)->getHeader()->getParent();
+
+  llvm_unreachable("Unknown IR unit");
+}
+
 
 // List 'leaf' interprocedural passes only.
 // For example, ModuleInlinerWrapperPass shouldn't be here because it is an
@@ -516,21 +520,19 @@ struct TVPass : public llvm::PassInfoMixin<TVPass> {
   TVPass(const TVPass &) = delete;
   TVPass &operator=(const TVPass &) = delete;
 
-  llvm::PreservedAnalyses run(llvm::Module &M,
-                              llvm::ModuleAnalysisManager &AM) {
-    auto &FAM = AM.getResult<llvm::FunctionAnalysisManagerModuleProxy>(M)
-                  .getManager();
+  llvm::PreservedAnalyses run(llvm::Function &F,
+                              llvm::FunctionAnalysisManager &FAM) {
     auto get_TLI = [&FAM](llvm::Function &F) {
       return &FAM.getResult<llvm::TargetLibraryAnalysis>(F);
     };
-    run(M, get_TLI);
+    run(F, get_TLI);
     return llvm::PreservedAnalyses::all();
   }
 
-  void run(llvm::Module &M,
+  void run(llvm::Function &F,
            const function<llvm::TargetLibraryInfo*(llvm::Function&)> &get_TLI) {
     if (!initialized)
-      TVLegacyPass::initialize(M);
+      TVLegacyPass::initialize(*F.getParent());
 
     if (batch_opts) {
       // Batching is supported by clang-tv only
@@ -556,7 +558,7 @@ struct TVPass : public llvm::PassInfoMixin<TVPass> {
 
       tv.TLI_override = &get_TLI;
       // If skip_pass is true, this updates fns map only.
-      tv.runOnModule(M);
+      tv.runOnFunction(F);
 
       if (!set_src)
         *out << "-- DONE: " << batched_pass_count << ". " << pass_name << "\n";
@@ -577,7 +579,7 @@ struct TVPass : public llvm::PassInfoMixin<TVPass> {
 
       tv.TLI_override = &get_TLI;
       // If skip_pass is true, this updates fns map only.
-      tv.runOnModule(M);
+      tv.runOnFunction(F);
     }
   }
 };
@@ -588,7 +590,7 @@ unsigned TVPass::batched_pass_count;
 unsigned TVPass::num_instances = 0;
 bool is_clangtv_done = false;
 
-void runTVPass(llvm::Module &M) {
+void runTVPass(llvm::Function &F) {
   static optional<llvm::TargetLibraryInfoImpl> TLIImpl;
   optional<llvm::TargetLibraryInfo> TLI_holder;
 
@@ -600,15 +602,15 @@ void runTVPass(llvm::Module &M) {
 
   TVPass tv;
   tv.print_pass_name = true;
-  tv.run(M, get_TLI);
+  tv.run(F, get_TLI);
 }
 
 struct ClangTVFinalizePass : public llvm::PassInfoMixin<ClangTVFinalizePass> {
-  llvm::PreservedAnalyses run(llvm::Module &M,
-                              llvm::ModuleAnalysisManager &AM) {
+  llvm::PreservedAnalyses run(llvm::Function &F,
+                              llvm::FunctionAnalysisManager &FAM) {
     if (is_clangtv) {
       if (batch_opts && TVPass::batch_started)
-        runTVPass(M);
+        runTVPass(F);
 
       if (initialized)
         TVLegacyPass::finalize();
@@ -627,7 +629,7 @@ llvmGetPassPluginInfo() {
       is_clangtv = true;
       PB.registerPipelineParsingCallback(
           [](llvm::StringRef Name,
-             llvm::ModulePassManager &MPM,
+             llvm::FunctionPassManager &FPM,
              llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
           if (Name != "tv")
             return false;
@@ -636,7 +638,7 @@ llvmGetPassPluginInfo() {
           // explicitly given as an argument
           is_clangtv = false;
 
-          MPM.addPass(TVPass());
+          FPM.addPass(TVPass());
           return true;
         });
       // registerOptimizerLastEPCallback is called when 'default' pipelines
@@ -645,7 +647,7 @@ llvmGetPassPluginInfo() {
       // and finalizes resources then.
       PB.registerOptimizerLastEPCallback(
           [](llvm::ModulePassManager &MPM, llvm::OptimizationLevel) {
-            MPM.addPass(ClangTVFinalizePass());
+            MPM.addPass(createModuleToFunctionPassAdaptor(ClangTVFinalizePass()));
           });
 
       if (batch_opts) {
@@ -673,7 +675,7 @@ llvmGetPassPluginInfo() {
 	    saveBitcode(unwrapModule(IR));
 
           if (is_first || do_start || do_finish)
-            runTVPass(*const_cast<llvm::Module *>(unwrapModule(IR)));
+            runTVPass(*const_cast<llvm::Function *>(unwrapFunction(IR)));
         });
         PB.getPassInstrumentationCallbacks()->registerAfterPassCallback([&](
             llvm::StringRef P, llvm::Any, const llvm::PreservedAnalyses &) {
@@ -697,7 +699,7 @@ llvmGetPassPluginInfo() {
           if (!is_clangtv || is_clangtv_done)
             return;
 
-          runTVPass(*const_cast<llvm::Module *>(unwrapModule(IR)));
+          runTVPass(*const_cast<llvm::Function *>(unwrapFunction(IR)));
         });
       }
     }
