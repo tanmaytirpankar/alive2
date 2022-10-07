@@ -195,6 +195,9 @@ set<int> s_flag = {
     AArch64::ANDSXri,
     AArch64::ANDSXrr,
     AArch64::ANDSXrs,
+    // BICS
+    AArch64::BICSWrs,
+    AArch64::BICSXrs,
 };
 
 set<int> instrs_32 = {
@@ -209,8 +212,8 @@ set<int> instrs_32 = {
     AArch64::UBFMWri, AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,
     AArch64::SDIVWr,  AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs,
     AArch64::RORVWr,  AArch64::RBITWr,   AArch64::CLZWr,    AArch64::REVWr,
-    AArch64::CSNEGWr, AArch64::BICWrs,   AArch64::EONWrs,   AArch64::REV16Wr,
-    AArch64::Bcc,     AArch64::CCMPWr,   AArch64::CCMPWi};
+    AArch64::CSNEGWr, AArch64::BICWrs,   AArch64::BICSWrs,  AArch64::EONWrs,   
+    AArch64::REV16Wr, AArch64::Bcc,      AArch64::CCMPWr,   AArch64::CCMPWi};
 
 set<int> instrs_64 = {
     AArch64::ADDXrx,    AArch64::ADDSXrs,   AArch64::ADDSXri,
@@ -229,13 +232,13 @@ set<int> instrs_64 = {
     AArch64::EORXrs,    AArch64::SMADDLrrr, AArch64::UMADDLrrr,
     AArch64::RORVXr,    AArch64::RBITXr,    AArch64::CLZXr,
     AArch64::REVXr,     AArch64::CSNEGXr,   AArch64::BICXrs,
-    AArch64::EONXrs,    AArch64::SMULHrr,   AArch64::UMULHrr,
-    AArch64::REV32Xr,   AArch64::REV16Xr,   AArch64::SMSUBLrrr,
-    AArch64::UMSUBLrrr, AArch64::PHI,       AArch64::TBZW,
-    AArch64::TBZX,      AArch64::TBNZW,     AArch64::TBNZX,
-    AArch64::B,         AArch64::CBZW,      AArch64::CBZX,
-    AArch64::CBNZW,     AArch64::CBNZX,     AArch64::CCMPXr,
-    AArch64::CCMPXi};
+    AArch64::BICSXrs,   AArch64::EONXrs,    AArch64::SMULHrr,
+    AArch64::UMULHrr,   AArch64::REV32Xr,   AArch64::REV16Xr,
+    AArch64::SMSUBLrrr, AArch64::UMSUBLrrr, AArch64::PHI,
+    AArch64::TBZW,      AArch64::TBZX,      AArch64::TBNZW,
+    AArch64::TBNZX,     AArch64::B,         AArch64::CBZW,
+    AArch64::CBZX,      AArch64::CBNZW,     AArch64::CBNZX,
+    AArch64::CCMPXr,    AArch64::CCMPXi};
 
 set<int> instrs_no_write = {AArch64::Bcc,    AArch64::B,      AArch64::TBZW,
                             AArch64::TBZX,   AArch64::TBNZW,  AArch64::TBNZX,
@@ -2850,7 +2853,9 @@ public:
     case AArch64::EONWrs:
     case AArch64::EONXrs:
     case AArch64::BICWrs:
-    case AArch64::BICXrs: {
+    case AArch64::BICXrs:
+    case AArch64::BICSWrs:
+    case AArch64::BICSXrs: {
       // BIC:
       // return = op1 AND NOT (optional shift) op2
       // EON:
@@ -2875,7 +2880,9 @@ public:
       IR::BinOp::Op finalBinOp;
       switch (opcode) {
       case AArch64::BICWrs:
-      case AArch64::BICXrs: {
+      case AArch64::BICXrs:
+      case AArch64::BICSXrs:
+      case AArch64::BICSWrs: {
         finalBinOp = IR::BinOp::And;
         break;
       }
@@ -2888,6 +2895,17 @@ public:
 
       auto ret = add_instr<IR::BinOp>(*ty, next_name(), *op1, *inverted_op2,
                                       finalBinOp);
+
+      // FIXME: it might be better to have EON instruction separate since there
+      //    no "S" instructions for EON
+      if (has_s(opcode)) {
+        // set n/z, clear c/v
+        set_n(ret);
+        set_z(ret);
+        cur_cs[MCBB] = make_intconst(0, 1);
+        cur_vs[MCBB] = make_intconst(0, 1);
+      }
+
       store(*ret);
       break;
     }
