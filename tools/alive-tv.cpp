@@ -948,7 +948,7 @@ public:
   void rewriteOperands() {
 
     // FIXME: this lambda is pretty hacky and brittle
-    auto in_range_rewrite = [](MCOperand &op) {
+    auto in_range_rewrite = [&](MCOperand &op) {
       if (op.isReg()) {
         if (op.getReg() >= AArch64::W0 &&
             op.getReg() <= AArch64::W28) { // FIXME: Why 28?
@@ -959,7 +959,15 @@ public:
                      op.getReg() >= AArch64::WZR) &&
                    !(op.getReg() == AArch64::NoRegister) &&
                    !(op.getReg() == AArch64::LR)) {
-          report_fatal_error("Unsupported registers detected in the Assembly");
+          // temporarily fix to print the name of unsupported register when
+          // encountered
+          std::string buff;
+          raw_string_ostream str_stream(buff);
+          op.print(str_stream, MRI_ptr);
+          std::stringstream error_msg;
+          error_msg << "Unsupported registers detected in the Assembly: "
+                    << str_stream.str();
+          report_fatal_error(error_msg.str().c_str());
         }
       }
     };
