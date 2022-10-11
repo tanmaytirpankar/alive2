@@ -212,7 +212,7 @@ set<int> instrs_32 = {
     AArch64::UBFMWri, AArch64::BFMWri,   AArch64::ORRWrs,   AArch64::ORRWri,
     AArch64::SDIVWr,  AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs,
     AArch64::RORVWr,  AArch64::RBITWr,   AArch64::CLZWr,    AArch64::REVWr,
-    AArch64::CSNEGWr, AArch64::BICWrs,   AArch64::BICSWrs,  AArch64::EONWrs,   
+    AArch64::CSNEGWr, AArch64::BICWrs,   AArch64::BICSWrs,  AArch64::EONWrs,
     AArch64::REV16Wr, AArch64::Bcc,      AArch64::CCMPWr,   AArch64::CCMPWi};
 
 set<int> instrs_64 = {
@@ -608,6 +608,18 @@ public:
     }
   }
 };
+
+bool isIntegerRegister(const MCOperand &op) {
+  if (!op.isReg())
+    return false;
+
+  if ((AArch64::W0 <= op.getReg() && op.getReg() <= AArch64::W30) ||
+      (AArch64::X0 <= op.getReg() && op.getReg() <= AArch64::X28)) {
+    return true;
+  }
+
+  return false;
+}
 
 // Represents a machine function
 class MCFunction {
@@ -1150,6 +1162,26 @@ public:
       stack[arg] = std::vector<unsigned>();
       pushFresh(arg);
     }
+
+    cout << "adding volatile registers\n";
+
+    for (unsigned int i = AArch64::X0; i <= AArch64::X17; i++) {
+      bool found_reg = false;
+      for (const auto &arg : fn_args) {
+        if (arg.getReg() == i) {
+          found_reg = true;
+          break;
+        }
+      }
+
+      if (!found_reg) {
+        cout << "adding volatile: " << i << "\n";
+        auto vol_reg = MCOperand::createReg(i);
+        stack[vol_reg] = std::vector<unsigned>();
+        pushFresh(vol_reg);
+      }
+    }
+
     rename(entry_block_ptr);
     cout << "printing MCInsts after renaming operands\n";
     printBlocks();
@@ -3255,7 +3287,7 @@ public:
                                              *stored, IR::ConversionOp::Trunc);
         auto extended_type = &get_int_type(64);
         if (truncated_type->bits() == 1) {
-          // cout << "encounterd 1 bit input\n";
+          // cout << "encountered 1 bit input\n";
           // stored = add_instr<IR::ConversionOp>(get_int_type(8),
           //                                      next_name(operand.getReg(),
           //                                      3), *stored,
@@ -3285,6 +3317,17 @@ public:
       Fn.addInput(move(val));
       argNum++;
     }
+
+    auto poison_val = make_unique<IR::PoisonValue>(get_int_type(64));
+    cout << "argNum = " << argNum << "\n";
+    // add remaining caller-saved registers
+    for (unsigned int i = AArch64::X0 + argNum; i <= AArch64::X17; i++) {
+      auto val =
+          add_instr<IR::BinOp>(get_int_type(64), next_name(i, 3), *poison_val,
+                               *make_intconst(0, 64), IR::BinOp::Or);
+      mc_add_identifier(i, 2, *val);
+    }
+    Fn.addConstant(std::move(poison_val));
 
     for (auto &[alive_bb, mc_bb] : sorted_bbs) {
       cout << "visitng bb: " << mc_bb->getName() << endl;
