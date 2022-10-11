@@ -970,6 +970,8 @@ public:
           op.setReg(op.getReg() + AArch64::X0 - AArch64::W0);
         } else if (!(op.getReg() >= AArch64::X0 &&
                      op.getReg() <= AArch64::X28) &&
+                   // !(op.getReg() >= AArch64::D0 &&
+                   //   op.getReg() <= AArch64::D31) &&
                    !(op.getReg() <= AArch64::XZR &&
                      op.getReg() >= AArch64::WZR) &&
                    !(op.getReg() == AArch64::NoRegister) &&
@@ -3325,7 +3327,11 @@ public:
       auto val =
           add_instr<IR::BinOp>(get_int_type(64), next_name(i, 3), *poison_val,
                                *make_intconst(0, 64), IR::BinOp::Or);
-      mc_add_identifier(i, 2, *val);
+      
+      auto val_frozen =
+          add_instr<IR::Freeze>(get_int_type(64), next_name(i, 4), *val);
+    
+      mc_add_identifier(i, 2, *val_frozen);
     }
     Fn.addConstant(std::move(poison_val));
 
