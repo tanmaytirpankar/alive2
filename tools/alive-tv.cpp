@@ -240,11 +240,15 @@ set<int> instrs_64 = {
     AArch64::CBZX,      AArch64::CBNZW,     AArch64::CBNZX,
     AArch64::CCMPXr,    AArch64::CCMPXi};
 
+set<int> instrs_128 = {AArch64::FMOVXDr, AArch64::INSvi64gpr};
+
 set<int> instrs_no_write = {AArch64::Bcc,    AArch64::B,      AArch64::TBZW,
                             AArch64::TBZX,   AArch64::TBNZW,  AArch64::TBNZX,
                             AArch64::CBZW,   AArch64::CBZX,   AArch64::CBNZW,
                             AArch64::CBNZX,  AArch64::CCMPWr, AArch64::CCMPWi,
                             AArch64::CCMPXr, AArch64::CCMPXi};
+
+set<int> ins_variant = {AArch64::INSvi64gpr};
 
 bool has_s(int instr) {
   return s_flag.contains(instr);
@@ -609,6 +613,7 @@ public:
   }
 };
 
+// utility function
 bool isIntegerRegister(const MCOperand &op) {
   if (!op.isReg())
     return false;
@@ -619,6 +624,22 @@ bool isIntegerRegister(const MCOperand &op) {
   }
 
   return false;
+}
+
+// hacky way of returning supported volatile registers
+std::vector<unsigned> volatileRegisters() {
+  std::vector<unsigned> res;
+  // integer registers
+  for (unsigned int i = AArch64::X0; i <= AArch64::X17; i++) {
+    res.push_back(i);
+  }
+
+  //fp registers
+  for (unsigned int i = AArch64::Q0; i <= AArch64::Q0; i++) {
+    res.push_back(i);
+  }
+
+  return res;
 }
 
 // Represents a machine function
@@ -968,10 +989,16 @@ public:
         if (op.getReg() >= AArch64::W0 &&
             op.getReg() <= AArch64::W28) { // FIXME: Why 28?
           op.setReg(op.getReg() + AArch64::X0 - AArch64::W0);
+          // FIXME refactor and also need to deal with vector register aliases
+        } else if (op.getReg() >= AArch64::D0 && 
+            op.getReg() <= AArch64::D31) {
+          op.setReg(op.getReg() + AArch64::Q0 - AArch64::D0);
         } else if (!(op.getReg() >= AArch64::X0 &&
                      op.getReg() <= AArch64::X28) &&
                    // !(op.getReg() >= AArch64::D0 &&
                    //   op.getReg() <= AArch64::D31) &&
+                   !(op.getReg() >= AArch64::Q0 &&
+                     op.getReg() <= AArch64::Q31) && 
                    !(op.getReg() <= AArch64::XZR &&
                      op.getReg() >= AArch64::WZR) &&
                    !(op.getReg() == AArch64::NoRegister) &&
@@ -1103,8 +1130,12 @@ public:
             continue;
           }
 
-          auto op_reg_num = op.getReg();
-          if (op_reg_num == AArch64::WZR || op_reg_num == AArch64::XZR) {
+          // hacky way of not renaming the element index for ins instruction variants
+          if ((i == 1) && (ins_variant.contains(mc_instr.getOpcode()))) {
+            continue;
+          }
+
+          if (op.getReg() == AArch64::WZR || op.getReg() == AArch64::XZR) {
             continue;
           }
 
@@ -1167,18 +1198,20 @@ public:
 
     cout << "adding volatile registers\n";
 
-    for (unsigned int i = AArch64::X0; i <= AArch64::X17; i++) {
+    auto v_registers = volatileRegisters();
+    for (auto reg_num : v_registers) {
+    // for (unsigned int i = AArch64::X0; i <= AArch64::X17; i++) {
       bool found_reg = false;
       for (const auto &arg : fn_args) {
-        if (arg.getReg() == i) {
+        if (arg.getReg() == reg_num) {
           found_reg = true;
           break;
         }
       }
 
       if (!found_reg) {
-        cout << "adding volatile: " << i << "\n";
-        auto vol_reg = MCOperand::createReg(i);
+        cout << "adding volatile: " << reg_num << "\n";
+        auto vol_reg = MCOperand::createReg(reg_num);
         stack[vol_reg] = std::vector<unsigned>();
         pushFresh(vol_reg);
       }
@@ -1298,7 +1331,30 @@ static std::map<std::pair<unsigned, unsigned>, IR::Value *> mc_cache;
 static std::unordered_map<MCOperand, unique_ptr<IR::StructType>, MCOperandHash,
                           MCOperandEqual>
     overflow_aggregate_types;
+static std::vector<unique_ptr<IR::VectorType>> lifted_vector_types;
 unsigned type_id_counter{0};
+
+static IR::Type *get_vector_type(unsigned elements, IR::Type &elementTy) {
+  int index = -1;
+
+  for (auto &cached_type : lifted_vector_types) {
+
+    if ((cached_type->numElementsConst() == elements) &&
+        (cached_type->getChild(0) == elementTy).isTrue()) {
+      break;
+    }
+    index++;
+  }
+
+  if (index != -1)
+    return lifted_vector_types[index].get();
+  
+  auto typ = make_unique<IR::VectorType>("ty_" + to_string(type_id_counter++), elements, elementTy);
+  lifted_vector_types.emplace_back(std::move(typ));
+  // auto &typ = lifted_vector_types.emplace_back(
+  //     "ty_" + to_string(type_id_counter++), elements, elementTy);
+  return lifted_vector_types.back().get();
+}
 
 // Keep track of which oprands had their type adjusted and their original
 // bitwidth
@@ -1463,10 +1519,15 @@ std::tuple<llvm::APInt, llvm::APInt> decode_bit_mask(bool immNBit,
 }
 
 // Values currently holding ZNCV bits, for each basicblock respectively
-unordered_map<MCBasicBlock *, IR::Value *> cur_vs;
-unordered_map<MCBasicBlock *, IR::Value *> cur_zs;
-unordered_map<MCBasicBlock *, IR::Value *> cur_ns;
-unordered_map<MCBasicBlock *, IR::Value *> cur_cs;
+std::unordered_map<MCBasicBlock *, IR::Value *> cur_vs;
+std::unordered_map<MCBasicBlock *, IR::Value *> cur_zs;
+std::unordered_map<MCBasicBlock *, IR::Value *> cur_ns;
+std::unordered_map<MCBasicBlock *, IR::Value *> cur_cs;
+
+// Values currently holding the latest definition for a volatile register, for each basic block
+// currently used by vector instructions only
+std::unordered_map<MCBasicBlock *, std::unordered_map<unsigned, IR::Value *>>
+    cur_vol_regs;
 
 IR::BasicBlock *get_basic_block(IR::Function &f, MCOperand &jmp_tgt) {
   assert(jmp_tgt.isExpr() && "[get_basic_block] expected expression operand");
@@ -1512,6 +1573,9 @@ class arm2alive_ {
   }
 
   int get_size(int instr) {
+    if (instr == AArch64::RET)
+      return 0;
+
     if (instrs_32.contains(instr)) {
       return 32;
     }
@@ -1520,8 +1584,9 @@ class arm2alive_ {
       return 64;
     }
 
-    if (instr == AArch64::RET)
-      return 0;
+    if (instrs_128.contains(instr)) {
+      return 128;
+    }
 
     cout << "get_size encountered unknown instruction" << endl;
     visitError(*wrapper);
@@ -1599,6 +1664,10 @@ class arm2alive_ {
       v = make_intconst(0, 64);
     } else if (op.getReg() == AArch64::WZR) {
       v = make_intconst(0, 32);
+    } else if (size == 128) { // FIXME this needs to be generalized
+      auto tmp = getIdentifier(op.getReg(), wrapper->getOpId(idx));
+      v = add_instr<IR::ConversionOp>(*ty, next_name(), *tmp,
+                                      IR::ConversionOp::ZExt);
     } else if (size == 64) {
       v = getIdentifier(op.getReg(), wrapper->getOpId(idx));
     } else if (size == 32) {
@@ -1680,8 +1749,8 @@ class arm2alive_ {
       return;
     }
 
-    // if v.bits() == 64, regSize == 64 because of above assertion
-    if (v.bits() == 64) {
+    // direcly add the value to the value cache 
+    if (v.bits() == 64 || v.bits() == 128) {
       add_identifier(v);
       return;
     }
@@ -2984,6 +3053,40 @@ public:
       store(*ret);
       break;
     }
+    // assuming that the source is always an x register
+    // This might not be the case but we need to look at the assembly emitter
+    case AArch64::FMOVXDr: { 
+      // zero extended x register to 128 bits
+      auto val = get_value(1);
+      const auto& cur_mc_instr = wrapper->getMCInst();
+      auto& op_0 = cur_mc_instr.getOperand(0);
+      auto q_reg_val = cur_vol_regs[MCBB][op_0.getReg()];
+      assert(q_reg_val && "volatile register's value not in cache");
+
+
+      //zero out the bottom 64-bits of the vector register by shifting
+      auto q_shift = add_instr<IR::BinOp>(
+          *ty, next_name(), *q_reg_val, *make_intconst(64, 128), IR::BinOp::LShr);
+
+      auto q_cleared = add_instr<IR::BinOp>(
+            *ty, next_name(), *q_shift, *make_intconst(64, 128), IR::BinOp::Shl);
+      
+      auto mov_res = 
+          add_instr<IR::BinOp>(*ty, next_name(), *q_cleared, *val, IR::BinOp::Or);
+      // auto q_reg_val = getIdentifier(op.getReg(), wrapper->getOpId)
+      store(*mov_res);
+      cur_vol_regs[MCBB][op_0.getReg()] = mov_res;
+      break;
+    }
+    // assuming that the source is always an x register
+    // This might not be the case but we need to look at the assembly emitter
+    case AArch64::INSvi64gpr: { 
+      cout << "inside INSvi64gpr\n";
+      Fn.print(
+          cout << "\nError "
+                  "detected----------partially-lifted-arm-target----------\n");
+      visitError(I);
+    }
     case AArch64::RET: {
       // for now we're assuming that the function returns an integer or void
       // value
@@ -3179,19 +3282,27 @@ public:
   }
 
   std::optional<IR::Function> run() {
+    IR::Type *func_return_type{nullptr};
+
     if (&srcFn->getType() == &IR::Type::voidTy) {
       cout << "function is void type\n";
       ret_void = true;
-    } else if (!srcFn->getType().isIntType())
-      report_fatal_error("Only int/void return types supported for now");
-
-    IR::Type *func_return_type{nullptr};
-    if (ret_void) {
       func_return_type = &IR::Type::voidTy;
-    } else {
-      // TODO: Will need to handle other return types here later
+    } else if (srcFn->getType().isIntType()) {
       func_return_type = &get_int_type(srcFn->getType().bits());
+    } else if (srcFn->getType().isVectorType()) {
+      auto ret_type_ptr = dynamic_cast<const IR::VectorType *>(&srcFn->getType());
+      // cout << ret_type_ptr->numElementsConst() << "\n";
+      // ret_type_ptr->getChild(0).print(cout);
+      func_return_type = get_vector_type(ret_type_ptr->numElementsConst(), ret_type_ptr->getChild(0));
+      func_return_type->print(cout);
+      cout.flush();
+
+      
     }
+    else
+      // TODO: Will need to handle other return types here later 
+      report_fatal_error("Only (int/void/int vector) return types supported for now");
 
     if (!func_return_type)
       return {};
@@ -3321,8 +3432,15 @@ public:
     }
 
     auto poison_val = make_unique<IR::PoisonValue>(get_int_type(64));
+    auto vect_poison_val = make_unique<IR::PoisonValue>(get_int_type(128));
     cout << "argNum = " << argNum << "\n";
-    // add remaining caller-saved registers
+    cout << "entry mc_bb = " << sorted_bbs[0].second->getName() << "\n";
+    auto entry_mc_bb = sorted_bbs[0].second;
+    // add remaining volatile registers and set them to unitialized value
+    // we chose frozen poison value to give a random yet determinate value
+    // FIXME: using the number of arguments to the function to determine which
+    // registers are uninitialized is hacky and will break when passing FP arguments
+
     for (unsigned int i = AArch64::X0 + argNum; i <= AArch64::X17; i++) {
       auto val =
           add_instr<IR::BinOp>(get_int_type(64), next_name(i, 3), *poison_val,
@@ -3332,8 +3450,23 @@ public:
           add_instr<IR::Freeze>(get_int_type(64), next_name(i, 4), *val);
     
       mc_add_identifier(i, 2, *val_frozen);
+      cur_vol_regs[entry_mc_bb][i] = val_frozen;
     }
+
+    for (unsigned int i = AArch64::Q0; i <= AArch64::Q0; i++) {
+      auto val =
+          add_instr<IR::BinOp>(get_int_type(128), next_name(i, 3), *vect_poison_val,
+                               *make_intconst(0, 128), IR::BinOp::Or);
+      
+      auto val_frozen =
+          add_instr<IR::Freeze>(get_int_type(128), next_name(i, 4), *val);
+    
+      mc_add_identifier(i, 2, *val_frozen);
+      cur_vol_regs[entry_mc_bb][i] = val_frozen;
+    }
+  
     Fn.addConstant(std::move(poison_val));
+    Fn.addConstant(std::move(vect_poison_val));
 
     for (auto &[alive_bb, mc_bb] : sorted_bbs) {
       cout << "visitng bb: " << mc_bb->getName() << endl;
