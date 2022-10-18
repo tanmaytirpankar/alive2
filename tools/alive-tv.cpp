@@ -990,13 +990,20 @@ public:
             op.getReg() <= AArch64::W28) { // FIXME: Why 28?
           op.setReg(op.getReg() + AArch64::X0 - AArch64::W0);
           // FIXME refactor and also need to deal with vector register aliases
+        } else if (op.getReg() >= AArch64::B0 && 
+            op.getReg() <= AArch64::B31) {
+          op.setReg(op.getReg() + AArch64::Q0 - AArch64::B0);
+        } else if (op.getReg() >= AArch64::H0 && 
+            op.getReg() <= AArch64::H31) {
+          op.setReg(op.getReg() + AArch64::Q0 - AArch64::H0);
+        } else if (op.getReg() >= AArch64::S0 && 
+            op.getReg() <= AArch64::S31) {
+          op.setReg(op.getReg() + AArch64::Q0 - AArch64::S0);
         } else if (op.getReg() >= AArch64::D0 && 
             op.getReg() <= AArch64::D31) {
           op.setReg(op.getReg() + AArch64::Q0 - AArch64::D0);
         } else if (!(op.getReg() >= AArch64::X0 &&
                      op.getReg() <= AArch64::X28) &&
-                   // !(op.getReg() >= AArch64::D0 &&
-                   //   op.getReg() <= AArch64::D31) &&
                    !(op.getReg() >= AArch64::Q0 &&
                      op.getReg() <= AArch64::Q31) && 
                    !(op.getReg() <= AArch64::XZR &&
