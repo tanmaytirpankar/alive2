@@ -630,12 +630,12 @@ bool isIntegerRegister(const MCOperand &op) {
 std::vector<unsigned> volatileRegisters() {
   std::vector<unsigned> res;
   // integer registers
-  for (unsigned int i = AArch64::X0; i <= AArch64::X17; i++) {
+  for (unsigned int i = AArch64::X0; i <= AArch64::X17; ++i) {
     res.push_back(i);
   }
 
   //fp registers
-  for (unsigned int i = AArch64::Q0; i <= AArch64::Q0; i++) {
+  for (unsigned int i = AArch64::Q0; i <= AArch64::Q0; ++i) {
     res.push_back(i);
   }
 
@@ -1710,7 +1710,7 @@ class arm2alive_ {
     assert(phi_mc_wrapper->getOpcode() == AArch64::PHI &&
            "cannot add params to non-phi instr");
     for (unsigned i = 1; i < phi_mc_wrapper->getMCInst().getNumOperands();
-         i++) {
+         ++i) {
       assert(phi_mc_wrapper->getMCInst().getOperand(i).isReg());
       cout << "<Phi arg>:[("
            << phi_mc_wrapper->getMCInst().getOperand(i).getReg() << ","
@@ -3081,15 +3081,92 @@ public:
     // assuming that the source is always an x register
     // This might not be the case but we need to look at the assembly emitter
     case AArch64::INSvi64gpr: { 
-      cout << "inside INSvi64gpr\n";
-      Fn.print(
-          cout << "\nError "
-                  "detected----------partially-lifted-arm-target----------\n");
-      visitError(I);
+      const auto& cur_mc_instr = wrapper->getMCInst();
+      auto& op_0 = cur_mc_instr.getOperand(0);
+      auto& op_1 = cur_mc_instr.getOperand(1);
+      assert(op_0.isReg() && op_1.isReg());
+      assert((op_0.getReg() == op_1.getReg()) && "this form of INSvi64gpr is not supported yet");
+      auto op_index = cur_mc_instr.getOperand(2).getImm();
+      auto val = get_value(3);
+      auto q_reg_val = cur_vol_regs[MCBB][op_0.getReg()];
+      // FIXME make this a utility function that uses index and size
+      auto mask = make_intconst(-1, 128);
+
+      if (op_index > 0) {
+        mask = add_instr<IR::BinOp>(
+            *ty, next_name(), *mask, *make_intconst(64, 128), IR::BinOp::Shl);
+
+        val = add_instr<IR::BinOp>(
+            *ty, next_name(), *val, *make_intconst(64, 128), IR::BinOp::Shl);
+      }
+
+      auto q_cleared = add_instr<IR::BinOp>(*ty, next_name(), *q_reg_val, *mask,
+                                            IR::BinOp::Shl);
+
+      auto mov_res = add_instr<IR::BinOp>(*ty, next_name(), *q_cleared, *val,
+                                          IR::BinOp::And);
+      // auto q_reg_val = getIdentifier(op.getReg(), wrapper->getOpId)
+      store(*mov_res);
+      cur_vol_regs[MCBB][op_0.getReg()] = mov_res;
+      break;
+      
     }
     case AArch64::RET: {
       // for now we're assuming that the function returns an integer or void
       // value
+
+      if (srcFn->getType().isVectorType()) {
+        cout << "returning vector type\n";
+        auto ret_type_ptr = dynamic_cast<const IR::VectorType *>(&srcFn->getType());
+        
+        // FIXME
+        //assert(ret_type_ptr->numElementsConst() == 1);
+
+        auto elem_bitwidth = ret_type_ptr->getChild(0).bits();
+        auto poison_val = make_unique<IR::PoisonValue>(ret_type_ptr->getChild(0));
+        auto poison_val_ptr = poison_val.get();
+        Fn.addConstant(std::move(poison_val));
+        vector<IR::Value*> vals;
+        for (unsigned i = 0; i < ret_type_ptr->numElementsConst(); ++i) {
+          vals.emplace_back(poison_val_ptr);
+        }
+
+        // Hacky way to identify how the returned vector is mapped to register in the assembly
+        //unsigned int largest_vect_register = AArch64::Q0;
+        //for (auto &[reg, val] : cur_vol_regs[MCBB]) {
+        //  cout << "reg num=" << reg << "\n";
+        //  if (reg > largest_vect_register) {
+        //    largest_vect_register = reg;
+        //  }
+        //}
+        //
+        //cout << "largest vect register=" << largest_vect_register-AArch64::Q0 << "\n";
+        
+        IR::Type *func_return_type = get_vector_type(ret_type_ptr->numElementsConst(), ret_type_ptr->getChild(0));
+        auto ret_vect_val = make_unique<IR::AggregateValue>(*func_return_type, std::move(vals));
+        IR::Value* vect_val_ptr = ret_vect_val.get();
+        Fn.addConstant(std::move(ret_vect_val));
+
+        auto elem_ret_typ = &get_int_type(elem_bitwidth);
+        for (unsigned i = 0; i < ret_type_ptr->numElementsConst(); ++i) {
+          //need to trunc if the element's bitwidth is less than 128
+          if (elem_bitwidth < 128) {
+            // FIXME
+            auto vect_reg_val = cur_vol_regs[MCBB][AArch64::Q0+i];
+            assert(vect_reg_val && "register value to return cannot be null!");
+
+            auto trunc = add_instr<IR::ConversionOp>(*elem_ret_typ, next_name(), *vect_reg_val,
+                                                     IR::ConversionOp::Trunc);            
+
+            vect_val_ptr = add_instr<IR::InsertElement>(*func_return_type, next_name(), *vect_val_ptr, *trunc, *make_intconst(i, 32));
+          }
+        }
+
+        // cout << "vector bits = " << ret_type_ptr->bits() << "\n";
+        // cout << "elem bitwidth = " << ret_type_ptr->getChild(0).bits() << "\n";
+        add_instr<IR::Return>(*func_return_type, *vect_val_ptr);
+        break;
+      }
       if (!ret_void) {
         auto retTyp = &get_int_type(srcFn->getType().bits());
 
@@ -3294,6 +3371,8 @@ public:
       auto ret_type_ptr = dynamic_cast<const IR::VectorType *>(&srcFn->getType());
       // cout << ret_type_ptr->numElementsConst() << "\n";
       // ret_type_ptr->getChild(0).print(cout);
+      cout << "vector bits = " << ret_type_ptr->bits() << "\n";
+      cout << "elem bitwidth = " << ret_type_ptr->getChild(0).bits() << "\n";
       func_return_type = get_vector_type(ret_type_ptr->numElementsConst(), ret_type_ptr->getChild(0));
       func_return_type->print(cout);
       cout.flush();
@@ -3441,7 +3520,7 @@ public:
     // FIXME: using the number of arguments to the function to determine which
     // registers are uninitialized is hacky and will break when passing FP arguments
 
-    for (unsigned int i = AArch64::X0 + argNum; i <= AArch64::X17; i++) {
+    for (unsigned int i = AArch64::X0 + argNum; i <= AArch64::X17; ++i) {
       auto val =
           add_instr<IR::BinOp>(get_int_type(64), next_name(i, 3), *poison_val,
                                *make_intconst(0, 64), IR::BinOp::Or);
@@ -3450,10 +3529,10 @@ public:
           add_instr<IR::Freeze>(get_int_type(64), next_name(i, 4), *val);
     
       mc_add_identifier(i, 2, *val_frozen);
-      cur_vol_regs[entry_mc_bb][i] = val_frozen;
+      // cur_vol_regs[entry_mc_bb][i] = val_frozen;
     }
 
-    for (unsigned int i = AArch64::Q0; i <= AArch64::Q0; i++) {
+    for (unsigned int i = AArch64::Q0; i <= AArch64::Q3; ++i) {
       auto val =
           add_instr<IR::BinOp>(get_int_type(128), next_name(i, 3), *vect_poison_val,
                                *make_intconst(0, 128), IR::BinOp::Or);
@@ -4053,7 +4132,7 @@ void adjustSrcInputs(std::optional<IR::Function> &srcFn) {
   // }
 }
 
-void adjustSourceReturn(std::optional<IR::Function> &srcFn) {
+void adjustSrcReturn(std::optional<IR::Function> &srcFn) {
   // Do nothing if the return operand attribute does not include signext/zeroext
   auto &ret_typ = srcFn->getType();
   auto &fnAttrs = srcFn->getFnAttrs();
@@ -4184,7 +4263,7 @@ bool backendTV() {
   AF->print(cout << "\n----------alive-ir-src.ll-file----------\n");
   adjustSrcInputs(AF);
   AF->print(cout << "\n----------alive-ir-src.ll-file----changed-input-\n");
-  adjustSourceReturn(AF);
+  adjustSrcReturn(AF);
   AF->print(cout << "\n----------alive-ir-src.ll-file----changed-return-\n");
 
   LLVMInitializeAArch64TargetInfo();
@@ -4314,7 +4393,7 @@ bool backendTV() {
   // Str.addTerminator();
   Str.generateSuccessors();
   Str.generatePredecessors();
-  Str.findArgs(AF);
+  Str.findArgs(AF); // needs refactoring
   Str.rewriteOperands();
   Str.printCFG();
   Str.generateDominator();
@@ -4323,7 +4402,7 @@ bool backendTV() {
   Str.findPhis();
   Str.generateDomTree();
   Str.ssaRename();
-  Str.adjustReturns();
+  Str.adjustReturns(); // needs refactoring
 
   cout << "after SSA conversion\n";
   Str.printBlocks();
