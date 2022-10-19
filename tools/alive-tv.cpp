@@ -238,7 +238,7 @@ set<int> instrs_64 = {
     AArch64::TBZW,      AArch64::TBZX,      AArch64::TBNZW,
     AArch64::TBNZX,     AArch64::B,         AArch64::CBZW,
     AArch64::CBZX,      AArch64::CBNZW,     AArch64::CBNZX,
-    AArch64::CCMPXr,    AArch64::CCMPXi};
+    AArch64::CCMPXr,    AArch64::CCMPXi,    AArch64::LDRXui};
 
 set<int> instrs_128 = {AArch64::FMOVXDr, AArch64::INSvi64gpr};
 
@@ -1009,7 +1009,8 @@ public:
                    !(op.getReg() <= AArch64::XZR &&
                      op.getReg() >= AArch64::WZR) &&
                    !(op.getReg() == AArch64::NoRegister) &&
-                   !(op.getReg() == AArch64::LR)) {
+                   !(op.getReg() == AArch64::LR) &&
+                   !(op.getReg() == AArch64::SP)) {
           // temporarily fix to print the name of unsupported register when
           // encountered
           std::string buff;
@@ -1224,6 +1225,11 @@ public:
       }
     }
 
+    // add SP to the stack
+    auto sp_reg = MCOperand::createReg(AArch64::SP);
+    stack[sp_reg] = std::vector<unsigned>();
+    pushFresh(sp_reg);
+
     rename(entry_block_ptr);
     cout << "printing MCInsts after renaming operands\n";
     printBlocks();
@@ -1339,6 +1345,7 @@ static std::unordered_map<MCOperand, unique_ptr<IR::StructType>, MCOperandHash,
                           MCOperandEqual>
     overflow_aggregate_types;
 static std::vector<unique_ptr<IR::VectorType>> lifted_vector_types;
+static std::vector<unique_ptr<IR::PtrType>> lifted_ptr_types;
 unsigned type_id_counter{0};
 
 static IR::Type *get_vector_type(unsigned elements, IR::Type &elementTy) {
@@ -1424,6 +1431,10 @@ static IR::Type *sadd_overflow_type(MCOperand op, int size) {
 // Add IR value to cache
 void mc_add_identifier(unsigned reg, unsigned version, IR::Value &v) {
   mc_cache.emplace(std::make_pair(reg, version), &v);
+}
+
+void mc_replace_identifier(unsigned reg, unsigned version, IR::Value &v) {
+  mc_cache[std::make_pair(reg,version)] = &v;
 }
 
 IR::Value *mc_get_operand(unsigned reg, unsigned version) {
@@ -3118,6 +3129,20 @@ public:
       break;
       
     }
+    case AArch64::LDRXui: {
+      const auto &cur_mc_instr = wrapper->getMCInst();
+      auto &op_0 = cur_mc_instr.getOperand(0);
+      auto &op_1 = cur_mc_instr.getOperand(1);
+      assert(op_0.isReg() && op_1.isReg());
+      assert(op_1.getReg() == AArch64::SP &&
+             "only loading from stack supported for now!");
+      auto stack_gep = getIdentifier(AArch64::SP, op_0.getReg());
+      assert(stack_gep && "loaded identifier should not be null!");
+      auto loaded_val =
+          add_instr<IR::Load>(get_int_type(64), next_name(), *stack_gep, 4);
+      store(*loaded_val);
+      break;
+    }
     case AArch64::RET: {
       // for now we're assuming that the function returns an integer or void
       // value
@@ -3515,6 +3540,37 @@ public:
       mc_add_identifier(operand.getReg(), 2, *stored);
       Fn.addInput(move(val));
       argNum++;
+    }
+
+    // Hacky way of supporting parameters passed via the stack
+    // need to properly model the parameter passing rules described in the spec
+    if (argNum > 8) {
+      auto num_stack_args = argNum - 8; // x0-x7 are passed via registers
+      cout << "num_stack_args=" << num_stack_args << "\n";
+
+      // add stack
+      auto alloc_size = make_intconst(8, 64); // size of element in bytes
+      auto alloc_mul = make_intconst(16, 64); // 16 elements
+      auto ptr_type = make_unique<IR::PtrType>(0);
+      auto alloc = add_instr<IR::Alloc>(*ptr_type.get(), "\%stack", *alloc_size,
+                                        alloc_mul, 16);
+      mc_add_identifier(AArch64::SP, 3, *alloc);
+
+      for (unsigned i = 0; i < num_stack_args; ++i) {
+        unsigned reg_num = AArch64::X8 + i;
+        cout << "reg_num = " << reg_num << "\n";
+
+        auto gep_xi = add_instr<IR::GEP>(
+            *ptr_type.get(), "\%stack_" + std::to_string(8 + i), *alloc, false);
+        gep_xi->addIdx(8, *make_intconst(i, 64)); // size in bytes
+        // FIXME, need to use version similar to the offset to address the stack
+        // pointer or alternatively a more elegant solution altogether
+        mc_add_identifier(AArch64::SP, reg_num, *gep_xi);
+
+        add_instr<IR::Store>(*gep_xi, *getIdentifier(reg_num, 2), 4);
+      }
+
+      lifted_ptr_types.emplace_back(std::move(ptr_type));
     }
 
     auto poison_val = make_unique<IR::PoisonValue>(get_int_type(64));
@@ -4066,7 +4122,6 @@ Results backend_verify(std::optional<IR::Function> &fn1,
   smt_init->reset();
   r.t.preprocess();
   TransformVerify verifier(r.t, false);
-
   if (print_transform)
     r.t.print(*out, {});
 
