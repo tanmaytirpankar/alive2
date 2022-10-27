@@ -452,8 +452,12 @@ const llvm::Module * unwrapModule(llvm::Any IR) {
 const llvm::Function *unwrapFunction(llvm::Any IR) {
   using namespace llvm;
 
-  if (any_isa<const llvm::Function *>(IR))
+  if (any_isa<const Module *>(IR))
+    llvm_unreachable("Can't process a module here");
+  else if (any_isa<const llvm::Function *>(IR))
     return any_cast<const llvm::Function *>(IR);
+  else if (any_isa<const LazyCallGraph::SCC *>(IR))
+    llvm_unreachable("Can't process a SCC here");
   else if (any_isa<const Loop *>(IR))
     return any_cast<const Loop *>(IR)->getHeader()->getParent();
 
