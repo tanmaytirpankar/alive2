@@ -3750,18 +3750,18 @@ public:
     errs() << "\n";
   }
 
-  bool emitSymbolAttribute(llvm::MCSymbol *Symbol,
+  virtual bool emitSymbolAttribute(llvm::MCSymbol *Symbol,
                            llvm::MCSymbolAttr Attribute) override {
     return true;
   }
 
-  void emitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size,
-                        Align ByteAlignment) override {}
 
+  virtual void emitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size,
+				unsigned ByteAlignment) override {}
                 
-  void emitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol = nullptr,
-                    uint64_t Size = 0, Align ByteAlignment = Align(1),
-                    llvm::SMLoc Loc = llvm::SMLoc()) override {}
+  virtual void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
+                            uint64_t Size = 0, unsigned ByteAlignment = 0,
+                            SMLoc Loc = llvm::SMLoc()) override {}
 
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
     // Assuming the first label encountered is the function's name
