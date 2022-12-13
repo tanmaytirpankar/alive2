@@ -3756,9 +3756,11 @@ public:
   }
 
   void emitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size,
-                        unsigned ByteAlignment) override {}
+                        Align ByteAlignment) override {}
+
+                
   void emitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol = nullptr,
-                    uint64_t Size = 0, unsigned ByteAlignment = 0,
+                    uint64_t Size = 0, Align ByteAlignment = Align(1),
                     llvm::SMLoc Loc = llvm::SMLoc()) override {}
 
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
@@ -4343,7 +4345,8 @@ bool backendTV() {
   }
   llvm::TargetOptions Opt;
   const char *CPU = "apple-a12";
-  auto RM = llvm::Optional<llvm::Reloc::Model>();
+  //auto RM = llvm::Optional<llvm::Reloc::Model>();
+  auto RM = std::optional<Reloc::Model>();
   std::unique_ptr<llvm::TargetMachine> TM(
       Target->createTargetMachine(TripleName, CPU, "", Opt, RM));
   llvm::SmallString<1024> Asm;
