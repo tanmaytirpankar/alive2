@@ -2,6 +2,7 @@
 // Distributed under the MIT license that can be found in the LICENSE file.
 
 #include "llvm/MC/MCAsmInfo.h" // include first to avoid ambiguity for comparison operator from util/spaceship.h
+
 #include "cache/cache.h"
 #include "ir/instr.h"
 #include "ir/type.h"
@@ -12,6 +13,7 @@
 #include "tools/transform.h"
 #include "util/sort.h"
 #include "util/version.h"
+#include "backend_tv/mc.h"
 
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseSet.h"
@@ -29,6 +31,7 @@
 #include "llvm/InitializePasses.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstBuilder.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCInstrAnalysis.h"
@@ -312,43 +315,6 @@ unsigned num_correct = 0;
 unsigned num_unsound = 0;
 unsigned num_failed = 0;
 unsigned num_errors = 0;
-
-struct MCOperandHash {
-
-  enum Kind {
-    reg = (1 << 2) - 1,
-    immedidate = (1 << 3) - 1,
-    symbol = (1 << 4) - 1
-  };
-
-  size_t operator()(const MCOperand &op) const {
-    unsigned prefix;
-    unsigned id;
-
-    if (op.isReg()) {
-      prefix = Kind::reg;
-      id = op.getReg();
-    } else if (op.isImm()) {
-      prefix = Kind::immedidate;
-      id = op.getImm();
-    } else if (op.isExpr()) {
-      prefix = Kind::symbol;
-      auto expr = op.getExpr();
-      if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
-        const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*expr);
-        const MCSymbol &Sym = SRE.getSymbol();
-        errs() << "label : " << Sym.getName() << '\n'; // FIXME remove when done
-        id = Sym.getOffset();
-      } else {
-        assert("unsupported mcExpr" && false);
-      }
-    } else {
-      assert("no" && false);
-    }
-
-    return std::hash<unsigned long>()(prefix * id);
-  }
-};
 
 struct MCOperandEqual {
   enum Kind { reg = (1 << 2) - 1, immedidate = (1 << 3) - 1 };

@@ -214,9 +214,14 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
     "llvm_util/utils.cpp"
   )
 
+  set(BACKEND_TV_SRCS
+    "backend_tv/mc.cpp"
+  )
+
   add_library(llvm_util STATIC ${LLVM_UTIL_SRCS})
-  set(ALIVE_LIBS_LLVM llvm_util ${ALIVE_LIBS})
-  set(ALIVE_EXEC_LIBS_LLVM llvm_util ${ALIVE_EXEC_LIBS})
+  add_library(backend_tv STATIC ${BACKEND_TV_SRCS})
+  set(ALIVE_LIBS_LLVM llvm_util backend_tv ${ALIVE_LIBS})
+  set(ALIVE_EXEC_LIBS_LLVM llvm_util backend_tv ${ALIVE_EXEC_LIBS})
 
   add_llvm_executable(alive-tv
     "tools/alive-tv.cpp"
@@ -236,6 +241,7 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
 
 else()
   set(LLVM_UTIL_SRCS "")
+  set(BAKEND_TV_SRCS "")
 endif()
 
 if (BUILD_TV)
