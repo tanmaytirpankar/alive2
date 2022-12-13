@@ -113,6 +113,7 @@ public:
   bool isVar() const;
   bool isBV() const;
   bool isBool() const;
+  bool isFloat() const;
   bool isTrue() const;
   bool isFalse() const;
   bool isZero() const;
@@ -147,6 +148,7 @@ public:
   bool isFPMul(expr &rounding, expr &lhs, expr &rhs) const;
   bool isFPDiv(expr &rounding, expr &lhs, expr &rhs) const;
   bool isFPNeg(expr &neg) const;
+  bool isFAbs(expr &val) const;
   bool isIsFPZero() const;
   bool isNaNCheck(expr &fp) const;
   bool isfloat2BV(expr &fp) const;
@@ -232,6 +234,7 @@ public:
   expr fdiv(const expr &rhs, const expr &rm) const;
   expr fabs() const;
   expr fneg() const;
+  expr copysign(const expr &sign) const;
   expr sqrt(const expr &rm) const;
 
   static expr fma(const expr &a, const expr &b, const expr &c, const expr &rm);

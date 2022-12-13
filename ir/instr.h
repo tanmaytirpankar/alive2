@@ -39,7 +39,8 @@ public:
             SAdd_Overflow, UAdd_Overflow, SSub_Overflow, USub_Overflow,
             SMul_Overflow, UMul_Overflow,
             And, Or, Xor, Cttz, Ctlz, UMin, UMax, SMin, SMax, Abs };
-  enum Flags { None = 0, NSW = 1 << 0, NUW = 1 << 1, Exact = 1 << 2 };
+  enum Flags { None = 0, NSW = 1 << 0, NUW = 1 << 1, Exact = 1 << 2,
+               NoUndef = 1 << 3 };
 
 private:
   Value *lhs, *rhs;
@@ -124,7 +125,8 @@ public:
 class FpUnaryOp final : public Instr {
 public:
   enum Op {
-    FAbs, FNeg, Ceil, Floor, RInt, NearbyInt, Round, RoundEven, Trunc, Sqrt
+    FAbs, FNeg, Canonicalize, Ceil, Floor, RInt, NearbyInt, Round, RoundEven,
+    Trunc, Sqrt
   };
 
 private:
