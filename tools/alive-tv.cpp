@@ -1402,7 +1402,7 @@ static IR::Type *sadd_overflow_type(MCOperand op, int size) {
     elems.push_back(add_ov_ty);
     elems.push_back(padding_ty);
     st = make_unique<IR::StructType>("ty_" + to_string(type_id_counter++),
-                                     move(elems), move(is_padding));
+                                     std::move(elems), std::move(is_padding));
   }
   return st.get();
 }
@@ -1933,7 +1933,7 @@ class arm2alive_ {
     auto instr = make_unique<_Tp>(std::forward<_Args>(__args)...);
     auto ret = instr.get();
 
-    BB->addInstr(move(instr));
+    BB->addInstr(std::move(instr));
 
     return ret;
   }
@@ -3475,7 +3475,7 @@ public:
       ss << "\%" << registerInfo->getName(operand.getReg());
       IR::ParamAttrs attrs(input_ptr->getAttributes());
 
-      auto val = make_unique<IR::Input>(typ, ss.str(), move(attrs));
+      auto val = make_unique<IR::Input>(typ, ss.str(), std::move(attrs));
       IR::Value *stored = val.get();
 
       stored =
@@ -3538,7 +3538,7 @@ public:
       }
       instructionCount++;
       mc_add_identifier(operand.getReg(), 2, *stored);
-      Fn.addInput(move(val));
+      Fn.addInput(std::move(val));
       argNum++;
     }
 
@@ -3646,7 +3646,7 @@ public:
       tmp_index++;
       add_phi_params(phi, phi_mc_wrapper);
     }
-    return move(Fn);
+    return std::move(Fn);
   }
 };
 
@@ -4106,8 +4106,8 @@ Results backend_verify(std::optional<IR::Function> &fn1,
                        bool print_transform = false,
                        bool always_verify = false) {
   Results r;
-  r.t.src = move(*fn1);
-  r.t.tgt = move(*fn2);
+  r.t.src = std::move(*fn1);
+  r.t.tgt = std::move(*fn2);
 
   if (!always_verify) {
     stringstream ss1, ss2;
@@ -4187,7 +4187,7 @@ void adjustSrcInputs(std::optional<IR::Function> &srcFn) {
         *new_inputs[i].get(), IR::ConversionOp::Trunc);
     srcFn->rauw(srcFn->getInput(new_input_idx_bitwidth[i].first), *new_ir);
     srcFn->getFirstBB().addInstr(std::move(new_ir), true);
-    srcFn->addInputAt(move(new_inputs[i]), new_input_idx_bitwidth[i].first);
+    srcFn->addInputAt(std::move(new_inputs[i]), new_input_idx_bitwidth[i].first);
   }
 
   // cout << "After adjusting inputs:\n";
