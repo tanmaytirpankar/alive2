@@ -296,6 +296,7 @@ void BinOp::print(ostream &os) const {
     os << ", !noundef";
 }
 
+
 static void div_ub(State &s, const expr &a, const expr &b, const expr &ap,
                    const expr &bp, bool sign) {
   // addUB(bp) is not needed because it is registered by getAndAddPoisonUB.
@@ -304,6 +305,7 @@ static void div_ub(State &s, const expr &a, const expr &b, const expr &ap,
   if (sign)
     s.addUB((ap && a != expr::IntSMin(b.bits())) || b != expr::mkInt(-1, b));
 }
+
 
 StateValue BinOp::toSMT(State &s) const {
   bool vertical_zip = false;
@@ -689,6 +691,7 @@ bool BinOp::isDivOrRem() const {
 vector<Value*> FpBinOp::operands() const {
   return { lhs, rhs };
 }
+
 
 bool FpBinOp::propagatesPoison() const {
   return true;
@@ -1502,6 +1505,7 @@ unique_ptr<Instr> FpTernaryOp::dup(Function &f, const string &suffix) const {
 vector<Value*> TestOp::operands() const {
   return { lhs, rhs };
 }
+
 
 bool TestOp::propagatesPoison() const {
   return true;

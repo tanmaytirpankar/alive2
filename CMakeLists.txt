@@ -182,7 +182,6 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
   include_directories(${LLVM_INCLUDE_DIRS})
   include_directories(${LLVM_BINARY_DIR}/lib)
 
-
   add_definitions(${LLVM_DEFINITIONS})
 
   set(LLVM_UTIL_SRCS
@@ -211,7 +210,7 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
 
 else()
   set(LLVM_UTIL_SRCS "")
-  set(BAKEND_TV_SRCS "")
+  set(BACKEND_TV_SRCS "")
 endif()
 
 if (BUILD_TV)
