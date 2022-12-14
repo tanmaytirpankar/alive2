@@ -1,4 +1,5 @@
-#include "llvm/MC/MCAsmInfo.h" // include first to avoid ambiguity for comparison operator from util/spaceship.h
+// include first to avoid ambiguity for comparison operator from util/spaceship.h
+#include "llvm/MC/MCAsmInfo.h"
 
 #include "cache/cache.h"
 #include "ir/instr.h"
@@ -76,12 +77,7 @@ using namespace std;
 using namespace llvm_util;
 using namespace llvm;
 
-#if 0
-#define LLVM_ARGS_PREFIX ""
-#define ARGS_SRC_TGT
-#define ARGS_REFINEMENT
-#include "llvm_util/cmd_args_list.h"
-#endif
+namespace {
 
 set<int> s_flag = {
     // ADDSW
@@ -381,6 +377,7 @@ public:
 };
 
 // utility function
+[[maybe_unused]]
 bool isIntegerRegister(const MCOperand &op) {
   if (!op.isReg())
     return false;
@@ -1200,6 +1197,7 @@ void mc_add_identifier(unsigned reg, unsigned version, IR::Value &v) {
   mc_cache.emplace(std::make_pair(reg, version), &v);
 }
 
+[[maybe_unused]]
 void mc_replace_identifier(unsigned reg, unsigned version, IR::Value &v) {
   mc_cache[std::make_pair(reg,version)] = &v;
 }
@@ -1266,6 +1264,7 @@ llvm::APInt replicate(llvm::APInt bits, unsigned N) {
 // Decode AArch64 bitfield and logical immediate masks which use a similar
 // encoding structure
 // TODO: this is super broken
+[[maybe_unused]]
 std::tuple<llvm::APInt, llvm::APInt> decode_bit_mask(bool immNBit,
                                                      uint32_t _imms,
                                                      uint32_t _immr,
@@ -3821,6 +3820,7 @@ public:
 };
 
 // Return variables that are read before being written in the basic block
+[[maybe_unused]]
 auto FindReadBeforeWritten(std::vector<MCInst> &instrs,
                            llvm::MCInstrAnalysis *Ana_ptr) {
   std::unordered_set<MCOperand, MCOperandHash, MCOperandEqual> reads;
@@ -3842,6 +3842,7 @@ auto FindReadBeforeWritten(std::vector<MCInst> &instrs,
 }
 
 // Return variable that are read before being written in the basicblock
+[[maybe_unused]]
 auto FindReadBeforeWritten(MCBasicBlock &block,
                            llvm::MCInstrAnalysis *Ana_ptr) {
   auto mcInstrs = block.getInstrs();
@@ -3979,6 +3980,8 @@ void adjustSrcReturn(IR::Function &srcFn) {
     }
   }
 }
+
+} // namespace
 
 optional<IR::Function> lift_func(Module &M, bool asm_input, string opt_file2,
                                  bool opt_asm_only, IR::Function &AF) {
