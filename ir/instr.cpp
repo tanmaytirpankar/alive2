@@ -245,6 +245,7 @@ void BinOp::rauw(const Value &what, Value &with) {
   RAUW(rhs);
 }
 
+
 void BinOp::print(ostream &os) const {
   const char *str = nullptr;
   switch (op) {

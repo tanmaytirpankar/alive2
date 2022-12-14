@@ -142,32 +142,10 @@ set(UTIL_SRCS
   util/version.cpp
 )
 
-set(UTIL_EXEC_SRCS
-  "${PROJECT_BINARY_DIR}/version_gen.h"
-  util/version.cpp
-  util/compiler.cpp
-  util/config.cpp
-  util/errors.cpp
-  util/file.cpp
-  util/parallel.cpp
-  util/parallel_fifo.cpp
-  util/parallel_null.cpp
-  util/parallel_unrestricted.cpp
-  util/random.cpp
-  util/sort.cpp
-  util/stopwatch.cpp
-  util/unionfind.cpp
-  util/version.cpp
-)
-
 add_library(util STATIC ${UTIL_SRCS})
 add_dependencies(util generate_version)
 
-add_library(util_exec STATIC ${UTIL_EXEC_SRCS})
-add_dependencies(util_exec generate_version)
-
 set(ALIVE_LIBS ir smt tools util)
-set(ALIVE_EXEC_LIBS ir smt tools util_exec)
 
 find_package(hiredis)
 if (HIREDIS_LIBRARIES)
@@ -230,14 +208,6 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
   add_llvm_executable(alive-exec
     "tools/alive-exec.cpp"
   )
-
-  #add_llvm_executable(alive-exec-concrete
-  #  "tools/alive-exec-concrete.cpp"
-  #)
-
-  #add_llvm_executable(alive-interp
-  #  "tools/alive-interp.cpp"
-  #)
 
 else()
   set(LLVM_UTIL_SRCS "")

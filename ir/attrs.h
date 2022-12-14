@@ -118,7 +118,6 @@ class FnAttrs final {
   uint8_t allockind = 0;
 
 public:
-
   enum Attribute { None = 0, NNaN = 1 << 0, NoReturn = 1 << 1,
                    Dereferenceable = 1 << 2, NonNull = 1 << 3,
                    NoFree = 1 << 4, NoUndef = 1 << 5, Align = 1 << 6,
