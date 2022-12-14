@@ -175,7 +175,7 @@ struct MCOperandHash {
     symbol = (1 << 4) - 1
   };
 
-  size_t operator()(const llvm::MCOperand &op) const;
+  size_t operator()(const MCOperand &op) const;
 };
 
 size_t MCOperandHash::operator()(const MCOperand &op) const {
@@ -203,24 +203,24 @@ size_t MCOperandHash::operator()(const MCOperand &op) const {
     assert("no" && false);
   }
 
-  return std::hash<unsigned long>()(prefix * id);
+  return hash<unsigned long>()(prefix * id);
 }
 
-llvm::mc::RegisterMCTargetOptionsFlags MOF;
+mc::RegisterMCTargetOptionsFlags MOF;
 
 class MCInstWrapper {
 private:
-  llvm::MCInst instr;
-  std::vector<unsigned> op_ids;
-  std::map<unsigned, std::string>
+  MCInst instr;
+  vector<unsigned> op_ids;
+  map<unsigned, string>
       phi_blocks; // This is pretty wasteful but I'm not sure how to add
                   // MCExpr operands to the underlying MCInst phi instructions
 public:
-  MCInstWrapper(llvm::MCInst _instr) : instr(_instr) {
+  MCInstWrapper(MCInst _instr) : instr(_instr) {
     op_ids.resize(instr.getNumOperands(), 0);
   }
 
-  llvm::MCInst &getMCInst() {
+  MCInst &getMCInst() {
     return instr;
   }
 
@@ -238,11 +238,11 @@ public:
     return op_ids[index];
   }
 
-  void setOpPhiBlock(unsigned index, const std::string &block_name) {
+  void setOpPhiBlock(unsigned index, const string &block_name) {
     phi_blocks[index] = block_name;
   }
 
-  const std::string &getOpPhiBlock(unsigned index) const {
+  const string &getOpPhiBlock(unsigned index) const {
     return phi_blocks.at(index);
   }
 
@@ -250,7 +250,7 @@ public:
     return instr.getOpcode();
   }
 
-  std::string findTargetLabel() {
+  string findTargetLabel() {
     auto num_operands = instr.getNumOperands();
     for (unsigned i = 0; i < num_operands; ++i) {
       auto op = instr.getOperand(i);
@@ -297,17 +297,17 @@ public:
 // Represents a basic block of machine instructions
 class MCBasicBlock {
 private:
-  std::string name;
-  using SetTy = llvm::SetVector<MCBasicBlock *>;
-  std::vector<MCInstWrapper> Instrs;
+  string name;
+  using SetTy = SetVector<MCBasicBlock *>;
+  vector<MCInstWrapper> Instrs;
   SetTy Succs;
   SetTy Preds;
 
 public:
-  MCBasicBlock(std::string _name) : name(_name) {}
+  MCBasicBlock(string _name) : name(_name) {}
   // MCBasicBlock(const MCBasicBlock&) =delete;
 
-  const std::string &getName() const {
+  const string &getName() const {
     return name;
   }
 
@@ -380,8 +380,8 @@ public:
 }
 
 // hacky way of returning supported volatile registers
-std::vector<unsigned> volatileRegisters() {
-  std::vector<unsigned> res;
+vector<unsigned> volatileRegisters() {
+  vector<unsigned> res;
   // integer registers
   for (unsigned int i = AArch64::X0; i <= AArch64::X17; ++i) {
     res.push_back(i);
@@ -397,54 +397,54 @@ std::vector<unsigned> volatileRegisters() {
 
 // Represents a machine function
 class MCFunction {
-  std::string name;
+  string name;
   unsigned label_cnt{0};
-  using BlockSetTy = llvm::SetVector<MCBasicBlock *>;
-  std::unordered_map<MCBasicBlock *, BlockSetTy> dom;
-  std::unordered_map<MCBasicBlock *, BlockSetTy> dom_frontier;
-  std::unordered_map<MCBasicBlock *, BlockSetTy> dom_tree;
+  using BlockSetTy = SetVector<MCBasicBlock *>;
+  unordered_map<MCBasicBlock *, BlockSetTy> dom;
+  unordered_map<MCBasicBlock *, BlockSetTy> dom_frontier;
+  unordered_map<MCBasicBlock *, BlockSetTy> dom_tree;
 
-  std::unordered_map<MCOperand, BlockSetTy, MCOperandHash, MCOperandEqual> defs;
-  std::unordered_map<
+  unordered_map<MCOperand, BlockSetTy, MCOperandHash, MCOperandEqual> defs;
+  unordered_map<
       MCBasicBlock *,
-      std::unordered_set<MCOperand, MCOperandHash, MCOperandEqual>>
+      unordered_set<MCOperand, MCOperandHash, MCOperandEqual>>
       phis; // map from block to variable names that need phi-nodes in those
             // blocks
-  std::unordered_map<
+  unordered_map<
       MCBasicBlock *,
-      std::unordered_map<MCOperand,
-                         std::vector<std::pair<unsigned, std::string>>,
+      unordered_map<MCOperand,
+                         vector<pair<unsigned, string>>,
                          MCOperandHash, MCOperandEqual>>
       phi_args;
-  std::vector<MCOperand> fn_args;
+  vector<MCOperand> fn_args;
 
 public:
-  llvm::MCInstrAnalysis *Ana_ptr;
-  llvm::MCInstPrinter *IP_ptr;
-  llvm::MCRegisterInfo *MRI_ptr;
-  std::vector<MCBasicBlock> BBs;
-  std::unordered_map<MCBasicBlock *, BlockSetTy> dom_tree_inv;
+  MCInstrAnalysis *Ana_ptr;
+  MCInstPrinter *IP_ptr;
+  MCRegisterInfo *MRI_ptr;
+  vector<MCBasicBlock> BBs;
+  unordered_map<MCBasicBlock *, BlockSetTy> dom_tree_inv;
 
   MCFunction() {}
-  MCFunction(std::string _name) : name(_name) {}
+  MCFunction(string _name) : name(_name) {}
 
-  void setName(std::string _name) {
+  void setName(string _name) {
     name = _name;
   }
 
-  MCBasicBlock *addBlock(std::string b_name) {
+  MCBasicBlock *addBlock(string b_name) {
     return &BBs.emplace_back(b_name);
   }
 
-  std::string getName() {
+  string getName() {
     return name;
   }
 
-  std::string getLabel() {
-    return name + std::to_string(++label_cnt);
+  string getLabel() {
+    return name + to_string(++label_cnt);
   }
 
-  MCBasicBlock *findBlockByName(std::string b_name) {
+  MCBasicBlock *findBlockByName(string b_name) {
     for (auto &bb : BBs) {
       if (bb.getName() == b_name) {
         return &bb;
@@ -475,7 +475,7 @@ public:
       auto &last_mc_instr = cur_bb.getInstrs().back();
       if (Ana_ptr->isConditionalBranch(last_mc_instr.getMCInst()) ||
           Ana_ptr->isUnconditionalBranch(last_mc_instr.getMCInst())) {
-        std::string target = last_mc_instr.findTargetLabel();
+        string target = last_mc_instr.findTargetLabel();
         if (target == first_block.getName()) {
           add_entry_block = true;
           break;
@@ -496,18 +496,18 @@ public:
   }
 
   void postOrderDFS(MCBasicBlock &curBlock, BlockSetTy &visited,
-                    std::vector<MCBasicBlock *> &postOrder) {
+                    vector<MCBasicBlock *> &postOrder) {
     visited.insert(&curBlock);
     for (auto succ : curBlock.getSuccs()) {
-      if (std::find(visited.begin(), visited.end(), succ) == visited.end()) {
+      if (find(visited.begin(), visited.end(), succ) == visited.end()) {
         postOrderDFS(*succ, visited, postOrder);
       }
     }
     postOrder.push_back(&curBlock);
   }
 
-  std::vector<MCBasicBlock *> postOrder() {
-    std::vector<MCBasicBlock *> postOrder;
+  vector<MCBasicBlock *> postOrder() {
+    vector<MCBasicBlock *> postOrder;
     BlockSetTy visited;
     for (auto &curBlock : BBs) {
       if (visited.count(&curBlock) == 0) {
@@ -520,7 +520,7 @@ public:
   // compute the domination relation
   void generateDominator() {
     auto blocks = postOrder();
-    std::reverse(blocks.begin(), blocks.end());
+    reverse(blocks.begin(), blocks.end());
     cout << "postOrder\n";
     for (auto &curBlock : blocks) {
       cout << curBlock->getName() << "\n";
@@ -560,14 +560,12 @@ public:
       dom_frontier[block] = BlockSetTy();
       for (auto &dominated : dominates[block]) {
         auto &temp_succs = dominated->getSuccs();
-        for (auto &elem : temp_succs) {
+        for (auto &elem : temp_succs)
           dominated_succs.insert(elem);
-        }
 
         for (auto &b : dominated_succs) {
-          if (b == block || dominates[block].count(b) == 0) {
+          if (b == block || dominates[block].count(b) == 0)
             dom_frontier[block].insert(b);
-          }
         }
       }
     }
@@ -581,7 +579,7 @@ public:
     cout << "printing dom_inverse\n";
     printGraph(dominates);
     cout << "-----------------\n";
-    std::unordered_map<MCBasicBlock *, BlockSetTy> s_dom;
+    unordered_map<MCBasicBlock *, BlockSetTy> s_dom;
     for (auto &[block, children] : dominates) {
       s_dom[block] = BlockSetTy();
       for (auto &child : children) {
@@ -591,7 +589,7 @@ public:
       }
     }
 
-    std::unordered_map<MCBasicBlock *, BlockSetTy> child_dom;
+    unordered_map<MCBasicBlock *, BlockSetTy> child_dom;
 
     for (auto &[block, children] : s_dom) {
       child_dom[block] = BlockSetTy();
@@ -688,7 +686,7 @@ public:
           if (phis[block_ptr].count(var) == 0) {
             phis[block_ptr].insert(var);
 
-            if (std::find(block_list.begin(), block_list.end(), block_ptr) ==
+            if (find(block_list.begin(), block_list.end(), block_ptr) ==
                 block_list.end()) {
               block_list.push_back(block_ptr);
             }
@@ -762,10 +760,10 @@ public:
                    !(op.getReg() == AArch64::SP)) {
           // temporarily fix to print the name of unsupported register when
           // encountered
-          std::string buff;
+          string buff;
           raw_string_ostream str_stream(buff);
           op.print(str_stream, MRI_ptr);
-          std::stringstream error_msg;
+          stringstream error_msg;
           error_msg << "Unsupported registers detected in the Assembly: "
                     << str_stream.str();
           report_fatal_error(error_msg.str().c_str());
@@ -798,16 +796,16 @@ public:
   }
 
   void ssaRename() {
-    std::unordered_map<MCOperand, std::vector<unsigned>, MCOperandHash,
+    unordered_map<MCOperand, vector<unsigned>, MCOperandHash,
                        MCOperandEqual>
         stack;
-    std::unordered_map<MCOperand, unsigned, MCOperandHash, MCOperandEqual>
+    unordered_map<MCOperand, unsigned, MCOperandHash, MCOperandEqual>
         counters;
 
     cout << "SSA rename\n";
 
-    // auto printStack = [&](std::unordered_map<MCOperand,
-    // std::vector<unsigned>,
+    // auto printStack = [&](unordered_map<MCOperand,
+    // vector<unsigned>,
     //                                          MCOperandHash, MCOperandEqual>
     //                           s) {
     //   for (auto &[var, stack_vec] : s) {
@@ -832,7 +830,7 @@ public:
       return fresh_id;
     };
 
-    std::function<void(MCBasicBlock *)> rename;
+    function<void(MCBasicBlock *)> rename;
     rename = [&](MCBasicBlock *block) {
       auto old_stack = stack;
       cout << "renaming block: " << block->getName() << "\n";
@@ -929,12 +927,12 @@ public:
 
           if (phi_args[s_block].find(phi_var) == phi_args[s_block].end()) {
             phi_args[s_block][phi_var] =
-                std::vector<std::pair<unsigned, std::string>>();
+                vector<pair<unsigned, string>>();
           }
           errs() << "phi_arg[" << s_block->getName() << "][" << phi_var.getReg()
                  << "]=" << stack[phi_var][0] << "\n";
           phi_args[s_block][phi_var].push_back(
-              std::make_pair(stack[phi_var][0], block->getName()));
+              make_pair(stack[phi_var][0], block->getName()));
         }
       }
 
@@ -950,7 +948,7 @@ public:
     entry_block_ptr->getInstrs()[0].print();
 
     for (auto &arg : fn_args) {
-      stack[arg] = std::vector<unsigned>();
+      stack[arg] = vector<unsigned>();
       pushFresh(arg);
     }
 
@@ -970,14 +968,14 @@ public:
       if (!found_reg) {
         cout << "adding volatile: " << reg_num << "\n";
         auto vol_reg = MCOperand::createReg(reg_num);
-        stack[vol_reg] = std::vector<unsigned>();
+        stack[vol_reg] = vector<unsigned>();
         pushFresh(vol_reg);
       }
     }
 
     // add SP to the stack
     auto sp_reg = MCOperand::createReg(AArch64::SP);
-    stack[sp_reg] = std::vector<unsigned>();
+    stack[sp_reg] = vector<unsigned>();
     pushFresh(sp_reg);
 
     rename(entry_block_ptr);
@@ -1028,7 +1026,7 @@ public:
 
   // helper function to compute the intersection of predecessor dominator sets
   BlockSetTy intersect(BlockSetTy &preds,
-                       std::unordered_map<MCBasicBlock *, BlockSetTy> &dom) {
+                       unordered_map<MCBasicBlock *, BlockSetTy> &dom) {
     BlockSetTy ret;
     if (preds.size() == 0) {
       return ret;
@@ -1052,9 +1050,9 @@ public:
   }
 
   // helper function to invert a graph
-  std::unordered_map<MCBasicBlock *, BlockSetTy>
-  invertGraph(std::unordered_map<MCBasicBlock *, BlockSetTy> &graph) {
-    std::unordered_map<MCBasicBlock *, BlockSetTy> res;
+  unordered_map<MCBasicBlock *, BlockSetTy>
+  invertGraph(unordered_map<MCBasicBlock *, BlockSetTy> &graph) {
+    unordered_map<MCBasicBlock *, BlockSetTy> res;
     for (auto &curBlock : graph) {
       for (auto &succ : curBlock.second) {
         res[succ].insert(curBlock.first);
@@ -1064,7 +1062,7 @@ public:
   }
 
   // Debug function to print domination info
-  void printGraph(std::unordered_map<MCBasicBlock *, BlockSetTy> &graph) {
+  void printGraph(unordered_map<MCBasicBlock *, BlockSetTy> &graph) {
     for (auto &curBlock : graph) {
       cout << curBlock.first->getName() << ": ";
       for (auto &dst : curBlock.second) {
@@ -1081,7 +1079,7 @@ public:
     for (auto &block : BBs) {
       errs() << "block " << i << ", name= " << block.getName() << '\n';
       for (auto &inst : block.getInstrs()) {
-        inst.getMCInst().dump_pretty(llvm::errs(), IP_ptr, " ", MRI_ptr);
+        inst.getMCInst().dump_pretty(errs(), IP_ptr, " ", MRI_ptr);
         errs() << '\n';
       }
       i++;
@@ -1090,12 +1088,12 @@ public:
 };
 
 // Some variables that we need to maintain as we're performing arm-tv
-std::map<std::pair<unsigned, unsigned>, IR::Value *> mc_cache;
-std::unordered_map<MCOperand, unique_ptr<IR::StructType>, MCOperandHash,
+map<pair<unsigned, unsigned>, IR::Value *> mc_cache;
+unordered_map<MCOperand, unique_ptr<IR::StructType>, MCOperandHash,
                    MCOperandEqual>
     overflow_aggregate_types;
-std::vector<unique_ptr<IR::VectorType>> lifted_vector_types;
-std::vector<unique_ptr<IR::PtrType>> lifted_ptr_types;
+vector<unique_ptr<IR::VectorType>> lifted_vector_types;
+vector<unique_ptr<IR::PtrType>> lifted_ptr_types;
 unsigned type_id_counter{0};
 
 IR::Type *get_vector_type(unsigned elements, IR::Type &elementTy) {
@@ -1123,7 +1121,7 @@ IR::Type *get_vector_type(unsigned elements, IR::Type &elementTy) {
 
 // Keep track of which oprands had their type adjusted and their original
 // bitwidth
-std::vector<std::pair<unsigned, unsigned>> new_input_idx_bitwidth;
+vector<pair<unsigned, unsigned>> new_input_idx_bitwidth;
 unsigned int original_ret_bitwidth{64};
 bool has_ret_attr{false};
 
@@ -1174,23 +1172,23 @@ IR::Type *sadd_overflow_type(MCOperand op, int size) {
 //     elems.push_back(add_ov_ty);
 //     elems.push_back(padding_ty);
 //     st = make_unique<IR::StructType>("ty_" + to_string(type_id_counter++),
-//                                  move(elems), move(is_padding));
+//                                  std::move(elems), std::move(is_padding));
 //   }
 //   return st.get();
 // }
 
 // Add IR value to cache
 void mc_add_identifier(unsigned reg, unsigned version, IR::Value &v) {
-  mc_cache.emplace(std::make_pair(reg, version), &v);
+  mc_cache.emplace(make_pair(reg, version), &v);
 }
 
 [[maybe_unused]] void mc_replace_identifier(unsigned reg, unsigned version,
                                             IR::Value &v) {
-  mc_cache[std::make_pair(reg, version)] = &v;
+  mc_cache[make_pair(reg, version)] = &v;
 }
 
 IR::Value *mc_get_operand(unsigned reg, unsigned version) {
-  if (auto I = mc_cache.find(std::make_pair(reg, version)); I != mc_cache.end())
+  if (auto I = mc_cache.find(make_pair(reg, version)); I != mc_cache.end())
     return I->second;
   return nullptr;
 }
@@ -1212,7 +1210,7 @@ uint64_t decodeLogicalImmediate(uint64_t val, unsigned regSize) {
   unsigned imms = val & 0x3f;
 
   assert((regSize == 64 || N == 0) && "undefined logical immediate encoding");
-  int len = 31 - llvm::countLeadingZeros((N << 6) | (~imms & 0x3f));
+  int len = 31 - countLeadingZeros((N << 6) | (~imms & 0x3f));
   assert(len >= 0 && "undefined logical immediate encoding");
   unsigned size = (1 << len);
   unsigned R = immr & (size - 1);
@@ -1235,11 +1233,11 @@ uint64_t decodeLogicalImmediate(uint64_t val, unsigned regSize) {
 // of size M, and duplicates it N times, returning a bit-vector of size M*N
 // reference:
 // https://developer.arm.com/documentation/ddi0596/2020-12/Shared-Pseudocode/Shared-Functions?lang=en#impl-shared.Replicate.2
-llvm::APInt replicate(llvm::APInt bits, unsigned N) {
+APInt replicate(APInt bits, unsigned N) {
   auto bitsWidth = bits.getBitWidth();
 
-  auto newInt = llvm::APInt(bitsWidth * N, 0);
-  auto mask = llvm::APInt(bitsWidth * N, bits.getZExtValue());
+  auto newInt = APInt(bitsWidth * N, 0);
+  auto mask = APInt(bitsWidth * N, bits.getZExtValue());
   for (size_t i = 0; i < N; i++) {
     newInt |= (mask << (bitsWidth * i));
   }
@@ -1251,11 +1249,11 @@ llvm::APInt replicate(llvm::APInt bits, unsigned N) {
 // Decode AArch64 bitfield and logical immediate masks which use a similar
 // encoding structure
 // TODO: this is super broken
-[[maybe_unused]] std::tuple<llvm::APInt, llvm::APInt>
+[[maybe_unused]] tuple<APInt, APInt>
 decode_bit_mask(bool immNBit, uint32_t _imms, uint32_t _immr, bool immediate,
                 int M) {
-  llvm::APInt imms(6, _imms);
-  llvm::APInt immr(6, _immr);
+  APInt imms(6, _imms);
+  APInt immr(6, _immr);
 
   auto notImm = APInt(6, _imms);
   notImm.flipAllBits();
@@ -1267,7 +1265,7 @@ decode_bit_mask(bool immNBit, uint32_t _imms, uint32_t _immr, bool immediate,
   assert(len >= 1);
   assert(M >= (1 << len));
 
-  auto levels = llvm::APInt::getAllOnes(len).zext(6);
+  auto levels = APInt::getAllOnes(len).zext(6);
 
   auto S = (imms & levels);
   auto R = (immr & levels);
@@ -1275,11 +1273,11 @@ decode_bit_mask(bool immNBit, uint32_t _imms, uint32_t _immr, bool immediate,
   auto diff = S - R;
 
   auto esize = (1 << len);
-  auto d = llvm::APInt(len - 1, diff.getZExtValue());
+  auto d = APInt(len - 1, diff.getZExtValue());
 
   auto welem =
-      llvm::APInt::getAllOnes(S.getZExtValue() + 1).zext(esize).rotr(R);
-  auto telem = llvm::APInt::getAllOnes(d.getZExtValue() + 1).zext(esize);
+      APInt::getAllOnes(S.getZExtValue() + 1).zext(esize).rotr(R);
+  auto telem = APInt::getAllOnes(d.getZExtValue() + 1).zext(esize);
 
   auto wmask = replicate(welem, esize);
   auto tmask = replicate(telem, esize);
@@ -1288,14 +1286,14 @@ decode_bit_mask(bool immNBit, uint32_t _imms, uint32_t _immr, bool immediate,
 }
 
 // Values currently holding ZNCV bits, for each basicblock respectively
-std::unordered_map<MCBasicBlock *, IR::Value *> cur_vs;
-std::unordered_map<MCBasicBlock *, IR::Value *> cur_zs;
-std::unordered_map<MCBasicBlock *, IR::Value *> cur_ns;
-std::unordered_map<MCBasicBlock *, IR::Value *> cur_cs;
+unordered_map<MCBasicBlock *, IR::Value *> cur_vs;
+unordered_map<MCBasicBlock *, IR::Value *> cur_zs;
+unordered_map<MCBasicBlock *, IR::Value *> cur_ns;
+unordered_map<MCBasicBlock *, IR::Value *> cur_cs;
 
 // Values currently holding the latest definition for a volatile register, for
 // each basic block currently used by vector instructions only
-std::unordered_map<MCBasicBlock *, std::unordered_map<unsigned, IR::Value *>>
+unordered_map<MCBasicBlock *, unordered_map<unsigned, IR::Value *>>
     cur_vol_regs;
 
 IR::BasicBlock *get_basic_block(IR::Function &f, MCOperand &jmp_tgt) {
@@ -1309,17 +1307,17 @@ IR::BasicBlock *get_basic_block(IR::Function &f, MCOperand &jmp_tgt) {
   return target_bb;
 }
 
-class arm2alive_ {
+class arm2llvm_ {
   MCFunction &MF;
-  // const llvm::DataLayout &DL;
+  // const DataLayout &DL;
   IR::Function &srcFn;
-  IR::BasicBlock *BB; // the current block
   MCBasicBlock *MCBB; // the current machine block
   unsigned blockCount{0};
+  IR::BasicBlock *BB; // the current block
 
   MCInstPrinter *instrPrinter;
   MCRegisterInfo *registerInfo;
-  std::vector<std::pair<IR::Phi *, MCInstWrapper *>> lift_todo_phis;
+  vector<pair<IR::Phi *, MCInstWrapper *>> lift_todo_phis;
 
   MCInstWrapper *wrapper{nullptr};
 
@@ -1327,48 +1325,40 @@ class arm2alive_ {
   unsigned curId;
   bool ret_void{false};
 
-  std::vector<std::unique_ptr<IR::Instr>> visitError(MCInstWrapper &I) {
+  [[noreturn]] void visitError(MCInstWrapper &I) {
     // flush must happen before error is printed to make sure the error
     // comes out nice and pretty when combing the stdout/stderr in scripts
     cout.flush();
 
-    llvm::errs() << "ERROR: Unsupported arm instruction: "
+    errs() << "ERROR: Unsupported arm instruction: "
                  << instrPrinter->getOpcodeName(I.getMCInst().getOpcode())
                  << "\n";
-    llvm::errs().flush();
+    errs().flush();
     cerr.flush();
-    exit(1); // for now lets exit the program if the arm instruction is not
-             // supported
+    exit(-1); // FIXME handle this better
   }
 
   int get_size(int instr) {
     if (instr == AArch64::RET)
       return 0;
-
-    if (instrs_32.contains(instr)) {
+    if (instrs_32.contains(instr))
       return 32;
-    }
-
-    if (instrs_64.contains(instr)) {
+    if (instrs_64.contains(instr))
       return 64;
-    }
-
-    if (instrs_128.contains(instr)) {
+    if (instrs_128.contains(instr))
       return 128;
-    }
-
     cout << "get_size encountered unknown instruction" << endl;
     visitError(*wrapper);
     UNREACHABLE();
   }
 
-  // yoinked form getShiftType/getShiftValue:
+  // from getShiftType/getShiftValue:
   // https://github.com/llvm/llvm-project/blob/93d1a623cecb6f732db7900baf230a13e6ac6c6a/llvm/lib/Target/AArch64/MCTargetDesc/AArch64AddressingModes.h#L74
   // LLVM encodes its shifts into immediates (ARM doesn't, it has a shift
   // field in the instruction)
-  IR::Value *reg_shift(IR::Value *value, int encodedShift) {
+  IR::Value *reg_shift(IR::Value &value, int encodedShift) {
     int shift_type = ((encodedShift >> 6) & 0x7);
-    auto typ = &value->getType();
+    auto &typ = value.getType();
 
     IR::BinOp::Op op;
 
@@ -1385,33 +1375,26 @@ class arm2alive_ {
     case 3:
       // ROR shift
       return add_instr<IR::TernaryOp>(
-          *typ, next_name(), *value, *value,
-          *llvm_util::make_intconst(encodedShift & 0x3f, typ->bits()),
+          typ, next_name(), value, value,
+          *llvm_util::make_intconst(encodedShift & 0x3f, typ.bits()),
           IR::TernaryOp::FShr);
-      break;
     default:
       // FIXME: handle other case (msl)
-      assert(false && "shift type not supported");
+      report_fatal_error("shift type not supported");
     }
 
     return add_instr<IR::BinOp>(
-        *typ, next_name(), *value,
-        *llvm_util::make_intconst(encodedShift & 0x3f, typ->bits()), op);
+        typ, next_name(), value,
+        *llvm_util::make_intconst(encodedShift & 0x3f, typ.bits()), op);
   }
 
   IR::Value *reg_shift(int value, int size, int encodedShift) {
     auto v = llvm_util::make_intconst(value, size);
-    return reg_shift(v, encodedShift);
+    return reg_shift(*v, encodedShift);
   }
 
   IR::Value *getIdentifier(unsigned reg, unsigned id) {
-    auto val = mc_get_operand(reg, id);
-
-    // if (val == nullptr) {
-    //   cout << "getIdentifier: " << reg << " " << id << endl;
-    // }
-    // assert(val != nullptr && "getIdentifier: null operand");
-    return val;
+    return mc_get_operand(reg, id);
   }
 
   // TODO: make it so that lshr generates code on register lookups
@@ -1447,16 +1430,15 @@ class arm2alive_ {
       assert(false && "unhandled case in get_value*");
     }
 
-    if (shift != 0) {
-      v = reg_shift(v, shift);
-    }
+    if (shift != 0)
+      v = reg_shift(*v, shift);
 
     return v;
   }
 
   // Generates string name for the next alive instruction
-  std::string next_name() {
-    std::stringstream ss;
+  string next_name() {
+    stringstream ss;
     if (instrs_no_write.contains(wrapper->getOpcode())) {
       ss << "\%tx" << ++curId << "x" << instructionCount << "x" << blockCount;
     } else {
@@ -1468,8 +1450,8 @@ class arm2alive_ {
     return ss.str();
   }
 
-  std::string next_name(unsigned reg_num, unsigned id_num) {
-    std::stringstream ss;
+  string next_name(unsigned reg_num, unsigned id_num) {
+    stringstream ss;
     ss << "\%" << registerInfo->getName(reg_num) << "_" << id_num;
     return ss.str();
   }
@@ -1671,7 +1653,6 @@ class arm2alive_ {
   void set_n(IR::Value *val) {
     auto typ = &llvm_util::get_int_type(1);
     auto zero = llvm_util::make_intconst(0, val->bits());
-
     auto n = add_instr<IR::ICmp>(*typ, next_name(), IR::ICmp::Cond::SLT, *val,
                                  *zero);
     cur_ns[MCBB] = n;
@@ -1683,21 +1664,19 @@ class arm2alive_ {
     assert(BB != nullptr);
     auto instr = make_unique<_Tp>(std::forward<_Args>(__args)...);
     auto ret = instr.get();
-
     BB->addInstr(std::move(instr));
-
     return ret;
   }
 
 public:
-  arm2alive_(MCFunction &MF, IR::Function &srcFn, MCInstPrinter *instrPrinter,
-             MCRegisterInfo *registerInfo)
-      : MF(MF), srcFn(srcFn), instrPrinter(instrPrinter),
-        registerInfo(registerInfo), instructionCount(0), curId(0) {}
+  arm2llvm_(MCFunction &MF, IR::Function &srcFn, MCInstPrinter *instrPrinter,
+            MCRegisterInfo *registerInfo)
+    : MF(MF), srcFn(srcFn), instrPrinter(instrPrinter),
+      registerInfo(registerInfo), instructionCount(0), curId(0) {}
 
   // Visit an MCInstWrapper instructions and convert it to alive IR
   void mc_visit(MCInstWrapper &I, IR::Function &Fn) {
-    std::vector<std::unique_ptr<IR::Instr>> res;
+    vector<unique_ptr<IR::Instr>> res;
     auto opcode = I.getOpcode();
     auto &mc_inst = I.getMCInst();
     wrapper = &I;
@@ -1968,7 +1947,7 @@ public:
       if (mc_inst.getNumOperands() == 4) {
         // the 4th operand (if it exists) must be an immediate
         assert(mc_inst.getOperand(3).isImm());
-        rhs = reg_shift(rhs, mc_inst.getOperand(3).getImm());
+        rhs = reg_shift(*rhs, mc_inst.getOperand(3).getImm());
       }
 
       auto and_op = add_instr<IR::BinOp>(*ty, next_name(), *get_value(1), *rhs,
@@ -2110,8 +2089,8 @@ public:
       auto mul_lhs = get_value(1, 0);
       auto mul_rhs = get_value(2, 0);
 
-      auto i64 = &llvm_util::get_int_type(64);
-      auto i128 = &llvm_util::get_int_type(128);
+      auto &i64 = llvm_util::get_int_type(64);
+      auto &i128 = llvm_util::get_int_type(128);
 
       IR::ConversionOp *lhs_extended;
       IR::ConversionOp *rhs_extended;
@@ -2120,27 +2099,27 @@ public:
       // overflow For signed multiplication, must sign extend the lhs and rhs to
       // not overflow
       if (opcode == AArch64::UMULHrr) {
-        lhs_extended = add_instr<IR::ConversionOp>(*i128, next_name(), *mul_lhs,
+        lhs_extended = add_instr<IR::ConversionOp>(i128, next_name(), *mul_lhs,
                                                    IR::ConversionOp::ZExt);
-        rhs_extended = add_instr<IR::ConversionOp>(*i128, next_name(), *mul_rhs,
+        rhs_extended = add_instr<IR::ConversionOp>(i128, next_name(), *mul_rhs,
                                                    IR::ConversionOp::ZExt);
       } else {
-        lhs_extended = add_instr<IR::ConversionOp>(*i128, next_name(), *mul_lhs,
+        lhs_extended = add_instr<IR::ConversionOp>(i128, next_name(), *mul_lhs,
                                                    IR::ConversionOp::SExt);
-        rhs_extended = add_instr<IR::ConversionOp>(*i128, next_name(), *mul_rhs,
+        rhs_extended = add_instr<IR::ConversionOp>(i128, next_name(), *mul_rhs,
                                                    IR::ConversionOp::SExt);
       }
 
-      auto mul = add_instr<IR::BinOp>(*i128, next_name(), *lhs_extended,
+      auto mul = add_instr<IR::BinOp>(i128, next_name(), *lhs_extended,
                                       *rhs_extended, IR::BinOp::Mul);
       // After multiplying, shift down 64 bits to get the top half of the i128
       // into the bottom half
-      auto shift = add_instr<IR::BinOp>(*i128, next_name(), *mul,
+      auto shift = add_instr<IR::BinOp>(i128, next_name(), *mul,
                                         *llvm_util::make_intconst(64, 128),
                                         IR::BinOp::LShr);
 
       // Truncate to the proper size:
-      auto trunc = add_instr<IR::ConversionOp>(*i64, next_name(), *shift,
+      auto trunc = add_instr<IR::ConversionOp>(i64, next_name(), *shift,
                                                IR::ConversionOp::Trunc);
       store(*trunc);
       break;
@@ -2760,7 +2739,7 @@ public:
       if (mc_inst.getNumOperands() == 4) {
         // the 4th operand (if it exists) must b an immediate
         assert(mc_inst.getOperand(3).isImm());
-        op2 = reg_shift(op2, mc_inst.getOperand(3).getImm());
+        op2 = reg_shift(*op2, mc_inst.getOperand(3).getImm());
       }
 
       // Perform NOT
@@ -2986,7 +2965,7 @@ public:
         break;
       }
       if (!ret_void) {
-        auto retTyp = &llvm_util::get_int_type(srcFn.getType().bits());
+        auto &retTyp = llvm_util::get_int_type(srcFn.getType().bits());
 
         // unsigned latest_id = 0;
         // Hacky way to find the latest use of the return value
@@ -3002,16 +2981,16 @@ public:
           cout << "null val" << endl;
         }
         if (val) {
-          if (retTyp->bits() < val->bits()) {
-            auto trunc = add_instr<IR::ConversionOp>(*retTyp, next_name(), *val,
+          if (retTyp.bits() < val->bits()) {
+            auto trunc = add_instr<IR::ConversionOp>(retTyp, next_name(), *val,
                                                      IR::ConversionOp::Trunc);
             val = trunc;
           }
 
           // for don't care bits we need to mask them off before returning
           if (has_ret_attr && (original_ret_bitwidth < 32)) {
-            assert(retTyp->bits() >= original_ret_bitwidth);
-            assert(retTyp->bits() == 64);
+            assert(retTyp.bits() >= original_ret_bitwidth);
+            assert(retTyp.bits() == 64);
             auto trunc = add_instr<IR::ConversionOp>(
                 llvm_util::get_int_type(32), next_name(), *val,
                 IR::ConversionOp::Trunc);
@@ -3019,11 +2998,11 @@ public:
                                               next_name(), *trunc,
                                               IR::ConversionOp::ZExt);
           }
-          add_instr<IR::Return>(*retTyp, *val);
+          add_instr<IR::Return>(retTyp, *val);
         } else { // Hacky solution to deal with functions where the assembly is
                  // just a ret instruction
-          add_instr<IR::Return>(*retTyp,
-                                *llvm_util::make_intconst(0, retTyp->bits()));
+          add_instr<IR::Return>(retTyp,
+                                *llvm_util::make_intconst(0, retTyp.bits()));
         }
       } else {
         add_instr<IR::Return>(IR::Type::voidTy, IR::Value::voidVal);
@@ -3059,7 +3038,7 @@ public:
       auto &dst_true = Fn.getBB(Sym.getName());
 
       assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
-      const std::string *dst_false_name;
+      const string *dst_false_name;
       for (auto &succ : MCBB->getSuccs()) {
         if (succ->getName() != Sym.getName()) {
           dst_false_name = &succ->getName();
@@ -3082,7 +3061,7 @@ public:
       auto dst_true = get_basic_block(Fn, mc_inst.getOperand(1));
       assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
 
-      const std::string *dst_false_name;
+      const string *dst_false_name;
       for (auto &succ : MCBB->getSuccs()) {
         if (succ->getName() != dst_true->getName()) {
           dst_false_name = &succ->getName();
@@ -3104,7 +3083,7 @@ public:
       auto dst_true = get_basic_block(Fn, mc_inst.getOperand(1));
       assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
 
-      const std::string *dst_false_name;
+      const string *dst_false_name;
       for (auto &succ : MCBB->getSuccs()) {
         if (succ->getName() != dst_true->getName()) {
           dst_false_name = &succ->getName();
@@ -3143,7 +3122,7 @@ public:
       cout << "jump target = " << Sym.getName().str() << endl;
       assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
 
-      const std::string *dst_true_name;
+      const string *dst_true_name;
       for (auto &succ : MCBB->getSuccs()) {
         if (succ->getName() != Sym.getName()) {
           dst_true_name = &succ->getName();
@@ -3180,7 +3159,7 @@ public:
     }
   }
 
-  std::optional<IR::Function> run() {
+  optional<IR::Function> run() {
     IR::Type *func_return_type{nullptr};
 
     if (&srcFn.getType() == &IR::Type::voidTy) {
@@ -3262,7 +3241,7 @@ public:
       // FIXME this is pretty convulated and needs to be cleaned up
       auto operand = MCOperand::createReg(AArch64::X0 + (argNum));
 
-      std::stringstream ss;
+      stringstream ss;
       ss << "\%" << registerInfo->getName(operand.getReg());
       IR::ParamAttrs attrs(input_ptr->getAttributes());
 
@@ -3356,7 +3335,7 @@ public:
         cout << "reg_num = " << reg_num << "\n";
 
         auto gep_xi = add_instr<IR::GEP>(
-            *ptr_type.get(), "\%stack_" + std::to_string(8 + i), *alloc, false);
+            *ptr_type.get(), "\%stack_" + to_string(8 + i), *alloc, false);
         gep_xi->addIdx(8, *llvm_util::make_intconst(i, 64)); // size in bytes
         // FIXME, need to use version similar to the offset to address the stack
         // pointer or alternatively a more elegant solution altogether
@@ -3443,7 +3422,7 @@ public:
       tmp_index++;
       add_phi_params(phi, phi_mc_wrapper);
     }
-    return std::move(Fn);
+    return Fn;
   }
 };
 
@@ -3451,10 +3430,10 @@ public:
 // Adapted from llvm2alive_ in llvm2alive.cpp with some simplifying assumptions
 // FIXME for now, we are making a lot of simplifying assumptions like assuming
 // types of arguments.
-std::optional<IR::Function> arm2alive(MCFunction &MF, IR::Function &srcFn,
-                                      MCInstPrinter *instrPrinter,
-                                      MCRegisterInfo *registerInfo) {
-  return arm2alive_(MF, srcFn, instrPrinter, registerInfo).run();
+optional<IR::Function> arm2llvm(MCFunction &MF, IR::Function &srcFn,
+                                     MCInstPrinter *instrPrinter,
+                                     MCRegisterInfo *registerInfo) {
+  return arm2llvm_(MF, srcFn, instrPrinter, registerInfo).run();
 }
 
 // We're overriding MCStreamerWrapper to generate an MCFunction
@@ -3469,28 +3448,28 @@ std::optional<IR::Function> arm2alive(MCFunction &MF, IR::Function &srcFn,
 // TODO we'll need to implement some of the other callbacks to extract more
 // information from the asm file. For example, it would be useful to extract
 // debug info to determine the number of function parameters.
-class MCStreamerWrapper final : public llvm::MCStreamer {
+class MCStreamerWrapper final : public MCStreamer {
   enum ASMLine { none = 0, label = 1, non_term_instr = 2, terminator = 3 };
 
 private:
   MCBasicBlock *temp_block{nullptr};
   bool first_label{true};
   unsigned prev_line{0};
-  llvm::MCInstrAnalysis *Ana_ptr;
-  llvm::MCInstPrinter *IP_ptr;
-  llvm::MCRegisterInfo *MRI_ptr;
+  MCInstrAnalysis *Ana_ptr;
+  MCInstPrinter *IP_ptr;
+  MCRegisterInfo *MRI_ptr;
 
 public:
   MCFunction MF;
   unsigned cnt{0};
-  std::vector<llvm::MCInst>
+  vector<MCInst>
       Insts; // CHECK this should go as it's only being used for pretty printing
              // which makes it unused after fixing MCInstWrapper::print
-  using BlockSetTy = llvm::SetVector<MCBasicBlock *>;
+  using BlockSetTy = SetVector<MCBasicBlock *>;
 
-  MCStreamerWrapper(llvm::MCContext &Context, llvm::MCInstrAnalysis *_Ana_ptr,
-                    llvm::MCInstPrinter *_IP_ptr,
-                    llvm::MCRegisterInfo *_MRI_ptr)
+  MCStreamerWrapper(MCContext &Context, MCInstrAnalysis *_Ana_ptr,
+                    MCInstPrinter *_IP_ptr,
+                    MCRegisterInfo *_MRI_ptr)
       : MCStreamer(Context), Ana_ptr(_Ana_ptr), IP_ptr(_IP_ptr),
         MRI_ptr(_MRI_ptr) {
     MF.Ana_ptr = Ana_ptr;
@@ -3500,8 +3479,8 @@ public:
 
   // We only want to intercept the emission of new instructions.
   virtual void
-  emitInstruction(const llvm::MCInst &Inst,
-                  const llvm::MCSubtargetInfo & /* unused */) override {
+  emitInstruction(const MCInst &Inst,
+                  const MCSubtargetInfo & /* unused */) override {
 
     assert(prev_line != ASMLine::none);
 
@@ -3534,7 +3513,7 @@ public:
     }
 
     errs() << cnt++ << "  : ";
-    Inst.dump_pretty(llvm::errs(), IP_ptr, " ", MRI_ptr);
+    Inst.dump_pretty(errs(), IP_ptr, " ", MRI_ptr);
     if (Ana_ptr->isBranch(Inst))
       errs() << ": branch ";
     if (Ana_ptr->isConditionalBranch(Inst))
@@ -3546,12 +3525,12 @@ public:
     errs() << "\n";
   }
 
-  virtual bool emitSymbolAttribute(llvm::MCSymbol *Symbol,
-                                   llvm::MCSymbolAttr Attribute) override {
+  virtual bool emitSymbolAttribute(MCSymbol *Symbol,
+                                   MCSymbolAttr Attribute) override {
     return true;
   }
 
-  virtual void emitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size,
+  virtual void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                                 Align ByteAlignment) override {}
 
   virtual void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
@@ -3573,7 +3552,7 @@ public:
     errs() << "inside Emit Label: symbol=" << Symbol->getName() << '\n';
   }
 
-  std::string findTargetLabel(MCInst &inst_ref) {
+  string findTargetLabel(MCInst &inst_ref) {
     auto num_operands = inst_ref.getNumOperands();
     for (unsigned i = 0; i < num_operands; ++i) {
       auto op = inst_ref.getOperand(i);
@@ -3597,18 +3576,18 @@ public:
   }
 
   void postOrderDFS(MCBasicBlock &curBlock, BlockSetTy &visited,
-                    std::vector<MCBasicBlock *> &postOrder) {
+                    vector<MCBasicBlock *> &postOrder) {
     visited.insert(&curBlock);
     for (auto succ : curBlock.getSuccs()) {
-      if (std::find(visited.begin(), visited.end(), succ) == visited.end()) {
+      if (find(visited.begin(), visited.end(), succ) == visited.end()) {
         postOrderDFS(*succ, visited, postOrder);
       }
     }
     postOrder.push_back(&curBlock);
   }
 
-  std::vector<MCBasicBlock *> postOrder() {
-    std::vector<MCBasicBlock *> postOrder;
+  vector<MCBasicBlock *> postOrder() {
+    vector<MCBasicBlock *> postOrder;
     BlockSetTy visited;
     for (auto &curBlock : MF.BBs) {
       if (visited.count(&curBlock) == 0) {
@@ -3655,7 +3634,7 @@ public:
 
   // helper function to compute the intersection of predecessor dominator sets
   BlockSetTy intersect(BlockSetTy &preds,
-                       std::unordered_map<MCBasicBlock *, BlockSetTy> &dom) {
+                       unordered_map<MCBasicBlock *, BlockSetTy> &dom) {
     BlockSetTy ret;
     if (preds.size() == 0) {
       return ret;
@@ -3679,9 +3658,9 @@ public:
   }
 
   // helper function to invert a graph
-  std::unordered_map<MCBasicBlock *, BlockSetTy>
-  invertGraph(std::unordered_map<MCBasicBlock *, BlockSetTy> &graph) {
-    std::unordered_map<MCBasicBlock *, BlockSetTy> res;
+  unordered_map<MCBasicBlock *, BlockSetTy>
+  invertGraph(unordered_map<MCBasicBlock *, BlockSetTy> &graph) {
+    unordered_map<MCBasicBlock *, BlockSetTy> res;
     for (auto &curBlock : graph) {
       for (auto &succ : curBlock.second) {
         res[succ].insert(curBlock.first);
@@ -3691,7 +3670,7 @@ public:
   }
 
   // Debug function to print domination info
-  void printGraph(std::unordered_map<MCBasicBlock *, BlockSetTy> &graph) {
+  void printGraph(unordered_map<MCBasicBlock *, BlockSetTy> &graph) {
     for (auto &curBlock : graph) {
       cout << curBlock.first->getName() << ": ";
       for (auto &dst : curBlock.second) {
@@ -3728,13 +3707,13 @@ public:
         continue;
       }
       if (Ana_ptr->isConditionalBranch(last_mc_instr)) {
-        std::string target = findTargetLabel(last_mc_instr);
+        string target = findTargetLabel(last_mc_instr);
         auto target_bb = MF.findBlockByName(target);
         cur_bb.addSucc(target_bb);
         if (next_bb_ptr)
           cur_bb.addSucc(next_bb_ptr);
       } else if (Ana_ptr->isUnconditionalBranch(last_mc_instr)) {
-        std::string target = findTargetLabel(last_mc_instr);
+        string target = findTargetLabel(last_mc_instr);
         auto target_bb = MF.findBlockByName(target);
         cur_bb.addSucc(target_bb);
       } else if (Ana_ptr->isReturn(last_mc_instr)) {
@@ -3748,7 +3727,7 @@ public:
   // Remove empty basic blocks from the machine function
   void removeEmptyBlocks() {
     cout << "removing empty basic blocks" << '\n';
-    std::erase_if(MF.BBs, [](MCBasicBlock b) { return b.size() == 0; });
+    erase_if(MF.BBs, [](MCBasicBlock b) { return b.size() == 0; });
   }
 
   // Only call after generateSucessors() has been called
@@ -3770,7 +3749,7 @@ public:
     for (auto &block : MF.BBs) {
       errs() << "block " << i << ", name= " << block.getName() << '\n';
       for (auto &inst : block.getInstrs()) {
-        inst.getMCInst().dump_pretty(llvm::errs(), IP_ptr, " ", MRI_ptr);
+        inst.getMCInst().dump_pretty(errs(), IP_ptr, " ", MRI_ptr);
         errs() << '\n';
       }
       i++;
@@ -3851,10 +3830,10 @@ public:
 };
 
 // Return variables that are read before being written in the basic block
-[[maybe_unused]] auto FindReadBeforeWritten(std::vector<MCInst> &instrs,
-                                            llvm::MCInstrAnalysis *Ana_ptr) {
-  std::unordered_set<MCOperand, MCOperandHash, MCOperandEqual> reads;
-  std::unordered_set<MCOperand, MCOperandHash, MCOperandEqual> writes;
+[[maybe_unused]] auto FindReadBeforeWritten(vector<MCInst> &instrs,
+                                            MCInstrAnalysis *Ana_ptr) {
+  unordered_set<MCOperand, MCOperandHash, MCOperandEqual> reads;
+  unordered_set<MCOperand, MCOperandHash, MCOperandEqual> writes;
   // TODO for writes, should only apply to instructions that update a
   // destination register
   for (auto &I : instrs) {
@@ -3873,10 +3852,10 @@ public:
 
 // Return variable that are read before being written in the basicblock
 [[maybe_unused]] auto FindReadBeforeWritten(MCBasicBlock &block,
-                                            llvm::MCInstrAnalysis *Ana_ptr) {
+                                            MCInstrAnalysis *Ana_ptr) {
   auto mcInstrs = block.getInstrs();
-  std::unordered_set<MCOperand, MCOperandHash, MCOperandEqual> reads;
-  std::unordered_set<MCOperand, MCOperandHash, MCOperandEqual> writes;
+  unordered_set<MCOperand, MCOperandHash, MCOperandEqual> reads;
+  unordered_set<MCOperand, MCOperandHash, MCOperandEqual> writes;
   // TODO for writes, should only apply to instructions that update a
   // destination register
   for (auto &WI : mcInstrs) {
@@ -3895,7 +3874,7 @@ public:
 }
 
 void adjustSrcInputs(IR::Function &srcFn) {
-  std::vector<std::unique_ptr<IR::Value>> new_inputs;
+  vector<unique_ptr<IR::Value>> new_inputs;
   unsigned idx = 0;
 
   for (auto &v : srcFn.getInputs()) {
@@ -4029,23 +4008,23 @@ optional<IR::Function> lift_func(Module &M, bool asm_input, string opt_file2,
   LLVMInitializeAArch64AsmParser();
   LLVMInitializeAArch64AsmPrinter();
 
-  std::string Error;
+  string Error;
   const char *TripleName = "aarch64-arm-none-eabi";
-  auto Target = llvm::TargetRegistry::lookupTarget(TripleName, Error);
+  auto Target = TargetRegistry::lookupTarget(TripleName, Error);
   if (!Target) {
     cerr << Error;
     exit(-1);
   }
-  llvm::TargetOptions Opt;
+  TargetOptions Opt;
   const char *CPU = "apple-a12";
-  auto RM = std::optional<Reloc::Model>();
-  std::unique_ptr<llvm::TargetMachine> TM(
+  auto RM = optional<Reloc::Model>();
+  unique_ptr<TargetMachine> TM(
       Target->createTargetMachine(TripleName, CPU, "", Opt, RM));
-  llvm::SmallString<1024> Asm;
-  llvm::raw_svector_ostream Dest(Asm);
+  SmallString<1024> Asm;
+  raw_svector_ostream Dest(Asm);
 
-  llvm::legacy::PassManager pass;
-  if (TM->addPassesToEmitFile(pass, Dest, nullptr, llvm::CGFT_AssemblyFile)) {
+  legacy::PassManager pass;
+  if (TM->addPassesToEmitFile(pass, Dest, nullptr, CGFT_AssemblyFile)) {
     cerr << "Failed to generate assembly";
     exit(-1);
   }
@@ -4057,29 +4036,29 @@ optional<IR::Function> lift_func(Module &M, bool asm_input, string opt_file2,
     cout << Asm[i];
   cout << "-------------\n";
   cout << "\n\n";
-  llvm::Triple TheTriple(TripleName);
+  Triple TheTriple(TripleName);
 
-  auto MCOptions = llvm::mc::InitMCTargetOptionsFromFlags();
-  std::unique_ptr<llvm::MCRegisterInfo> MRI(
+  auto MCOptions = mc::InitMCTargetOptionsFromFlags();
+  unique_ptr<MCRegisterInfo> MRI(
       Target->createMCRegInfo(TripleName));
   assert(MRI && "Unable to create target register info!");
 
-  std::unique_ptr<llvm::MCAsmInfo> MAI(
+  unique_ptr<MCAsmInfo> MAI(
       Target->createMCAsmInfo(*MRI, TripleName, MCOptions));
   assert(MAI && "Unable to create MC asm info!");
 
-  std::unique_ptr<llvm::MCSubtargetInfo> STI(
+  unique_ptr<MCSubtargetInfo> STI(
       Target->createMCSubtargetInfo(TripleName, CPU, ""));
   assert(STI && "Unable to create subtarget info!");
   assert(STI->isCPUStringValid(CPU) && "Invalid CPU!");
 
-  llvm::MCContext Ctx(TheTriple, MAI.get(), MRI.get(), STI.get());
-  llvm::SourceMgr SrcMgr;
+  MCContext Ctx(TheTriple, MAI.get(), MRI.get(), STI.get());
+  SourceMgr SrcMgr;
 
   if (asm_input) {
-    llvm::ExitOnError ExitOnErr;
+    ExitOnError ExitOnErr;
     auto MB_Asm =
-        ExitOnErr(errorOrToExpected(llvm::MemoryBuffer::getFile(opt_file2)));
+        ExitOnErr(errorOrToExpected(MemoryBuffer::getFile(opt_file2)));
     assert(MB_Asm);
     cout << "reading asm from file\n";
     for (auto it = MB_Asm->getBuffer().begin(); it != MB_Asm->getBuffer().end();
@@ -4087,29 +4066,29 @@ optional<IR::Function> lift_func(Module &M, bool asm_input, string opt_file2,
       cout << *it;
     }
     cout << "-------------\n";
-    SrcMgr.AddNewSourceBuffer(std::move(MB_Asm), llvm::SMLoc());
+    SrcMgr.AddNewSourceBuffer(std::move(MB_Asm), SMLoc());
   } else {
-    auto Buf = llvm::MemoryBuffer::getMemBuffer(Asm.c_str());
-    SrcMgr.AddNewSourceBuffer(std::move(Buf), llvm::SMLoc());
+    auto Buf = MemoryBuffer::getMemBuffer(Asm.c_str());
+    SrcMgr.AddNewSourceBuffer(std::move(Buf), SMLoc());
   }
 
-  std::unique_ptr<llvm::MCInstrInfo> MCII(Target->createMCInstrInfo());
+  unique_ptr<MCInstrInfo> MCII(Target->createMCInstrInfo());
   assert(MCII && "Unable to create instruction info!");
 
-  std::unique_ptr<llvm::MCInstPrinter> IPtemp(
+  unique_ptr<MCInstPrinter> IPtemp(
       Target->createMCInstPrinter(TheTriple, 0, *MAI, *MCII, *MRI));
 
-  auto Ana = std::make_unique<MCInstrAnalysis>(MCII.get());
+  auto Ana = make_unique<MCInstrAnalysis>(MCII.get());
 
-  MCStreamerWrapper Str(Ctx, Ana.get(), IPtemp.get(), MRI.get());
+  MCStreamerWrapper MCSW(Ctx, Ana.get(), IPtemp.get(), MRI.get());
 
-  std::unique_ptr<llvm::MCAsmParser> Parser(
-      llvm::createMCAsmParser(SrcMgr, Ctx, Str, *MAI));
+  unique_ptr<MCAsmParser> Parser(
+      createMCAsmParser(SrcMgr, Ctx, MCSW, *MAI));
   assert(Parser);
 
-  llvm::MCTargetOptions Opts;
+  MCTargetOptions Opts;
   Opts.PreserveAsmComments = false;
-  std::unique_ptr<llvm::MCTargetAsmParser> TAP(
+  unique_ptr<MCTargetAsmParser> TAP(
       Target->createMCAsmParser(*STI, *Parser, *MCII, Opts));
   assert(TAP);
   Parser->setTargetParser(*TAP);
@@ -4118,21 +4097,21 @@ optional<IR::Function> lift_func(Module &M, bool asm_input, string opt_file2,
   // FIXME remove printing of the mcInsts
   // For now, print the parsed instructions for debug puropses
   cout << "\n\nPretty Parsed MCInsts:\n";
-  for (auto I : Str.Insts) {
-    I.dump_pretty(llvm::errs(), IPtemp.get(), " ", MRI.get());
-    llvm::errs() << '\n';
+  for (auto I : MCSW.Insts) {
+    I.dump_pretty(errs(), IPtemp.get(), " ", MRI.get());
+    errs() << '\n';
   }
 
   cout << "\n\nParsed MCInsts:\n";
-  for (auto I : Str.Insts) {
-    I.dump_pretty(llvm::errs());
-    llvm::errs() << '\n';
+  for (auto I : MCSW.Insts) {
+    I.dump_pretty(errs());
+    errs() << '\n';
   }
 
   if (opt_asm_only) {
-    cout << "arm instruction count = " << Str.Insts.size() << "\n";
+    cout << "arm instruction count = " << MCSW.Insts.size() << "\n";
     cout.flush();
-    llvm::errs().flush();
+    errs().flush();
     cerr.flush();
     exit(0);
   }
@@ -4142,28 +4121,26 @@ optional<IR::Function> lift_func(Module &M, bool asm_input, string opt_file2,
   if (AF.isVarArgs())
     report_fatal_error("Varargs not supported yet");
 
-  Str.printBlocks();
-  Str.removeEmptyBlocks(); // remove empty basic blocks, including .Lfunc_end
-  Str.printBlocks();
+  MCSW.printBlocks();
+  MCSW.removeEmptyBlocks(); // remove empty basic blocks, including .Lfunc_end
+  MCSW.printBlocks();
 
-  Str.addEntryBlock();
-  // Str.addTerminator();
-  Str.generateSuccessors();
-  Str.generatePredecessors();
-  Str.findArgs(AF); // needs refactoring
-  Str.rewriteOperands();
-  Str.printCFG();
-  Str.generateDominator();
-  Str.generateDominatorFrontier();
-  Str.findDefiningBlocks();
-  Str.findPhis();
-  Str.generateDomTree();
-  Str.ssaRename();
-  Str.adjustReturns(); // needs refactoring
+  MCSW.addEntryBlock();
+  MCSW.generateSuccessors();
+  MCSW.generatePredecessors();
+  MCSW.findArgs(AF); // needs refactoring
+  MCSW.rewriteOperands();
+  MCSW.printCFG();
+  MCSW.generateDominator();
+  MCSW.generateDominatorFrontier();
+  MCSW.findDefiningBlocks();
+  MCSW.findPhis();
+  MCSW.generateDomTree();
+  MCSW.ssaRename();
+  MCSW.adjustReturns(); // needs refactoring
 
   cout << "after SSA conversion\n";
-  Str.printBlocks();
+  MCSW.printBlocks();
 
-  auto &MF = Str.MF;
-  return arm2alive(MF, AF, IPtemp.get(), MRI.get());
+  return arm2llvm(MCSW.MF, AF, IPtemp.get(), MRI.get());
 }
