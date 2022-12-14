@@ -55,4 +55,5 @@ void set_outs(std::ostream &os);
 
 void reset_state();
 void reset_state(IR::Function &f);
+
 }
