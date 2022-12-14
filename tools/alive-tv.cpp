@@ -183,14 +183,14 @@ Results verify(llvm::Function &F1, llvm::Function &F2,
 
 // Perform verification on two alive functions
 // FIXME get rid of this
-Results backend_verify(std::optional<IR::Function> &fn1,
-                       std::optional<IR::Function> &fn2,
+Results backend_verify(IR::Function &fn1,
+                       IR::Function &fn2,
                        llvm::TargetLibraryInfoWrapperPass &TLI,
                        bool print_transform = false,
                        bool always_verify = false) {
   Results r;
-  r.t.src = std::move(*fn1);
-  r.t.tgt = std::move(*fn2);
+  r.t.src = std::move(fn1);
+  r.t.tgt = std::move(fn2);
 
   if (!always_verify) {
     stringstream ss1, ss2;
@@ -455,8 +455,12 @@ bool backendTV() {
     llvm::report_fatal_error("Could not convert llvm function to alive ir");
   
   auto TF = lift_func(*M1.get(), asm_input, opt_file2, opt_asm_only, AF.value());
+  if (TF)
+    TF->print(cout << "\n----------alive-lift-arm-target----------\n");
+  else
+    llvm::report_fatal_error("could not lift function");
 
-  auto r = backend_verify(AF, TF, TLI, true);
+  auto r = backend_verify(AF.value(), TF.value(), TLI, true);
 
   // cout << "exiting for valgrind\n";
   // return false;
