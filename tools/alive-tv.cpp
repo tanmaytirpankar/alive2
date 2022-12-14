@@ -1,84 +1,40 @@
 // Copyright (c) 2018-present The Alive2 Authors.
 // Distributed under the MIT license that can be found in the LICENSE file.
 
-// #include "llvm/MC/MCAsmInfo.h" // include first to avoid ambiguity for comparison operator from util/spaceship.h
-
+#include "backend_tv/mc.h"
 #include "cache/cache.h"
-#include "ir/instr.h"
-#include "ir/type.h"
 #include "llvm_util/llvm2alive.h"
 #include "llvm_util/llvm_optimizer.h"
-#include "llvm_util/utils.h"
 #include "smt/smt.h"
 #include "tools/transform.h"
-#include "util/sort.h"
 #include "util/version.h"
-#include "backend_tv/mc.h"
 
-#include "llvm/ADT/BitVector.h"
-#include "llvm/ADT/DenseSet.h"
-#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
-#include "llvm/AsmParser/Parser.h"
 #include "llvm/Bitcode/BitcodeReader.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/LegacyPassManager.h"
-#include "llvm/IR/Module.h"
-#include "llvm/IRReader/IRReader.h"
 #include "llvm/InitializePasses.h"
-#include "llvm/MC/MCContext.h"
-#include "llvm/MC/MCExpr.h"
-#include "llvm/MC/MCInst.h"
-#include "llvm/MC/MCInstBuilder.h"
-#include "llvm/MC/MCInstPrinter.h"
-#include "llvm/MC/MCInstrAnalysis.h"
-#include "llvm/MC/MCInstrInfo.h"
-#include "llvm/MC/MCParser/MCAsmParser.h"
-#include "llvm/MC/MCParser/MCTargetAsmParser.h"
-#include "llvm/MC/MCRegisterInfo.h"
-#include "llvm/MC/MCStreamer.h"
-#include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/MC/MCSymbol.h"
-#include "llvm/MC/MCTargetOptions.h"
-#include "llvm/MC/MCTargetOptionsCommandFlags.h"
-#include "llvm/MC/TargetRegistry.h"
-#include "llvm/Pass.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IRReader/IRReader.h"
 #include "llvm/Passes/PassBuilder.h"
-#include "llvm/Support/MathExtras.h"
-#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/TargetSelect.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 
-#define GET_INSTRINFO_ENUM
-#include "Target/AArch64/AArch64GenInstrInfo.inc"
-
-#define GET_REGINFO_ENUM
-#include "Target/AArch64/AArch64GenRegisterInfo.inc"
-
-#include <algorithm>
 #include <fstream>
 #include <iostream>
-#include <ranges>
 #include <sstream>
-#include <unordered_map>
 #include <utility>
-#include <vector>
 
 using namespace tools;
 using namespace util;
 using namespace std;
 using namespace llvm_util;
-using namespace llvm;
 
 #define LLVM_ARGS_PREFIX ""
 #define ARGS_SRC_TGT
@@ -88,33 +44,30 @@ using namespace llvm;
 namespace {
 
 llvm::cl::opt<string> opt_file1(llvm::cl::Positional,
-                                llvm::cl::desc("first_bitcode_file"),
-                                llvm::cl::Required,
-                                llvm::cl::value_desc("filename"),
-                                llvm::cl::cat(alive_cmdargs));
+  llvm::cl::desc("first_bitcode_file"),
+  llvm::cl::Required, llvm::cl::value_desc("filename"),
+  llvm::cl::cat(alive_cmdargs));
 
 llvm::cl::opt<string> opt_file2(llvm::cl::Positional,
-                                llvm::cl::desc("[second_bitcode_file]"),
-                                llvm::cl::Optional,
-                                llvm::cl::value_desc("filename"),
-                                llvm::cl::cat(alive_cmdargs));
+  llvm::cl::desc("[second_bitcode_file]"),
+  llvm::cl::Optional, llvm::cl::value_desc("filename"),
+  llvm::cl::cat(alive_cmdargs));
 
-llvm::cl::opt<std::string>
-    opt_src_fn(LLVM_ARGS_PREFIX "src-fn",
-               llvm::cl::desc("Name of src function (without @)"),
-               llvm::cl::cat(alive_cmdargs), llvm::cl::init("src"));
+llvm::cl::opt<std::string> opt_src_fn(LLVM_ARGS_PREFIX "src-fn",
+  llvm::cl::desc("Name of src function (without @)"),
+  llvm::cl::cat(alive_cmdargs), llvm::cl::init("src"));
 
-llvm::cl::opt<std::string>
-    opt_tgt_fn(LLVM_ARGS_PREFIX "tgt-fn",
-               llvm::cl::desc("Name of tgt function (without @)"),
-               llvm::cl::cat(alive_cmdargs), llvm::cl::init("tgt"));
+llvm::cl::opt<std::string> opt_tgt_fn(LLVM_ARGS_PREFIX "tgt-fn",
+  llvm::cl::desc("Name of tgt function (without @)"),
+  llvm::cl::cat(alive_cmdargs), llvm::cl::init("tgt"));
 
-llvm::cl::opt<string> optPass(
-    LLVM_ARGS_PREFIX "passes", llvm::cl::value_desc("optimization passes"),
-    llvm::cl::desc("Specify which LLVM passes to run (default=O2). "
-                   "The syntax is described at "
-                   "https://llvm.org/docs/NewPassManager.html#invoking-opt"),
-    llvm::cl::cat(alive_cmdargs), llvm::cl::init("O2"));
+llvm::cl::opt<string>
+    optPass(LLVM_ARGS_PREFIX "passes",
+            llvm::cl::value_desc("optimization passes"),
+            llvm::cl::desc("Specify which LLVM passes to run (default=O2). "
+                           "The syntax is described at "
+                           "https://llvm.org/docs/NewPassManager.html#invoking-opt"),
+            llvm::cl::cat(alive_cmdargs), llvm::cl::init("O2"));
 
 llvm::cl::opt<bool> opt_backend_tv(
     LLVM_ARGS_PREFIX "backend-tv",
@@ -131,10 +84,11 @@ llvm::cl::opt<bool> asm_input(
     llvm::cl::desc("use 2nd positional argument as asm input (default=false)"),
     llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
 
+llvm::ExitOnError ExitOnErr;
+
 // adapted from llvm-dis.cpp
 std::unique_ptr<llvm::Module> openInputFile(llvm::LLVMContext &Context,
                                             const string &InputFilename) {
-  llvm::ExitOnError ExitOnErr;
   auto MB =
       ExitOnErr(errorOrToExpected(llvm::MemoryBuffer::getFile(InputFilename)));
   llvm::SMDiagnostic Diag;
@@ -151,9 +105,31 @@ std::unique_ptr<llvm::Module> openInputFile(llvm::LLVMContext &Context,
 optional<smt::smt_initializer> smt_init;
 unique_ptr<Cache> cache;
 
+struct Results {
+  Transform t;
+  string error;
+  Errors errs;
+  enum {
+    ERROR,
+    TYPE_CHECKER_FAILED,
+    SYNTACTIC_EQ,
+    CORRECT,
+    UNSOUND,
+    FAILED_TO_PROVE
+  } status;
+
+  static Results Error(string &&err) {
+    Results r;
+    r.status = ERROR;
+    r.error = std::move(err);
+    return r;
+  }
+};
+
 Results verify(llvm::Function &F1, llvm::Function &F2,
                llvm::TargetLibraryInfoWrapperPass &TLI,
-               bool print_transform = false, bool always_verify = false) {
+               bool print_transform = false,
+               bool always_verify = false) {
   auto fn1 = llvm2alive(F1, TLI.getTLI(F1), true);
   if (!fn1)
     return Results::Error("Could not translate '" + F1.getName().str() +
@@ -476,7 +452,7 @@ bool backendTV() {
   }
 
   if (!AF)
-    report_fatal_error("Could not convert llvm function to alive ir");
+    llvm::report_fatal_error("Could not convert llvm function to alive ir");
   
   auto TF = lift_func(*M1.get(), asm_input, opt_file2, opt_asm_only, AF.value());
 
@@ -596,4 +572,3 @@ convenient way to demonstrate an existing optimizer bug.
 
   return num_errors > 0;
 }
-

@@ -73,25 +73,4 @@ void print_model_val(std::ostream &os, const IR::State &st, const smt::Model &m,
                      const IR::Value *var, const IR::Type &type,
                      const IR::StateValue &val, unsigned child = 0);
 
-struct Results {
-  Transform t;
-  std::string error;
-  util::Errors errs;
-  enum {
-    ERROR,
-    TYPE_CHECKER_FAILED,
-    SYNTACTIC_EQ,
-    CORRECT,
-    UNSOUND,
-    FAILED_TO_PROVE
-  } status;
-
-  static Results Error(std::string &&err) {
-    Results r;
-    r.status = ERROR;
-    r.error = std::move(err);
-    return r;
-  }
-};
-
 }
