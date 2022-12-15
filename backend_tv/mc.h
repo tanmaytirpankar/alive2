@@ -1,9 +1,7 @@
-#include <optional>
-
 #include "ir/function.h"
 
 #include "llvm/IR/Module.h"
 
-std::optional<IR::Function> lift_func(llvm::Module &M, bool asm_input,
-                                      std::string opt_file2, bool opt_asm_only,
-                                      IR::Function &AF);
+llvm::Function *lift_func(llvm::Module &ArmModule, llvm::Module &LiftedModule, bool asm_input,
+                          std::string opt_file2, bool opt_asm_only,
+                          IR::Function &AF, llvm::Function *F);

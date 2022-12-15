@@ -18,6 +18,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/PrettyStackTrace.h"
@@ -184,13 +185,18 @@ Results verify(llvm::Function &F1, llvm::Function &F2,
 // Perform verification on two alive functions
 // FIXME get rid of this
 Results backend_verify(IR::Function &fn1,
-                       IR::Function &fn2,
+                       llvm::Function &llvm_fn2,
                        llvm::TargetLibraryInfoWrapperPass &TLI,
                        bool print_transform = false,
                        bool always_verify = false) {
+  auto fn2 = llvm2alive(llvm_fn2, TLI.getTLI(llvm_fn2), false, fn1.getGlobalVarNames());
+  if (!fn2)
+    return Results::Error("Could not translate '" + llvm_fn2.getName().str() +
+                          "' to Alive IR\n");
+
   Results r;
   r.t.src = std::move(fn1);
-  r.t.tgt = std::move(fn2);
+  r.t.tgt = std::move(*fn2);
 
   if (!always_verify) {
     stringstream ss1, ss2;
@@ -442,25 +448,41 @@ bool backendTV() {
   }
 
   // Only try to verify the first function in the module
+  llvm::Function *Func = nullptr;
   for (auto &F : *M1.get()) {
     if (F.isDeclaration())
       continue;
     if (!func_names.empty() && !func_names.count(F.getName().str()))
       continue;
+    Func = &F;
     AF = llvm2alive(F, TLI.getTLI(F), true);
     break;
   }
 
   if (!AF)
     llvm::report_fatal_error("Could not convert llvm function to alive ir");
-  
-  auto TF = lift_func(*M1.get(), asm_input, opt_file2, opt_asm_only, AF.value());
-  if (TF)
-    TF->print(cout << "\n----------alive-lift-arm-target----------\n");
-  else
-    llvm::report_fatal_error("could not lift function");
 
-  auto r = backend_verify(AF.value(), TF.value(), TLI, true);
+  std::unique_ptr<llvm::Module> M2 = std::make_unique<llvm::Module>("M2", Context);
+  M2->setDataLayout(M1.get()->getDataLayout());
+  M2->setTargetTriple(M1.get()->getTargetTriple());
+
+  auto TF = lift_func(*M1.get(), *M2.get(), asm_input, opt_file2, opt_asm_only, AF.value(), Func);
+  if (!TF)
+    llvm::report_fatal_error("could not lift function");
+  llvm::outs() << "\n----------alive-lift-arm-target----------\n";
+
+  M2->print(llvm::outs(), nullptr);
+
+  if (llvm::verifyModule(*M2.get())) {
+    llvm::errs() << "Error: lifted module failed verification. This shouldn't happen.\n";
+    abort();
+  }
+
+  // FIXME optimize TF
+  
+  // TF->print(llvm::outs());
+
+  auto r = backend_verify(AF.value(), *TF, TLI, true);
 
   // cout << "exiting for valgrind\n";
   // return false;
