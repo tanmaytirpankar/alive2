@@ -180,6 +180,8 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
   include(AddLLVM)
 
   include_directories(${LLVM_INCLUDE_DIRS})
+  include_directories(${LLVM_BINARY_DIR}/lib)
+
   add_definitions(${LLVM_DEFINITIONS})
 
   set(LLVM_UTIL_SRCS
@@ -189,8 +191,14 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
     "llvm_util/utils.cpp"
   )
 
+  set(BACKEND_TV_SRCS
+    "backend_tv/mc.cpp"
+  )
+
   add_library(llvm_util STATIC ${LLVM_UTIL_SRCS})
-  set(ALIVE_LIBS_LLVM llvm_util ${ALIVE_LIBS})
+  add_library(backend_tv STATIC ${BACKEND_TV_SRCS})
+  set(ALIVE_LIBS_LLVM llvm_util backend_tv ${ALIVE_LIBS})
+  set(ALIVE_EXEC_LIBS_LLVM llvm_util backend_tv ${ALIVE_EXEC_LIBS})
 
   add_llvm_executable(alive-tv
     "tools/alive-tv.cpp"
@@ -202,6 +210,7 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
 
 else()
   set(LLVM_UTIL_SRCS "")
+  set(BACKEND_TV_SRCS "")
 endif()
 
 if (BUILD_TV)
@@ -241,8 +250,8 @@ add_executable(alive-jobserver
 #add_library(alive2 SHARED ${IR_SRCS} ${SMT_SRCS} ${TOOLS_SRCS} ${UTIL_SRCS} ${LLVM_UTIL_SRCS})
 
 if (BUILD_LLVM_UTILS OR BUILD_TV)
-  llvm_map_components_to_libnames(llvm_libs support core irreader analysis passes transformutils)
-#  target_link_libraries(alive2 PRIVATE ${llvm_libs})
+  llvm_map_components_to_libnames(llvm_libs support core irreader analysis passes transformutils asmparser asmprinter target mc mcparser mcdisassembler aarch64asmparser aarch64codegen aarch64desc aarch64disassembler aarch64info aarch64utils)
+  #target_link_libraries(alive2 PRIVATE ${llvm_libs})
   target_link_libraries(alive-tv PRIVATE ${ALIVE_LIBS_LLVM} ${Z3_LIBRARIES} ${HIREDIS_LIBRARIES} ${llvm_libs})
   target_link_libraries(alive-exec PRIVATE ${ALIVE_LIBS_LLVM} ${Z3_LIBRARIES} ${HIREDIS_LIBRARIES} ${llvm_libs})
 endif()

@@ -57,6 +57,7 @@ FpExceptionMode parse_exceptions(llvm::Instruction &i) {
   }
 }
 
+bool hit_limits;
 unsigned constexpr_idx;
 unsigned copy_idx;
 unsigned alignopbundle_idx;
@@ -133,6 +134,13 @@ class llvm2alive_ : public llvm::InstVisitor<llvm2alive_, unique_ptr<Instr>> {
     llvm::Instruction *newI = cexpr->getAsInstruction();
     newI->setName("__constexpr_" + to_string(constexpr_idx++));
     i_constexprs.push_back(newI);
+
+    // don't bother if the number of instructions exploded
+    if (constexpr_idx > 5'000) {
+      hit_limits = true;
+      *out << "ERROR: Too many constants\n";
+      return {};
+    }
 
     auto ptr = this->visit(*newI);
     if (!ptr)
@@ -1164,7 +1172,13 @@ public:
   RetTy visitInstruction(llvm::Instruction &i) { return error(i); }
 
   RetTy error(llvm::Instruction &i) {
-    *out << "ERROR: Unsupported instruction: " << i << '\n';
+    if (hit_limits)
+      return {};
+    stringstream ss;
+    ss << i;
+
+    *out << "ERROR: Unsupported instruction: "
+         << string_view(std::move(ss).str()).substr(0, 80) << '\n';
     return {};
   }
   RetTy errorAttr(const llvm::Attribute &attr) {
@@ -1269,10 +1283,16 @@ public:
 
       switch (llvmattr.getKindAsEnum()) {
       case llvm::Attribute::InReg:
-      case llvm::Attribute::SExt:
-      case llvm::Attribute::ZExt:
         // TODO: not important for IR verification, but we should check that
         // they don't change
+        break;
+      
+      case llvm::Attribute::SExt:
+        attrs.set(ParamAttrs::Sext);
+        break;
+      
+      case llvm::Attribute::ZExt:
+        attrs.set(ParamAttrs::Zext);
         break;
 
       case llvm::Attribute::ByVal: {
@@ -1358,6 +1378,8 @@ public:
         continue;
 
       switch (llvmattr.getKindAsEnum()) {
+      case llvm::Attribute::SExt: attrs.set(FnAttrs::Sext); break;
+      case llvm::Attribute::ZExt: attrs.set(FnAttrs::Zext); break;
       case llvm::Attribute::NoAlias: attrs.set(FnAttrs::NoAlias); break;
       case llvm::Attribute::NonNull: attrs.set(FnAttrs::NonNull); break;
       case llvm::Attribute::NoUndef: attrs.set(FnAttrs::NoUndef); break;
@@ -1511,6 +1533,7 @@ public:
 
 
   optional<Function> run() {
+    hit_limits = false;
     constexpr_idx = 0;
     copy_idx = 0;
     alignopbundle_idx = 0;
