@@ -200,6 +200,8 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
   set(ALIVE_LIBS_LLVM llvm_util backend_tv ${ALIVE_LIBS})
   set(ALIVE_EXEC_LIBS_LLVM llvm_util backend_tv ${ALIVE_EXEC_LIBS})
 
+  set(LLVM_LINK_COMPONENTS ${LLVM_LINK_COMPONENTS} TargetParser)
+
   add_llvm_executable(alive-tv
     "tools/alive-tv.cpp"
   )
