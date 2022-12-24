@@ -3119,6 +3119,7 @@ public:
       mc_add_identifier(operand.getReg(), 2, stored);
       argNum++;
     }
+    cout << "created non-vector args" << endl;
 
 #if 0 // FIXME enable later
 
