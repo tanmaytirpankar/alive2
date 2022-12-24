@@ -1397,12 +1397,12 @@ class arm2llvm_ {
 
   // Generates string name for the next instruction
   string next_name() {
+    assert(wrapper);
     stringstream ss;
     if (instrs_no_write.contains(wrapper->getOpcode())) {
       ss << "tx" << ++curId << "x" << instructionCount << "x" << blockCount;
     } else {
-      ss 
-         << registerInfo->getName(wrapper->getMCInst().getOperand(0).getReg())
+      ss << registerInfo->getName(wrapper->getMCInst().getOperand(0).getReg())
          << "_" << wrapper->getOpId(0) << "x" << ++curId << "x"
          << instructionCount << "x" << blockCount;
     }
@@ -1428,26 +1428,26 @@ class arm2llvm_ {
   }
 
   Value *createSSubOverflow(Value *a, Value *b) {
-    auto ssub_decl = Intrinsic::getDeclaration(LiftedModule, Intrinsic::ssub_with_overflow,
-                                               a->getType());
+    auto ssub_decl = Intrinsic::getDeclaration(
+        LiftedModule, Intrinsic::ssub_with_overflow, a->getType());
     return CallInst::Create(ssub_decl, {a, b}, next_name(), CurrBB);
   }
 
   Value *createSAddOverflow(Value *a, Value *b) {
-    auto sadd_decl = Intrinsic::getDeclaration(LiftedModule, Intrinsic::sadd_with_overflow,
-                                               a->getType());
+    auto sadd_decl = Intrinsic::getDeclaration(
+        LiftedModule, Intrinsic::sadd_with_overflow, a->getType());
     return CallInst::Create(sadd_decl, {a, b}, next_name(), CurrBB);
   }
 
   Value *createUSubOverflow(Value *a, Value *b) {
-    auto usub_decl = Intrinsic::getDeclaration(LiftedModule, Intrinsic::usub_with_overflow,
-                                               a->getType());
+    auto usub_decl = Intrinsic::getDeclaration(
+        LiftedModule, Intrinsic::usub_with_overflow, a->getType());
     return CallInst::Create(usub_decl, {a, b}, next_name(), CurrBB);
   }
 
   Value *createUAddOverflow(Value *a, Value *b) {
-    auto uadd_decl = Intrinsic::getDeclaration(LiftedModule, Intrinsic::uadd_with_overflow,
-                                               a->getType());
+    auto uadd_decl = Intrinsic::getDeclaration(
+        LiftedModule, Intrinsic::uadd_with_overflow, a->getType());
     return CallInst::Create(uadd_decl, {a, b}, next_name(), CurrBB);
   }
 
@@ -1464,28 +1464,32 @@ class arm2llvm_ {
   }
 
   Value *createFShr(Value *a, Value *b, Value *c) {
-    auto *decl = Intrinsic::getDeclaration(LiftedModule, Intrinsic::fshr, a->getType());
+    auto *decl =
+        Intrinsic::getDeclaration(LiftedModule, Intrinsic::fshr, a->getType());
     return CallInst::Create(decl, {a, b, c}, next_name(), CurrBB);
   }
 
   Value *createFShl(Value *a, Value *b, Value *c) {
-    auto *decl = Intrinsic::getDeclaration(LiftedModule, Intrinsic::fshl, a->getType());
+    auto *decl =
+        Intrinsic::getDeclaration(LiftedModule, Intrinsic::fshl, a->getType());
     return CallInst::Create(decl, {a, b, c}, next_name(), CurrBB);
   }
 
   Value *createBitReverse(Value *v) {
-    auto *decl =
-        Intrinsic::getDeclaration(LiftedModule, Intrinsic::bitreverse, v->getType());
+    auto *decl = Intrinsic::getDeclaration(LiftedModule, Intrinsic::bitreverse,
+                                           v->getType());
     return CallInst::Create(decl, {v}, next_name(), CurrBB);
   }
 
   Value *createCtlz(Value *v) {
-    auto *decl = Intrinsic::getDeclaration(LiftedModule, Intrinsic::ctlz, v->getType());
+    auto *decl =
+        Intrinsic::getDeclaration(LiftedModule, Intrinsic::ctlz, v->getType());
     return CallInst::Create(decl, {v, intconst(0, 1)}, next_name(), CurrBB);
   }
 
   Value *createBSwap(Value *v) {
-    auto *decl = Intrinsic::getDeclaration(LiftedModule, Intrinsic::bswap, v->getType());
+    auto *decl =
+        Intrinsic::getDeclaration(LiftedModule, Intrinsic::bswap, v->getType());
     return CallInst::Create(decl, {v}, next_name(), CurrBB);
   }
 
@@ -1747,11 +1751,12 @@ class arm2llvm_ {
   }
 
 public:
-  arm2llvm_(Module *LiftedModule, MCFunction &MF, IR::Function &srcFn, Function &srcFnLLVM,
-            MCInstPrinter *instrPrinter, MCRegisterInfo *registerInfo)
-    : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn), srcFnLLVM(srcFnLLVM),
-      instrPrinter(instrPrinter),
-      registerInfo(registerInfo), instructionCount(0), curId(0) {}
+  arm2llvm_(Module *LiftedModule, MCFunction &MF, IR::Function &srcFn,
+            Function &srcFnLLVM, MCInstPrinter *instrPrinter,
+            MCRegisterInfo *registerInfo)
+      : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn), srcFnLLVM(srcFnLLVM),
+        instrPrinter(instrPrinter), registerInfo(registerInfo),
+        instructionCount(0), curId(0) {}
 
   // Visit an MCInstWrapper instructions and convert it to LLVM IR
   void mc_visit(MCInstWrapper &I, Function &Fn) {
@@ -3059,8 +3064,8 @@ public:
       args.push_back(ty);
     }
     auto FTy = FunctionType::get(func_return_type, args, false);
-    auto Fn =
-      Function::Create(FTy, GlobalValue::ExternalLinkage, 0, MF.getName(), LiftedModule);
+    auto Fn = Function::Create(FTy, GlobalValue::ExternalLinkage, 0,
+                               MF.getName(), LiftedModule);
 
     cout << "function name: '" << MF.getName() << "'" << endl;
     for (auto &Arg : Fn->args())
@@ -3217,9 +3222,11 @@ public:
 // Adapted from llvm2alive_ in llvm2alive.cpp with some simplifying assumptions
 // FIXME for now, we are making a lot of simplifying assumptions like assuming
 // types of arguments.
-  Function *arm2llvm(Module *ArmModule, MCFunction &MF, IR::Function &srcFn, Function &srcFnLLVM,
-                   MCInstPrinter *instrPrinter, MCRegisterInfo *registerInfo) {
-    return arm2llvm_(ArmModule, MF, srcFn, srcFnLLVM, instrPrinter, registerInfo).run();
+Function *arm2llvm(Module *ArmModule, MCFunction &MF, IR::Function &srcFn,
+                   Function &srcFnLLVM, MCInstPrinter *instrPrinter,
+                   MCRegisterInfo *registerInfo) {
+  return arm2llvm_(ArmModule, MF, srcFn, srcFnLLVM, instrPrinter, registerInfo)
+      .run();
 }
 
 // We're overriding MCStreamerWrapper to generate an MCFunction
@@ -3773,8 +3780,9 @@ void adjustSrcReturn(IR::Function &srcFn) {
 
 } // namespace
 
-Function *lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input, string opt_file2,
-                    bool opt_asm_only, IR::Function &AF, Function *LLVMFunc) {
+Function *lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input,
+                    string opt_file2, bool opt_asm_only, IR::Function &AF,
+                    Function *LLVMFunc) {
 
   AF.print(cout << "\n----------alive-ir-src.ll-file----------\n");
   adjustSrcInputs(AF);
