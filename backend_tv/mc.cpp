@@ -1554,8 +1554,8 @@ class arm2llvm_ {
     return new FreezeInst(v, (NameStr == "") ? next_name() : NameStr, CurrBB);
   }
 
-  Value *createTrunc(Value *v, Type *t) {
-    return CastInst::Create(Instruction::Trunc, v, t, next_name(), CurrBB);
+  Value *createTrunc(Value *v, Type *t, const string &NameStr = "") {
+    return CastInst::Create(Instruction::Trunc, v, t, (NameStr == "") ? next_name() : NameStr, CurrBB);
   }
 
   Value *createSExt(Value *v, Type *t, const string &NameStr = "") {
@@ -3068,8 +3068,6 @@ public:
                                MF.getName(), LiftedModule);
 
     cout << "function name: '" << MF.getName() << "'" << endl;
-    for (auto &Arg : Fn->args())
-      Arg.addAttr(Attribute::NoUndef);
 
     vector<pair<BasicBlock *, MCBasicBlock *>> sorted_bbs;
     createBBs(sorted_bbs, *Fn);
@@ -3077,15 +3075,14 @@ public:
     unsigned argNum = 0;
     unsigned idx = 0;
     for (auto &Arg : Fn->args()) {
-      auto Ty = Arg.getType();
-      Value *stored = &Arg;
-
       // generate names and values for the input arguments
       // FIXME this is pretty convoluted and needs to be cleaned up
       auto operand = MCOperand::createReg(AArch64::X0 + argNum);
 
+      Value *stored = createFreeze(&Arg, next_name(operand.getReg(), 1));
+
       mc_add_identifier(operand.getReg(), 1, &Arg);
-      assert(Ty->getIntegerBitWidth() == 64 &&
+      assert(Arg.getType()->getIntegerBitWidth() == 64 &&
              "at this point input type should be 64 bits");
 
       if (!new_input_idx_bitwidth.empty() &&
@@ -3095,7 +3092,7 @@ public:
           op = Instruction::SExt;
 
         auto truncated_type = get_int_type(new_input_idx_bitwidth[idx].second);
-        stored = createTrunc(stored, truncated_type);
+        stored = createTrunc(stored, truncated_type, next_name(operand.getReg(), 2));
         auto extended_type = get_int_type(64);
         if (truncated_type->getIntegerBitWidth() == 1) {
           stored = createCast(stored, get_int_type(32), op,
