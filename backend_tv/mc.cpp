@@ -3712,13 +3712,14 @@ void adjustSrcInputs(IR::Function &srcFn) {
 }
 
 void adjustSrcReturn(IR::Function &srcFn) {
-  // Do nothing if the return operand attribute does not include signext/zeroext
+  // Nothing needs to be done unless the return operand attribute does
+  // includes signext/zeroext
+  
   auto &ret_typ = srcFn.getType();
   auto &fnAttrs = srcFn.getFnAttrs();
 
-  if (!fnAttrs.has(IR::FnAttrs::Sext)) {
+  if (!fnAttrs.has(IR::FnAttrs::SignExt))
     return;
-  }
 
   if (!ret_typ.isIntType())
     report_fatal_error("[Unsupported Function Return]: Only int types "
