@@ -3926,5 +3926,5 @@ Function *lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input,
   cout << "after SSA conversion\n";
   MCSW.printBlocksMF();
 
-  return arm2llvm(&ArmModule, MCSW.MF, AF, *LLVMFunc, IPtemp.get(), MRI.get());
+  return arm2llvm(&LiftedModule, MCSW.MF, AF, *LLVMFunc, IPtemp.get(), MRI.get());
 }

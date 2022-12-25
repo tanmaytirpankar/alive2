@@ -471,6 +471,8 @@ bool backendTV() {
     llvm::report_fatal_error("could not lift function");
   llvm::outs() << "\n----------alive-lift-arm-target----------\n";
 
+  assert(TF->getParent() == M2.get());
+  
   M2->print(llvm::outs(), nullptr);
 
   if (llvm::verifyModule(*M2.get())) {
@@ -478,9 +480,14 @@ bool backendTV() {
     abort();
   }
 
-  // FIXME optimize TF
+  cout << "llvm optimizer says: " << optimize_module(M2.get(), "Oz");
   
-  // TF->print(llvm::outs());
+  if (llvm::verifyModule(*M2.get())) {
+    llvm::errs() << "Error: lifted, optimized module failed verification. This shouldn't happen.\n";
+    abort();
+  }
+
+  M2->print(llvm::outs(), nullptr);
 
   auto r = backend_verify(AF.value(), *TF, TLI, true);
 
