@@ -37,7 +37,6 @@ public:
 
   void addInstr(std::unique_ptr<Instr> &&i, bool push_front = false);
   void addInstrAt(std::unique_ptr<Instr> &&i, const Instr *other, bool before);
-  void delInstr(Instr *i);
   void delInstr(const Instr *i);
 
   util::const_strip_unique_ptr<decltype(m_instrs)> instrs() const {
@@ -136,7 +135,7 @@ public:
   void addAggregate(std::unique_ptr<AggregateValue> &&a);
 
   void addInput(std::unique_ptr<Value> &&c);
-  void addInputAt(std::unique_ptr<Value> &&c, unsigned idx);
+  void replaceInput(std::unique_ptr<Value> &&c, unsigned idx);
   Value &getInput(int idx) { return *inputs[idx]; }
   util::const_strip_unique_ptr<decltype(inputs)> getInputs() const {
     return inputs;
