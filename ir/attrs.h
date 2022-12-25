@@ -124,13 +124,8 @@ public:
                    NoThrow = 1 << 7, NoAlias = 1 << 8, WillReturn = 1 << 9,
                    DereferenceableOrNull = 1 << 10,
                    NullPointerIsValid = 1 << 11,
-<<<<<<< HEAD
-                   AllocSize = 1 << 12, Zext = 1<<13, 
-                   Sext = 1<<14 };
-=======
                    AllocSize = 1 << 12, ZeroExt = 1<<13,
                    SignExt = 1<<14 };
->>>>>>> origin/master
 
   FnAttrs(unsigned bits = None) : bits(bits) {}
 

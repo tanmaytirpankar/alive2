@@ -1295,10 +1295,6 @@ public:
         // verification, but we should check that they don't change
 
       case llvm::Attribute::InReg:
-<<<<<<< HEAD
-        // TODO: not important for IR verification, but we should check that
-        // they don't change
-=======
         break;
 
       case llvm::Attribute::SExt:
@@ -1307,16 +1303,6 @@ public:
 
       case llvm::Attribute::ZExt:
         attrs.set(ParamAttrs::ZeroExt);
->>>>>>> origin/master
-        break;
-      
-      case llvm::Attribute::SExt:
-        attrs.set(ParamAttrs::Sext);
-        break;
-      
-      case llvm::Attribute::ZExt:
-        attrs.set(ParamAttrs::Zext);
-        break;
 
       case llvm::Attribute::ByVal: {
         attrs.set(ParamAttrs::ByVal);
@@ -1401,13 +1387,8 @@ public:
         continue;
 
       switch (llvmattr.getKindAsEnum()) {
-<<<<<<< HEAD
-      case llvm::Attribute::SExt: attrs.set(FnAttrs::Sext); break;
-      case llvm::Attribute::ZExt: attrs.set(FnAttrs::Zext); break;
-=======
       case llvm::Attribute::SExt: attrs.set(FnAttrs::SignExt); break;
       case llvm::Attribute::ZExt: attrs.set(FnAttrs::ZeroExt); break;
->>>>>>> origin/master
       case llvm::Attribute::NoAlias: attrs.set(FnAttrs::NoAlias); break;
       case llvm::Attribute::NonNull: attrs.set(FnAttrs::NonNull); break;
       case llvm::Attribute::NoUndef: attrs.set(FnAttrs::NoUndef); break;

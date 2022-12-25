@@ -3271,7 +3271,7 @@ public:
           (argNum == new_input_idx_bitwidth[idx].first)) {
         IR::ConversionOp::Op op(IR::ConversionOp::ZExt);
 
-        if (input_ptr->getAttributes().has(IR::ParamAttrs::Sext)) {
+        if (input_ptr->getAttributes().has(IR::ParamAttrs::SignExt)) {
           op = IR::ConversionOp::SExt;
         }
 
@@ -3929,7 +3929,7 @@ void adjustSrcReturn(IR::Function &srcFn) {
   auto &ret_typ = srcFn.getType();
   auto &fnAttrs = srcFn.getFnAttrs();
 
-  if (!fnAttrs.has(IR::FnAttrs::Sext)) {
+  if (!fnAttrs.has(IR::FnAttrs::SignExt)) {
     return;
   }
 

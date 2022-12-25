@@ -91,15 +91,9 @@ ostream& operator<<(ostream &os, const FnAttrs &attr) {
     os << " dereferenceable_or_null(" << attr.derefOrNullBytes << ')';
   if (attr.has(FnAttrs::NullPointerIsValid))
     os << " null_pointer_is_valid";
-<<<<<<< HEAD
-  if (attr.has(FnAttrs::Zext))
-    os << " zeroext";
-  if (attr.has(FnAttrs::Sext))
-=======
   if (attr.has(FnAttrs::ZeroExt))
     os << " zeroext";
   if (attr.has(FnAttrs::SignExt))
->>>>>>> origin/master
     os << " signext";
   if (!attr.allocfamily.empty())
     os << " alloc-family(" << attr.allocfamily << ')';
