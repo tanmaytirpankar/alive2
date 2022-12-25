@@ -1423,35 +1423,35 @@ class arm2llvm_ {
     BranchInst::Create(dst, CurrBB);
   }
 
-  Value *createLoad(Type *ty, Value *ptr, unsigned align) {
+  LoadInst *createLoad(Type *ty, Value *ptr, unsigned align) {
     return new LoadInst(ty, ptr, next_name(), false, Align(align), CurrBB);
   }
 
-  Value *createSSubOverflow(Value *a, Value *b) {
+  CallInst *createSSubOverflow(Value *a, Value *b) {
     auto ssub_decl = Intrinsic::getDeclaration(
         LiftedModule, Intrinsic::ssub_with_overflow, a->getType());
     return CallInst::Create(ssub_decl, {a, b}, next_name(), CurrBB);
   }
 
-  Value *createSAddOverflow(Value *a, Value *b) {
+  CallInst *createSAddOverflow(Value *a, Value *b) {
     auto sadd_decl = Intrinsic::getDeclaration(
         LiftedModule, Intrinsic::sadd_with_overflow, a->getType());
     return CallInst::Create(sadd_decl, {a, b}, next_name(), CurrBB);
   }
 
-  Value *createUSubOverflow(Value *a, Value *b) {
+  CallInst *createUSubOverflow(Value *a, Value *b) {
     auto usub_decl = Intrinsic::getDeclaration(
         LiftedModule, Intrinsic::usub_with_overflow, a->getType());
     return CallInst::Create(usub_decl, {a, b}, next_name(), CurrBB);
   }
 
-  Value *createUAddOverflow(Value *a, Value *b) {
+  CallInst *createUAddOverflow(Value *a, Value *b) {
     auto uadd_decl = Intrinsic::getDeclaration(
         LiftedModule, Intrinsic::uadd_with_overflow, a->getType());
     return CallInst::Create(uadd_decl, {a, b}, next_name(), CurrBB);
   }
 
-  Value *createExtractValue(Value *v, ArrayRef<unsigned> idxs) {
+  ExtractValueInst *createExtractValue(Value *v, ArrayRef<unsigned> idxs) {
     return ExtractValueInst::Create(v, idxs, next_name(), CurrBB);
   }
 
@@ -1463,112 +1463,112 @@ class arm2llvm_ {
     return ReturnInst::Create(LLVMCtx, v, CurrBB);
   }
 
-  Value *createFShr(Value *a, Value *b, Value *c) {
+  CallInst *createFShr(Value *a, Value *b, Value *c) {
     auto *decl =
         Intrinsic::getDeclaration(LiftedModule, Intrinsic::fshr, a->getType());
     return CallInst::Create(decl, {a, b, c}, next_name(), CurrBB);
   }
 
-  Value *createFShl(Value *a, Value *b, Value *c) {
+  CallInst *createFShl(Value *a, Value *b, Value *c) {
     auto *decl =
         Intrinsic::getDeclaration(LiftedModule, Intrinsic::fshl, a->getType());
     return CallInst::Create(decl, {a, b, c}, next_name(), CurrBB);
   }
 
-  Value *createBitReverse(Value *v) {
+  CallInst *createBitReverse(Value *v) {
     auto *decl = Intrinsic::getDeclaration(LiftedModule, Intrinsic::bitreverse,
                                            v->getType());
     return CallInst::Create(decl, {v}, next_name(), CurrBB);
   }
 
-  Value *createCtlz(Value *v) {
+  CallInst *createCtlz(Value *v) {
     auto *decl =
         Intrinsic::getDeclaration(LiftedModule, Intrinsic::ctlz, v->getType());
     return CallInst::Create(decl, {v, intconst(0, 1)}, next_name(), CurrBB);
   }
 
-  Value *createBSwap(Value *v) {
+  CallInst *createBSwap(Value *v) {
     auto *decl =
         Intrinsic::getDeclaration(LiftedModule, Intrinsic::bswap, v->getType());
     return CallInst::Create(decl, {v}, next_name(), CurrBB);
   }
 
-  Value *createSelect(Value *cond, Value *a, Value *b) {
+  SelectInst *createSelect(Value *cond, Value *a, Value *b) {
     return SelectInst::Create(cond, a, b, next_name(), CurrBB);
   }
 
-  Value *createICmp(ICmpInst::Predicate p, Value *a, Value *b) {
+  ICmpInst *createICmp(ICmpInst::Predicate p, Value *a, Value *b) {
     return new ICmpInst(*CurrBB, p, a, b, next_name());
   }
 
-  Value *createBinop(Value *a, Value *b, Instruction::BinaryOps op) {
+  BinaryOperator *createBinop(Value *a, Value *b, Instruction::BinaryOps op) {
     return BinaryOperator::Create(op, a, b, next_name(), CurrBB);
   }
 
-  Value *createUDiv(Value *a, Value *b) {
+  BinaryOperator *createUDiv(Value *a, Value *b) {
     return BinaryOperator::Create(Instruction::UDiv, a, b, next_name(), CurrBB);
   }
 
-  Value *createSDiv(Value *a, Value *b) {
+  BinaryOperator *createSDiv(Value *a, Value *b) {
     return BinaryOperator::Create(Instruction::SDiv, a, b, next_name(), CurrBB);
   }
 
-  Value *createMul(Value *a, Value *b) {
+  BinaryOperator *createMul(Value *a, Value *b) {
     return BinaryOperator::Create(Instruction::Mul, a, b, next_name(), CurrBB);
   }
 
-  Value *createAdd(Value *a, Value *b) {
+  BinaryOperator *createAdd(Value *a, Value *b) {
     return BinaryOperator::Create(Instruction::Add, a, b, next_name(), CurrBB);
   }
 
-  Value *createSub(Value *a, Value *b) {
+  BinaryOperator *createSub(Value *a, Value *b) {
     return BinaryOperator::Create(Instruction::Sub, a, b, next_name(), CurrBB);
   }
 
-  Value *createLShr(Value *a, Value *b) {
+  BinaryOperator *createLShr(Value *a, Value *b) {
     return BinaryOperator::Create(Instruction::LShr, a, b, next_name(), CurrBB);
   }
 
-  Value *createAShr(Value *a, Value *b) {
+  BinaryOperator *createAShr(Value *a, Value *b) {
     return BinaryOperator::Create(Instruction::AShr, a, b, next_name(), CurrBB);
   }
 
-  Value *createShl(Value *a, Value *b) {
+  BinaryOperator *createShl(Value *a, Value *b) {
     return BinaryOperator::Create(Instruction::Shl, a, b, next_name(), CurrBB);
   }
 
-  Value *createAnd(Value *a, Value *b) {
+  BinaryOperator *createAnd(Value *a, Value *b) {
     return BinaryOperator::Create(Instruction::And, a, b, next_name(), CurrBB);
   }
 
-  Value *createOr(Value *a, Value *b, const string &NameStr = "") {
+  BinaryOperator *createOr(Value *a, Value *b, const string &NameStr = "") {
     return BinaryOperator::Create(
         Instruction::Or, a, b, (NameStr == "") ? next_name() : NameStr, CurrBB);
   }
 
-  Value *createXor(Value *a, Value *b) {
+  BinaryOperator *createXor(Value *a, Value *b) {
     return BinaryOperator::Create(Instruction::Xor, a, b, next_name(), CurrBB);
   }
 
-  Value *createFreeze(Value *v, const string &NameStr = "") {
+  FreezeInst *createFreeze(Value *v, const string &NameStr = "") {
     return new FreezeInst(v, (NameStr == "") ? next_name() : NameStr, CurrBB);
   }
 
-  Value *createTrunc(Value *v, Type *t, const string &NameStr = "") {
+  CastInst *createTrunc(Value *v, Type *t, const string &NameStr = "") {
     return CastInst::Create(Instruction::Trunc, v, t, (NameStr == "") ? next_name() : NameStr, CurrBB);
   }
 
-  Value *createSExt(Value *v, Type *t, const string &NameStr = "") {
+  CastInst *createSExt(Value *v, Type *t, const string &NameStr = "") {
     return CastInst::Create(Instruction::SExt, v, t,
                             (NameStr == "") ? next_name() : NameStr, CurrBB);
   }
 
-  Value *createZExt(Value *v, Type *t, const string &NameStr = "") {
+  CastInst *createZExt(Value *v, Type *t, const string &NameStr = "") {
     return CastInst::Create(Instruction::ZExt, v, t,
                             (NameStr == "") ? next_name() : NameStr, CurrBB);
   }
 
-  Value *createCast(Value *v, Type *t, Instruction::CastOps op,
+  CastInst *createCast(Value *v, Type *t, Instruction::CastOps op,
                     const string &NameStr = "") {
     return CastInst::Create(op, v, t, (NameStr == "") ? next_name() : NameStr,
                             CurrBB);
@@ -3104,7 +3104,7 @@ public:
             stored = createCast(stored, get_int_type(32), op,
                                 next_name(operand.getReg(), 3));
             stored =
-                createZExt(&Arg, extended_type, next_name(operand.getReg(), 4));
+                createZExt(stored, extended_type, next_name(operand.getReg(), 4));
           } else {
             stored = createCast(stored, extended_type, op,
                                 next_name(operand.getReg(), 4));
