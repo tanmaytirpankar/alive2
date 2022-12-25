@@ -131,6 +131,7 @@ public:
   }
 
   void addAggregate(std::unique_ptr<AggregateValue> &&a);
+
   void addInput(std::unique_ptr<Value> &&c);
   void replaceInput(std::unique_ptr<Value> &&c, unsigned idx);
   Value &getInput(int idx) { return *inputs[idx]; }
