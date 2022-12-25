@@ -114,8 +114,6 @@ public:
 
   void removeBB(BasicBlock &BB);
 
-  bool hasOneUse(const Instr &i);
-
   void addConstant(std::unique_ptr<Value> &&c);
   util::const_strip_unique_ptr<decltype(constants)> getConstants() const {
     return constants;
@@ -134,10 +132,10 @@ public:
   }
 
   void addAggregate(std::unique_ptr<AggregateValue> &&a);
-
   void addInput(std::unique_ptr<Value> &&c);
   void addInputAt(std::unique_ptr<Value> &&c, unsigned idx);
   Value &getInput(int idx) { return *inputs[idx]; }
+  
   util::const_strip_unique_ptr<decltype(inputs)> getInputs() const {
     return inputs;
   }

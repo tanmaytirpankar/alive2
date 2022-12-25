@@ -198,27 +198,6 @@ void Function::removeBB(BasicBlock &BB) {
   }
 }
 
-bool Function::hasOneUse(const Instr &target) {
-  long uses = 0;
-  for (auto *bb : getBBs()) {
-    for (auto &i : bb->instrs()) {
-      for (auto op : i.operands()) {
-        auto ip = dynamic_cast<Instr*>(op);
-        if (ip != nullptr && &target == ip)
-          uses++;
-      }
-    }
-  }
-  for (auto &agg : aggregates) {
-    for (auto val : agg->getVals()) {
-      auto ip = dynamic_cast<Instr*>(val);
-      if (ip != nullptr && &target == ip)
-        uses++;
-    }
-  }
-  return uses == 1;
-}
-
 void Function::addConstant(unique_ptr<Value> &&c) {
   constants.emplace_back(std::move(c));
 }
