@@ -3702,7 +3702,7 @@ void adjustSrcInputs(IR::Function &srcFn) {
         *new_inputs[i].get(), IR::ConversionOp::Trunc);
     srcFn.rauw(srcFn.getInput(new_input_idx_bitwidth[i].first), *new_ir);
     srcFn.getFirstBB().addInstr(std::move(new_ir), true);
-    srcFn.addInputAt(std::move(new_inputs[i]), new_input_idx_bitwidth[i].first);
+    srcFn.replaceInput(std::move(new_inputs[i]), new_input_idx_bitwidth[i].first);
   }
 
   // cout << "After adjusting inputs:\n";

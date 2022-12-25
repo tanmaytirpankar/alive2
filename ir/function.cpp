@@ -49,16 +49,6 @@ void BasicBlock::addInstrAt(unique_ptr<Instr> &&i, const Instr *other,
     }
   }
 }
-#if 0
-void BasicBlock::delInstr(Instr *i) {
-  for (auto I = m_instrs.begin(), E = m_instrs.end(); I != E; ++I) {
-    if (I->get() == i) {
-      m_instrs.erase(I);
-      return;
-    }
-  }
-}
-#endif
 
 void BasicBlock::delInstr(const Instr *i) {
   for (auto I = m_instrs.begin(), E = m_instrs.end(); I != E; ++I) {
@@ -238,7 +228,7 @@ void Function::addInput(unique_ptr<Value> &&i) {
   inputs.emplace_back(std::move(i));
 }
 
-void Function::addInputAt(std::unique_ptr<Value> &&c, unsigned idx) {
+void Function::replaceInput(std::unique_ptr<Value> &&c, unsigned idx) {
   inputs[idx] = std::move(c);
 }
 
