@@ -1294,11 +1294,11 @@ public:
         // TODO: not important for IR verification, but we should check that
         // they don't change
         break;
-      
+
       case llvm::Attribute::SExt:
         attrs.set(ParamAttrs::Sext);
         break;
-      
+
       case llvm::Attribute::ZExt:
         attrs.set(ParamAttrs::Zext);
         break;
