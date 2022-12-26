@@ -2759,20 +2759,15 @@ public:
     case AArch64::RET: {
       // for now we're assuming that the function returns an integer or void
       // value
-
-#if 0 // FIXME
-      if (srcFn.getType().isVectorType()) {
+      auto retTy = srcFnLLVM.getReturnType();
+      if (auto *vecRetTy = dyn_cast<VectorType>(retTy)) {
         cout << "returning vector type\n";
-        auto ret_type_ptr = dynamic_cast<const VectorType *>(&srcFn.getType());
-        auto elem_bitwidth = ret_type_ptr->getChild(0)->getIntegerBitWidth();
-        auto poison_val =
-            make_unique<IR::PoisonValue>(ret_type_ptr->getChild(0));
-        auto poison_val_ptr = poison_val.get();
-        Fn.addConstant(std::move(poison_val));
+        auto elem_bitwidth = vecRetTy->getScalarType()->getIntegerBitWidth();
+        auto poison_val = PoisonValue::get(vecRetTy->getScalarType());
         vector<Value *> vals;
-        for (unsigned i = 0; i < ret_type_ptr->numElementsConst(); ++i) {
-          vals.emplace_back(poison_val_ptr);
-        }
+        auto elts = vecRetTy->getElementCount()->getKnownMinValue();
+        for (unsigned i = 0; i < elts; ++i)
+          vals.emplace_back(poison_val);
 
         // Hacky way to identify how the returned vector is mapped to register
         // in the assembly
@@ -2787,12 +2782,9 @@ public:
         // cout << "largest vect register=" << largest_vect_register-AArch64::Q0
         // << "\n";
 
-        Type *func_return_type = VectorType::get(ret_type_ptr->getScalarType(),
-                                                 dyn_cast<VectorType>(ret_type_ptr)->getElementCount());
+        Type *func_return_type = VectorType::get(vecRetTy->getScalarType(), elts);
         auto ret_vect_val =
             make_unique<IR::AggregateValue>(*func_return_type, std::move(vals));
-        Value *vect_val_ptr = ret_vect_val.get();
-        Fn.addConstant(std::move(ret_vect_val));
 
         auto elem_ret_typ = get_int_type(elem_bitwidth);
         for (unsigned i = 0; i < ret_type_ptr->numElementsConst(); ++i) {
@@ -2801,43 +2793,40 @@ public:
             // FIXME
             auto vect_reg_val = cur_vol_regs[MCBB][AArch64::Q0 + i];
             assert(vect_reg_val && "register value to return cannot be null!");
-
             auto trunc = createTrunc(vect_reg_val, elem_ret_typ);
-
             vect_val_ptr = add_instr<IR::InsertElement>(
                 *func_return_type, next_name(), *vect_val_ptr, *trunc,
                 intconst(i, 32));
           }
         }
-
         add_instr<IR::Return>(*func_return_type, *vect_val_ptr);
-        break;
-      }
-#endif
 
-      if (ret_void) {
-        createRet(nullptr);
       } else {
-        auto retTyp = srcFnLLVM.getReturnType();
-        auto val = getIdentifier(mc_inst.getOperand(0).getReg(), I.getOpId(0));
-        if (val) {
-          if (retTyp->getIntegerBitWidth() <
-              val->getType()->getIntegerBitWidth())
-            val = createTrunc(val, retTyp);
 
-          // for don't care bits we need to mask them off before returning
-          if (has_ret_attr && (original_ret_bitwidth < 32)) {
-            assert(retTyp->getIntegerBitWidth() >= original_ret_bitwidth);
-            assert(retTyp->getIntegerBitWidth() == 64);
-            auto trunc = createTrunc(val, get_int_type(32));
-            val = createZExt(trunc, get_int_type(64));
-          }
-          createRet(val);
+        if (ret_void) {
+          createRet(nullptr);
         } else {
-          // Hacky solution to deal with functions where the assembly
-          // is just a ret instruction
-          cout << "hack: returning zero" << endl;
-          createRet(intconst(0, retTyp->getIntegerBitWidth()));
+          auto retTyp = srcFnLLVM.getReturnType();
+          auto val = getIdentifier(mc_inst.getOperand(0).getReg(), I.getOpId(0));
+          if (val) {
+            if (retTyp->getIntegerBitWidth() <
+                val->getType()->getIntegerBitWidth())
+              val = createTrunc(val, retTyp);
+            
+            // for don't care bits we need to mask them off before returning
+            if (has_ret_attr && (original_ret_bitwidth < 32)) {
+              assert(retTyp->getIntegerBitWidth() >= original_ret_bitwidth);
+              assert(retTyp->getIntegerBitWidth() == 64);
+              auto trunc = createTrunc(val, get_int_type(32));
+              val = createZExt(trunc, get_int_type(64));
+            }
+            createRet(val);
+          } else {
+            // Hacky solution to deal with functions where the assembly
+            // is just a ret instruction
+            cout << "hack: returning zero" << endl;
+            createRet(intconst(0, retTyp->getIntegerBitWidth()));
+          }
         }
       }
       break;
