@@ -2765,7 +2765,7 @@ public:
         auto elem_bitwidth = vecRetTy->getScalarType()->getIntegerBitWidth();
         auto poison_val = PoisonValue::get(vecRetTy->getScalarType());
         vector<Value *> vals;
-        auto elts = vecRetTy->getElementCount()->getKnownMinValue();
+        auto elts = vecRetTy->getElementCount().getKnownMinValue();
         for (unsigned i = 0; i < elts; ++i)
           vals.emplace_back(poison_val);
 
@@ -2782,15 +2782,10 @@ public:
         // cout << "largest vect register=" << largest_vect_register-AArch64::Q0
         // << "\n";
 
-        Type *func_return_type = VectorType::get(vecRetTy->getScalarType(), elts);
-        auto ret_vect_val =
-            make_unique<IR::AggregateValue>(*func_return_type, std::move(vals));
-
         auto elem_ret_typ = get_int_type(elem_bitwidth);
-        for (unsigned i = 0; i < ret_type_ptr->numElementsConst(); ++i) {
-          // need to trunc if the element's bitwidth is less than 128
-          if (elem_bitwidth < 128) {
-            // FIXME
+	// need to trunc if the element's bitwidth is less than 128
+	if (elem_bitwidth < 128) {
+	  for (unsigned i = 0; i < elts; ++i) {
             auto vect_reg_val = cur_vol_regs[MCBB][AArch64::Q0 + i];
             assert(vect_reg_val && "register value to return cannot be null!");
             auto trunc = createTrunc(vect_reg_val, elem_ret_typ);
@@ -2799,10 +2794,8 @@ public:
                 intconst(i, 32));
           }
         }
-        add_instr<IR::Return>(*func_return_type, *vect_val_ptr);
-
+	createReturn(vect_val);
       } else {
-
         if (ret_void) {
           createRet(nullptr);
         } else {
