@@ -173,9 +173,7 @@ struct MCOperandEqual {
   bool operator()(const MCOperand &lhs, const MCOperand &rhs) const {
     return ((lhs.isReg() && rhs.isReg() && (lhs.getReg() == rhs.getReg())) ||
             (lhs.isImm() && rhs.isImm() && (lhs.getImm() == rhs.getImm())) ||
-            (lhs.isExpr() && rhs.isExpr() &&
-             (lhs.getExpr() ==
-              rhs.getExpr())));
+            (lhs.isExpr() && rhs.isExpr() && (lhs.getExpr() == rhs.getExpr())));
   }
 };
 
@@ -1534,7 +1532,8 @@ class arm2llvm_ {
   }
 
   CastInst *createTrunc(Value *v, Type *t, const string &NameStr = "") {
-    return CastInst::Create(Instruction::Trunc, v, t, (NameStr == "") ? next_name() : NameStr, CurrBB);
+    return CastInst::Create(Instruction::Trunc, v, t,
+                            (NameStr == "") ? next_name() : NameStr, CurrBB);
   }
 
   CastInst *createSExt(Value *v, Type *t, const string &NameStr = "") {
@@ -1548,7 +1547,7 @@ class arm2llvm_ {
   }
 
   CastInst *createCast(Value *v, Type *t, Instruction::CastOps op,
-                    const string &NameStr = "") {
+                       const string &NameStr = "") {
     return CastInst::Create(op, v, t, (NameStr == "") ? next_name() : NameStr,
                             CurrBB);
   }
@@ -2762,9 +2761,9 @@ public:
         // << "\n";
 
         auto elem_ret_typ = get_int_type(elem_bitwidth);
-	// need to trunc if the element's bitwidth is less than 128
-	if (elem_bitwidth < 128) {
-	  for (unsigned i = 0; i < elts; ++i) {
+        // need to trunc if the element's bitwidth is less than 128
+        if (elem_bitwidth < 128) {
+          for (unsigned i = 0; i < elts; ++i) {
             auto vect_reg_val = cur_vol_regs[MCBB][AArch64::Q0 + i];
             assert(vect_reg_val && "register value to return cannot be null!");
             auto trunc = createTrunc(vect_reg_val, elem_ret_typ);
@@ -2773,18 +2772,19 @@ public:
                 intconst(i, 32));
           }
         }
-	createReturn(vect_val);
+        createReturn(vect_val);
       } else {
         if (ret_void) {
           createRet(nullptr);
         } else {
           auto retTyp = srcFnLLVM.getReturnType();
-          auto val = getIdentifier(mc_inst.getOperand(0).getReg(), I.getOpId(0));
+          auto val =
+              getIdentifier(mc_inst.getOperand(0).getReg(), I.getOpId(0));
           if (val) {
             if (retTyp->getIntegerBitWidth() <
                 val->getType()->getIntegerBitWidth())
               val = createTrunc(val, retTyp);
-            
+
             // for don't care bits we need to mask them off before returning
             if (has_ret_attr && (original_ret_bitwidth < 32)) {
               assert(retTyp->getIntegerBitWidth() >= original_ret_bitwidth);
@@ -3053,7 +3053,8 @@ public:
           op = Instruction::SExt;
 
         auto truncated_type = get_int_type(new_input_idx_bitwidth[idx].second);
-        stored = createTrunc(stored, truncated_type, next_name(operand.getReg(), 2));
+        stored =
+            createTrunc(stored, truncated_type, next_name(operand.getReg(), 2));
         auto extended_type = get_int_type(64);
         if (truncated_type->getIntegerBitWidth() == 1) {
           stored = createCast(stored, get_int_type(32), op,
@@ -3064,8 +3065,8 @@ public:
           if (truncated_type->getIntegerBitWidth() < 32) {
             stored = createCast(stored, get_int_type(32), op,
                                 next_name(operand.getReg(), 3));
-            stored =
-                createZExt(stored, extended_type, next_name(operand.getReg(), 4));
+            stored = createZExt(stored, extended_type,
+                                next_name(operand.getReg(), 4));
           } else {
             stored = createCast(stored, extended_type, op,
                                 next_name(operand.getReg(), 4));
@@ -3663,7 +3664,8 @@ void adjustSrcInputs(IR::Function &srcFn) {
         *new_inputs[i].get(), IR::ConversionOp::Trunc);
     srcFn.rauw(srcFn.getInput(new_input_idx_bitwidth[i].first), *new_ir);
     srcFn.getFirstBB().addInstr(std::move(new_ir), true);
-    srcFn.replaceInput(std::move(new_inputs[i]), new_input_idx_bitwidth[i].first);
+    srcFn.replaceInput(std::move(new_inputs[i]),
+                       new_input_idx_bitwidth[i].first);
   }
 
   // cout << "After adjusting inputs:\n";
@@ -3675,7 +3677,7 @@ void adjustSrcInputs(IR::Function &srcFn) {
 void adjustSrcReturn(IR::Function &srcFn) {
   // Nothing needs to be done unless the return operand attribute does
   // includes signext/zeroext
-  
+
   auto &ret_typ = srcFn.getType();
   auto &fnAttrs = srcFn.getFnAttrs();
 
@@ -3888,5 +3890,6 @@ Function *lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input,
   cout << "after SSA conversion\n";
   MCSW.printBlocksMF();
 
-  return arm2llvm(&LiftedModule, MCSW.MF, AF, *LLVMFunc, IPtemp.get(), MRI.get());
+  return arm2llvm(&LiftedModule, MCSW.MF, AF, *LLVMFunc, IPtemp.get(),
+                  MRI.get());
 }
