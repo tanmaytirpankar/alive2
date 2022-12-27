@@ -171,14 +171,11 @@ BasicBlock *getBBByName(Function &Fn, StringRef name) {
 struct MCOperandEqual {
   enum Kind { reg = (1 << 2) - 1, immedidate = (1 << 3) - 1 };
   bool operator()(const MCOperand &lhs, const MCOperand &rhs) const {
-    if ((lhs.isReg() && rhs.isReg() && (lhs.getReg() == rhs.getReg())) ||
-        (lhs.isImm() && rhs.isImm() && (lhs.getImm() == rhs.getImm())) ||
-        (lhs.isExpr() && rhs.isExpr() &&
-         (lhs.getExpr() ==
-          rhs.getExpr()))) { // FIXME this is just comparing ptrs
-      return true;
-    }
-    return false;
+    return ((lhs.isReg() && rhs.isReg() && (lhs.getReg() == rhs.getReg())) ||
+            (lhs.isImm() && rhs.isImm() && (lhs.getImm() == rhs.getImm())) ||
+            (lhs.isExpr() && rhs.isExpr() &&
+             (lhs.getExpr() ==
+              rhs.getExpr())));
   }
 };
 
@@ -499,17 +496,14 @@ public:
       jmp_instr.addOperand(MCOperand::createImm(1));
       BBs[0].addInstBegin(std::move(jmp_instr));
     }
-
-    return;
   }
 
   void postOrderDFS(MCBasicBlock &curBlock, BlockSetTy &visited,
                     vector<MCBasicBlock *> &postOrder) {
     visited.insert(&curBlock);
     for (auto succ : curBlock.getSuccs()) {
-      if (find(visited.begin(), visited.end(), succ) == visited.end()) {
+      if (find(visited.begin(), visited.end(), succ) == visited.end())
         postOrderDFS(*succ, visited, postOrder);
-      }
     }
     postOrder.push_back(&curBlock);
   }
@@ -532,9 +526,8 @@ public:
     for (auto &curBlock : blocks) {
       cout << curBlock->getName() << "\n";
       dom[curBlock] = BlockSetTy();
-      for (auto &b : blocks) {
+      for (auto &b : blocks)
         dom[curBlock].insert(b);
-      }
     }
 
     cout << "printing dom before\n";
@@ -550,9 +543,8 @@ public:
           dom[curBlock] = newDom;
         }
       }
-      if (!changed) {
+      if (!changed)
         break;
-      }
     }
     cout << "printing dom after\n";
     printGraph(dom);
@@ -778,9 +770,8 @@ public:
       }
     };
 
-    for (auto &fn_arg : fn_args) {
+    for (auto &fn_arg : fn_args)
       in_range_rewrite(fn_arg);
-    }
 
     for (auto &block : BBs) {
       for (auto &w_instr : block.getInstrs()) {
@@ -886,19 +877,16 @@ public:
 
         for (; i < mc_instr.getNumOperands(); ++i) {
           auto &op = mc_instr.getOperand(i);
-          if (!op.isReg()) {
+          if (!op.isReg())
             continue;
-          }
 
           // hacky way of not renaming the element index for ins instruction
           // variants
-          if ((i == 1) && (ins_variant.contains(mc_instr.getOpcode()))) {
+          if ((i == 1) && (ins_variant.contains(mc_instr.getOpcode())))
             continue;
-          }
 
-          if (op.getReg() == AArch64::WZR || op.getReg() == AArch64::XZR) {
+          if (op.getReg() == AArch64::WZR || op.getReg() == AArch64::XZR)
             continue;
-          }
 
           op.print(errs(), MRI_ptr);
           errs() << "\n";
@@ -940,9 +928,8 @@ public:
         }
       }
 
-      for (auto b : dom_tree[block]) {
+      for (auto b : dom_tree[block])
         rename(b);
-      }
 
       stack = old_stack;
     };
@@ -1002,9 +989,8 @@ public:
     for (auto &[block, phi_vars] : phi_args) {
       for (auto &w_instr : block->getInstrs()) {
         auto &mc_instr = w_instr.getMCInst();
-        if (mc_instr.getOpcode() != AArch64::PHI) {
+        if (mc_instr.getOpcode() != AArch64::PHI)
           break;
-        }
 
         auto phi_var = mc_instr.getOperand(0);
         unsigned index = 1;
@@ -1032,21 +1018,18 @@ public:
   BlockSetTy intersect(BlockSetTy &preds,
                        unordered_map<MCBasicBlock *, BlockSetTy> &dom) {
     BlockSetTy ret;
-    if (preds.size() == 0) {
+    if (preds.size() == 0)
       return ret;
-    }
-    if (preds.size() == 1) {
+    if (preds.size() == 1)
       return dom[*preds.begin()];
-    }
     ret = dom[*preds.begin()];
     auto second = ++preds.begin();
     for (auto it = second; it != preds.end(); ++it) {
       auto &pred_set = dom[*it];
       BlockSetTy new_ret;
       for (auto &b : ret) {
-        if (pred_set.count(b) == 1) {
+        if (pred_set.count(b) == 1)
           new_ret.insert(b);
-        }
       }
       ret = new_ret;
     }
@@ -1058,9 +1041,8 @@ public:
   invertGraph(unordered_map<MCBasicBlock *, BlockSetTy> &graph) {
     unordered_map<MCBasicBlock *, BlockSetTy> res;
     for (auto &curBlock : graph) {
-      for (auto &succ : curBlock.second) {
+      for (auto &succ : curBlock.second)
         res[succ].insert(curBlock.first);
-      }
     }
     return res;
   }
@@ -1069,9 +1051,8 @@ public:
   void printGraph(unordered_map<MCBasicBlock *, BlockSetTy> &graph) {
     for (auto &curBlock : graph) {
       cout << curBlock.first->getName() << ": ";
-      for (auto &dst : curBlock.second) {
+      for (auto &dst : curBlock.second)
         cout << dst->getName() << " ";
-      }
       cout << "\n";
     }
   }
@@ -1185,12 +1166,10 @@ uint64_t decodeLogicalImmediate(uint64_t val, unsigned regSize) {
 // https://developer.arm.com/documentation/ddi0596/2020-12/Shared-Pseudocode/Shared-Functions?lang=en#impl-shared.Replicate.2
 APInt replicate(APInt bits, unsigned N) {
   auto bitsWidth = bits.getBitWidth();
-
   auto newInt = APInt(bitsWidth * N, 0);
   auto mask = APInt(bitsWidth * N, bits.getZExtValue());
-  for (size_t i = 0; i < N; i++) {
+  for (size_t i = 0; i < N; i++)
     newInt |= (mask << (bitsWidth * i));
-  }
   return newInt;
 }
 
@@ -1368,7 +1347,7 @@ class arm2llvm_ {
 
     assert(op.isImm() || op.isReg());
 
-    Value *v;
+    Value *v = nullptr;
     auto ty = get_int_type(size);
 
     if (op.isImm()) {
