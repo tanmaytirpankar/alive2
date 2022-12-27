@@ -2774,24 +2774,27 @@ public:
             auto trunc = createTrunc(vect_reg_val, elem_ret_typ);
             vec = createInsertElement(vec, trunc, intconst(i, 32));
           }
+        } else {
+          assert(false && "we're not handling this case yet");
         }
         createReturn(vec);
       } else {
         if (ret_void) {
           createReturn(nullptr);
         } else {
-          auto retTyp = srcFnLLVM.getReturnType();
+          auto &retTyp = llvm_util::get_int_type(srcFn.getType().bits());
+          auto retWidth = retTyp.bits();
+          cout << "return width = " << retWidth << endl;
           auto val =
               getIdentifier(mc_inst.getOperand(0).getReg(), I.getOpId(0));
           if (val) {
-            if (retTyp->getIntegerBitWidth() <
-                val->getType()->getIntegerBitWidth())
-              val = createTrunc(val, retTyp);
+            if (retWidth < val->getType()->getIntegerBitWidth())
+              val = createTrunc(val, get_int_type(retWidth));
 
             // for don't care bits we need to mask them off before returning
             if (has_ret_attr && (original_ret_bitwidth < 32)) {
-              assert(retTyp->getIntegerBitWidth() >= original_ret_bitwidth);
-              assert(retTyp->getIntegerBitWidth() == 64);
+              assert(retWidth >= original_ret_bitwidth);
+              assert(retWidth == 64);
               auto trunc = createTrunc(val, get_int_type(32));
               val = createZExt(trunc, get_int_type(64));
             }
@@ -2799,8 +2802,8 @@ public:
           } else {
             // Hacky solution to deal with functions where the assembly
             // is just a ret instruction
-            cout << "hack: returning zero" << endl;
-            createReturn(intconst(0, retTyp->getIntegerBitWidth()));
+            cout << "hack: returning poison" << endl;
+            createReturn(PoisonValue::get(get_int_type(retWidth)));
           }
         }
       }
@@ -2808,8 +2811,8 @@ public:
     }
     case AArch64::B: {
       const auto &op = mc_inst.getOperand(0);
-      if (op.isImm()) { // handles the case when we add an entry block with no
-                        // predecessors
+      if (op.isImm()) {
+        // handles the case when we add an entry block with no predecessors
         auto &dst_name = MF.BBs[mc_inst.getOperand(0).getImm()].getName();
         auto BB = getBBByName(Fn, dst_name);
         createBranch(BB);
