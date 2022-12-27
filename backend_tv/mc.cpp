@@ -1436,7 +1436,7 @@ class arm2llvm_ {
     return PHINode::Create(ty, 0, next_name(), CurrBB);
   }
 
-  ReturnInst *createRet(Value *v) {
+  ReturnInst *createReturn(Value *v) {
     return ReturnInst::Create(LLVMCtx, v, CurrBB);
   }
 
@@ -1535,10 +1535,14 @@ class arm2llvm_ {
     return CastInst::Create(Instruction::Trunc, v, t,
                             (NameStr == "") ? next_name() : NameStr, CurrBB);
   }
-
+  
   CastInst *createSExt(Value *v, Type *t, const string &NameStr = "") {
     return CastInst::Create(Instruction::SExt, v, t,
                             (NameStr == "") ? next_name() : NameStr, CurrBB);
+  }
+
+  InsertElementInst *createInsertElement(Value *vec, Value *val, Value *index) {
+    return InsertElementInst::Create(vec, val, index, next_name(), CurrBB);
   }
 
   CastInst *createZExt(Value *v, Type *t, const string &NameStr = "") {
@@ -2742,10 +2746,11 @@ public:
         cout << "returning vector type\n";
         auto elem_bitwidth = vecRetTy->getScalarType()->getIntegerBitWidth();
         auto poison_val = PoisonValue::get(vecRetTy->getScalarType());
-        vector<Value *> vals;
+        vector<Constant *> vals;
         auto elts = vecRetTy->getElementCount().getKnownMinValue();
         for (unsigned i = 0; i < elts; ++i)
           vals.emplace_back(poison_val);
+        Value *vec = ConstantVector::get(vals);
 
         // Hacky way to identify how the returned vector is mapped to register
         // in the assembly
@@ -2767,15 +2772,13 @@ public:
             auto vect_reg_val = cur_vol_regs[MCBB][AArch64::Q0 + i];
             assert(vect_reg_val && "register value to return cannot be null!");
             auto trunc = createTrunc(vect_reg_val, elem_ret_typ);
-            vect_val_ptr = add_instr<IR::InsertElement>(
-                *func_return_type, next_name(), *vect_val_ptr, *trunc,
-                intconst(i, 32));
+            vec = createInsertElement(vec, trunc, intconst(i, 32));
           }
         }
-        createReturn(vect_val);
+        createReturn(vec);
       } else {
         if (ret_void) {
-          createRet(nullptr);
+          createReturn(nullptr);
         } else {
           auto retTyp = srcFnLLVM.getReturnType();
           auto val =
@@ -2792,12 +2795,12 @@ public:
               auto trunc = createTrunc(val, get_int_type(32));
               val = createZExt(trunc, get_int_type(64));
             }
-            createRet(val);
+            createReturn(val);
           } else {
             // Hacky solution to deal with functions where the assembly
             // is just a ret instruction
             cout << "hack: returning zero" << endl;
-            createRet(intconst(0, retTyp->getIntegerBitWidth()));
+            createReturn(intconst(0, retTyp->getIntegerBitWidth()));
           }
         }
       }
