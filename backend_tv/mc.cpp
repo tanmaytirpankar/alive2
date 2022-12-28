@@ -3641,6 +3641,7 @@ Function *adjustSrcReturn(Function *srcFn) {
 
   auto *ret_typ = srcFn->getReturnType();
   orig_ret_bitwidth = ret_typ->getIntegerBitWidth();
+  cout << "original return bitwidth = " << orig_ret_bitwidth << endl;
 
   // FIXME
   if (!ret_typ->isIntegerTy())
@@ -3663,30 +3664,31 @@ Function *adjustSrcReturn(Function *srcFn) {
   auto *i32ty = Type::getIntNTy(srcFn->getContext(), 32);
   auto *i64ty = Type::getIntNTy(srcFn->getContext(), 64);
 
-  for (auto &BB : *srcFn) {
-    for (auto &I : BB) {
-      if (auto *RI = dyn_cast<ReturnInst>(&I)) {
-        auto retVal = RI->getReturnValue();
-        if (orig_ret_bitwidth < 32) {
-          auto sext = new SExtInst(retVal, i32ty,
-                                   retVal->getName() + "_sext",
-                                   &I);
-          auto zext = new ZExtInst(sext, i64ty,
-                                   retVal->getName() + "_zext",
-                                   &I);
-          ReturnInst::Create(srcFn->getContext(),
-                             zext, &I);
-          I.eraseFromParent();
-        } else {
-          auto sext = new SExtInst(retVal, i64ty,
-                                   retVal->getName() + "_sext",
-                                   &I);
-          ReturnInst::Create(srcFn->getContext(),
-                             sext, &I);
-          I.eraseFromParent();
-        }
-      }
+  vector<ReturnInst *> RIs;  
+  for (auto &BB : *srcFn)
+    for (auto &I : BB)
+      if (auto *RI = dyn_cast<ReturnInst>(&I))
+        RIs.push_back(RI);
+
+  for (auto *RI : RIs) {
+    auto retVal = RI->getReturnValue();
+    if (orig_ret_bitwidth < 32) {
+      auto sext = new SExtInst(retVal, i32ty,
+                               retVal->getName() + "_sext",
+                               RI);
+      auto zext = new ZExtInst(sext, i64ty,
+                               retVal->getName() + "_zext",
+                               RI);
+      ReturnInst::Create(srcFn->getContext(),
+                         zext, RI);
+    } else {
+      auto sext = new SExtInst(retVal, i64ty,
+                               retVal->getName() + "_sext",
+                               RI);
+      ReturnInst::Create(srcFn->getContext(),
+                         sext, RI);
     }
+    RI->eraseFromParent();
   }
 
   // FIXME this is duplicate code, factor it out
