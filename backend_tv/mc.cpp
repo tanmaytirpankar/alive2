@@ -705,7 +705,7 @@ public:
   }
 
   // FIXME: this is duplicated code. need to refactor
-  void findArgs(IR::Function &src_fn) {
+  void findArgs(Function *src_fn) {
     unsigned arg_num = 0;
 
     for (auto &v : src_fn.getInputs()) {
@@ -1082,7 +1082,7 @@ vector<unique_ptr<PointerType *>> lifted_ptr_types;
 // Keep track of which oprands had their type adjusted and their original
 // bitwidth
 vector<pair<unsigned, unsigned>> new_input_idx_bitwidth;
-unsigned int original_ret_bitwidth{64};
+unsigned int orig_ret_bitwidth{64};
 bool has_ret_attr{false};
 
 // IR::Type *uadd_overflow_type(MCOperand op, int size) {
@@ -2792,8 +2792,8 @@ public:
               val = createTrunc(val, get_int_type(retWidth));
 
             // for don't care bits we need to mask them off before returning
-            if (has_ret_attr && (original_ret_bitwidth < 32)) {
-              assert(retWidth >= original_ret_bitwidth);
+            if (has_ret_attr && (orig_ret_bitwidth < 32)) {
+              assert(retWidth >= orig_ret_bitwidth);
               assert(retWidth == 64);
               auto trunc = createTrunc(val, get_int_type(32));
               val = createZExt(trunc, get_int_type(64));
@@ -3377,7 +3377,7 @@ public:
   }
 
   // FIXME: this is duplicated code. need to refactor
-  void findArgs(IR::Function &src_fn) {
+  void findArgs(Function *src_fn) {
     MF.findArgs(src_fn);
   }
 
@@ -3683,83 +3683,99 @@ Function *adjustSrcInputs(Function *srcFnLLVM) {
   return NF;
 }
 
-void adjustSrcReturn(IR::Function &srcFnAlive) {
-  // Nothing needs to be done unless the return operand attribute does
+Function *adjustSrcReturn(Function *srcFnLLVM) {
+  // Nothing needs to be done unless the return operand attribute
   // includes signext/zeroext
+  if (!srcFnLLVM->hasRetAttribute(Attribute::SExt))
+    return srcFnLLVM;
 
-  auto &ret_typ = srcFnAlive.getType();
-  auto &fnAttrs = srcFnAlive.getFnAttrs();
+  auto *ret_typ = srcFnLLVM->getReturnType();
+  orig_ret_bitwidth = ret_typ->getIntegerBitWidth();
 
-  if (!fnAttrs.has(IR::FnAttrs::SignExt))
-    return;
-
-  if (!ret_typ.isIntType())
+  // FIXME
+  if (!ret_typ->isIntegerTy())
     report_fatal_error("[Unsupported Function Return]: Only int types "
                        "supported for now");
 
-  if (ret_typ.bits() > 64)
+  // FIXME
+  if (orig_ret_bitwidth > 64)
     report_fatal_error("[Unsupported Function Return]: Only int types 64 "
                        "bits or smaller supported for now");
 
   // don't need to do any extension if the return type is exactly 32 bits
-  if (ret_typ.bits() == 64 || ret_typ.bits() == 32)
-    return;
+  if (orig_ret_bitwidth == 64 || orig_ret_bitwidth == 32)
+    return srcFnLLVM;
 
+  // starting here we commit to returning a copy instead of the
+  // original function
+  
   has_ret_attr = true;
-  original_ret_bitwidth = ret_typ.bits();
+  auto *i32ty = Type::getIntNTy(srcFnLLVM->getContext(), 32);
+  auto *i64ty = Type::getIntNTy(srcFnLLVM->getContext(), 64);
 
-  srcFnAlive.setType(llvm_util::get_int_type(64));
-  for (auto bb : srcFnAlive.getBBs()) {
-    for (auto &i : bb->instrs()) {
-      if (dynamic_cast<const IR::Return *>(&i)) {
-        auto v_op = i.operands();
-        assert(v_op.size() == 1);
-
-        if (original_ret_bitwidth < 32) {
-          string val_name(v_op[0]->getName() + "_sext");
-          string val_name_2(v_op[0]->getName() + "_zext");
-          auto new_ir = make_unique<IR::ConversionOp>(
-              llvm_util::get_int_type(32), std::move(val_name), *v_op[0],
-              IR::ConversionOp::SExt);
-          auto new_ir_2 = make_unique<IR::ConversionOp>(
-              llvm_util::get_int_type(64), std::move(val_name_2), *new_ir,
-              IR::ConversionOp::ZExt);
-          auto new_ret =
-              make_unique<IR::Return>(llvm_util::get_int_type(64), *new_ir_2);
-
-          bb->addInstrAt(std::move(new_ir), &i, true);
-          bb->addInstrAt(std::move(new_ir_2), &i, true);
-          bb->addInstrAt(std::move(new_ret), &i, false);
-          bb->delInstr(&i);
+  for (auto &BB : *srcFnLLVM) {
+    for (auto &I : BB) {
+      if (auto *RI = dyn_cast<ReturnInst>(&I)) {
+        auto retVal = RI->getReturnValue();
+        if (orig_ret_bitwidth < 32) {
+          auto sext = new SExtInst(retVal, i32ty,
+                                   retVal->getName() + "_sext",
+                                   &I);
+          auto zext = new ZExtInst(sext, i64ty,
+                                   retVal->getName() + "_zext",
+                                   &I);
+          ReturnInst::Create(srcFnLLVM->getContext(),
+                             zext, &I);
+          I.eraseFromParent();
         } else {
-          string val_name(v_op[0]->getName() + "_sext");
-          auto new_ir = make_unique<IR::ConversionOp>(
-              llvm_util::get_int_type(64), std::move(val_name), *v_op[0],
-              IR::ConversionOp::SExt);
-          auto new_ret =
-              make_unique<IR::Return>(llvm_util::get_int_type(64), *new_ir);
-
-          bb->addInstrAt(std::move(new_ir), &i, true);
-          bb->addInstrAt(std::move(new_ret), &i, false);
-          bb->delInstr(&i);
+          auto sext = new SExtInst(retVal, i64ty,
+                                   retVal->getName() + "_sext",
+                                   &I);
+          ReturnInst::Create(srcFnLLVM->getContext(),
+                             sext, &I);
+          I.eraseFromParent();
         }
-        break;
       }
     }
   }
+
+  // FIXME this is duplicate code, factor it out
+  FunctionType *NFTy = FunctionType::get(i64ty,
+                                        srcFnLLVM->getFunctionType()->params(), false);
+  Function *NF = Function::Create(NFTy, srcFnLLVM->getLinkage(), srcFnLLVM->getAddressSpace(),
+                                  srcFnLLVM->getName(), srcFnLLVM->getParent());
+  NF->copyAttributesFrom(srcFnLLVM);
+  // FIXME -- copy over argument attributes
+  NF->splice(NF->begin(), srcFnLLVM);
+  for (Function::arg_iterator I = srcFnLLVM->arg_begin(), E = srcFnLLVM->arg_end(),
+         I2 = NF->arg_begin();
+       I != E; ++I, ++I2)
+    I->replaceAllUsesWith(&*I2);
+
+  // FIXME -- if we're lifting modules with important calls, we need to replace
+  // uses of the function with NF, see code in DeadArgumentElimination.cpp
+  
+  srcFnLLVM->eraseFromParent();
+  return NF;
 }
 
 } // namespace
 
 Function *lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input,
-                    string opt_file2, bool opt_asm_only, IR::Function &AF,
+                    string opt_file2, bool opt_asm_only,
                     Function *srcFnLLVM) {
 
-  AF.print(cout << "\n----------alive-ir-src.ll-file----------\n");
+  // FIXME -- both adjustSrcInputs and adjustSrcReturn create an
+  // entirely new function, this is slow and not elegant, probably
+  // merge these together
+  outs() << "\n---------- src.ll ----------\n";
+  srcFnLLVM->print(outs());
   srcFnLLVM = adjustSrcInputs(srcFnLLVM);
-  AF.print(cout << "\n----------alive-ir-src.ll-file----changed-input-\n");
-  adjustSrcReturn(AF);
-  AF.print(cout << "\n----------alive-ir-src.ll-file----changed-return-\n");
+  outs() << "\n---------- src.ll ---- changed-input -\n";
+  srcFnLLVM->print(outs());
+  srcFnLLVM = adjustSrcReturn(srcFnLLVM);
+  outs() << "\n---------- src.ll ---- changed-return -\n";
+  srcFnLLVM->print(outs());
 
   LLVMInitializeAArch64TargetInfo();
   LLVMInitializeAArch64Target();
@@ -3875,8 +3891,8 @@ Function *lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input,
 
   cout << "\n\n";
 
-  if (AF.isVarArgs())
-    report_fatal_error("Varargs not supported yet");
+  if (srcFnLLVM->isVarArg())
+    report_fatal_error("Varargs not supported");
 
   MCSW.printBlocksMF();
   MCSW.removeEmptyBlocks(); // remove empty basic blocks, including .Lfunc_end
@@ -3885,7 +3901,7 @@ Function *lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input,
   MCSW.addEntryBlock();
   MCSW.generateSuccessors();
   MCSW.generatePredecessors();
-  MCSW.findArgs(AF); // needs refactoring
+  MCSW.findArgs(srcFnLLVM); // needs refactoring
   MCSW.rewriteOperands();
   MCSW.printCFG();
   MCSW.generateDominator();
@@ -3899,6 +3915,6 @@ Function *lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input,
   cout << "after SSA conversion\n";
   MCSW.printBlocksMF();
 
-  return arm2llvm(&LiftedModule, MCSW.MF, AF, *srcFnLLVM, IPtemp.get(),
+  return arm2llvm(&LiftedModule, MCSW.MF, srcFnAlive, *srcFnLLVM, IPtemp.get(),
                   MRI.get());
 }
