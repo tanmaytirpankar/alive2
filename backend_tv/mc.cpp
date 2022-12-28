@@ -3048,7 +3048,7 @@ public:
     // need to properly model the parameter passing rules described in the spec
     if (argNum > 8) {
       auto num_stack_args = argNum - 8; // x0-x7 are passed via registers
-      cout << "num_stack_args=" << num_stack_args << "\n";
+      cout << "num_stack_args = " << num_stack_args << "\n";
 
       // add stack
       auto alloc_size = intconst(8, 64); // size of element in bytes
@@ -3142,10 +3142,10 @@ public:
 // Adapted from llvm2alive_ in llvm2alive.cpp with some simplifying assumptions
 // FIXME for now, we are making a lot of simplifying assumptions like assuming
 // types of arguments.
-Function *arm2llvm(Module *ArmModule, MCFunction &MF,
+Function *arm2llvm(Module *OrigModule, MCFunction &MF,
                    Function &srcFn, MCInstPrinter *instrPrinter,
                    MCRegisterInfo *registerInfo) {
-  return arm2llvm_(ArmModule, MF, srcFn, instrPrinter, registerInfo)
+  return arm2llvm_(OrigModule, MF, srcFn, instrPrinter, registerInfo)
       .run();
 }
 
@@ -3664,6 +3664,7 @@ Function *adjustSrcReturn(Function *srcFn) {
   auto *i32ty = Type::getIntNTy(srcFn->getContext(), 32);
   auto *i64ty = Type::getIntNTy(srcFn->getContext(), 64);
 
+  // build this first to avoid iterator invalidation
   vector<ReturnInst *> RIs;  
   for (auto &BB : *srcFn)
     for (auto &I : BB)
@@ -3713,7 +3714,7 @@ Function *adjustSrcReturn(Function *srcFn) {
 
 } // namespace
 
-pair<Function *, Function *> lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input,
+pair<Function *, Function *> lift_func(Module &OrigModule, Module &LiftedModule, bool asm_input,
                                        string opt_file2, bool opt_asm_only,
                                        Function *srcFn) {
 
@@ -3755,7 +3756,7 @@ pair<Function *, Function *> lift_func(Module &ArmModule, Module &LiftedModule, 
     cerr << "Failed to generate assembly";
     exit(-1);
   }
-  pass.run(ArmModule);
+  pass.run(OrigModule);
 
   // FIXME only do this in verbose mode, or something
   cout << "\n----------arm asm----------\n\n";
