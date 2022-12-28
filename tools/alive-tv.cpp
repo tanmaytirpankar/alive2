@@ -184,18 +184,23 @@ Results verify(llvm::Function &F1, llvm::Function &F2,
 
 // Perform verification on two alive functions
 // FIXME get rid of this
-Results backend_verify(IR::Function &fn1,
+Results backend_verify(llvm::Function &llvm_fn1,
                        llvm::Function &llvm_fn2,
                        llvm::TargetLibraryInfoWrapperPass &TLI,
                        bool print_transform = false,
                        bool always_verify = false) {
-  auto fn2 = llvm2alive(llvm_fn2, TLI.getTLI(llvm_fn2), false, fn1.getGlobalVarNames());
+  auto fn1 = llvm2alive(llvm_fn1, TLI.getTLI(llvm_fn1), false);
+  if (!fn1)
+    return Results::Error("Could not translate '" + llvm_fn1.getName().str() +
+                          "' to Alive IR\n");
+
+  auto fn2 = llvm2alive(llvm_fn2, TLI.getTLI(llvm_fn2), false);
   if (!fn2)
     return Results::Error("Could not translate '" + llvm_fn2.getName().str() +
                           "' to Alive IR\n");
 
   Results r;
-  r.t.src = std::move(fn1);
+  r.t.src = std::move(*fn1);
   r.t.tgt = std::move(*fn2);
 
   if (!always_verify) {
@@ -455,18 +460,15 @@ bool backendTV() {
     if (!func_names.empty() && !func_names.count(F.getName().str()))
       continue;
     Func = &F;
-    AF = llvm2alive(F, TLI.getTLI(F), true);
     break;
   }
-
-  if (!AF)
-    llvm::report_fatal_error("Could not convert llvm function to alive ir");
+  assert(Func);
 
   std::unique_ptr<llvm::Module> M2 = std::make_unique<llvm::Module>("M2", Context);
   M2->setDataLayout(M1.get()->getDataLayout());
   M2->setTargetTriple(M1.get()->getTargetTriple());
 
-  auto TF = lift_func(*M1.get(), *M2.get(), asm_input, opt_file2, opt_asm_only, AF.value(), Func);
+  auto TF = lift_func(*M1.get(), *M2.get(), asm_input, opt_file2, opt_asm_only, Func);
   if (!TF)
     llvm::report_fatal_error("could not lift function");
   llvm::outs() << "\n----------alive-lift-arm-target----------\n";
@@ -489,7 +491,7 @@ bool backendTV() {
 
   M2->print(llvm::outs(), nullptr);
 
-  auto r = backend_verify(AF.value(), *TF, TLI, true);
+  auto r = backend_verify(*Func, *TF, TLI, true);
 
   // cout << "exiting for valgrind\n";
   // return false;

@@ -4,5 +4,5 @@
 
 llvm::Function *lift_func(llvm::Module &ArmModule, llvm::Module &LiftedModule,
                           bool asm_input, std::string opt_file2,
-                          bool opt_asm_only, IR::Function &AF,
+                          bool opt_asm_only,
                           llvm::Function *srcFnLLVM);

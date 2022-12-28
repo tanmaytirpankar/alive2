@@ -708,14 +708,14 @@ public:
   void findArgs(Function *src_fn) {
     unsigned arg_num = 0;
 
-    for (auto &v : src_fn.getInputs()) {
-      auto &typ = v.getType();
-      if (!typ.isIntType())
-        report_fatal_error("Only int types supported for now");
+    for (auto &arg : src_fn->args()) {
+      auto *ty = arg.getType();
+      if (!ty->isIntegerTy())
+        report_fatal_error("Only integer-typed arguments supported for now");
       // FIXME. Do a switch statement to figure out which register to start from
-      auto start = typ.bits() == 32 ? AArch64::W0 : AArch64::X0;
-      auto arg = MCOperand::createReg(start + (arg_num++));
-      fn_args.push_back(std::move(arg));
+      auto start = ty->getIntegerBitWidth() == 32 ? AArch64::W0 : AArch64::X0;
+      auto mcarg = MCOperand::createReg(start + (arg_num++));
+      fn_args.push_back(std::move(mcarg));
     }
 
     // temp for debugging
@@ -1246,7 +1246,6 @@ class arm2llvm_ {
   LLVMContext &LLVMCtx = LiftedModule->getContext();
   MCFunction &MF;
   // const DataLayout &DL;
-  IR::Function &srcFnAlive; // FIXME eventually this should go away
   Function &srcFnLLVM;
   MCBasicBlock *MCBB; // the current machine block
   unsigned blockCount{0};
@@ -1733,10 +1732,10 @@ class arm2llvm_ {
   }
 
 public:
-  arm2llvm_(Module *LiftedModule, MCFunction &MF, IR::Function &srcFnAlive,
+  arm2llvm_(Module *LiftedModule, MCFunction &MF,
             Function &srcFnLLVM, MCInstPrinter *instrPrinter,
             MCRegisterInfo *registerInfo)
-      : LiftedModule(LiftedModule), MF(MF), srcFnAlive(srcFnAlive), srcFnLLVM(srcFnLLVM),
+      : LiftedModule(LiftedModule), MF(MF), srcFnLLVM(srcFnLLVM),
         instrPrinter(instrPrinter), registerInfo(registerInfo),
         instructionCount(0), curId(0) {}
 
@@ -2782,8 +2781,8 @@ public:
         if (ret_void) {
           createReturn(nullptr);
         } else {
-          auto &retTyp = llvm_util::get_int_type(srcFnAlive.getType().bits());
-          auto retWidth = retTyp.bits();
+          auto *retTyp = srcFnLLVM.getReturnType();
+          auto retWidth = retTyp->getIntegerBitWidth();
           cout << "return width = " << retWidth << endl;
           auto val =
               getIdentifier(mc_inst.getOperand(0).getReg(), I.getOpId(0));
@@ -2993,45 +2992,7 @@ public:
   }
 
   Function *run() {
-    Type *func_return_type{nullptr};
-
-    if (&srcFnAlive.getType() == &IR::Type::voidTy) {
-      cout << "function is void type\n";
-      ret_void = true;
-      func_return_type = Type::getVoidTy(LLVMCtx);
-    } else if (srcFnAlive.getType().isIntType()) {
-      func_return_type = get_int_type(srcFnAlive.getType().bits());
-    } else if (srcFnAlive.getType().isVectorType()) {
-      auto ret_type_ptr = dynamic_cast<const VectorType *>(&srcFnAlive.getType());
-      // cout << ret_type_ptr->numElementsConst() << "\n";
-      // ret_type_ptr->getChild(0).print(cout);
-      cout << "vector bits = " << ret_type_ptr->getIntegerBitWidth() << "\n";
-      cout << "elem bitwidth = "
-           << ret_type_ptr->getScalarType()->getIntegerBitWidth() << "\n";
-      func_return_type =
-          VectorType::get(dyn_cast<VectorType>(ret_type_ptr)->getScalarType(),
-                          ret_type_ptr->getElementCount());
-      func_return_type->print(outs());
-      outs().flush();
-    } else {
-      // TODO: Will need to handle other return types here later
-      report_fatal_error(
-          "Only (int/void/int vector) return types supported for now");
-    }
-
-    // FIXME why does this happen? probably add an assertion here later
-    if (!func_return_type)
-      return {};
-
-    vector<Type *> args{};
-    for (auto &v : srcFnAlive.getInputs()) {
-      auto bits = v.getType().bits();
-      cout << "arg is " << bits << " bits wide" << endl;
-      auto ty = get_int_type(bits);
-      args.push_back(ty);
-    }
-    auto FTy = FunctionType::get(func_return_type, args, false);
-    auto Fn = Function::Create(FTy, GlobalValue::ExternalLinkage, 0,
+    auto Fn = Function::Create(srcFnLLVM.getFunctionType(), GlobalValue::ExternalLinkage, 0,
                                MF.getName(), LiftedModule);
 
     cout << "function name: '" << MF.getName() << "'" << endl;
@@ -3188,10 +3149,10 @@ public:
 // Adapted from llvm2alive_ in llvm2alive.cpp with some simplifying assumptions
 // FIXME for now, we are making a lot of simplifying assumptions like assuming
 // types of arguments.
-Function *arm2llvm(Module *ArmModule, MCFunction &MF, IR::Function &srcFnAlive,
+Function *arm2llvm(Module *ArmModule, MCFunction &MF,
                    Function &srcFnLLVM, MCInstPrinter *instrPrinter,
                    MCRegisterInfo *registerInfo) {
-  return arm2llvm_(ArmModule, MF, srcFnAlive, srcFnLLVM, instrPrinter, registerInfo)
+  return arm2llvm_(ArmModule, MF, srcFnLLVM, instrPrinter, registerInfo)
       .run();
 }
 
@@ -3915,6 +3876,6 @@ Function *lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input,
   cout << "after SSA conversion\n";
   MCSW.printBlocksMF();
 
-  return arm2llvm(&LiftedModule, MCSW.MF, srcFnAlive, *srcFnLLVM, IPtemp.get(),
+  return arm2llvm(&LiftedModule, MCSW.MF, *srcFnLLVM, IPtemp.get(),
                   MRI.get());
 }
