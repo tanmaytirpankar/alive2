@@ -3,7 +3,6 @@
 #include "llvm/MC/MCAsmInfo.h"
 
 #include "backend_tv/mc.h"
-#include "llvm_util/utils.h"
 #include "util/sort.h"
 
 #include "llvm/ADT/BitVector.h"
@@ -1246,7 +1245,7 @@ class arm2llvm_ {
   LLVMContext &LLVMCtx = LiftedModule->getContext();
   MCFunction &MF;
   // const DataLayout &DL;
-  Function &srcFnLLVM;
+  Function &srcFn;
   MCBasicBlock *MCBB; // the current machine block
   unsigned blockCount{0};
   BasicBlock *CurrBB; // the current block
@@ -1733,9 +1732,9 @@ class arm2llvm_ {
 
 public:
   arm2llvm_(Module *LiftedModule, MCFunction &MF,
-            Function &srcFnLLVM, MCInstPrinter *instrPrinter,
+            Function &srcFn, MCInstPrinter *instrPrinter,
             MCRegisterInfo *registerInfo)
-      : LiftedModule(LiftedModule), MF(MF), srcFnLLVM(srcFnLLVM),
+      : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
         instrPrinter(instrPrinter), registerInfo(registerInfo),
         instructionCount(0), curId(0) {}
 
@@ -2740,7 +2739,7 @@ public:
     case AArch64::RET: {
       // for now we're assuming that the function returns an integer or void
       // value
-      auto retTy = srcFnLLVM.getReturnType();
+      auto retTy = srcFn.getReturnType();
       if (auto *vecRetTy = dyn_cast<VectorType>(retTy)) {
         cout << "returning vector type\n";
         auto elem_bitwidth = vecRetTy->getScalarType()->getIntegerBitWidth();
@@ -2781,7 +2780,7 @@ public:
         if (ret_void) {
           createReturn(nullptr);
         } else {
-          auto *retTyp = srcFnLLVM.getReturnType();
+          auto *retTyp = srcFn.getReturnType();
           auto retWidth = retTyp->getIntegerBitWidth();
           cout << "return width = " << retWidth << endl;
           auto val =
@@ -2992,7 +2991,7 @@ public:
   }
 
   Function *run() {
-    auto Fn = Function::Create(srcFnLLVM.getFunctionType(), GlobalValue::ExternalLinkage, 0,
+    auto Fn = Function::Create(srcFn.getFunctionType(), GlobalValue::ExternalLinkage, 0,
                                MF.getName(), LiftedModule);
 
     cout << "function name: '" << MF.getName() << "'" << endl;
@@ -3150,9 +3149,9 @@ public:
 // FIXME for now, we are making a lot of simplifying assumptions like assuming
 // types of arguments.
 Function *arm2llvm(Module *ArmModule, MCFunction &MF,
-                   Function &srcFnLLVM, MCInstPrinter *instrPrinter,
+                   Function &srcFn, MCInstPrinter *instrPrinter,
                    MCRegisterInfo *registerInfo) {
-  return arm2llvm_(ArmModule, MF, srcFnLLVM, instrPrinter, registerInfo)
+  return arm2llvm_(ArmModule, MF, srcFn, instrPrinter, registerInfo)
       .run();
 }
 
@@ -3589,12 +3588,12 @@ public:
   return reads;
 }
 
-Function *adjustSrcInputs(Function *srcFnLLVM) {
+Function *adjustSrcInputs(Function *srcFn) {
   vector<Value *> new_inputs;
   vector<Type *> new_argtypes;
   unsigned idx = 0;
 
-  for (auto &v : srcFnLLVM->args()) {
+  for (auto &v : srcFn->args()) {
     auto *ty = v.getType();
 
     // FIXME
@@ -3611,9 +3610,9 @@ Function *adjustSrcInputs(Function *srcFnLLVM) {
     if (orig_width < 64) {
       auto name = v.getName().substr(v.getName().rfind('%')) + "_t";
       auto trunc = new TruncInst(&v,
-                                 Type::getIntNTy(srcFnLLVM->getContext(), 64),
+                                 Type::getIntNTy(srcFn->getContext(), 64),
                                  name,
-                                 srcFnLLVM->getEntryBlock().getFirstNonPHI());
+                                 srcFn->getEntryBlock().getFirstNonPHI());
       new_inputs.emplace_back(trunc);
       new_argtypes.emplace_back(trunc->getType());
     } else {
@@ -3626,13 +3625,13 @@ Function *adjustSrcInputs(Function *srcFnLLVM) {
     idx++;
   }
 
-  FunctionType *NFTy = FunctionType::get(srcFnLLVM->getReturnType(), new_argtypes, false);
-  Function *NF = Function::Create(NFTy, srcFnLLVM->getLinkage(), srcFnLLVM->getAddressSpace(),
-                                  srcFnLLVM->getName(), srcFnLLVM->getParent());
-  NF->copyAttributesFrom(srcFnLLVM);
+  FunctionType *NFTy = FunctionType::get(srcFn->getReturnType(), new_argtypes, false);
+  Function *NF = Function::Create(NFTy, srcFn->getLinkage(), srcFn->getAddressSpace(),
+                                  srcFn->getName(), srcFn->getParent());
+  NF->copyAttributesFrom(srcFn);
   // FIXME -- copy over argument attributes
-  NF->splice(NF->begin(), srcFnLLVM);
-  for (Function::arg_iterator I = srcFnLLVM->arg_begin(), E = srcFnLLVM->arg_end(),
+  NF->splice(NF->begin(), srcFn);
+  for (Function::arg_iterator I = srcFn->arg_begin(), E = srcFn->arg_end(),
          I2 = NF->arg_begin();
        I != E; ++I, ++I2)
     I->replaceAllUsesWith(&*I2);
@@ -3640,17 +3639,17 @@ Function *adjustSrcInputs(Function *srcFnLLVM) {
   // FIXME -- if we're lifting modules with important calls, we need to replace
   // uses of the function with NF, see code in DeadArgumentElimination.cpp
   
-  srcFnLLVM->eraseFromParent();
+  srcFn->eraseFromParent();
   return NF;
 }
 
-Function *adjustSrcReturn(Function *srcFnLLVM) {
-  // Nothing needs to be done unless the return operand attribute
-  // includes signext/zeroext
-  if (!srcFnLLVM->hasRetAttribute(Attribute::SExt))
-    return srcFnLLVM;
+Function *adjustSrcReturn(Function *srcFn) {
+  // FIXME -- there's some work to be done here for checking zeroext
+  
+  if (!srcFn->hasRetAttribute(Attribute::SExt))
+    return srcFn;
 
-  auto *ret_typ = srcFnLLVM->getReturnType();
+  auto *ret_typ = srcFn->getReturnType();
   orig_ret_bitwidth = ret_typ->getIntegerBitWidth();
 
   // FIXME
@@ -3665,16 +3664,16 @@ Function *adjustSrcReturn(Function *srcFnLLVM) {
 
   // don't need to do any extension if the return type is exactly 32 bits
   if (orig_ret_bitwidth == 64 || orig_ret_bitwidth == 32)
-    return srcFnLLVM;
+    return srcFn;
 
   // starting here we commit to returning a copy instead of the
   // original function
   
   has_ret_attr = true;
-  auto *i32ty = Type::getIntNTy(srcFnLLVM->getContext(), 32);
-  auto *i64ty = Type::getIntNTy(srcFnLLVM->getContext(), 64);
+  auto *i32ty = Type::getIntNTy(srcFn->getContext(), 32);
+  auto *i64ty = Type::getIntNTy(srcFn->getContext(), 64);
 
-  for (auto &BB : *srcFnLLVM) {
+  for (auto &BB : *srcFn) {
     for (auto &I : BB) {
       if (auto *RI = dyn_cast<ReturnInst>(&I)) {
         auto retVal = RI->getReturnValue();
@@ -3685,14 +3684,14 @@ Function *adjustSrcReturn(Function *srcFnLLVM) {
           auto zext = new ZExtInst(sext, i64ty,
                                    retVal->getName() + "_zext",
                                    &I);
-          ReturnInst::Create(srcFnLLVM->getContext(),
+          ReturnInst::Create(srcFn->getContext(),
                              zext, &I);
           I.eraseFromParent();
         } else {
           auto sext = new SExtInst(retVal, i64ty,
                                    retVal->getName() + "_sext",
                                    &I);
-          ReturnInst::Create(srcFnLLVM->getContext(),
+          ReturnInst::Create(srcFn->getContext(),
                              sext, &I);
           I.eraseFromParent();
         }
@@ -3702,13 +3701,13 @@ Function *adjustSrcReturn(Function *srcFnLLVM) {
 
   // FIXME this is duplicate code, factor it out
   FunctionType *NFTy = FunctionType::get(i64ty,
-                                        srcFnLLVM->getFunctionType()->params(), false);
-  Function *NF = Function::Create(NFTy, srcFnLLVM->getLinkage(), srcFnLLVM->getAddressSpace(),
-                                  srcFnLLVM->getName(), srcFnLLVM->getParent());
-  NF->copyAttributesFrom(srcFnLLVM);
+                                        srcFn->getFunctionType()->params(), false);
+  Function *NF = Function::Create(NFTy, srcFn->getLinkage(), srcFn->getAddressSpace(),
+                                  srcFn->getName(), srcFn->getParent());
+  NF->copyAttributesFrom(srcFn);
   // FIXME -- copy over argument attributes
-  NF->splice(NF->begin(), srcFnLLVM);
-  for (Function::arg_iterator I = srcFnLLVM->arg_begin(), E = srcFnLLVM->arg_end(),
+  NF->splice(NF->begin(), srcFn);
+  for (Function::arg_iterator I = srcFn->arg_begin(), E = srcFn->arg_end(),
          I2 = NF->arg_begin();
        I != E; ++I, ++I2)
     I->replaceAllUsesWith(&*I2);
@@ -3716,27 +3715,27 @@ Function *adjustSrcReturn(Function *srcFnLLVM) {
   // FIXME -- if we're lifting modules with important calls, we need to replace
   // uses of the function with NF, see code in DeadArgumentElimination.cpp
   
-  srcFnLLVM->eraseFromParent();
+  srcFn->eraseFromParent();
   return NF;
 }
 
 } // namespace
 
-Function *lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input,
-                    string opt_file2, bool opt_asm_only,
-                    Function *srcFnLLVM) {
+pair<Function *, Function *> lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input,
+                                       string opt_file2, bool opt_asm_only,
+                                       Function *srcFn) {
 
   // FIXME -- both adjustSrcInputs and adjustSrcReturn create an
   // entirely new function, this is slow and not elegant, probably
   // merge these together
   outs() << "\n---------- src.ll ----------\n";
-  srcFnLLVM->print(outs());
-  srcFnLLVM = adjustSrcInputs(srcFnLLVM);
+  srcFn->print(outs());
+  srcFn = adjustSrcInputs(srcFn);
   outs() << "\n---------- src.ll ---- changed-input -\n";
-  srcFnLLVM->print(outs());
-  srcFnLLVM = adjustSrcReturn(srcFnLLVM);
+  srcFn->print(outs());
+  srcFn = adjustSrcReturn(srcFn);
   outs() << "\n---------- src.ll ---- changed-return -\n";
-  srcFnLLVM->print(outs());
+  srcFn->print(outs());
 
   LLVMInitializeAArch64TargetInfo();
   LLVMInitializeAArch64Target();
@@ -3852,7 +3851,7 @@ Function *lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input,
 
   cout << "\n\n";
 
-  if (srcFnLLVM->isVarArg())
+  if (srcFn->isVarArg())
     report_fatal_error("Varargs not supported");
 
   MCSW.printBlocksMF();
@@ -3862,7 +3861,7 @@ Function *lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input,
   MCSW.addEntryBlock();
   MCSW.generateSuccessors();
   MCSW.generatePredecessors();
-  MCSW.findArgs(srcFnLLVM); // needs refactoring
+  MCSW.findArgs(srcFn); // needs refactoring
   MCSW.rewriteOperands();
   MCSW.printCFG();
   MCSW.generateDominator();
@@ -3876,6 +3875,6 @@ Function *lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input,
   cout << "after SSA conversion\n";
   MCSW.printBlocksMF();
 
-  return arm2llvm(&LiftedModule, MCSW.MF, *srcFnLLVM, IPtemp.get(),
-                  MRI.get());
+  return make_pair(srcFn, arm2llvm(&LiftedModule, MCSW.MF, *srcFn, IPtemp.get(),
+                                       MRI.get()));
 }

@@ -434,7 +434,6 @@ bool backendTV() {
   smt_init.emplace();
 
   cout << "\n\nConverting source llvm function to alive ir\n";
-  std::optional<IR::Function> AF;
   unsigned f_def_cnt = 0;
   for (auto &F : *M1.get()) {
     if (F.isDeclaration())
@@ -468,12 +467,18 @@ bool backendTV() {
   M2->setDataLayout(M1.get()->getDataLayout());
   M2->setTargetTriple(M1.get()->getTargetTriple());
 
-  auto TF = lift_func(*M1.get(), *M2.get(), asm_input, opt_file2, opt_asm_only, Func);
-  if (!TF)
+  auto [srcFn, armFn] = lift_func(*M1.get(), *M2.get(), asm_input, opt_file2, opt_asm_only, Func);
+  // lift_func rewrites srcFn and deletes it, let's make sure not to keep using the obsolete ptr
+  Func = nullptr;
+  assert(srcFn);
+
+  // FIXME can this happen?
+  if (!armFn)
     llvm::report_fatal_error("could not lift function");
   llvm::outs() << "\n----------alive-lift-arm-target----------\n";
 
-  assert(TF->getParent() == M2.get());
+  assert(srcFn->getParent() == M1.get());
+  assert(armFn->getParent() == M2.get());
   
   M2->print(llvm::outs(), nullptr);
 
@@ -491,7 +496,7 @@ bool backendTV() {
 
   M2->print(llvm::outs(), nullptr);
 
-  auto r = backend_verify(*Func, *TF, TLI, true);
+  auto r = backend_verify(*srcFn, *armFn, TLI, true);
 
   // cout << "exiting for valgrind\n";
   // return false;
