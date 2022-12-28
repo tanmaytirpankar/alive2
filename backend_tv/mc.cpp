@@ -1783,7 +1783,7 @@ public:
 
         // Make sure to not to trunc to the same size as the parameter.
         // Sometimes ADDrx is generated using 32 bit registers and "extends" to
-        // a 32 bit value. This is seen as a type error in Alive, but is valid
+        // a 32 bit value. This is seen as a type error by LLVM, but is valid
         // ARM
         if (extendSize != (unsigned)size) {
           auto truncType = get_int_type(extendSize);
@@ -1883,7 +1883,7 @@ public:
 
         // Make sure to not to trunc to the same size as the parameter.
         // Sometimes SUBrx is generated using 32 bit registers and "extends" to
-        // a 32 bit value. This is seen as a type error in Alive, but is valid
+        // a 32 bit value. This is seen as a type error by LLVM, but is valid
         // ARM
         if (extendSize != ty->getIntegerBitWidth()) {
           auto truncType = get_int_type(extendSize);
@@ -3100,9 +3100,9 @@ public:
       cur_vol_regs[entry_mc_bb][i] = val_frozen;
     }
 
-    for (auto &[alive_bb, mc_bb] : sorted_bbs) {
+    for (auto &[llvm_bb, mc_bb] : sorted_bbs) {
       cout << "visiting bb: " << mc_bb->getName() << endl;
-      CurrBB = alive_bb;
+      CurrBB = llvm_bb;
       MCBB = mc_bb;
       auto &mc_instrs = mc_bb->getInstrs();
 
@@ -3113,13 +3113,11 @@ public:
         cout << "after visit\n";
       }
 
-      auto term = CurrBB->getTerminator();
-      if (!isa<BranchInst>(term) && !isa<ReturnInst>(term)) {
-        cout << "Last basicBlock instruction is not a terminator!\n";
-        auto succ = CurrBB->getSingleSuccessor();
-        assert(succ &&
-               "expected single successor for block with no terminator");
-        createBranch(succ);
+      if (!CurrBB->getTerminator()) {
+        assert(MCBB->getSuccs().size() == 1 &&
+               "expected 1 successor for block with no terminator");
+        auto *dst = getBBByName(*Fn, MCBB->getSuccs()[0]->getName());
+        createBranch(dst);
       }
 
       blockCount++;
