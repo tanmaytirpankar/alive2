@@ -433,7 +433,6 @@ bool backendTV() {
   llvm_util::initializer llvm_util_init(*out, DL);
   smt_init.emplace();
 
-  cout << "\n\nConverting source llvm function to alive ir\n";
   unsigned f_def_cnt = 0;
   for (auto &F : *M1.get()) {
     if (F.isDeclaration())
@@ -468,24 +467,31 @@ bool backendTV() {
   M2->setTargetTriple(M1.get()->getTargetTriple());
 
   auto [srcFn, armFn] = lift_func(*M1.get(), *M2.get(), asm_input, opt_file2, opt_asm_only, Func);
-  // lift_func rewrites srcFn and deletes it, let's make sure not to keep using the obsolete ptr
-  Func = nullptr;
+
   assert(srcFn);
+
+  // lift_func rewrites srcFn and deletes it, let's make sure not to
+  // keep using the obsolete ptr
+  Func = nullptr;
 
   // FIXME can this happen?
   if (!armFn)
     llvm::report_fatal_error("could not lift function");
   llvm::outs() << "\n----------alive-lift-arm-target----------\n";
 
-  assert(srcFn->getParent() == M1.get());
-  assert(armFn->getParent() == M2.get());
-  
-  M2->print(llvm::outs(), nullptr);
+  assert(srcFn->getParent() == M1.get());  
+  if (llvm::verifyModule(*M1.get())) {
+    llvm::errs() << "Error: source module failed verification. This shouldn't happen.\n";
+    abort();
+  }
 
+  assert(armFn->getParent() == M2.get());
   if (llvm::verifyModule(*M2.get())) {
     llvm::errs() << "Error: lifted module failed verification. This shouldn't happen.\n";
     abort();
   }
+
+  M2->print(llvm::outs(), nullptr);
 
   cout << "llvm optimizer says: " << optimize_module(M2.get(), "Oz");
   

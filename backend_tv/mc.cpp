@@ -3589,39 +3589,23 @@ public:
 }
 
 Function *adjustSrcInputs(Function *srcFn) {
-  vector<Value *> new_inputs;
   vector<Type *> new_argtypes;
   unsigned idx = 0;
 
   for (auto &v : srcFn->args()) {
-    auto *ty = v.getType();
-
-    // FIXME
-    if (!ty->isIntegerTy())
+    auto *ty = v.getType();    
+    if (!ty->isIntegerTy()) // FIXME
       report_fatal_error("[Unsupported Function Argument]: Only int types "
                          "supported for now");
-
     auto orig_width = ty->getIntegerBitWidth();
-    // FIXME
-    if (orig_width > 64)
+    if (orig_width > 64) // FIXME
       report_fatal_error("[Unsupported Function Argument]: Only int types 64 "
                          "bits or smaller supported for now");
-
     if (orig_width < 64) {
-      auto name = v.getName().substr(v.getName().rfind('%')) + "_t";
-      auto trunc = new TruncInst(&v,
-                                 Type::getIntNTy(srcFn->getContext(), 64),
-                                 name,
-                                 srcFn->getEntryBlock().getFirstNonPHI());
-      new_inputs.emplace_back(trunc);
-      new_argtypes.emplace_back(trunc->getType());
-    } else {
-      new_inputs.emplace_back(&v);
-      new_argtypes.emplace_back(v.getType());
+      new_input_idx_bitwidth.emplace_back(idx, orig_width);
     }
-
+    new_argtypes.emplace_back(Type::getIntNTy(srcFn->getContext(), 64));
     // FIXME Do we need to update the value_cache?
-    new_input_idx_bitwidth.emplace_back(idx, orig_width);
     idx++;
   }
 
@@ -3633,11 +3617,23 @@ Function *adjustSrcInputs(Function *srcFn) {
   NF->splice(NF->begin(), srcFn);
   for (Function::arg_iterator I = srcFn->arg_begin(), E = srcFn->arg_end(),
          I2 = NF->arg_begin();
-       I != E; ++I, ++I2)
-    I->replaceAllUsesWith(&*I2);
+       I != E; ++I, ++I2) {
+    if (I->getType()->getIntegerBitWidth() < 64) {
+      auto name = I->getName().substr(I->getName().rfind('%')) + "_t";
+      auto trunc = new TruncInst(I2,
+                                 I->getType(),
+                                 name,
+                                 NF->getEntryBlock().getFirstNonPHI());
+      I->replaceAllUsesWith(trunc);      
+    } else {
+      I->replaceAllUsesWith(&*I2);
+    }
+  }
 
-  // FIXME -- if we're lifting modules with important calls, we need to replace
-  // uses of the function with NF, see code in DeadArgumentElimination.cpp
+  // FIXME -- doesn't matter if we're just dealing with one function,
+  // but if we're lifting modules with important calls, we need to
+  // replace uses of the function with NF, see code in
+  // DeadArgumentElimination.cpp
   
   srcFn->eraseFromParent();
   return NF;
