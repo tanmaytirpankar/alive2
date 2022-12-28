@@ -1246,7 +1246,7 @@ class arm2llvm_ {
   LLVMContext &LLVMCtx = LiftedModule->getContext();
   MCFunction &MF;
   // const DataLayout &DL;
-  IR::Function &srcFn; // FIXME eventually this should go away
+  IR::Function &srcFnAlive; // FIXME eventually this should go away
   Function &srcFnLLVM;
   MCBasicBlock *MCBB; // the current machine block
   unsigned blockCount{0};
@@ -1733,10 +1733,10 @@ class arm2llvm_ {
   }
 
 public:
-  arm2llvm_(Module *LiftedModule, MCFunction &MF, IR::Function &srcFn,
+  arm2llvm_(Module *LiftedModule, MCFunction &MF, IR::Function &srcFnAlive,
             Function &srcFnLLVM, MCInstPrinter *instrPrinter,
             MCRegisterInfo *registerInfo)
-      : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn), srcFnLLVM(srcFnLLVM),
+      : LiftedModule(LiftedModule), MF(MF), srcFnAlive(srcFnAlive), srcFnLLVM(srcFnLLVM),
         instrPrinter(instrPrinter), registerInfo(registerInfo),
         instructionCount(0), curId(0) {}
 
@@ -2658,10 +2658,10 @@ public:
       auto val = get_value(1);
       auto first_part = createShl(val, intconst(8, size));
       auto first_part_and =
-          createAnd(first_part, intconst(0xFF00FF00FF00FF00, size));
+          createAnd(first_part, intconst(0xFF00FF00FF00FF00UL, size));
       auto second_part = createLShr(val, intconst(8, size));
       auto second_part_and =
-          createAnd(second_part, intconst(0x00FF00FF00FF00FF, size));
+          createAnd(second_part, intconst(0x00FF00FF00FF00FFUL, size));
       auto combined_val = createOr(first_part_and, second_part_and);
       store(combined_val);
       break;
@@ -2782,7 +2782,7 @@ public:
         if (ret_void) {
           createReturn(nullptr);
         } else {
-          auto &retTyp = llvm_util::get_int_type(srcFn.getType().bits());
+          auto &retTyp = llvm_util::get_int_type(srcFnAlive.getType().bits());
           auto retWidth = retTyp.bits();
           cout << "return width = " << retWidth << endl;
           auto val =
@@ -2995,14 +2995,14 @@ public:
   Function *run() {
     Type *func_return_type{nullptr};
 
-    if (&srcFn.getType() == &IR::Type::voidTy) {
+    if (&srcFnAlive.getType() == &IR::Type::voidTy) {
       cout << "function is void type\n";
       ret_void = true;
       func_return_type = Type::getVoidTy(LLVMCtx);
-    } else if (srcFn.getType().isIntType()) {
-      func_return_type = get_int_type(srcFn.getType().bits());
-    } else if (srcFn.getType().isVectorType()) {
-      auto ret_type_ptr = dynamic_cast<const VectorType *>(&srcFn.getType());
+    } else if (srcFnAlive.getType().isIntType()) {
+      func_return_type = get_int_type(srcFnAlive.getType().bits());
+    } else if (srcFnAlive.getType().isVectorType()) {
+      auto ret_type_ptr = dynamic_cast<const VectorType *>(&srcFnAlive.getType());
       // cout << ret_type_ptr->numElementsConst() << "\n";
       // ret_type_ptr->getChild(0).print(cout);
       cout << "vector bits = " << ret_type_ptr->getIntegerBitWidth() << "\n";
@@ -3024,7 +3024,7 @@ public:
       return {};
 
     vector<Type *> args{};
-    for (auto &v : srcFn.getInputs()) {
+    for (auto &v : srcFnAlive.getInputs()) {
       auto bits = v.getType().bits();
       cout << "arg is " << bits << " bits wide" << endl;
       auto ty = get_int_type(bits);
@@ -3188,10 +3188,10 @@ public:
 // Adapted from llvm2alive_ in llvm2alive.cpp with some simplifying assumptions
 // FIXME for now, we are making a lot of simplifying assumptions like assuming
 // types of arguments.
-Function *arm2llvm(Module *ArmModule, MCFunction &MF, IR::Function &srcFn,
+Function *arm2llvm(Module *ArmModule, MCFunction &MF, IR::Function &srcFnAlive,
                    Function &srcFnLLVM, MCInstPrinter *instrPrinter,
                    MCRegisterInfo *registerInfo) {
-  return arm2llvm_(ArmModule, MF, srcFn, srcFnLLVM, instrPrinter, registerInfo)
+  return arm2llvm_(ArmModule, MF, srcFnAlive, srcFnLLVM, instrPrinter, registerInfo)
       .run();
 }
 
@@ -3628,64 +3628,67 @@ public:
   return reads;
 }
 
-void adjustSrcInputs(IR::Function &srcFn) {
-  vector<unique_ptr<IR::Value>> new_inputs;
+Function *adjustSrcInputs(Function *srcFnLLVM) {
+  vector<Value *> new_inputs;
+  vector<Type *> new_argtypes;
   unsigned idx = 0;
 
-  for (auto &v : srcFn.getInputs()) {
-    auto &orig_typ = v.getType();
+  for (auto &v : srcFnLLVM->args()) {
+    auto *ty = v.getType();
 
-    if (!orig_typ.isIntType())
+    // FIXME
+    if (!ty->isIntegerTy())
       report_fatal_error("[Unsupported Function Argument]: Only int types "
                          "supported for now");
-    // FIXME: need to handle wider types
-    if (orig_typ.bits() > 64)
+
+    auto orig_width = ty->getIntegerBitWidth();
+    // FIXME
+    if (orig_width > 64)
       report_fatal_error("[Unsupported Function Argument]: Only int types 64 "
                          "bits or smaller supported for now");
 
-    if (orig_typ.bits() == 64) {
-      idx++;
-      continue;
+    if (orig_width < 64) {
+      auto name = v.getName().substr(v.getName().rfind('%')) + "_t";
+      auto trunc = new TruncInst(&v,
+                                 Type::getIntNTy(srcFnLLVM->getContext(), 64),
+                                 name,
+                                 srcFnLLVM->getEntryBlock().getFirstNonPHI());
+      new_inputs.emplace_back(trunc);
+      new_argtypes.emplace_back(trunc->getType());
+    } else {
+      new_inputs.emplace_back(&v);
+      new_argtypes.emplace_back(v.getType());
     }
 
-    auto input_ptr = dynamic_cast<const IR::Input *>(&v);
-    assert(input_ptr);
-    auto extended_type = &llvm_util::get_int_type(64);
-    string name(v.getName().substr(v.getName().rfind('%')));
-
-    IR::ParamAttrs attrs(input_ptr->getAttributes());
-    // Do we need to update the value_cache?
-    new_inputs.emplace_back(make_unique<IR::Input>(
-        *extended_type, std::move(name), std::move(attrs)));
-    new_input_idx_bitwidth.emplace_back(idx, orig_typ.bits());
+    // FIXME Do we need to update the value_cache?
+    new_input_idx_bitwidth.emplace_back(idx, orig_width);
     idx++;
   }
 
-  for (unsigned i = 0; i < new_inputs.size(); ++i) {
-    string input_trunc(
-        new_inputs[i]->getName().substr(new_inputs[i]->getName().rfind('%')) +
-        "_t");
-    auto new_ir = make_unique<IR::ConversionOp>(
-        srcFn.getInput(i).getType(), std::move(input_trunc),
-        *new_inputs[i].get(), IR::ConversionOp::Trunc);
-    srcFn.rauw(srcFn.getInput(new_input_idx_bitwidth[i].first), *new_ir);
-    srcFn.getFirstBB().addInstr(std::move(new_ir), true);
-    srcFn.replaceInput(std::move(new_inputs[i]),
-                       new_input_idx_bitwidth[i].first);
-  }
+  FunctionType *NFTy = FunctionType::get(srcFnLLVM->getReturnType(), new_argtypes, false);
+  Function *NF = Function::Create(NFTy, srcFnLLVM->getLinkage(), srcFnLLVM->getAddressSpace(),
+                                  srcFnLLVM->getName(), srcFnLLVM->getParent());
+  NF->copyAttributesFrom(srcFnLLVM);
+  // FIXME -- copy over argument attributes
+  NF->splice(NF->begin(), srcFnLLVM);
+  for (Function::arg_iterator I = srcFnLLVM->arg_begin(), E = srcFnLLVM->arg_end(),
+         I2 = NF->arg_begin();
+       I != E; ++I, ++I2)
+    I->replaceAllUsesWith(&*I2);
 
-  // cout << "After adjusting inputs:\n";
-  // for (auto &v : srcFn->getInputs()) {
-  //   cout << v.getName() << endl;
-  // }
+  // FIXME -- if we're lifting modules with important calls, we need to replace
+  // uses of the function with NF, see code in DeadArgumentElimination.cpp
+  
+  srcFnLLVM->eraseFromParent();
+  return NF;
 }
 
-void adjustSrcReturn(IR::Function &srcFn) {
+void adjustSrcReturn(IR::Function &srcFnAlive) {
   // Nothing needs to be done unless the return operand attribute does
   // includes signext/zeroext
 
-  auto &ret_typ = srcFn.getType();
-  auto &fnAttrs = srcFn.getFnAttrs();
+  auto &ret_typ = srcFnAlive.getType();
+  auto &fnAttrs = srcFnAlive.getFnAttrs();
 
   if (!fnAttrs.has(IR::FnAttrs::SignExt))
     return;
@@ -3705,8 +3708,8 @@ void adjustSrcReturn(IR::Function &srcFn) {
   has_ret_attr = true;
   original_ret_bitwidth = ret_typ.bits();
 
-  srcFn.setType(llvm_util::get_int_type(64));
-  for (auto bb : srcFn.getBBs()) {
+  srcFnAlive.setType(llvm_util::get_int_type(64));
+  for (auto bb : srcFnAlive.getBBs()) {
     for (auto &i : bb->instrs()) {
       if (dynamic_cast<const IR::Return *>(&i)) {
         auto v_op = i.operands();
@@ -3750,10 +3753,10 @@ void adjustSrcReturn(IR::Function &srcFn) {
 
 Function *lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input,
                     string opt_file2, bool opt_asm_only, IR::Function &AF,
-                    Function *LLVMFunc) {
+                    Function *srcFnLLVM) {
 
   AF.print(cout << "\n----------alive-ir-src.ll-file----------\n");
-  adjustSrcInputs(AF);
+  srcFnLLVM = adjustSrcInputs(srcFnLLVM);
   AF.print(cout << "\n----------alive-ir-src.ll-file----changed-input-\n");
   adjustSrcReturn(AF);
   AF.print(cout << "\n----------alive-ir-src.ll-file----changed-return-\n");
@@ -3896,6 +3899,6 @@ Function *lift_func(Module &ArmModule, Module &LiftedModule, bool asm_input,
   cout << "after SSA conversion\n";
   MCSW.printBlocksMF();
 
-  return arm2llvm(&LiftedModule, MCSW.MF, AF, *LLVMFunc, IPtemp.get(),
+  return arm2llvm(&LiftedModule, MCSW.MF, AF, *srcFnLLVM, IPtemp.get(),
                   MRI.get());
 }
