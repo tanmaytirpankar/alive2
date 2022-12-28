@@ -1571,11 +1571,7 @@ class arm2llvm_ {
                          phi_mc_wrapper->getOpId(i));
       assert(val != nullptr);
       cout << "block name = " << block_name << endl;
-
-      // fixme -- turn name into BB pointer
-      // phi_instr->addIncoming(val, std::move(block_name));
-      assert(false);
-
+      phi_instr->addIncoming(val, getBBByName(*(phi_instr->getParent()->getParent()), block_name));
       cout << "i is = " << i << endl;
     }
     cout << "exiting add_phi_params" << endl;
