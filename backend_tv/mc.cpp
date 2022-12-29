@@ -3613,6 +3613,7 @@ Function *adjustSrcInputs(Function *srcFn) {
   NF->copyAttributesFrom(srcFn);
   // FIXME -- copy over argument attributes
   NF->splice(NF->begin(), srcFn);
+  NF->takeName(srcFn);
   for (Function::arg_iterator I = srcFn->arg_begin(), E = srcFn->arg_end(),
          I2 = NF->arg_begin();
        I != E; ++I, ++I2) {
@@ -3704,6 +3705,7 @@ Function *adjustSrcReturn(Function *srcFn) {
   NF->copyAttributesFrom(srcFn);
   // FIXME -- copy over argument attributes
   NF->splice(NF->begin(), srcFn);
+  NF->takeName(srcFn);
   for (Function::arg_iterator I = srcFn->arg_begin(), E = srcFn->arg_end(),
          I2 = NF->arg_begin();
        I != E; ++I, ++I2)
