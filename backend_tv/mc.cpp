@@ -1389,13 +1389,13 @@ class arm2llvm_ {
     return ss.str();
   }
 
-  AllocaInst *createAlloca(Type *ty, Value *sz) {
-    return new AllocaInst(ty, 0, sz, next_name(), CurrBB);
+  AllocaInst *createAlloca(Type *ty, Value *sz, const string &NameStr) {
+    return new AllocaInst(ty, 0, sz, NameStr, CurrBB);
   }
 
   GetElementPtrInst *createGEP(Type *ty, Value *v, ArrayRef<Value *> idxlist,
-			       const string &NameStr = "") {
-    return GetElementPtrInst::Create(ty, v, idxlist, (NameStr == "") ? next_name() : NameStr, CurrBB);
+			       const string &NameStr) {
+    return GetElementPtrInst::Create(ty, v, idxlist, NameStr, CurrBB);
   }
 
   void createBranch(Value *c, BasicBlock *t, BasicBlock *f) {
@@ -3054,8 +3054,9 @@ public:
     }
     cout << "created non-vector args" << endl;
 
-    // Hacky way of supporting parameters passed via the stack
-    // need to properly model the parameter passing rules described in the spec
+    // FIXME: Hacky way of supporting parameters passed via the stack
+    // need to properly model the parameter passing rules described in
+    // the spec
     if (argNum > 8) {
       auto num_stack_args = argNum - 8; // x0-x7 are passed via registers
       cout << "num_stack_args = " << num_stack_args << "\n";
@@ -3063,7 +3064,7 @@ public:
       // add stack with 16 slots, 8 bytes each
       auto alloc_size = intconst(16, 64);
       auto ty = Type::getInt64Ty(LLVMCtx);
-      auto alloca = createAlloca(ty, alloc_size);
+      auto alloca = createAlloca(ty, alloc_size, "stack");
       mc_add_identifier(AArch64::SP, 3, alloca);
 
       for (unsigned i = 0; i < num_stack_args; ++i) {
