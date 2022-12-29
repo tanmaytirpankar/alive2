@@ -1075,7 +1075,6 @@ unordered_map<MCOperand, unique_ptr<StructType *>, MCOperandHash,
               MCOperandEqual>
     overflow_aggregate_types;
 vector<unique_ptr<VectorType *>> lifted_vector_types;
-vector<unique_ptr<PointerType *>> lifted_ptr_types;
 // unsigned type_id_counter{0};
 
 // Keep track of which oprands had their type adjusted and their original
@@ -1390,6 +1389,15 @@ class arm2llvm_ {
     return ss.str();
   }
 
+  AllocaInst *createAlloca(Type *ty, Value *sz) {
+    return new AllocaInst(ty, 0, sz, next_name(), CurrBB);
+  }
+
+  GetElementPtrInst *createGEP(Type *ty, Value *v, ArrayRef<Value *> idxlist,
+			       const string &NameStr = "") {
+    return GetElementPtrInst::Create(ty, v, idxlist, (NameStr == "") ? next_name() : NameStr, CurrBB);
+  }
+
   void createBranch(Value *c, BasicBlock *t, BasicBlock *f) {
     BranchInst::Create(t, f, c, CurrBB);
   }
@@ -1398,8 +1406,12 @@ class arm2llvm_ {
     BranchInst::Create(dst, CurrBB);
   }
 
-  LoadInst *createLoad(Type *ty, Value *ptr, unsigned align) {
-    return new LoadInst(ty, ptr, next_name(), false, Align(align), CurrBB);
+  LoadInst *createLoad(Type *ty, Value *ptr) {
+    return new LoadInst(ty, ptr, next_name(), CurrBB);
+  }
+
+  void createStore(Value *v, Value *ptr) {
+    new StoreInst(v, ptr, CurrBB);
   }
 
   CallInst *createSSubOverflow(Value *a, Value *b) {
@@ -2728,7 +2740,7 @@ public:
              "only loading from stack supported for now!");
       auto stack_gep = getIdentifier(AArch64::SP, op_0.getReg());
       assert(stack_gep && "loaded identifier should not be null!");
-      auto loaded_val = createLoad(get_int_type(64), stack_gep, 4);
+      auto loaded_val = createLoad(get_int_type(64), stack_gep);
       store(loaded_val);
       break;
     }
@@ -3042,39 +3054,30 @@ public:
     }
     cout << "created non-vector args" << endl;
 
-#if 0 // FIXME enable later
-
     // Hacky way of supporting parameters passed via the stack
     // need to properly model the parameter passing rules described in the spec
     if (argNum > 8) {
       auto num_stack_args = argNum - 8; // x0-x7 are passed via registers
       cout << "num_stack_args = " << num_stack_args << "\n";
 
-      // add stack
-      auto alloc_size = intconst(8, 64); // size of element in bytes
-      auto alloc_mul = intconst(16, 64); // 16 elements
-      auto ptr_type = make_unique<PointerType *>(0);
-      auto alloc = add_instr<IR::Alloc>(*ptr_type.get(), "stack", *alloc_size,
-                                        alloc_mul, 16);
-      mc_add_identifier(AArch64::SP, 3, *alloc);
+      // add stack with 16 slots, 8 bytes each
+      auto alloc_size = intconst(16, 64);
+      auto ty = Type::getInt64Ty(LLVMCtx);
+      auto alloca = createAlloca(ty, alloc_size);
+      mc_add_identifier(AArch64::SP, 3, alloca);
 
       for (unsigned i = 0; i < num_stack_args; ++i) {
         unsigned reg_num = AArch64::X8 + i;
         cout << "reg_num = " << reg_num << "\n";
 
-        auto gep_xi = add_instr<IR::GEP>(
-            *ptr_type.get(), "stack_" + to_string(8 + i), *alloc, false);
-        gep_xi->addIdx(8, intconst(i, 64)); // size in bytes
+	vector<Value *> idxlist{ intconst(i, 64) };
+	auto get_xi = createGEP(ty, alloca, idxlist, "stack_" + to_string(8 + i));
         // FIXME, need to use version similar to the offset to address the stack
         // pointer or alternatively a more elegant solution altogether
-        mc_add_identifier(AArch64::SP, reg_num, *gep_xi);
-
-        add_instr<IR::Store>(*gep_xi, *getIdentifier(reg_num, 2), 4);
+        mc_add_identifier(AArch64::SP, reg_num, get_xi);
+	createStore(getIdentifier(reg_num, 2), get_xi);
       }
-
-      lifted_ptr_types.emplace_back(std::move(ptr_type));
     }
-#endif
 
     auto poison_val = PoisonValue::get(get_int_type(64));
     auto vect_poison_val = PoisonValue::get(get_int_type(128));
