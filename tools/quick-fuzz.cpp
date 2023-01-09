@@ -513,7 +513,20 @@ Value *genBinaryIntrinsic(Type *Ty, vector<Value *> &Vals,
   }
 
   auto Decl = Intrinsic::getDeclaration(M, Op, Ty);
-  auto *I = CallInst::Create(Decl, {LHS, RHS}, "", BB);
+
+  Value *AltRHS = nullptr;
+  if ((Op == Intrinsic::sshl_sat || Op == Intrinsic::ushl_sat) &&
+      (isa<ConstantInt>(RHS) || flip())) {
+    auto NarrowWidth = ilog2_ceil(Ty->getIntegerBitWidth(), true);
+    auto *NarrowTy = Type::getIntNTy(BB->getContext(), NarrowWidth);
+    auto *Mask = ConstantInt::get(Ty, (1UL << NarrowWidth) - 1);
+    AltRHS = flip()
+      ? adapt(adapt(RHS, NarrowTy, BB, "mask"), Ty, BB, "mask")
+      : BinaryOperator::Create(BinaryOperator::And, RHS, Mask,
+			       "mask", BB);
+  }
+
+  auto *I = CallInst::Create(Decl, {LHS, AltRHS ? AltRHS : RHS}, "", BB);
   if (Op == Intrinsic::ssub_with_overflow ||
       Op == Intrinsic::usub_with_overflow ||
       Op == Intrinsic::sadd_with_overflow ||
