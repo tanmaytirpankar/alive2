@@ -1,6 +1,11 @@
 // Copyright (c) 2018-present The Alive2 Authors.
 // Distributed under the MIT license that can be found in the LICENSE file.
 
+#ifdef GUIDE
+#include "guide.h"
+using namespace tree_guide;
+#endif
+
 #include "cache/cache.h"
 #include "llvm_util/compare.h"
 #include "llvm_util/llvm2alive.h"
@@ -95,6 +100,7 @@ cl::opt<string>
                      "https://llvm.org/docs/NewPassManager.html#invoking-opt"),
             cl::cat(alive_cmdargs), cl::init("O2"));
 
+#ifndef GUIDE
 class Chooser {
   mt19937_64 Rand;
   Chooser() = delete;
@@ -110,12 +116,13 @@ public:
     return choose(2) == 0;
   }
 
-  long dist() {
+  long chooseUnimportant() {
     uniform_int_distribution<unsigned long> Dist(
         0, numeric_limits<unsigned long>::max());
     return Dist(Rand);
   }
 };
+#endif
 
 class ValueGenerator {
   enum class WidthPolicy {
@@ -360,7 +367,7 @@ private:
   }
 
   // one or more runs of set bits
-  APInt bitRun(int Width) {
+  APInt bitRun(unsigned Width) {
     APInt I(Width, 0);
     do {
       auto loBit = C.choose(Width - 1);
@@ -385,7 +392,7 @@ private:
 
   // uniform random choice from the entire range
   APInt uniformInt(int Width) {
-    return APInt(Width, C.dist());
+    return APInt(Width, C.chooseUnimportant());
   }
 
   // chosen values
@@ -682,12 +689,12 @@ class ValueFuzzer : public Fuzzer {
   const int MaxInsts = 15;
   Module &M;
   LLVMContext &Ctx;
-  Chooser C;
+  Chooser &C;
   ValueGenerator VG;
   bool gone = false;
 
 public:
-  ValueFuzzer(Module &_M, long seed) : M(_M), Ctx(M.getContext()), C(seed),
+  ValueFuzzer(Module &_M, Chooser &_C) : M(_M), Ctx(M.getContext()), C(_C),
     VG(C, MaxIntWidth, Ctx) {}
 
   void go() override;
@@ -753,12 +760,12 @@ class BBFuzzer : public Fuzzer {
   const int MaxBoolParams = 16;
   Module &M;
   LLVMContext &Ctx;
-  Chooser C;
+  Chooser &C;
   ValueGenerator VG;
   bool gone = false;
 
 public:
-  BBFuzzer(Module &_M, long seed) : M(_M), Ctx(M.getContext()), C(seed),
+  BBFuzzer(Module &_M, Chooser &_C) : M(_M), Ctx(M.getContext()), C(_C),
     VG(C, MaxWidth, Ctx) {}
 
   void go() override;
@@ -877,6 +884,11 @@ void BBFuzzer::go() {
   }
 }
 
+string getEnvVar(std::string const &var) {
+  char const *val = getenv(var.c_str()); 
+  return (val == nullptr) ? std::string() : std::string(val);
+}
+  
 } // namespace
 
 int main(int argc, char **argv) {
@@ -928,14 +940,14 @@ reduced using llvm-reduce.
   verifier.print_dot = opt_print_dot;
   verifier.bidirectional = opt_bidirectional;
 
-  function<unique_ptr<Fuzzer>(Module &, long)> makeFuzzer;
+  function<unique_ptr<Fuzzer>(Module &, Chooser &)> makeFuzzer;
   if (opt_fuzzer == "value") {
-    makeFuzzer = [](Module &M, long seed) {
-      return make_unique<ValueFuzzer>(M, seed);
+    makeFuzzer = [](Module &M, Chooser &C) {
+      return make_unique<ValueFuzzer>(M, C);
     };
   } else if (opt_fuzzer == "bb") {
-    makeFuzzer = [](Module &M, long seed) {
-      return make_unique<BBFuzzer>(M, seed);
+    makeFuzzer = [](Module &M, Chooser &C) {
+      return make_unique<BBFuzzer>(M, C);
     };
   } else {
     *out << "Available fuzzers are \"value\" and \"bb\".\n\n";
@@ -947,7 +959,23 @@ reduced using llvm-reduce.
       0, numeric_limits<unsigned long>::max());
 
   for (int rep = 0; rep < opt_num_reps; ++rep) {
-    auto F = makeFuzzer(M1, Dist(Rand));
+#ifdef GUIDE
+    auto InFn = getEnvVar("FILEGUIDE_INPUT_FILE");
+    if (InFn.empty())
+      report_fatal_error("Expected file name in env var FILEGUIDE_INPUT_FILE");
+    auto OutFn = getEnvVar("FILEGUIDE_OUTPUT_FILE");
+    if (OutFn.empty())
+      report_fatal_error("Expected file name in env var FILEGUIDE_OUTPUT_FILE");
+    FileGuide FG;
+    const string Prefix("; ");
+    FG.parseChoices(InFn, Prefix);
+    SaverGuide SG(&FG, Prefix);
+    auto Cho = SG.makeChooser();
+    auto C = static_cast<tree_guide::SaverChooser *>(Cho.get());
+#else
+    auto C = make_unique<Chooser>(Dist(Rand));                                      
+#endif
+    auto F = makeFuzzer(M1, *C);
     F->go();
 
     if (verifyModule(M1, &errs()))
@@ -963,6 +991,17 @@ reduced using llvm-reduce.
       assert(err.empty());
     }
 
+#ifdef GUIDE
+    std::error_code EC;
+    raw_fd_stream OF(OutFn, EC);
+    if (EC)
+      report_fatal_error("Could not open output file");
+    OF << C->formatChoices();
+    OF << "\n";
+    M1.print(OF, nullptr);
+    exit(0);
+#endif
+    
     if (opt_save_ir) {
       stringstream output_fn;
       output_fn << "file_" << rep << ".bc";
