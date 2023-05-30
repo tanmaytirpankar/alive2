@@ -121,6 +121,9 @@ public:
         0, numeric_limits<unsigned long>::max());
     return Dist(Rand);
   }
+
+  void beginScope() {}
+  void endScope() {}
 };
 #endif
 
@@ -197,20 +200,26 @@ public:
   }
 
   Value *getVal(Type *Ty) {
+    C.beginScope();
     int num_vals = Vals.size();
     int idx = C.choose(1 + num_vals);
     if (idx == num_vals) {
-      return randomInt(Ty);
+      auto *v = randomInt(Ty);
+      C.endScope();
+      return v;
     } else {
       auto *v = Vals[idx];
       if (v->getType()->isPointerTy())
         v = new LoadInst(getArgTy(v), v, "", false, BB);
-      return adapt(v, Ty);
+      v = adapt(v, Ty);
+      C.endScope();
+      return v;
     }
   }
 
   // TODO generate vector instructions
   Value *genInst() {
+    C.beginScope();
     auto *Ty = Type::getIntNTy(BB->getContext(), getWidth(WP));
     Value *Val = nullptr;
     switch (C.choose(4)) {
@@ -267,6 +276,7 @@ public:
       assert(false);
     }
     Vals.push_back(Val);
+    C.endScope();
     return Val;
   }
 
@@ -439,6 +449,8 @@ private:
   }
 
   Constant *randomInt(Type *Ty) {
+    C.beginScope();
+    
     const auto Width = Ty->getIntegerBitWidth();
     auto &P = Pool.at(Width);
 
@@ -459,6 +471,7 @@ private:
       default:
         assert(false);
       }
+      C.endScope();
       return ConstantInt::get(Ty, I);
     } else {
       auto I = randomIntHelper(Width);
@@ -476,6 +489,7 @@ private:
         break;
       }
       P.push_back(I);
+      C.endScope();
       return ConstantInt::get(Ty, I);
     }
   }
