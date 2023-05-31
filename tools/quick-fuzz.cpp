@@ -825,6 +825,7 @@ void BBFuzzer::go() {
   }
 
   for (int i = 0; i < NumBBs; ++i) {
+    C.beginScope();
     if (C.choose(10) == 0) {
       if (C.flip()) {
         auto idx = C.choose(NumCounters);
@@ -844,9 +845,11 @@ void BBFuzzer::go() {
         Inc->setHasNoSignedWrap();
       new StoreInst(Inc, Counters[idx], BBs[i]);
     }
+    C.endScope();
   }
 
   for (int i = 0; i < NumBBs; ++i) {
+    C.beginScope();
   again:
     switch (C.choose(4)) {
     case 0: {
@@ -895,6 +898,7 @@ void BBFuzzer::go() {
     default:
       assert(false);
     }
+    C.endScope();
   }
 }
 
