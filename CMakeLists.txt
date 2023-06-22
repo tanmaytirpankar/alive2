@@ -253,7 +253,7 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
   target_link_libraries(alive-tv PRIVATE ${ALIVE_LIBS_LLVM} ${Z3_LIBRARIES} ${HIREDIS_LIBRARIES} ${llvm_libs})
   target_link_libraries(quick-fuzz PRIVATE ${ALIVE_LIBS_LLVM} ${Z3_LIBRARIES} ${HIREDIS_LIBRARIES} ${llvm_libs})
   target_include_directories(quick-fuzz PRIVATE "/home/regehr/guided-tree-search/include")
-  target_compile_options(quick-fuzz PRIVATE "-DGUIDE=1")
+  target_compile_options(quick-fuzz PRIVATE "-DGUIDE=1" "-DNOMUT=1")
   target_link_libraries(alive-exec PRIVATE ${ALIVE_LIBS_LLVM} ${Z3_LIBRARIES} ${HIREDIS_LIBRARIES} ${llvm_libs})
 endif()
 
