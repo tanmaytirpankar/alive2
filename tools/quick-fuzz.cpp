@@ -974,14 +974,6 @@ reduced using llvm-reduce.
       WriteBitcodeToFile(M1, output_file);
     }
 
-    if (opt_print_ir) {
-      out->flush();
-      outs() << "------------------------------------------------------\n\n";
-      M1.print(outs(), nullptr);
-      outs() << "------------------------------------------------------\n\n";
-      outs().flush();
-    }
-
     if (opt_skip_alive)
       continue;
 
@@ -1015,6 +1007,14 @@ reduced using llvm-reduce.
       F->eraseFromParent();
   }
 
+    if (opt_print_ir) {
+      out->flush();
+      M1.print(outs(), nullptr);
+      outs().flush();
+    }
+
+    if (false) {
+    
   *out << "Summary:\n"
           "  "
        << verifier.num_correct
@@ -1027,6 +1027,7 @@ reduced using llvm-reduce.
        << " failed-to-prove transformations\n"
           "  "
        << verifier.num_errors << " Alive2 errors\n";
+    }
 
 end:
   if (opt_smt_stats)
