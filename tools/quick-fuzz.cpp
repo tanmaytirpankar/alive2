@@ -984,17 +984,16 @@ reduced using llvm-reduce.
     auto OutFn = getEnvVar("FILEGUIDE_OUTPUT_FILE");
     if (OutFn.empty())
       report_fatal_error("Expected file name in env var FILEGUIDE_OUTPUT_FILE");
+    const string Prefix("; ");
 #ifdef NOMUT
     DefaultGuide G;
-    auto C = G.makeChooser();
 #else
-    FileGuide FG;
-    const string Prefix("; ");
-    FG.parseChoices(InFn, Prefix);
-    SaverGuide SG(&FG, Prefix);
+    FileGuide G;
+    G.parseChoices(InFn, Prefix);
+#endif
+    SaverGuide SG(&G, Prefix);
     auto Cho = SG.makeChooser();
     auto C = static_cast<tree_guide::SaverChooser *>(Cho.get());
-#endif
 
 #else
     auto C = make_unique<Chooser>(Dist(Rand));                                      
@@ -1020,15 +1019,9 @@ reduced using llvm-reduce.
     raw_fd_stream OF(OutFn, EC);
     if (EC)
       report_fatal_error("Could not open output file");
-#ifndef NOMUT
     OF << C->formatChoices();
     OF << "\n";
-#endif
     M1.print(OF, nullptr);
-    OF << "; BEGIN FORMATTED CHOICES\n";
-    OF << "; 1,0,3,4,0,1,0,1,0,3,0,0,0,2,0,1,0,3,0,1,2,3,0,2,3,3,2,3,7,1,0,10,0,\n";
-    OF << "; 3,28,1,0,3,2,5,4,0,6,1,3,9,0,1,12,1,4,0,\n";
-    OF << "; END FORMATTED CHOICES\n";
     OF.close();
     exit(0);
 #endif
