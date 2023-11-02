@@ -143,15 +143,6 @@ const set<int> instrs_64 = {
 
 const set<int> instrs_128 = {AArch64::FMOVXDr, AArch64::INSvi64gpr};
 
-const set<int> instrs_no_write = {
-    AArch64::Bcc,    AArch64::B,      AArch64::TBZW,   AArch64::TBZX,
-    AArch64::TBNZW,  AArch64::TBNZX,  AArch64::CBZW,   AArch64::CBZX,
-    AArch64::CBNZW,  AArch64::CBNZX,  AArch64::CCMPWr, AArch64::CCMPWi,
-    AArch64::CCMPXr, AArch64::CCMPXi,
-};
-
-const set<int> ins_variant = {AArch64::INSvi64gpr};
-
 bool has_s(int instr) {
   return s_flag.contains(instr);
 }
