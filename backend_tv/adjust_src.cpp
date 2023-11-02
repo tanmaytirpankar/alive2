@@ -65,80 +65,79 @@ namespace {
 /*
  * a function that have the sext or zext attribute on its return value
  * is awkward: this obligates the function to sign- or zero-extend the
- * return value. we want to check this, which requires rewriting the
- * function to return a larger type
+ * return value. we want to check this, which requires making the
+ * function return a wider type, which requires cloning the function.
+ *
+ * cloning a function is an awkward case and we'd like to thoroughly
+ * test that sort of code, so we just unconditionally do that even
+ * when we don't actually need to.
  */
 Function *adjustSrcReturn(Function *srcFn) {
-  auto *ret_typ = srcFn->getReturnType();
+  auto *orig_ret_typ = srcFn->getReturnType();
 
-  if (ret_typ->isPointerTy() || ret_typ->isVoidTy())
-    return srcFn;
-
-  if (!(ret_typ->isIntegerTy() || ret_typ->isVectorTy())) {
+  if (!(orig_ret_typ->isIntegerTy() || orig_ret_typ->isVectorTy() ||
+        orig_ret_typ->isPointerTy() || orig_ret_typ->isVoidTy())) {
     *out << "\nERROR: Unsupported Function Return Type: Only int, ptr, vec, "
-            "and void "
-            "supported for now\n\n";
+            "and void supported for now\n\n";
     exit(-1);
   }
 
   auto &DL = srcFn->getParent()->getDataLayout();
-  cout << "getting size of return type" << endl;
-  orig_ret_bitwidth = DL.getTypeSizeInBits(ret_typ);
-  cout << "size = " << orig_ret_bitwidth << endl;
+  orig_ret_bitwidth =
+      orig_ret_typ->isVoidTy() ? 0 : DL.getTypeSizeInBits(orig_ret_typ);
+
   if (orig_ret_bitwidth > 64) {
-    *out << "\nERROR: Unsupported Function Return: Only int/vec types 64 "
+    *out << "\nERROR: Unsupported Function Return: Only int/vec/ptr types 64 "
             "bits or smaller supported for now\n\n";
     exit(-1);
   }
 
-  // don't need to do any extension if the return type is exactly 32 bits
-  if (orig_ret_bitwidth == 64 || orig_ret_bitwidth == 32)
-    return srcFn;
+  has_ret_attr = srcFn->hasRetAttribute(Attribute::SExt) ||
+                 srcFn->hasRetAttribute(Attribute::ZExt);
 
-  if (!srcFn->hasRetAttribute(Attribute::SExt) &&
-      !srcFn->hasRetAttribute(Attribute::ZExt))
-    return srcFn;
+  Type *actual_ret_ty = nullptr;
+  if (has_ret_attr) {
+    auto *i32 = Type::getIntNTy(srcFn->getContext(), 32);
+    auto *i64 = Type::getIntNTy(srcFn->getContext(), 64);
 
-  // starting here we commit to returning a copy instead of the
-  // original function
+    actual_ret_ty = i64;
 
-  has_ret_attr = true;
-  auto *i32 = Type::getIntNTy(srcFn->getContext(), 32);
-  auto *i64 = Type::getIntNTy(srcFn->getContext(), 64);
+    // build this first to avoid iterator invalidation
+    vector<ReturnInst *> RIs;
+    for (auto &BB : *srcFn)
+      for (auto &I : BB)
+        if (auto *RI = dyn_cast<ReturnInst>(&I))
+          RIs.push_back(RI);
 
-  // build this first to avoid iterator invalidation
-  vector<ReturnInst *> RIs;
-  for (auto &BB : *srcFn)
-    for (auto &I : BB)
-      if (auto *RI = dyn_cast<ReturnInst>(&I))
-        RIs.push_back(RI);
-
-  for (auto *RI : RIs) {
-    auto retVal = RI->getReturnValue();
-    auto Name = retVal->getName();
-    if (orig_ret_bitwidth < 32) {
-      if (srcFn->hasRetAttribute(Attribute::ZExt)) {
-        auto zext = new ZExtInst(retVal, i64, Name + "_zext", RI);
-        ReturnInst::Create(srcFn->getContext(), zext, RI);
+    for (auto *RI : RIs) {
+      auto retVal = RI->getReturnValue();
+      auto Name = retVal->getName();
+      if (orig_ret_bitwidth < 32) {
+        if (srcFn->hasRetAttribute(Attribute::ZExt)) {
+          auto zext = new ZExtInst(retVal, i64, Name + "_zext", RI);
+          ReturnInst::Create(srcFn->getContext(), zext, RI);
+        } else {
+          auto sext = new SExtInst(retVal, i32, Name + "_sext", RI);
+          auto zext = new ZExtInst(sext, i64, Name + "_zext", RI);
+          ReturnInst::Create(srcFn->getContext(), zext, RI);
+        }
       } else {
-        auto sext = new SExtInst(retVal, i32, Name + "_sext", RI);
-        auto zext = new ZExtInst(sext, i64, Name + "_zext", RI);
-        ReturnInst::Create(srcFn->getContext(), zext, RI);
+        if (srcFn->hasRetAttribute(Attribute::ZExt)) {
+          auto zext = new ZExtInst(retVal, i64, Name + "_zext", RI);
+          ReturnInst::Create(srcFn->getContext(), zext, RI);
+        } else {
+          auto sext = new SExtInst(retVal, i64, Name + "_sext", RI);
+          ReturnInst::Create(srcFn->getContext(), sext, RI);
+        }
       }
-    } else {
-      if (srcFn->hasRetAttribute(Attribute::ZExt)) {
-        auto zext = new ZExtInst(retVal, i64, Name + "_zext", RI);
-        ReturnInst::Create(srcFn->getContext(), zext, RI);
-      } else {
-        auto sext = new SExtInst(retVal, i64, Name + "_sext", RI);
-        ReturnInst::Create(srcFn->getContext(), sext, RI);
-      }
+      RI->eraseFromParent();
     }
-    RI->eraseFromParent();
+  } else {
+    actual_ret_ty = orig_ret_typ;
   }
 
-  FunctionType *NFTy =
-      FunctionType::get(i64, srcFn->getFunctionType()->params(), false);
+  FunctionType *NFTy = FunctionType::get(
+      actual_ret_ty, srcFn->getFunctionType()->params(), false);
   Function *NF =
       Function::Create(NFTy, srcFn->getLinkage(), srcFn->getAddressSpace(),
                        srcFn->getName(), srcFn->getParent());
