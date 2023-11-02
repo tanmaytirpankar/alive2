@@ -88,56 +88,57 @@ const set<int> s_flag = {
 };
 
 const set<int> instrs_32 = {
-    AArch64::ADDWrx,   AArch64::ADDSWrs,  AArch64::ADDSWri,  AArch64::ADDWrs,
-    AArch64::ADDWri,   AArch64::ADDSWrx,  AArch64::ADCWr,    AArch64::ADCSWr,
-    AArch64::ASRVWr,   AArch64::SUBWri,   AArch64::SUBWrs,   AArch64::SUBWrx,
-    AArch64::SUBSWrs,  AArch64::SUBSWri,  AArch64::SUBSWrx,  AArch64::SBFMWri,
-    AArch64::CSELWr,   AArch64::ANDWri,   AArch64::ANDWrr,   AArch64::ANDWrs,
-    AArch64::ANDSWri,  AArch64::ANDSWrr,  AArch64::ANDSWrs,  AArch64::MADDWrrr,
-    AArch64::MSUBWrrr, AArch64::EORWri,   AArch64::CSINVWr,  AArch64::CSINCWr,
-    AArch64::MOVZWi,   AArch64::MOVNWi,   AArch64::MOVKWi,   AArch64::LSLVWr,
-    AArch64::LSRVWr,   AArch64::ORNWrs,   AArch64::UBFMWri,  AArch64::BFMWri,
-    AArch64::ORRWrs,   AArch64::ORRWri,   AArch64::SDIVWr,   AArch64::UDIVWr,
-    AArch64::EXTRWrri, AArch64::EORWrs,   AArch64::RORVWr,   AArch64::RBITWr,
-    AArch64::CLZWr,    AArch64::REVWr,    AArch64::CSNEGWr,  AArch64::BICWrs,
-    AArch64::BICSWrs,  AArch64::EONWrs,   AArch64::REV16Wr,  AArch64::Bcc,
-    AArch64::CCMPWr,   AArch64::CCMPWi,   AArch64::LDRWui,   AArch64::LDRBBui,
-    AArch64::LDRBui,   AArch64::LDRSBWui, AArch64::LDRSWui,  AArch64::LDRSHWui,
-    AArch64::LDRSBWui, AArch64::LDRHHui,  AArch64::LDRHui,   AArch64::STRWui,
-    AArch64::CCMNWi,   AArch64::CCMNWr,   AArch64::STRBBui,  AArch64::STRBui,
-    AArch64::STPWi,    AArch64::STRHHui,  AArch64::STRHui,   AArch64::STURWi,
+    AArch64::ADDWrx,   AArch64::ADDSWrs,  AArch64::ADDSWri, AArch64::ADDWrs,
+    AArch64::ADDWri,   AArch64::ADDSWrx,  AArch64::ADCWr,   AArch64::ADCSWr,
+    AArch64::ASRVWr,   AArch64::SUBWri,   AArch64::SUBWrs,  AArch64::SUBWrx,
+    AArch64::SUBSWrs,  AArch64::SUBSWri,  AArch64::SUBSWrx, AArch64::SBFMWri,
+    AArch64::CSELWr,   AArch64::ANDWri,   AArch64::ANDWrr,  AArch64::ANDWrs,
+    AArch64::ANDSWri,  AArch64::ANDSWrr,  AArch64::ANDSWrs, AArch64::MADDWrrr,
+    AArch64::MSUBWrrr, AArch64::EORWri,   AArch64::CSINVWr, AArch64::CSINCWr,
+    AArch64::MOVZWi,   AArch64::MOVNWi,   AArch64::MOVKWi,  AArch64::LSLVWr,
+    AArch64::LSRVWr,   AArch64::ORNWrs,   AArch64::UBFMWri, AArch64::BFMWri,
+    AArch64::ORRWrs,   AArch64::ORRWri,   AArch64::SDIVWr,  AArch64::UDIVWr,
+    AArch64::EXTRWrri, AArch64::EORWrs,   AArch64::RORVWr,  AArch64::RBITWr,
+    AArch64::CLZWr,    AArch64::REVWr,    AArch64::CSNEGWr, AArch64::BICWrs,
+    AArch64::BICSWrs,  AArch64::EONWrs,   AArch64::REV16Wr, AArch64::Bcc,
+    AArch64::CCMPWr,   AArch64::CCMPWi,   AArch64::LDRWui,  AArch64::LDRBBui,
+    AArch64::LDRBui,   AArch64::LDRSBWui, AArch64::LDRSWui, AArch64::LDRSHWui,
+    AArch64::LDRSBWui, AArch64::LDRHHui,  AArch64::LDRHui,  AArch64::STRWui,
+    AArch64::CCMNWi,   AArch64::CCMNWr,   AArch64::STRBBui, AArch64::STRBui,
+    AArch64::STPWi,    AArch64::STRHHui,  AArch64::STRHui,  AArch64::STURWi,
     AArch64::LDPWi,    AArch64::STRWpre};
 
 const set<int> instrs_64 = {
     AArch64::ADDXrx,    AArch64::ADDSXrs,   AArch64::ADDSXri,
     AArch64::ADDXrs,    AArch64::ADDXri,    AArch64::ADDSXrx,
-    AArch64::ADDv4i16,  AArch64::ADDv8i8,   AArch64::ADCXr,     AArch64::ADCSXr,
-    AArch64::ASRVXr,    AArch64::SUBXri,    AArch64::SUBXrs,
-    AArch64::SUBXrx,    AArch64::SUBSXrs,   AArch64::SUBSXri,
-    AArch64::SUBSXrx,   AArch64::SBFMXri,   AArch64::CSELXr,
-    AArch64::ANDXri,    AArch64::ANDXrr,    AArch64::ANDXrs,
-    AArch64::ANDSXri,   AArch64::ANDSXrr,   AArch64::ANDSXrs,
-    AArch64::MADDXrrr,  AArch64::MSUBXrrr,  AArch64::EORXri,
-    AArch64::CSINVXr,   AArch64::CSINCXr,   AArch64::MOVZXi,
-    AArch64::MOVNXi,    AArch64::MOVKXi,    AArch64::LSLVXr,
-    AArch64::LSRVXr,    AArch64::ORNXrs,    AArch64::UBFMXri,
-    AArch64::BFMXri,    AArch64::ORRXrs,    AArch64::ORRXri,
-    AArch64::SDIVXr,    AArch64::UDIVXr,    AArch64::EXTRXrri,
-    AArch64::EORXrs,    AArch64::SMADDLrrr, AArch64::UMADDLrrr,
-    AArch64::RORVXr,    AArch64::RBITXr,    AArch64::CLZXr,
-    AArch64::REVXr,     AArch64::CSNEGXr,   AArch64::BICXrs,
-    AArch64::BICSXrs,   AArch64::EONXrs,    AArch64::SMULHrr,
-    AArch64::UMULHrr,   AArch64::REV32Xr,   AArch64::REV16Xr,
-    AArch64::SMSUBLrrr, AArch64::UMSUBLrrr, AArch64::PHI,
-    AArch64::TBZW,      AArch64::TBZX,      AArch64::TBNZW,
-    AArch64::TBNZX,     AArch64::B,         AArch64::CBZW,
-    AArch64::CBZX,      AArch64::CBNZW,     AArch64::CBNZX,
-    AArch64::CCMPXr,    AArch64::CCMPXi,    AArch64::LDRXui,
-    AArch64::LDPXi,     AArch64::LDRDui,    AArch64::STRDui,
-    AArch64::MSR,       AArch64::MRS,       AArch64::LDRSBXui,
-    AArch64::LDRSBXui,  AArch64::LDRSHXui,  AArch64::STRXui,
-    AArch64::STPXi,     AArch64::CCMNXi,    AArch64::CCMNXr,
-    AArch64::STURXi,    AArch64::ADRP,      AArch64::STRXpre,
+    AArch64::ADDv4i16,  AArch64::ADDv8i8,   AArch64::ADCXr,
+    AArch64::ADCSXr,    AArch64::ASRVXr,    AArch64::SUBXri,
+    AArch64::SUBXrs,    AArch64::SUBXrx,    AArch64::SUBSXrs,
+    AArch64::SUBSXri,   AArch64::SUBSXrx,   AArch64::SBFMXri,
+    AArch64::CSELXr,    AArch64::ANDXri,    AArch64::ANDXrr,
+    AArch64::ANDXrs,    AArch64::ANDSXri,   AArch64::ANDSXrr,
+    AArch64::ANDSXrs,   AArch64::MADDXrrr,  AArch64::MSUBXrrr,
+    AArch64::EORXri,    AArch64::CSINVXr,   AArch64::CSINCXr,
+    AArch64::MOVZXi,    AArch64::MOVNXi,    AArch64::MOVKXi,
+    AArch64::LSLVXr,    AArch64::LSRVXr,    AArch64::ORNXrs,
+    AArch64::UBFMXri,   AArch64::BFMXri,    AArch64::ORRXrs,
+    AArch64::ORRXri,    AArch64::SDIVXr,    AArch64::UDIVXr,
+    AArch64::EXTRXrri,  AArch64::EORXrs,    AArch64::SMADDLrrr,
+    AArch64::UMADDLrrr, AArch64::RORVXr,    AArch64::RBITXr,
+    AArch64::CLZXr,     AArch64::REVXr,     AArch64::CSNEGXr,
+    AArch64::BICXrs,    AArch64::BICSXrs,   AArch64::EONXrs,
+    AArch64::SMULHrr,   AArch64::UMULHrr,   AArch64::REV32Xr,
+    AArch64::REV16Xr,   AArch64::SMSUBLrrr, AArch64::UMSUBLrrr,
+    AArch64::PHI,       AArch64::TBZW,      AArch64::TBZX,
+    AArch64::TBNZW,     AArch64::TBNZX,     AArch64::B,
+    AArch64::CBZW,      AArch64::CBZX,      AArch64::CBNZW,
+    AArch64::CBNZX,     AArch64::CCMPXr,    AArch64::CCMPXi,
+    AArch64::LDRXui,    AArch64::LDPXi,     AArch64::LDRDui,
+    AArch64::STRDui,    AArch64::MSR,       AArch64::MRS,
+    AArch64::LDRSBXui,  AArch64::LDRSBXui,  AArch64::LDRSHXui,
+    AArch64::STRXui,    AArch64::STPXi,     AArch64::CCMNXi,
+    AArch64::CCMNXr,    AArch64::STURXi,    AArch64::ADRP,
+    AArch64::STRXpre,
 };
 
 const set<int> instrs_128 = {AArch64::FMOVXDr, AArch64::INSvi64gpr};
@@ -665,8 +666,7 @@ class arm2llvm {
       auto *ty = getIntTy(1 + n1);
       return createTrunc(v, ty);
     } else {
-      auto *shift =
-          createLShr(v, getIntConst(n2, getBitWidth(v)));
+      auto *shift = createLShr(v, getIntConst(n2, getBitWidth(v)));
       auto *ty = getIntTy(1 + n1 - n2);
       return createTrunc(shift, ty);
     }
@@ -692,10 +692,11 @@ class arm2llvm {
                             LLVMBB);
   }
 
-  // Creates LLVM IR instructions by takes two values with the same number of bits,
-  // bit casting them to vectors of numElements elements of size elementTypeInBits
-  // and adding them.
-  BinaryOperator *createVectorAdd(Value *a, Value *b, int elementTypeInBits, int numElements) {
+  // Creates LLVM IR instructions by takes two values with the same number of
+  // bits, bit casting them to vectors of numElements elements of size
+  // elementTypeInBits and adding them.
+  BinaryOperator *createVectorAdd(Value *a, Value *b, int elementTypeInBits,
+                                  int numElements) {
     assert(getBitWidth(a) == getBitWidth(b) &&
            "Expected values of same bit width");
 
@@ -713,11 +714,8 @@ class arm2llvm {
                                    ElementCount::getFixed(numElements)),
                    Instruction::BitCast);
 
-    return BinaryOperator::Create(Instruction::Add,
-                                  a_vector,
-                                  b_vector,
-                                  nextName(),
-                                  LLVMBB);
+    return BinaryOperator::Create(Instruction::Add, a_vector, b_vector,
+                                  nextName(), LLVMBB);
   }
 
   // Returns Bit Width of Value V
@@ -729,7 +727,7 @@ class arm2llvm {
     if (V->getType()->isVectorTy()) {
       auto *v_type = (VectorType *)V->getType();
       bitWidth = v_type->getScalarSizeInBits() *
-          v_type->getElementCount().getFixedValue();
+                 v_type->getElementCount().getFixedValue();
     } else {
       bitWidth = V->getType()->getIntegerBitWidth();
     }
@@ -746,16 +744,12 @@ class arm2llvm {
     if (Reg >= AArch64::H0 && Reg <= AArch64::H31)
       return 16;
     if ((Reg >= AArch64::W0 && Reg <= AArch64::W30) ||
-        (Reg >= AArch64::S0 && Reg <= AArch64::S31) ||
-        Reg == AArch64::WZR ||
+        (Reg >= AArch64::S0 && Reg <= AArch64::S31) || Reg == AArch64::WZR ||
         Reg == AArch64::WSP)
       return 32;
     if ((Reg >= AArch64::X0 && Reg <= AArch64::X28) ||
-        (Reg >= AArch64::D0 && Reg <= AArch64::D31) ||
-        Reg == AArch64::XZR ||
-        Reg == AArch64::SP ||
-        Reg == AArch64::FP ||
-        Reg == AArch64::LR)
+        (Reg >= AArch64::D0 && Reg <= AArch64::D31) || Reg == AArch64::XZR ||
+        Reg == AArch64::SP || Reg == AArch64::FP || Reg == AArch64::LR)
       return 64;
     if (Reg >= AArch64::Q0 && Reg <= AArch64::Q31)
       return 128;
@@ -803,7 +797,7 @@ class arm2llvm {
   // always does a full-width read
   Value *readFromReg(unsigned Reg, const string &NameStr = "") {
     auto RegAddr = dealiasReg(Reg);
-    int regSize = getRegSize(Reg) <= 64?64:128;
+    int regSize = getRegSize(Reg) <= 64 ? 64 : 128;
     return createLoad(getIntTy(regSize), RegAddr, NameStr);
   }
 
@@ -956,16 +950,17 @@ class arm2llvm {
       // Look through all visited ADRP instructions to find one in which
       // stringVar was the operand used.
       bool foundStringVar = false;
-      for(const auto& exprVar: instExprVarMap) {
-        if(exprVar.second == stringVar) {
+      for (const auto &exprVar : instExprVarMap) {
+        if (exprVar.second == stringVar) {
           foundStringVar = true;
           break;
         }
       }
 
       if (!foundStringVar) {
-        *out << "\nERROR: Did not use \"" << stringVar << "\" in an ADRP "
-                                                          "instruction\n\n";
+        *out << "\nERROR: Did not use \"" << stringVar
+             << "\" in an ADRP "
+                "instruction\n\n";
         exit(-1);
       }
 
@@ -1072,8 +1067,7 @@ class arm2llvm {
 
   tuple<Value *, tuple<Value *, Value *, Value *, Value *>>
   addWithCarry(Value *l, Value *r, Value *carryIn) {
-    assert(getBitWidth(l) ==
-           getBitWidth(r));
+    assert(getBitWidth(l) == getBitWidth(r));
     assert(getBitWidth(carryIn) == 1);
 
     auto size = getBitWidth(l);
@@ -1142,7 +1136,7 @@ public:
            MCInstPrinter *instrPrinter, bool DebugRegs)
       : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
         instrPrinter(instrPrinter), instCount(0), DebugRegs(DebugRegs),
-	DL(srcFn.getParent()->getDataLayout()) {}
+        DL(srcFn.getParent()->getDataLayout()) {}
 
   int64_t getImm(int idx) {
     return CurInst->getOperand(idx).getImm();
@@ -2592,8 +2586,8 @@ public:
           auto retWidth = DL.getTypeSizeInBits(retTyp);
           auto retValWidth = DL.getTypeSizeInBits(retVal->getType());
 
-	  if (retWidth < retValWidth)
-	    retVal = createTrunc(retVal, getIntTy(retWidth));
+          if (retWidth < retValWidth)
+            retVal = createTrunc(retVal, getIntTy(retWidth));
 
           // mask off any don't-care bits
           if (has_ret_attr && (orig_ret_bitwidth < 32)) {
@@ -2603,8 +2597,8 @@ public:
             retVal = createZExt(trunc, i64);
           }
 
-	  if (retTyp->isVectorTy() && !has_ret_attr)
-	    retVal = createCast(retVal, retTyp, Instruction::BitCast);
+          if (retTyp->isVectorTy() && !has_ret_attr)
+            retVal = createCast(retVal, retTyp, Instruction::BitCast);
         }
         createReturn(retVal);
       }
@@ -2653,9 +2647,8 @@ public:
     case AArch64::CBZX: {
       auto operand = readFromOperand(0);
       assert(operand != nullptr && "operand is null");
-      auto cond_val =
-          createICmp(ICmpInst::Predicate::ICMP_EQ, operand,
-                     getIntConst(0, getBitWidth(operand)));
+      auto cond_val = createICmp(ICmpInst::Predicate::ICMP_EQ, operand,
+                                 getIntConst(0, getBitWidth(operand)));
       auto dst_true = getBB(Fn, CurInst->getOperand(1));
       assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
 
@@ -2674,9 +2667,8 @@ public:
     case AArch64::CBNZX: {
       auto operand = readFromOperand(0);
       assert(operand != nullptr && "operand is null");
-      auto cond_val =
-          createICmp(ICmpInst::Predicate::ICMP_NE, operand,
-                     getIntConst(0, getBitWidth(operand)));
+      auto cond_val = createICmp(ICmpInst::Predicate::ICMP_NE, operand,
+                                 getIntConst(0, getBitWidth(operand)));
 
       auto dst_true = getBB(Fn, CurInst->getOperand(1));
       assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
@@ -2891,10 +2883,11 @@ public:
     unsigned stackArgNum = 0;
 
     for (Function::arg_iterator arg = Fn->arg_begin(), E = Fn->arg_end(),
-	   srcArg = srcFn.arg_begin();
-	 arg != E; ++arg, ++srcArg) {
-      *out << "  processing arg wtih vecArgNum = " << vecArgNum <<
-        ", scalarArgNum = " << scalarArgNum << ", stackArgNum = " << stackArgNum << "\n";
+                                srcArg = srcFn.arg_begin();
+         arg != E; ++arg, ++srcArg) {
+      *out << "  processing arg wtih vecArgNum = " << vecArgNum
+           << ", scalarArgNum = " << scalarArgNum
+           << ", stackArgNum = " << stackArgNum << "\n";
       auto *argTy = arg->getType();
       Value *frozenArg = createFreeze(arg, nextName());
       auto *val = parameterABIRules(frozenArg, srcArg->hasSExtAttr());
@@ -2928,8 +2921,7 @@ public:
         ++stackArgNum;
       }
 
-    end:
-      ;
+    end:;
     }
 
     *out << "done with callee-side ABI stuff\n";

@@ -177,7 +177,8 @@ void checkTy(Type *t, const DataLayout &DL) {
   } else if (t->isIntegerTy()) {
   } else if (t->isVectorTy()) {
   } else {
-    *out << "\nERROR: only integer, pointer, and vector arguments supported so far\n\n";
+    *out << "\nERROR: only integer, pointer, and vector arguments supported so "
+            "far\n\n";
     exit(-1);
   }
 }
@@ -271,7 +272,7 @@ Function *adjustSrc(Function *srcFn) {
     cout << "arg size = " << orig_width << endl;
     if (orig_width > 64) {
       *out << "\nERROR: Unsupported function argument: Only integer / vector "
-	"parameters 64 bits or smaller supported for now\n\n";
+              "parameters 64 bits or smaller supported for now\n\n";
       exit(-1);
     }
   }
