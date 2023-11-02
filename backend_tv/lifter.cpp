@@ -838,6 +838,11 @@ class arm2llvm {
     return V;
   }
 
+  unsigned getOutputRegSize() {
+    auto outReg = CurInst->getOperand(0).getReg();
+    return getRegSize(outReg);
+  }
+
   void writeToOutputReg(Value *V, bool SExt = false) {
     auto destReg = CurInst->getOperand(0).getReg();
 
@@ -854,7 +859,7 @@ class arm2llvm {
       size_t destRegSize = getRegSize(mapRegToBackingReg(destReg));
 
       if (!(destRegSize == 32 || destRegSize == 64 || destRegSize == 128)) {
-        *out << "\nERROR: only 32, 64 and 128 bit registers supported for "
+        *out << "\nERROR: only 32, 64, and 128 bit registers supported for "
                 "now\n\n";
         exit(-1);
       }
@@ -1543,8 +1548,6 @@ public:
     }
     case AArch64::CSELWr:
     case AArch64::CSELXr: {
-      auto size = getInstSize(opcode);
-      auto ty = getIntTy(size);
       assert(CurInst->getNumOperands() == 4); // dst, lhs, rhs, cond
       // TODO decode condition and find the approprate cond val
       assert(CurInst->getOperand(1).isReg() && CurInst->getOperand(2).isReg());
@@ -1552,12 +1555,11 @@ public:
 
       auto a = readFromOperand(1);
       auto b = readFromOperand(2);
+      if (!a || !b)
+        visitError(I);
 
       auto cond_val_imm = getImm(3);
       auto cond_val = conditionHolds(cond_val_imm);
-
-      if (!ty || !a || !b)
-        visitError(I);
 
       auto result = createSelect(cond_val, a, b);
       writeToOutputReg(result);
@@ -1728,7 +1730,6 @@ public:
       auto imms = getImm(3);
 
       auto r = getIntConst(immr, size);
-      //      auto s = getIntConst(imms, size);
 
       // arithmetic shift right (ASR) alias is perferred when:
       // imms == 011111 and size == 32 or when imms == 111111 and size = 64
@@ -1801,14 +1802,12 @@ public:
     case AArch64::CCMPWr:
     case AArch64::CCMPXi:
     case AArch64::CCMPXr: {
-      auto size = getInstSize(opcode);
-      auto ty = getIntTy(size);
       assert(CurInst->getNumOperands() == 4);
 
       auto lhs = readFromOperand(0);
       auto imm_rhs = readFromOperand(1);
 
-      if (!ty || !lhs || !imm_rhs)
+      if (!lhs || !imm_rhs)
         visitError(I);
 
       auto imm_flags = getImm(2);
@@ -1843,7 +1842,6 @@ public:
     case AArch64::EORWri:
     case AArch64::EORXri: {
       auto size = getInstSize(opcode);
-      auto ty = getIntTy(size);
       assert(CurInst->getNumOperands() == 3); // dst, src, imm
       assert(CurInst->getOperand(1).isReg() && CurInst->getOperand(2).isImm());
 
@@ -1851,7 +1849,7 @@ public:
       auto decoded_immediate = decodeLogicalImmediate(getImm(2), size);
       auto imm_val = getIntConst(decoded_immediate,
                                  size); // FIXME, need to decode immediate val
-      if (!ty || !a || !imm_val)
+      if (!a || !imm_val)
         visitError(I);
 
       auto res = createXor(a, imm_val);
@@ -1894,7 +1892,6 @@ public:
     case AArch64::CSNEGWr:
     case AArch64::CSNEGXr: {
       auto size = getInstSize(opcode);
-      auto ty = getIntTy(size);
       // csinv dst, a, b, cond
       // if (cond) a else ~b
       assert(CurInst->getNumOperands() == 4); // dst, lhs, rhs, cond
@@ -1904,12 +1901,11 @@ public:
 
       auto a = readFromOperand(1);
       auto b = readFromOperand(2);
+      if (!a || !b)
+        visitError(I);
 
       auto cond_val_imm = getImm(3);
       auto cond_val = conditionHolds(cond_val_imm);
-
-      if (!ty || !a || !b)
-        visitError(I);
 
       auto neg_one = getIntConst(-1, size);
       auto inverted_b = createXor(b, neg_one);
