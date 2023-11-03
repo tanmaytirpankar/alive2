@@ -112,6 +112,11 @@ Function *adjustSrcReturn(Function *srcFn) {
     for (auto *RI : RIs) {
       auto retVal = RI->getReturnValue();
       auto Name = retVal->getName();
+      if (orig_ret_typ->isVectorTy()) {
+        retVal = new BitCastInst(
+            retVal, Type::getIntNTy(srcFn->getContext(), orig_ret_bitwidth),
+            Name + "_bitcast", RI);
+      }
       if (orig_ret_bitwidth < 32) {
         if (srcFn->hasRetAttribute(Attribute::ZExt)) {
           auto zext = new ZExtInst(retVal, i64, Name + "_zext", RI);
@@ -263,17 +268,18 @@ Function *adjustSrc(Function *srcFn) {
     exit(-1);
   }
 
+  int i = 0;
   for (auto &v : srcFn->args()) {
     auto *ty = v.getType();
     auto &DL = srcFn->getParent()->getDataLayout();
-    cout << "getting size of arg" << endl;
     auto orig_width = DL.getTypeSizeInBits(ty);
-    cout << "arg size = " << orig_width << endl;
+    cout << "size of arg " << i << " = " << orig_width << endl;
     if (orig_width > 64) {
       *out << "\nERROR: Unsupported function argument: Only integer / vector "
               "parameters 64 bits or smaller supported for now\n\n";
       exit(-1);
     }
+    ++i;
   }
 
   auto &DL = srcFn->getParent()->getDataLayout();
