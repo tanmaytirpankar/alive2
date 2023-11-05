@@ -59,6 +59,10 @@ llvm::cl::opt<string> opt_optimize_tgt(LLVM_ARGS_PREFIX "optimize-tgt",
 		 "validation (default=O3)"),
                  llvm::cl::cat(alive_cmdargs), llvm::cl::init("O3"));
 
+llvm::cl::opt<bool> opt_skip_verification(LLVM_ARGS_PREFIX "skip-verification",
+  llvm::cl::desc("Perform lifting but skip the refinement check (default=false)"),
+  llvm::cl::cat(alive_cmdargs), llvm::cl::init(false));
+
 // FIXME support opt_asm_only and opt_asm_input
   
 llvm::cl::opt<bool> opt_debug_regs(
@@ -125,7 +129,8 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   *out << "about to compare functions\n";
   out->flush();
 
-  verifier.compareFunctions(*F1, *F2);
+  if (!opt_skip_verification)
+    verifier.compareFunctions(*F1, *F2);
 
   *out << "done comparing functions\n";
   out->flush();

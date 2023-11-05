@@ -2380,9 +2380,10 @@ public:
       makeStore(baseAddr, (imm + 1) * size, size, val2);
       break;
     }
-    case AArch64::LDRSWui: {
+    case AArch64::LDRSBXui:
+    case AArch64::LDRSBWui: {
       auto [base, imm] = getParamsLoadImmed();
-      auto loaded = makeLoad(base, imm * 4, 4);
+      auto loaded = makeLoad(base, imm * 1, 1);
       writeToOutputReg(loaded, /*SExt=*/true);
       break;
     }
@@ -2393,39 +2394,10 @@ public:
       writeToOutputReg(loaded, /*SExt=*/true);
       break;
     }
-    case AArch64::LDRSBXui:
-    case AArch64::LDRSBWui: {
+    case AArch64::LDRSWui: {
       auto [base, imm] = getParamsLoadImmed();
-      auto loaded = makeLoad(base, imm * 1, 1);
+      auto loaded = makeLoad(base, imm * 4, 4);
       writeToOutputReg(loaded, /*SExt=*/true);
-      break;
-    }
-    case AArch64::LDRHHui: {
-      MCOperand &op2 = CurInst->getOperand(2);
-      if (op2.isExpr()) {
-        Value *globalVar = getExprVar(op2.getExpr());
-        auto Reg = CurInst->getOperand(0).getReg();
-        if (Reg != AArch64::WZR && Reg != AArch64::XZR)
-          createStore(globalVar, dealiasReg(Reg));
-      } else {
-        auto [base, imm] = getParamsLoadImmed();
-        auto loaded = makeLoad(base, imm * 2, 2);
-        writeToOutputReg(loaded);
-      }
-      break;
-    }
-    case AArch64::LDRHui: {
-      MCOperand &op2 = CurInst->getOperand(2);
-      if (op2.isExpr()) {
-        Value *globalVar = getExprVar(op2.getExpr());
-        auto Reg = CurInst->getOperand(0).getReg();
-        if (Reg != AArch64::WZR && Reg != AArch64::XZR)
-          createStore(globalVar, dealiasReg(Reg));
-      } else {
-        auto [base, imm] = getParamsLoadImmed();
-        auto loaded = makeLoad(base, imm * 2, 2);
-        writeToOutputReg(loaded);
-      }
       break;
     }
     case AArch64::LDRBBui: {
@@ -2452,6 +2424,34 @@ public:
       } else {
         auto [base, imm] = getParamsLoadImmed();
         auto loaded = makeLoad(base, imm * 1, 1);
+        writeToOutputReg(loaded);
+      }
+      break;
+    }
+    case AArch64::LDRHHui: {
+      MCOperand &op2 = CurInst->getOperand(2);
+      if (op2.isExpr()) {
+        Value *globalVar = getExprVar(op2.getExpr());
+        auto Reg = CurInst->getOperand(0).getReg();
+        if (Reg != AArch64::WZR && Reg != AArch64::XZR)
+          createStore(globalVar, dealiasReg(Reg));
+      } else {
+        auto [base, imm] = getParamsLoadImmed();
+        auto loaded = makeLoad(base, imm * 2, 2);
+        writeToOutputReg(loaded);
+      }
+      break;
+    }
+    case AArch64::LDRHui: {
+      MCOperand &op2 = CurInst->getOperand(2);
+      if (op2.isExpr()) {
+        Value *globalVar = getExprVar(op2.getExpr());
+        auto Reg = CurInst->getOperand(0).getReg();
+        if (Reg != AArch64::WZR && Reg != AArch64::XZR)
+          createStore(globalVar, dealiasReg(Reg));
+      } else {
+        auto [base, imm] = getParamsLoadImmed();
+        auto loaded = makeLoad(base, imm * 2, 2);
         writeToOutputReg(loaded);
       }
       break;
