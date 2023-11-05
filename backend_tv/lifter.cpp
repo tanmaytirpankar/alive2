@@ -133,12 +133,12 @@ const set<int> instrs_64 = {
     AArch64::TBNZW,     AArch64::TBNZX,     AArch64::B,
     AArch64::CBZW,      AArch64::CBZX,      AArch64::CBNZW,
     AArch64::CBNZX,     AArch64::CCMPXr,    AArch64::CCMPXi,
-    AArch64::LDRXui,    AArch64::LDPXi,     AArch64::LDRDui,
-    AArch64::STRDui,    AArch64::MSR,       AArch64::MRS,
-    AArch64::LDRSBXui,  AArch64::LDRSBXui,  AArch64::LDRSHXui,
-    AArch64::STRXui,    AArch64::STPXi,     AArch64::CCMNXi,
-    AArch64::CCMNXr,    AArch64::STURXi,    AArch64::ADRP,
-    AArch64::STRXpre,
+    AArch64::LDRXui,    AArch64::LDRXpost,  AArch64::LDPXi,
+    AArch64::LDRDui,    AArch64::STRDui,    AArch64::MSR,
+    AArch64::MRS,       AArch64::LDRSBXui,  AArch64::LDRSBXui,
+    AArch64::LDRSHXui,  AArch64::STRXui,    AArch64::STPXi,
+    AArch64::CCMNXi,    AArch64::CCMNXr,    AArch64::STURXi,
+    AArch64::ADRP,      AArch64::STRXpre,
 };
 
 const set<int> instrs_128 = {AArch64::FMOVXDr, AArch64::INSvi64gpr};
@@ -797,6 +797,10 @@ class arm2llvm {
     return createLoad(PointerType::get(Ctx, 0), RegAddr, NameStr);
   }
 
+  void updateReg(Value *v, int reg) {
+    createStore(v, dealiasReg(reg));
+  }
+
   // TODO: make it so that lshr generates code on register lookups
   // some instructions make use of this, and the semantics need to be
   // worked out
@@ -871,7 +875,7 @@ class arm2llvm {
         V = createZExt(V, getIntTy(128));
       }
     }
-    createStore(V, dealiasReg(destReg));
+    updateReg(V, destReg);
   }
 
   // Reads an Expr and maps containing string variable to a global variable
@@ -1095,22 +1099,22 @@ class arm2llvm {
 
   void setV(Value *V) {
     assert(getBitWidth(V) == 1);
-    createStore(V, dealiasReg(AArch64::V));
+    updateReg(V, AArch64::V);
   }
 
   void setZ(Value *V) {
     assert(getBitWidth(V) == 1);
-    createStore(V, dealiasReg(AArch64::Z));
+    updateReg(V, AArch64::Z);
   }
 
   void setN(Value *V) {
     assert(getBitWidth(V) == 1);
-    createStore(V, dealiasReg(AArch64::N));
+    updateReg(V, AArch64::N);
   }
 
   void setC(Value *V) {
     assert(getBitWidth(V) == 1);
-    createStore(V, dealiasReg(AArch64::C));
+    updateReg(V, AArch64::C);
   }
 
   void setZUsingResult(Value *V) {
@@ -1138,21 +1142,33 @@ public:
     return CurInst->getOperand(idx).getImm();
   }
 
-  pair<Value *, int> getParamsLoadImmed() {
+  tuple<Value *, int> getParamsLoadImmed() {
     auto &op0 = CurInst->getOperand(0);
     auto &op1 = CurInst->getOperand(1);
     auto &op2 = CurInst->getOperand(2);
     assert(op0.isReg() && op1.isReg());
+    assert(op2.isImm());
+    auto baseReg = op1.getReg();
+    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
+           (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
+           (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
+    auto baseAddr = readPtrFromReg(baseReg);
+    return make_pair(baseAddr, op2.getImm());
+  }
 
-    if (op2.isImm()) {
-      auto baseReg = op1.getReg();
-      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
-             (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
-             (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
-      auto baseAddr = readPtrFromReg(baseReg);
-      return make_pair(baseAddr, op2.getImm());
-    }
-    assert(false && "expected immediate or expression for operand 2 of a load");
+  tuple<Value *, int, int> getParamsLoadPostImmed() {
+    auto &op0 = CurInst->getOperand(0);
+    auto &op1 = CurInst->getOperand(1);
+    auto &op2 = CurInst->getOperand(2);
+    auto &op3 = CurInst->getOperand(3);
+    assert(op0.isReg() && op1.isReg() && op2.isReg());
+    assert(op3.isImm());
+    auto baseReg = op1.getReg();
+    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
+           (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
+           (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
+    auto baseAddr = readPtrFromReg(baseReg);
+    return make_tuple(baseAddr, op2.getReg(), op3.getImm());
   }
 
   // Creates instructions to store val in memory pointed by base + offset
@@ -1184,26 +1200,9 @@ public:
     return make_tuple(baseAddr, op2.getImm(), readFromReg(op0.getReg()));
   }
 
-  tuple<Value *, int, Value *> getParamsStorePreImmed() {
-    auto &op0 = CurInst->getOperand(0);
-    auto &op1 = CurInst->getOperand(1);
-    auto &op2 = CurInst->getOperand(2);
-    auto &op3 = CurInst->getOperand(3);
-    assert(op0.isReg() && op1.isReg() && op2.isReg());
-    assert(op0.getReg() == op2.getReg());
-    assert(op3.isImm());
-
-    auto baseReg = op2.getReg();
-    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
-           (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
-           (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
-    auto baseAddr = readPtrFromReg(baseReg);
-    return make_tuple(baseAddr, op3.getImm(), readFromReg(op1.getReg()));
-  }
-
   // Creates instructions to store val in memory pointed by base + offset
   //  and size are in bytes
-  void makeStore(Value *base, int offset, int size, Value *val) {
+  void storeToMemory(Value *base, int offset, int size, Value *val) {
     // Get offset as a 64-bit LLVM constant
     auto offsetVal = getIntConst(offset, 64);
 
@@ -1213,23 +1212,6 @@ public:
 
     // Store Value val in the pointer returned by the GEP instruction
     createStore(val, ptr);
-  }
-
-  // Shifts a given pointer by the offset, and stores the new pointer
-  // Must have register associated with value
-  // size is the size of the ptr in bits used by the instruction
-  Value *shiftPtr(Value *base, int offset) {
-    auto currPtrReg = CurInst->getOperand(2).getReg();
-
-    // 64 bit offsetVal, because readFromReg always returns 64bit val
-    auto offsetVal = getIntConst(offset, 64);
-
-    auto basePtrInt = readFromReg(currPtrReg);
-    auto newPtrAddr = createAdd(basePtrInt, offsetVal);
-
-    createStore(newPtrAddr, dealiasReg(currPtrReg));
-
-    return readPtrFromReg(currPtrReg);
   }
 
   // Visit an MCInst and convert it to LLVM IR
@@ -1360,9 +1342,9 @@ public:
         b = readFromOperand(2, getImm(3));
         if (b->getType()->isPointerTy()) {
           // This control path is for PC-Relative addressing.
-          auto Reg = CurInst->getOperand(0).getReg();
-          if (Reg != AArch64::WZR && Reg != AArch64::XZR)
-            createStore(b, dealiasReg(Reg));
+          auto reg = CurInst->getOperand(0).getReg();
+          if (reg != AArch64::WZR && reg != AArch64::XZR)
+            updateReg(b, reg);
           break_outer_switch = true;
           break;
         }
@@ -2412,9 +2394,9 @@ public:
       MCOperand &op2 = CurInst->getOperand(2);
       if (op2.isExpr()) {
         Value *globalVar = getExprVar(op2.getExpr());
-        auto Reg = CurInst->getOperand(0).getReg();
-        if (Reg != AArch64::WZR && Reg != AArch64::XZR)
-          createStore(globalVar, dealiasReg(Reg));
+        auto reg = CurInst->getOperand(0).getReg();
+        if (reg != AArch64::WZR && reg != AArch64::XZR)
+          updateReg(globalVar, reg);
       } else {
         auto [base, imm] = getParamsLoadImmed();
         auto loaded = makeLoad(base, imm * size, size);
@@ -2423,57 +2405,82 @@ public:
       break;
     }
 
+    case AArch64::LDRXpost: {
+      unsigned size = 8;
+      auto [base, reg, imm] = getParamsLoadPostImmed();
+      auto loaded = makeLoad(base, imm * size, size);
+      writeToOutputReg(loaded);
+      break;
+    }
+
     case AArch64::STRBBui: {
       auto [base, imm, val] = getParamsStoreImmed();
-      makeStore(base, imm * 1, 1, createTrunc(val, i8));
+      storeToMemory(base, imm * 1, 1, createTrunc(val, i8));
       break;
     }
     case AArch64::STRHHui: {
       auto [base, imm, val] = getParamsStoreImmed();
-      makeStore(base, imm * 2, 2, createTrunc(val, i16));
+      storeToMemory(base, imm * 2, 2, createTrunc(val, i16));
       break;
     }
     case AArch64::STRHui: {
       auto [base, imm, val] = getParamsStoreImmed();
-      makeStore(base, imm * 2, 2, createTrunc(val, i16));
+      storeToMemory(base, imm * 2, 2, createTrunc(val, i16));
       break;
     }
     case AArch64::STURWi: {
       auto [base, imm, val] = getParamsStoreImmed();
-      makeStore(base, imm * 1, 4, createTrunc(val, i32));
+      storeToMemory(base, imm * 1, 4, createTrunc(val, i32));
       break;
     }
     case AArch64::STURXi: {
       auto [base, imm, val] = getParamsStoreImmed();
-      makeStore(base, imm * 1, 8, val);
+      storeToMemory(base, imm * 1, 8, val);
       break;
     }
     case AArch64::STRWui: {
       auto [base, imm, val] = getParamsStoreImmed();
-      makeStore(base, imm * 4, 4, createTrunc(val, i32));
+      storeToMemory(base, imm * 4, 4, createTrunc(val, i32));
       break;
     }
     case AArch64::STRXui: {
       auto [base, imm, val] = getParamsStoreImmed();
-      makeStore(base, imm * 8, 8, val);
+      storeToMemory(base, imm * 8, 8, val);
       break;
     }
     case AArch64::STRDui: {
       auto [base, imm, val] = getParamsStoreImmed();
-      makeStore(base, imm * 8, 8, val);
+      storeToMemory(base, imm * 8, 8, val);
       break;
     }
 
     case AArch64::STRXpre:
     case AArch64::STRWpre: {
-      auto [basePtr, immOffset, valToStore] = getParamsStorePreImmed();
+      auto &op0 = CurInst->getOperand(0);
+      auto &op1 = CurInst->getOperand(1);
+      auto &op2 = CurInst->getOperand(2);
+      auto &op3 = CurInst->getOperand(3);
+      assert(op0.isReg() && op1.isReg() && op2.isReg());
+      assert(op0.getReg() == op2.getReg());
+      assert(op3.isImm());
 
-      auto shiftedPtr = shiftPtr(basePtr, immOffset);
+      auto baseReg = op2.getReg();
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
+             (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
+             (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
+
+      auto valToStore = readFromReg(op1.getReg());
+      auto offsetVal = getIntConst(op3.getImm(), 64);
+      auto basePtrInt = readFromReg(baseReg);
+      auto newPtrAddr = createAdd(basePtrInt, offsetVal);
+
+      updateReg(newPtrAddr, baseReg);
+      auto shiftedPtr = readPtrFromReg(baseReg);
 
       if (getInstSize(opcode) == 32)
         valToStore = createTrunc(valToStore, i32);
 
-      makeStore(shiftedPtr, 0, 8, valToStore);
+      storeToMemory(shiftedPtr, 0, 8, valToStore);
       break;
     }
 
@@ -2498,11 +2505,11 @@ public:
       auto out2 = op1.getReg();
       if (out1 != AArch64::XZR && out1 != AArch64::WZR) {
         auto loaded = makeLoad(baseAddr, imm * size, size);
-        createStore(loaded, dealiasReg(out1));
+        updateReg(loaded, out1);
       }
       if (out2 != AArch64::XZR && out2 != AArch64::WZR) {
         auto loaded = makeLoad(baseAddr, (imm + 1) * size, size);
-        createStore(loaded, dealiasReg(out2));
+        updateReg(loaded, out2);
       }
       break;
     }
@@ -2527,11 +2534,11 @@ public:
       auto val1 = readFromReg(op0.getReg());
       if (size == 4)
         val1 = createTrunc(val1, i32);
-      makeStore(baseAddr, imm * size, size, val1);
+      storeToMemory(baseAddr, imm * size, size, val1);
       auto val2 = readFromReg(op1.getReg());
       if (size == 4)
         val2 = createTrunc(val2, i32);
-      makeStore(baseAddr, (imm + 1) * size, size, val2);
+      storeToMemory(baseAddr, (imm + 1) * size, size, val2);
       break;
     }
 
