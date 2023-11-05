@@ -176,22 +176,6 @@ string findTargetLabel(MCInst &Inst) {
   UNREACHABLE();
 }
 
-void print(MCInst &Inst) {
-  *out << "< MCInst " << Inst.getOpcode() << " ";
-  for (auto it = Inst.begin(); it != Inst.end(); ++it) {
-    if (it->isReg()) {
-      *out << "<MCOperand Reg:(" << it->getReg() << ")>";
-    } else if (it->isImm()) {
-      *out << "<MCOperand Imm:" << it->getImm() << ">";
-    } else if (it->isExpr()) {
-      *out << "<MCOperand Expr:>"; // FIXME
-    } else {
-      assert("MCInst printing an unsupported operand" && false);
-    }
-  }
-  *out << ">\n";
-}
-
 // Represents a basic block of machine instructions
 class MCBasicBlock {
 private:
@@ -1154,21 +1138,6 @@ public:
            (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
     auto baseAddr = readPtrFromReg(baseReg);
     return make_pair(baseAddr, op2.getImm());
-  }
-
-  tuple<Value *, int, int> getParamsLoadPostImmed() {
-    auto &op0 = CurInst->getOperand(0);
-    auto &op1 = CurInst->getOperand(1);
-    auto &op2 = CurInst->getOperand(2);
-    auto &op3 = CurInst->getOperand(3);
-    assert(op0.isReg() && op1.isReg() && op2.isReg());
-    assert(op3.isImm());
-    auto baseReg = op1.getReg();
-    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
-           (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
-           (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
-    auto baseAddr = readPtrFromReg(baseReg);
-    return make_tuple(baseAddr, op2.getReg(), op3.getImm());
   }
 
   // Creates instructions to store val in memory pointed by base + offset
@@ -2407,9 +2376,28 @@ public:
 
     case AArch64::LDRXpost: {
       unsigned size = 8;
-      auto [base, reg, imm] = getParamsLoadPostImmed();
-      auto loaded = makeLoad(base, imm * size, size);
-      writeToOutputReg(loaded);
+      auto &op0 = CurInst->getOperand(0);
+      auto &op1 = CurInst->getOperand(1);
+      auto &op2 = CurInst->getOperand(2);
+      auto &op3 = CurInst->getOperand(3);
+      assert(op0.isReg() && op1.isReg() && op2.isReg());
+      assert(op0.getReg() == op2.getReg());
+      assert(op3.isImm());
+
+      // loaded value is going to end up in this register
+      auto destReg = op1.getReg();
+
+      // this register points to the value to be loaded, and it also
+      // gets post-updated
+      auto ptrReg = op0.getReg();
+      auto addr = readPtrFromReg(ptrReg);
+      auto imm = op3.getImm();
+      auto loaded = makeLoad(addr, imm * size, size);
+      auto offsetVal = getIntConst(imm, 64);
+      updateReg(loaded, destReg);
+      auto toUpdate = readFromReg(ptrReg);
+      auto added = createAdd(toUpdate, offsetVal);
+      updateReg(added, ptrReg);
       break;
     }
 
@@ -2925,7 +2913,6 @@ public:
       auto &mc_instrs = mc_bb->getInstrs();
 
       for (auto &mc_instr : mc_instrs) {
-        print(mc_instr);
         if (DebugRegs)
           printRegs();
         mc_visit(mc_instr, *Fn);

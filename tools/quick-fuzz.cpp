@@ -687,7 +687,7 @@ public:
 class ValueFuzzer : public Fuzzer {
   const int MaxIntWidth = 64;
   const int MaxIntParams = 5;
-  const int MaxInsts = 75;
+  const int MaxInsts = 100;
   Module &M;
   LLVMContext &Ctx;
   Chooser C;
