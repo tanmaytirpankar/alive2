@@ -1247,6 +1247,7 @@ public:
     auto i128 = getIntTy(128);
 
     switch (opcode) {
+
     case AArch64::MRS: {
       // https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/NZCV--Condition-Flags
       auto imm = getImm(1);
@@ -2367,64 +2368,6 @@ public:
       break;
     }
 
-    case AArch64::LDPWi:
-    case AArch64::LDPXi: {
-      auto &op0 = CurInst->getOperand(0);
-      auto &op1 = CurInst->getOperand(1);
-      auto &op2 = CurInst->getOperand(2);
-      auto &op3 = CurInst->getOperand(3);
-      assert(op0.isReg() && op1.isReg() && op2.isReg());
-      assert(op3.isImm());
-
-      auto baseReg = op2.getReg();
-      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
-             (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
-             (baseReg == AArch64::XZR));
-      auto baseAddr = readPtrFromReg(baseReg);
-
-      auto size = (opcode == AArch64::LDPWi) ? 4 : 8;
-      auto imm = op3.getImm();
-      auto out1 = op0.getReg();
-      auto out2 = op1.getReg();
-      if (out1 != AArch64::XZR && out1 != AArch64::WZR) {
-        auto loaded = makeLoad(baseAddr, imm * size, size);
-        createStore(loaded, dealiasReg(out1));
-      }
-      if (out2 != AArch64::XZR && out2 != AArch64::WZR) {
-        auto loaded = makeLoad(baseAddr, (imm + 1) * size, size);
-        createStore(loaded, dealiasReg(out2));
-      }
-      break;
-    }
-
-    case AArch64::STPXi:
-    case AArch64::STPWi: {
-      auto &op0 = CurInst->getOperand(0);
-      auto &op1 = CurInst->getOperand(1);
-      auto &op2 = CurInst->getOperand(2);
-      auto &op3 = CurInst->getOperand(3);
-      assert(op0.isReg() && op1.isReg() && op2.isReg());
-      assert(op3.isImm());
-
-      auto baseReg = op2.getReg();
-      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
-             (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
-             (baseReg == AArch64::FP));
-      auto baseAddr = readPtrFromReg(baseReg);
-
-      auto size = (opcode == AArch64::STPWi) ? 4 : 8;
-      auto imm = op3.getImm();
-      auto val1 = readFromReg(op0.getReg());
-      if (size == 4)
-        val1 = createTrunc(val1, i32);
-      makeStore(baseAddr, imm * size, size, val1);
-      auto val2 = readFromReg(op1.getReg());
-      if (size == 4)
-        val2 = createTrunc(val2, i32);
-      makeStore(baseAddr, (imm + 1) * size, size, val2);
-      break;
-    }
-
     case AArch64::LDRSBXui:
     case AArch64::LDRSBWui:
     case AArch64::LDRSHXui:
@@ -2463,8 +2406,9 @@ public:
         size = 4;
       else if (opcode == AArch64::LDRXui || opcode == AArch64::LDRDui)
         size = 8;
-      else assert(false);
-      
+      else
+        assert(false);
+
       MCOperand &op2 = CurInst->getOperand(2);
       if (op2.isExpr()) {
         Value *globalVar = getExprVar(op2.getExpr());
@@ -2530,6 +2474,64 @@ public:
         valToStore = createTrunc(valToStore, i32);
 
       makeStore(shiftedPtr, 0, 8, valToStore);
+      break;
+    }
+
+    case AArch64::LDPWi:
+    case AArch64::LDPXi: {
+      auto &op0 = CurInst->getOperand(0);
+      auto &op1 = CurInst->getOperand(1);
+      auto &op2 = CurInst->getOperand(2);
+      auto &op3 = CurInst->getOperand(3);
+      assert(op0.isReg() && op1.isReg() && op2.isReg());
+      assert(op3.isImm());
+
+      auto baseReg = op2.getReg();
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
+             (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
+             (baseReg == AArch64::XZR));
+      auto baseAddr = readPtrFromReg(baseReg);
+
+      auto size = (opcode == AArch64::LDPWi) ? 4 : 8;
+      auto imm = op3.getImm();
+      auto out1 = op0.getReg();
+      auto out2 = op1.getReg();
+      if (out1 != AArch64::XZR && out1 != AArch64::WZR) {
+        auto loaded = makeLoad(baseAddr, imm * size, size);
+        createStore(loaded, dealiasReg(out1));
+      }
+      if (out2 != AArch64::XZR && out2 != AArch64::WZR) {
+        auto loaded = makeLoad(baseAddr, (imm + 1) * size, size);
+        createStore(loaded, dealiasReg(out2));
+      }
+      break;
+    }
+
+    case AArch64::STPXi:
+    case AArch64::STPWi: {
+      auto &op0 = CurInst->getOperand(0);
+      auto &op1 = CurInst->getOperand(1);
+      auto &op2 = CurInst->getOperand(2);
+      auto &op3 = CurInst->getOperand(3);
+      assert(op0.isReg() && op1.isReg() && op2.isReg());
+      assert(op3.isImm());
+
+      auto baseReg = op2.getReg();
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
+             (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
+             (baseReg == AArch64::FP));
+      auto baseAddr = readPtrFromReg(baseReg);
+
+      auto size = (opcode == AArch64::STPWi) ? 4 : 8;
+      auto imm = op3.getImm();
+      auto val1 = readFromReg(op0.getReg());
+      if (size == 4)
+        val1 = createTrunc(val1, i32);
+      makeStore(baseAddr, imm * size, size, val1);
+      auto val2 = readFromReg(op1.getReg());
+      if (size == 4)
+        val2 = createTrunc(val2, i32);
+      makeStore(baseAddr, (imm + 1) * size, size, val2);
       break;
     }
 
