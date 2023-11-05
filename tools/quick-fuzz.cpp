@@ -450,7 +450,6 @@ private:
         break;
       }
       case 1:
-        std::cout << "width = " << Width << "\n";
         I ^= APInt(Width, 1ULL << C.choose(Width));
         break;
       case 2:
