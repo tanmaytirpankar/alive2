@@ -96,7 +96,7 @@ Function *adjustSrcReturn(Function *srcFn) {
                  srcFn->hasRetAttribute(Attribute::ZExt);
 
   Type *actual_ret_ty = nullptr;
-  if (has_ret_attr) {
+  if (has_ret_attr && orig_ret_bitwidth != 32 && orig_ret_bitwidth != 64) {
     auto *i32 = Type::getIntNTy(srcFn->getContext(), 32);
     auto *i64 = Type::getIntNTy(srcFn->getContext(), 64);
 
