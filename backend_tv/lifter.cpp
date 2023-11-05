@@ -1273,6 +1273,7 @@ public:
       writeToOutputReg(res);
       break;
     }
+
     case AArch64::MSR: {
       // https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/NZCV--Condition-Flags
       auto imm = getImm(0);
@@ -1301,6 +1302,7 @@ public:
       setV(createICmp(ICmpInst::Predicate::ICMP_NE, Vval, i64_0));
       break;
     }
+
     case AArch64::ADDWrs:
     case AArch64::ADDWri:
     case AArch64::ADDWrx:
@@ -1390,6 +1392,7 @@ public:
       writeToOutputReg(createAdd(a, b));
       break;
     }
+
     case AArch64::ADCXr:
     case AArch64::ADCWr:
     case AArch64::ADCSXr:
@@ -1410,6 +1413,7 @@ public:
 
       break;
     }
+
     case AArch64::ASRVWr:
     case AArch64::ASRVXr: {
       auto size = getInstSize(opcode);
@@ -1422,6 +1426,7 @@ public:
       writeToOutputReg(res);
       break;
     }
+
     case AArch64::ADDv8i8:
     case AArch64::ADDv4i16: {
       auto a = readFromOperand(1);
@@ -1448,6 +1453,7 @@ public:
       writeToOutputReg(createVectorAdd(a, b, elementTypeInBits, numElements));
       break;
     }
+
       // SUBrx is a subtract instruction with an extended register.
       // ARM has 8 types of extensions:
       // 000 -> uxtb
@@ -1537,6 +1543,7 @@ public:
       }
       break;
     }
+
     case AArch64::CSELWr:
     case AArch64::CSELXr: {
       assert(CurInst->getNumOperands() == 4); // dst, lhs, rhs, cond
@@ -1556,6 +1563,7 @@ public:
       writeToOutputReg(result);
       break;
     }
+
     case AArch64::ANDWri:
     case AArch64::ANDWrr:
     case AArch64::ANDWrs:
@@ -1596,6 +1604,7 @@ public:
       writeToOutputReg(and_op);
       break;
     }
+
     case AArch64::MADDWrrr:
     case AArch64::MADDXrrr: {
       auto mul_lhs = readFromOperand(1);
@@ -1607,6 +1616,7 @@ public:
       writeToOutputReg(add);
       break;
     }
+
     case AArch64::UMADDLrrr: {
       auto size = getInstSize(opcode);
       auto mul_lhs = readFromOperand(1);
@@ -1620,6 +1630,7 @@ public:
       writeToOutputReg(add);
       break;
     }
+
     case AArch64::SMADDLrrr: {
       // Signed Multiply-Add Long multiplies two 32-bit register values,
       // adds a 64-bit register value, and writes the result to the 64-bit
@@ -1643,6 +1654,7 @@ public:
       writeToOutputReg(add);
       break;
     }
+
     case AArch64::SMSUBLrrr:
     case AArch64::UMSUBLrrr: {
       // SMSUBL: Signed Multiply-Subtract Long.
@@ -1673,6 +1685,7 @@ public:
       writeToOutputReg(subtract);
       break;
     }
+
     case AArch64::SMULHrr:
     case AArch64::UMULHrr: {
       // SMULH: Signed Multiply High
@@ -1702,6 +1715,7 @@ public:
       writeToOutputReg(trunc);
       break;
     }
+
     case AArch64::MSUBWrrr:
     case AArch64::MSUBXrrr: {
       auto mul_lhs = readFromOperand(1);
@@ -1712,6 +1726,7 @@ public:
       writeToOutputReg(sub);
       break;
     }
+
     case AArch64::SBFMWri:
     case AArch64::SBFMXri: {
       auto size = getInstSize(opcode);
@@ -1789,6 +1804,7 @@ public:
       writeToOutputReg(shifted_res);
       return;
     }
+
     case AArch64::CCMPWi:
     case AArch64::CCMPWr:
     case AArch64::CCMPXi:
@@ -1830,6 +1846,7 @@ public:
       setV(new_v_flag);
       break;
     }
+
     case AArch64::EORWri:
     case AArch64::EORXri: {
       auto size = getInstSize(opcode);
@@ -1855,6 +1872,7 @@ public:
       writeToOutputReg(result);
       break;
     }
+
     case AArch64::CCMNWi:
     case AArch64::CCMNWr:
     case AArch64::CCMNXi:
@@ -1878,6 +1896,7 @@ public:
 
       break;
     }
+
     case AArch64::CSINVWr:
     case AArch64::CSINVXr:
     case AArch64::CSNEGWr:
@@ -1911,6 +1930,7 @@ public:
       }
       break;
     }
+
     case AArch64::CSINCWr:
     case AArch64::CSINCXr: {
       auto size = getInstSize(opcode);
@@ -1929,6 +1949,7 @@ public:
       writeToOutputReg(sel);
       break;
     }
+
     case AArch64::MOVZWi:
     case AArch64::MOVZXi: {
       auto size = getInstSize(opcode);
@@ -1940,6 +1961,7 @@ public:
       writeToOutputReg(ident);
       break;
     }
+
     case AArch64::MOVNWi:
     case AArch64::MOVNXi: {
       auto size = getInstSize(opcode);
@@ -1954,6 +1976,7 @@ public:
       writeToOutputReg(not_lhs);
       break;
     }
+
     case AArch64::LSLVWr:
     case AArch64::LSLVXr: {
       auto lhs = readFromOperand(1);
@@ -1962,6 +1985,7 @@ public:
       writeToOutputReg(exp);
       break;
     }
+
     case AArch64::LSRVWr:
     case AArch64::LSRVXr: {
       auto lhs = readFromOperand(1);
@@ -1970,6 +1994,7 @@ public:
       writeToOutputReg(exp);
       break;
     }
+
     case AArch64::ORNWrs:
     case AArch64::ORNXrs: {
       auto size = getInstSize(opcode);
@@ -1982,6 +2007,7 @@ public:
       writeToOutputReg(ident);
       break;
     }
+
     case AArch64::MOVKWi:
     case AArch64::MOVKXi: {
       auto size = getInstSize(opcode);
@@ -2006,6 +2032,7 @@ public:
       writeToOutputReg(ident);
       break;
     }
+
     case AArch64::UBFMWri:
     case AArch64::UBFMXri: {
       auto size = getInstSize(opcode);
@@ -2075,6 +2102,7 @@ public:
       return;
       // assert(false && "UBFX not supported");
     }
+
     case AArch64::BFMWri:
     case AArch64::BFMXri: {
       auto size = getInstSize(opcode);
@@ -2122,6 +2150,7 @@ public:
       writeToOutputReg(res);
       return;
     }
+
     case AArch64::ORRWri:
     case AArch64::ORRXri: {
       auto size = getInstSize(opcode);
@@ -2132,6 +2161,7 @@ public:
       writeToOutputReg(result);
       break;
     }
+
     case AArch64::ORRWrs:
     case AArch64::ORRXrs: {
       auto lhs = readFromOperand(1);
@@ -2140,6 +2170,7 @@ public:
       writeToOutputReg(result);
       break;
     }
+
     case AArch64::SDIVWr:
     case AArch64::SDIVXr: {
       auto lhs = readFromOperand(1);
@@ -2148,6 +2179,7 @@ public:
       writeToOutputReg(result);
       break;
     }
+
     case AArch64::UDIVWr:
     case AArch64::UDIVXr: {
       auto lhs = readFromOperand(1);
@@ -2156,6 +2188,7 @@ public:
       writeToOutputReg(result);
       break;
     }
+
     case AArch64::EXTRWrri:
     case AArch64::EXTRXrri: {
       auto op1 = readFromOperand(1);
@@ -2165,6 +2198,7 @@ public:
       writeToOutputReg(result);
       break;
     }
+
     case AArch64::RORVWr:
     case AArch64::RORVXr: {
       auto op = readFromOperand(1);
@@ -2173,6 +2207,7 @@ public:
       writeToOutputReg(result);
       break;
     }
+
     case AArch64::RBITWr:
     case AArch64::RBITXr: {
       auto op = readFromOperand(1);
@@ -2180,10 +2215,12 @@ public:
       writeToOutputReg(result);
       break;
     }
+
     case AArch64::REVWr:
     case AArch64::REVXr:
       writeToOutputReg(createBSwap(readFromOperand(1)));
       break;
+
     case AArch64::CLZWr:
     case AArch64::CLZXr: {
       auto op = readFromOperand(1);
@@ -2191,6 +2228,7 @@ public:
       writeToOutputReg(result);
       break;
     }
+
     case AArch64::EONWrs:
     case AArch64::EONXrs:
     case AArch64::BICWrs:
@@ -2246,6 +2284,7 @@ public:
       writeToOutputReg(ret);
       break;
     }
+
     case AArch64::REV16Xr: {
       // REV16Xr: Reverse bytes of 64 bit value in 16-bit half-words.
       auto size = getInstSize(opcode);
@@ -2260,6 +2299,7 @@ public:
       writeToOutputReg(combined_val);
       break;
     }
+
     case AArch64::REV16Wr:
     case AArch64::REV32Xr: {
       // REV16Wr: Reverse bytes of 32 bit value in 16-bit half-words.
@@ -2276,6 +2316,7 @@ public:
       writeToOutputReg(ret);
       break;
     }
+
     // assuming that the source is always an x register
     // This might not be the case but we need to look at the assembly emitter
     case AArch64::FMOVXDr: {
@@ -2296,6 +2337,7 @@ public:
 #endif
       break;
     }
+
     // assuming that the source is always an x register
     // This might not be the case but we need to look at the assembly emitter
     case AArch64::INSvi64gpr: {
@@ -2324,6 +2366,7 @@ public:
 #endif
       break;
     }
+
     case AArch64::LDPWi:
     case AArch64::LDPXi: {
       auto &op0 = CurInst->getOperand(0);
@@ -2353,6 +2396,7 @@ public:
       }
       break;
     }
+
     case AArch64::STPXi:
     case AArch64::STPWi: {
       auto &op0 = CurInst->getOperand(0);
@@ -2380,6 +2424,7 @@ public:
       makeStore(baseAddr, (imm + 1) * size, size, val2);
       break;
     }
+
     case AArch64::LDRSBXui:
     case AArch64::LDRSBWui:
     case AArch64::LDRSHXui:
@@ -2387,7 +2432,7 @@ public:
     case AArch64::LDRSWui: {
       auto [base, imm] = getParamsLoadImmed();
 
-      unsigned size = -1;
+      unsigned size;
       if (opcode == AArch64::LDRSBXui || opcode == AArch64::LDRSBWui)
         size = 1;
       else if (opcode == AArch64::LDRSHXui || opcode == AArch64::LDRSHWui)
@@ -2401,91 +2446,25 @@ public:
       writeToOutputReg(loaded, /*SExt=*/true);
       break;
     }
-    case AArch64::LDRBBui: {
-      MCOperand &op2 = CurInst->getOperand(2);
-      if (op2.isExpr()) {
-        Value *globalVar = getExprVar(op2.getExpr());
-        auto Reg = CurInst->getOperand(0).getReg();
-        if (Reg != AArch64::WZR && Reg != AArch64::XZR)
-          createStore(globalVar, dealiasReg(Reg));
-      } else {
-        auto [base, imm] = getParamsLoadImmed();
-        auto loaded = makeLoad(base, imm * 1, 1);
-        writeToOutputReg(loaded);
-      }
-      break;
-    }
-    case AArch64::LDRBui: {
-      MCOperand &op2 = CurInst->getOperand(2);
-      if (op2.isExpr()) {
-        Value *globalVar = getExprVar(op2.getExpr());
-        auto Reg = CurInst->getOperand(0).getReg();
-        if (Reg != AArch64::WZR && Reg != AArch64::XZR)
-          createStore(globalVar, dealiasReg(Reg));
-      } else {
-        auto [base, imm] = getParamsLoadImmed();
-        auto loaded = makeLoad(base, imm * 1, 1);
-        writeToOutputReg(loaded);
-      }
-      break;
-    }
-    case AArch64::LDRHHui: {
-      MCOperand &op2 = CurInst->getOperand(2);
-      if (op2.isExpr()) {
-        Value *globalVar = getExprVar(op2.getExpr());
-        auto Reg = CurInst->getOperand(0).getReg();
-        if (Reg != AArch64::WZR && Reg != AArch64::XZR)
-          createStore(globalVar, dealiasReg(Reg));
-      } else {
-        auto [base, imm] = getParamsLoadImmed();
-        auto loaded = makeLoad(base, imm * 2, 2);
-        writeToOutputReg(loaded);
-      }
-      break;
-    }
-    case AArch64::LDRHui: {
-      MCOperand &op2 = CurInst->getOperand(2);
-      if (op2.isExpr()) {
-        Value *globalVar = getExprVar(op2.getExpr());
-        auto Reg = CurInst->getOperand(0).getReg();
-        if (Reg != AArch64::WZR && Reg != AArch64::XZR)
-          createStore(globalVar, dealiasReg(Reg));
-      } else {
-        auto [base, imm] = getParamsLoadImmed();
-        auto loaded = makeLoad(base, imm * 2, 2);
-        writeToOutputReg(loaded);
-      }
-      break;
-    }
-    case AArch64::LDRWui: {
-      MCOperand &op2 = CurInst->getOperand(2);
-      if (op2.isExpr()) {
-        Value *globalVar = getExprVar(op2.getExpr());
-        auto Reg = CurInst->getOperand(0).getReg();
-        if (Reg != AArch64::WZR && Reg != AArch64::XZR)
-          createStore(globalVar, dealiasReg(Reg));
-      } else {
-        auto [base, imm] = getParamsLoadImmed();
-        auto loaded = makeLoad(base, imm * 4, 4);
-        writeToOutputReg(loaded);
-      }
-      break;
-    }
-    case AArch64::LDRXui: {
-      MCOperand &op2 = CurInst->getOperand(2);
-      if (op2.isExpr()) {
-        Value *globalVar = getExprVar(op2.getExpr());
-        auto Reg = CurInst->getOperand(0).getReg();
-        if (Reg != AArch64::WZR && Reg != AArch64::XZR)
-          createStore(globalVar, dealiasReg(Reg));
-      } else {
-        auto [base, imm] = getParamsLoadImmed();
-        auto loaded = makeLoad(base, imm * 8, 8);
-        writeToOutputReg(loaded);
-      }
-      break;
-    }
+
+    case AArch64::LDRBBui:
+    case AArch64::LDRBui:
+    case AArch64::LDRHHui:
+    case AArch64::LDRHui:
+    case AArch64::LDRWui:
+    case AArch64::LDRXui:
     case AArch64::LDRDui: {
+      unsigned size;
+      if (opcode == AArch64::LDRBBui || opcode == AArch64::LDRBui)
+        size = 1;
+      else if (opcode == AArch64::LDRHHui || opcode == AArch64::LDRHui)
+        size = 2;
+      else if (opcode == AArch64::LDRWui)
+        size = 4;
+      else if (opcode == AArch64::LDRXui || opcode == AArch64::LDRDui)
+        size = 8;
+      else assert(false);
+      
       MCOperand &op2 = CurInst->getOperand(2);
       if (op2.isExpr()) {
         Value *globalVar = getExprVar(op2.getExpr());
@@ -2494,11 +2473,12 @@ public:
           createStore(globalVar, dealiasReg(Reg));
       } else {
         auto [base, imm] = getParamsLoadImmed();
-        auto loaded = makeLoad(base, imm * 8, 8);
+        auto loaded = makeLoad(base, imm * size, size);
         writeToOutputReg(loaded);
       }
       break;
     }
+
     case AArch64::STRBBui: {
       auto [base, imm, val] = getParamsStoreImmed();
       makeStore(base, imm * 1, 1, createTrunc(val, i8));
@@ -2539,6 +2519,7 @@ public:
       makeStore(base, imm * 8, 8, val);
       break;
     }
+
     case AArch64::STRXpre:
     case AArch64::STRWpre: {
       auto [basePtr, immOffset, valToStore] = getParamsStorePreImmed();
@@ -2546,16 +2527,18 @@ public:
       auto shiftedPtr = shiftPtr(basePtr, immOffset);
 
       if (getInstSize(opcode) == 32)
-        valToStore = createTrunc(valToStore, getIntTy(32));
+        valToStore = createTrunc(valToStore, i32);
 
       makeStore(shiftedPtr, 0, 8, valToStore);
       break;
     }
+
     case AArch64::ADRP: {
       assert(CurInst->getOperand(0).isReg());
       mapExprVar(CurInst->getOperand(1).getExpr());
       break;
     }
+
     case AArch64::RET: {
       auto *retTyp = srcFn.getReturnType();
       if (retTyp->isVoidTy()) {
@@ -2592,6 +2575,7 @@ public:
       }
       break;
     }
+
     case AArch64::B: {
       const auto &op = CurInst->getOperand(0);
       if (op.isImm()) {
@@ -2606,6 +2590,7 @@ public:
       createBranch(dst_ptr);
       break;
     }
+
     case AArch64::Bcc: {
       auto cond_val_imm = getImm(0);
       auto cond_val = conditionHolds(cond_val_imm);
@@ -2631,6 +2616,7 @@ public:
       createBranch(cond_val, dst_true, dst_false);
       break;
     }
+
     case AArch64::CBZW:
     case AArch64::CBZX: {
       auto operand = readFromOperand(0);
@@ -2651,6 +2637,7 @@ public:
       createBranch(cond_val, dst_true, dst_false);
       break;
     }
+
     case AArch64::CBNZW:
     case AArch64::CBNZX: {
       auto operand = readFromOperand(0);
@@ -2672,6 +2659,7 @@ public:
       createBranch(cond_val, dst_true, dst_false);
       break;
     }
+
     case AArch64::TBZW:
     case AArch64::TBZX:
     case AArch64::TBNZW:
@@ -2709,6 +2697,7 @@ public:
         createBranch(cond_val, dst_true, dst_false);
       break;
     }
+
     default:
       *out << funcToString(&Fn);
       *out << "\nError "
