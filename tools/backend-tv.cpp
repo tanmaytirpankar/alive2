@@ -14,12 +14,12 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Bitcode/BitcodeReader.h"
-#include "llvm/InitializePasses.h"
-#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IRReader/IRReader.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Signals.h"
@@ -45,29 +45,33 @@ using namespace llvm_util;
 namespace {
 
 llvm::cl::opt<string> opt_file(llvm::cl::Positional,
-  llvm::cl::desc("bitcode_file"),
-  llvm::cl::Required, llvm::cl::value_desc("filename"),
-  llvm::cl::cat(alive_cmdargs));
+                               llvm::cl::desc("bitcode_file"),
+                               llvm::cl::Required,
+                               llvm::cl::value_desc("filename"),
+                               llvm::cl::cat(alive_cmdargs));
 
-llvm::cl::opt<std::string> opt_fn(LLVM_ARGS_PREFIX "fn",
-  llvm::cl::desc("Name of function to verify, without @ (default "
-                 "= first function in the module)"),
-  llvm::cl::cat(alive_cmdargs));
+llvm::cl::opt<std::string>
+    opt_fn(LLVM_ARGS_PREFIX "fn",
+           llvm::cl::desc("Name of function to verify, without @ (default "
+                          "= first function in the module)"),
+           llvm::cl::cat(alive_cmdargs));
 
-llvm::cl::opt<string> opt_optimize_tgt(LLVM_ARGS_PREFIX "optimize-tgt",
-  llvm::cl::desc("Optimize lifted code before performing translation "
-		 "validation (default=O3)"),
-                 llvm::cl::cat(alive_cmdargs), llvm::cl::init("O3"));
+llvm::cl::opt<string> opt_optimize_tgt(
+    LLVM_ARGS_PREFIX "optimize-tgt",
+    llvm::cl::desc("Optimize lifted code before performing translation "
+                   "validation (default=O3)"),
+    llvm::cl::cat(alive_cmdargs), llvm::cl::init("O3"));
 
-llvm::cl::opt<bool> opt_skip_verification(LLVM_ARGS_PREFIX "skip-verification",
-  llvm::cl::desc("Perform lifting but skip the refinement check (default=false)"),
-  llvm::cl::cat(alive_cmdargs), llvm::cl::init(false));
+llvm::cl::opt<bool> opt_skip_verification(
+    LLVM_ARGS_PREFIX "skip-verification",
+    llvm::cl::desc(
+        "Perform lifting but skip the refinement check (default=false)"),
+    llvm::cl::cat(alive_cmdargs), llvm::cl::init(false));
 
 // FIXME support opt_asm_only and opt_asm_input
-  
+
 llvm::cl::opt<bool> opt_debug_regs(
-    "debug-regs",
-    llvm::cl::desc("Add register debugging code (default=false)"),
+    "debug-regs", llvm::cl::desc("Add register debugging code (default=false)"),
     llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
 
 llvm::cl::opt<bool> opt_asm_only(
@@ -78,8 +82,8 @@ llvm::cl::opt<bool> opt_asm_only(
 llvm::cl::opt<string> opt_asm_input(
     "asm-input",
     llvm::cl::desc("Use the provied file as lifted assembly, instead of "
-		   "lifting the LLVM IR. This is only for testing. "
-		   "(default=no asm input)"),
+                   "lifting the LLVM IR. This is only for testing. "
+                   "(default=no asm input)"),
     llvm::cl::cat(alive_cmdargs));
 
 llvm::ExitOnError ExitOnErr;
@@ -91,14 +95,15 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   // this has to return a fresh function since it rewrites the
   // signature
   srcFn = lifter::adjustSrc(srcFn);
-  
-  auto AsmBuffer = (opt_asm_input != "") ?
-    ExitOnErr(llvm::errorOrToExpected(llvm::MemoryBuffer::getFile(opt_asm_input))) :
-    lifter::generateAsm(*M1);
+
+  auto AsmBuffer = (opt_asm_input != "")
+                       ? ExitOnErr(llvm::errorOrToExpected(
+                             llvm::MemoryBuffer::getFile(opt_asm_input)))
+                       : lifter::generateAsm(*M1);
 
   *out << "\n\n------------ AArch64 Assembly: ------------\n\n";
-  for (auto it = AsmBuffer->getBuffer().begin(); it != AsmBuffer->getBuffer().end();
-       ++it) {
+  for (auto it = AsmBuffer->getBuffer().begin();
+       it != AsmBuffer->getBuffer().end(); ++it) {
     *out << *it;
   }
   *out << "-------------\n";
@@ -106,13 +111,14 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   if (opt_asm_only)
     exit(0);
 
-  std::unique_ptr<llvm::Module> M2 = std::make_unique<llvm::Module>("M2", M1->getContext());
+  std::unique_ptr<llvm::Module> M2 =
+      std::make_unique<llvm::Module>("M2", M1->getContext());
   M2->setDataLayout(M1->getDataLayout());
   M2->setTargetTriple(M1->getTargetTriple());
 
   auto [F1, F2] = lifter::liftFunc(M1, M2.get(), srcFn, std::move(AsmBuffer),
-				   opt_debug_regs);
-  
+                                   opt_debug_regs);
+
   *out << "\n\nabout to optimize lifted code:\n\n";
   *out << lifter::moduleToString(M2.get());
 
@@ -125,7 +131,7 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   // lifted function can never verify after we've added debugging code
   if (opt_debug_regs)
     exit(0);
-  
+
   *out << "about to compare functions\n";
   out->flush();
 
@@ -144,11 +150,11 @@ int main(int argc, char **argv) {
 
   if (true) {
     // FIXME remove when done debugging
-    for (int i=0; i<argc; ++i)
+    for (int i = 0; i < argc; ++i)
       cout << "'" << argv[i] << "' ";
     cout << endl;
   }
-  
+
   llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
   llvm::PrettyStackTraceProgram X(argc, argv);
   llvm::EnableDebugBuffering = true;
@@ -170,7 +176,7 @@ version )EOF";
   }
 
 #define ARGS_MODULE_VAR M1
-# include "llvm_util/cmd_args_def.h"
+#include "llvm_util/cmd_args_def.h"
 
   // turn on Alive2's asm-level memory model for the target; this
   // helps Alive2 deal more gracefully with the fact that integers and
@@ -216,7 +222,7 @@ version )EOF";
     vector<llvm::Function *> Funcs;
     for (auto &srcFn : *M1.get()) {
       if (srcFn.isDeclaration())
-	continue;
+        continue;
       Funcs.push_back(&srcFn);
     }
     if (Funcs.empty()) {
@@ -231,12 +237,19 @@ version )EOF";
     for (auto *srcFn : Funcs)
       doit(M1.get(), srcFn, verifier);
   }
-  
+
   *out << "Summary:\n"
-          "  " << verifier.num_correct << " correct transformations\n"
-          "  " << verifier.num_unsound << " incorrect transformations\n"
-          "  " << verifier.num_failed  << " failed-to-prove transformations\n"
-          "  " << verifier.num_errors << " Alive2 errors\n";
+          "  "
+       << verifier.num_correct
+       << " correct transformations\n"
+          "  "
+       << verifier.num_unsound
+       << " incorrect transformations\n"
+          "  "
+       << verifier.num_failed
+       << " failed-to-prove transformations\n"
+          "  "
+       << verifier.num_errors << " Alive2 errors\n";
 
   if (opt_smt_stats)
     smt::solver_print_stats(*out);
