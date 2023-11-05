@@ -2381,22 +2381,23 @@ public:
       break;
     }
     case AArch64::LDRSBXui:
-    case AArch64::LDRSBWui: {
-      auto [base, imm] = getParamsLoadImmed();
-      auto loaded = makeLoad(base, imm * 1, 1);
-      writeToOutputReg(loaded, /*SExt=*/true);
-      break;
-    }
+    case AArch64::LDRSBWui:
     case AArch64::LDRSHXui:
-    case AArch64::LDRSHWui: {
-      auto [base, imm] = getParamsLoadImmed();
-      auto loaded = makeLoad(base, imm * 2, 2);
-      writeToOutputReg(loaded, /*SExt=*/true);
-      break;
-    }
+    case AArch64::LDRSHWui:
     case AArch64::LDRSWui: {
       auto [base, imm] = getParamsLoadImmed();
-      auto loaded = makeLoad(base, imm * 4, 4);
+
+      unsigned size = -1;
+      if (opcode == AArch64::LDRSBXui || opcode == AArch64::LDRSBWui)
+        size = 1;
+      else if (opcode == AArch64::LDRSHXui || opcode == AArch64::LDRSHWui)
+        size = 2;
+      else if (opcode == AArch64::LDRSWui)
+        size = 4;
+      else
+        assert(false);
+
+      auto loaded = makeLoad(base, imm * size, size);
       writeToOutputReg(loaded, /*SExt=*/true);
       break;
     }
