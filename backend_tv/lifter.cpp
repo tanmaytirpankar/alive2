@@ -1777,10 +1777,10 @@ public:
       auto mask = ((uint64_t)1 << (width)) - 1;
       auto pos = immr;
 
-      *out << "SBFX:\n";
-      *out << "size = " << size << "\n";
-      *out << "width = " << width << "\n";
-      *out << "pos = " << pos << "\n";
+      //*out << "SBFX:\n";
+      //*out << "size = " << size << "\n";
+      //*out << "width = " << width << "\n";
+      //*out << "pos = " << pos << "\n";
 
       auto masked = createAnd(src, getIntConst(mask, size));
       auto l_shifted = createRawShl(masked, getIntConst(size - width, size));
