@@ -2615,8 +2615,8 @@ public:
             retVal = createTrunc(retVal, getIntTy(retWidth));
 
           // mask off any don't-care bits
-          if (has_ret_attr && (orig_ret_bitwidth < 32)) {
-            assert(retWidth >= orig_ret_bitwidth);
+          if (has_ret_attr && (origRetWidth < 32)) {
+            assert(retWidth >= origRetWidth);
             assert(retWidth == 64);
             auto trunc = createTrunc(retVal, i32);
             retVal = createZExt(trunc, i64);
@@ -3227,7 +3227,7 @@ public:
 namespace lifter {
 
 std::ostream *out;
-unsigned int orig_ret_bitwidth;
+unsigned int origRetWidth;
 bool has_ret_attr;
 const Target *Targ;
 
@@ -3253,7 +3253,7 @@ void reset() {
 
   // FIXME this is a pretty error-prone way to reset the state,
   // probably should just encapsulate this in a class
-  orig_ret_bitwidth = 64;
+  origRetWidth = 64;
   has_ret_attr = false;
 }
 

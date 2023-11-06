@@ -35,7 +35,7 @@ inline std::string funcToString(llvm::Function *F) {
 // FIXME we'd rather not have these globals shared across files
 
 // details from rewriting the src function
-extern unsigned orig_ret_bitwidth;
+extern unsigned origRetWidth;
 extern bool has_ret_attr;
 extern const llvm::Target *Targ;
 
