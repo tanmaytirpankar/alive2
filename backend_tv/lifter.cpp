@@ -362,7 +362,7 @@ class arm2llvm {
   BasicBlock *LLVMBB{nullptr};
   MCInstPrinter *instrPrinter{nullptr};
   MCInst *CurInst{nullptr}, *PrevInst{nullptr};
-  unsigned instCount{0};
+  unsigned armInstNum{0}, llvmInstNum{0};
   map<unsigned, Value *> RegFile;
   Value *stackMem{nullptr};
   unordered_map<string, GlobalVariable *> globals;
@@ -438,7 +438,7 @@ class arm2llvm {
   // instruction they come from
   string nextName() {
     stringstream ss;
-    ss << "a" << instCount << "_";
+    ss << "a" << armInstNum << "_" << llvmInstNum++;
     return ss.str();
   }
 
@@ -1119,7 +1119,7 @@ public:
   arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
            MCInstPrinter *instrPrinter, bool DebugRegs)
       : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
-        instrPrinter(instrPrinter), instCount(0), DebugRegs(DebugRegs),
+        instrPrinter(instrPrinter), DebugRegs(DebugRegs),
         DL(srcFn.getParent()->getDataLayout()) {}
 
   int64_t getImm(int idx) {
@@ -2907,8 +2907,9 @@ public:
       for (auto &mc_instr : mc_instrs) {
         if (DebugRegs)
           printRegs();
+	llvmInstNum = 0;
         mc_visit(mc_instr, *Fn);
-        ++instCount;
+        ++armInstNum;
       }
 
       // machine code falls through but LLVM isn't allowed to
