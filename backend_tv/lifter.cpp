@@ -2760,7 +2760,7 @@ public:
 
     auto Fn =
         Function::Create(srcFn.getFunctionType(), GlobalValue::ExternalLinkage,
-                         0, MF.getName(), LiftedModule);
+                         0, srcFn.getName() + "-tgt", LiftedModule);
 
     // create LLVM-side basic blocks
     vector<pair<BasicBlock *, MCBasicBlock *>> BBs;
@@ -2779,14 +2779,6 @@ public:
                                    GlobalValue::LinkageTypes::ExternalLinkage,
                                    nullptr, name);
       g->setAlignment(MaybeAlign(16));
-      /*
-        FIXME initialize
-      for (unsigned i = 0; i < size; ++i) {
-        auto F = createFreeze(PoisonValue::get(i8));
-        auto G = createGEP(i8, g, {getIntConst(i, 64)}, "");
-        createStore(F, G);
-      }
-      */
       globals[name] = g;
     }
 
@@ -2890,7 +2882,7 @@ public:
           exit(-1);
         }
         auto addr =
-            createGEP(i64, paramBase, {getIntConst(stackArgNum, 64)}, "");
+	  createGEP(i64, paramBase, {getIntConst(stackArgNum, 64)}, "");
         createStore(val, addr);
         ++stackArgNum;
       }
@@ -2941,7 +2933,6 @@ class MCStreamerWrapper final : public MCStreamer {
 
 private:
   MCBasicBlock *temp_block{nullptr};
-  bool first_label{true};
   unsigned prev_line{0};
   MCInstrAnalysis *IA;
   MCInstPrinter *IP;
@@ -3092,15 +3083,8 @@ public:
   }
 
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
-    // Assuming the first label encountered is the function's name
-    // Need to figure out if there is a better way to get access to the
-    // function's name. FIXME: key on the actual name here
-    *out << "[[emitLabel " << Symbol->getName().str() << "]]\n";
-    if (first_label) {
-      MF.setName(Symbol->getName().str() + "-tgt");
-      first_label = false;
-    }
     string cur_label = Symbol->getName().str();
+    *out << "[[emitLabel " << cur_label << "]]\n";
     temp_block = MF.addBlock(cur_label);
     prev_line = ASMLine::label;
     dumpSymbol(Symbol);
