@@ -1178,7 +1178,8 @@ public:
 
   // Creates instructions to store val in memory pointed by base + offset
   //  and size are in bytes
-  void storeToMemory(Value *base, u_int64_t offset, u_int64_t size, Value *val) {
+  void storeToMemory(Value *base, u_int64_t offset, u_int64_t size,
+                     Value *val) {
     // Get offset as a 64-bit LLVM constant
     auto offsetVal = getIntConst(offset, 64);
 
@@ -1395,25 +1396,25 @@ public:
       int numElements;
 
       switch (opcode) {
-        case AArch64::ADDv8i8: {
-          numElements = 8;
-          elementTypeInBits = 8;
-          break;
-        }
-        case AArch64::ADDv4i16: {
-          numElements = 4;
-          elementTypeInBits = 16;
-          break;
-        }
-        case AArch64::ADDv8i16: {
-          numElements = 8;
-          elementTypeInBits = 16;
-          break;
-        }
-        default: {
-          assert(false && "missed case");
-          break;
-        }
+      case AArch64::ADDv8i8: {
+        numElements = 8;
+        elementTypeInBits = 8;
+        break;
+      }
+      case AArch64::ADDv4i16: {
+        numElements = 4;
+        elementTypeInBits = 16;
+        break;
+      }
+      case AArch64::ADDv8i16: {
+        numElements = 8;
+        elementTypeInBits = 16;
+        break;
+      }
+      default: {
+        assert(false && "missed case");
+        break;
+      }
       }
 
       writeToOutputReg(createVectorAdd(a, b, elementTypeInBits, numElements));
@@ -2504,22 +2505,22 @@ public:
 
       int size = 0;
       switch (opcode) {
-        case AArch64::LDPWi: {
-          size = 4;
-          break;
-        }
-        case AArch64::LDPXi: {
-          size = 8;
-          break;
-        }
-        case AArch64::LDPQi: {
-          size = 16;
-          break;
-        }
-        default: {
-          *out << "\nError Unknown opcode\n";
-          visitError(I);
-        }
+      case AArch64::LDPWi: {
+        size = 4;
+        break;
+      }
+      case AArch64::LDPXi: {
+        size = 8;
+        break;
+      }
+      case AArch64::LDPQi: {
+        size = 16;
+        break;
+      }
+      default: {
+        *out << "\nError Unknown opcode\n";
+        visitError(I);
+      }
       }
       assert(size != 0);
 
@@ -2559,25 +2560,25 @@ public:
 
       u_int64_t size = 0;
       switch (opcode) {
-        case AArch64::STPWi: {
-          size = 4;
-          val1 = createTrunc(val1, i32);
-          val2 = createTrunc(val2, i32);
-          break;
-        }
-        case AArch64::STPXi: {
-          size = 8;
-          break;
-        }
-        case AArch64::STPQi: {
-          size = 16;
-          break;
-        }
-        default: {
-          *out << "\nError Unknown opcode\n";
-          visitError(I);
-          break;
-        }
+      case AArch64::STPWi: {
+        size = 4;
+        val1 = createTrunc(val1, i32);
+        val2 = createTrunc(val2, i32);
+        break;
+      }
+      case AArch64::STPXi: {
+        size = 8;
+        break;
+      }
+      case AArch64::STPQi: {
+        size = 16;
+        break;
+      }
+      default: {
+        *out << "\nError Unknown opcode\n";
+        visitError(I);
+        break;
+      }
       }
       assert(size != 0);
 
@@ -2938,7 +2939,7 @@ public:
           exit(-1);
         }
         auto addr =
-	  createGEP(i64, paramBase, {getIntConst(stackArgNum, 64)}, "");
+            createGEP(i64, paramBase, {getIntConst(stackArgNum, 64)}, "");
         createStore(val, addr);
         ++stackArgNum;
       }
@@ -2963,7 +2964,7 @@ public:
       for (auto &mc_instr : mc_instrs) {
         if (DebugRegs)
           printRegs();
-	llvmInstNum = 0;
+        llvmInstNum = 0;
         mc_visit(mc_instr, *Fn);
         ++armInstNum;
       }
