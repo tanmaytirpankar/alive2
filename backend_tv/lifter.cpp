@@ -133,12 +133,12 @@ const set<int> instrs_64 = {
     AArch64::TBNZW,     AArch64::TBNZX,     AArch64::B,
     AArch64::CBZW,      AArch64::CBZX,      AArch64::CBNZW,
     AArch64::CBNZX,     AArch64::CCMPXr,    AArch64::CCMPXi,
-    AArch64::LDRXui,    AArch64::LDRXpost,  AArch64::LDPXi,
-    AArch64::LDRDui,    AArch64::STRDui,    AArch64::MSR,
-    AArch64::MRS,       AArch64::LDRSBXui,  AArch64::LDRSBXui,
-    AArch64::LDRSHXui,  AArch64::STRXui,    AArch64::STPXi,
-    AArch64::CCMNXi,    AArch64::CCMNXr,    AArch64::STURXi,
-    AArch64::ADRP,      AArch64::STRXpre,
+    AArch64::LDRXui,    AArch64::LDRXpost,  AArch64::LDPXpost,
+    AArch64::LDPXi,     AArch64::LDRDui,    AArch64::STRDui,
+    AArch64::MSR,       AArch64::MRS,       AArch64::LDRSBXui,
+    AArch64::LDRSBXui,  AArch64::LDRSHXui,  AArch64::STRXui,
+    AArch64::STPXi,     AArch64::CCMNXi,    AArch64::CCMNXr,
+    AArch64::STURXi,    AArch64::ADRP,      AArch64::STRXpre,
 };
 
 const set<int> instrs_128 = {AArch64::FMOVXDr, AArch64::INSvi64gpr,
@@ -2408,8 +2408,8 @@ public:
       auto addr = readPtrFromReg(ptrReg);
       auto imm = op3.getImm();
       auto loaded = makeLoad(addr, imm * size, size);
-      auto offsetVal = getIntConst(imm, 64);
       updateReg(loaded, destReg);
+      auto offsetVal = getIntConst(imm, 64);
       auto toUpdate = readFromReg(ptrReg);
       auto added = createAdd(toUpdate, offsetVal);
       updateReg(added, ptrReg);
@@ -2476,7 +2476,6 @@ public:
       auto offsetVal = getIntConst(op3.getImm(), 64);
       auto basePtrInt = readFromReg(baseReg);
       auto newPtrAddr = createAdd(basePtrInt, offsetVal);
-
       updateReg(newPtrAddr, baseReg);
       auto shiftedPtr = readPtrFromReg(baseReg);
 
@@ -2582,6 +2581,66 @@ public:
       }
       assert(size != 0);
 
+      storeToMemory(baseAddr, imm * size, size, val1);
+      storeToMemory(baseAddr, (imm + 1) * size, size, val2);
+      break;
+    }
+
+    case AArch64::LDPXpost: {
+      unsigned size = 8;
+      auto &op0 = CurInst->getOperand(0);
+      auto &op1 = CurInst->getOperand(1);
+      auto &op2 = CurInst->getOperand(2);
+      auto &op3 = CurInst->getOperand(3);
+      auto &op4 = CurInst->getOperand(4);
+      assert(op0.isReg() && op1.isReg() && op2.isReg() && op3.isReg());
+      assert(op0.getReg() == op3.getReg());
+      assert(op4.isImm());
+
+      auto baseReg = op0.getReg();
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
+             (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
+             (baseReg == AArch64::FP));
+      auto addr = readPtrFromReg(baseReg);
+      auto r1 = op1.getReg();
+      auto r2 = op2.getReg();
+      auto loaded1 = makeLoad(addr, 0, size);
+      auto loaded2 = makeLoad(addr, size, size);
+      updateReg(loaded1, r1);
+      updateReg(loaded2, r2);
+
+      auto offsetVal = getIntConst(op4.getImm(), 64);
+      auto basePtrInt = readFromReg(baseReg);
+      auto newPtrAddr = createAdd(basePtrInt, offsetVal);
+      updateReg(newPtrAddr, baseReg);
+      break;
+    }
+
+    case AArch64::STPXpre: {
+      auto &op0 = CurInst->getOperand(0);
+      auto &op1 = CurInst->getOperand(1);
+      auto &op2 = CurInst->getOperand(2);
+      auto &op3 = CurInst->getOperand(3);
+      auto &op4 = CurInst->getOperand(4);
+      assert(op0.isReg() && op1.isReg() && op2.isReg() && op3.isReg());
+      assert(op0.getReg() == op3.getReg());
+      assert(op4.isImm());
+
+      auto baseReg = op0.getReg();
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
+             (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
+             (baseReg == AArch64::FP));
+      auto baseAddr = readPtrFromReg(baseReg);
+      auto val1 = readFromReg(op1.getReg());
+      auto val2 = readFromReg(op2.getReg());
+
+      auto offsetVal = getIntConst(op4.getImm(), 64);
+      auto basePtrInt = readFromReg(baseReg);
+      auto newPtrAddr = createAdd(basePtrInt, offsetVal);
+      updateReg(newPtrAddr, baseReg);
+
+      auto imm = op4.getImm();
+      unsigned size = 8;
       storeToMemory(baseAddr, imm * size, size, val1);
       storeToMemory(baseAddr, (imm + 1) * size, size, val2);
       break;
