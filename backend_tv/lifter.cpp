@@ -2538,8 +2538,8 @@ public:
       break;
     }
 
-    case AArch64::STPXi:
     case AArch64::STPWi:
+    case AArch64::STPXi:
     case AArch64::STPQi: {
       auto &op0 = CurInst->getOperand(0);
       auto &op1 = CurInst->getOperand(1);
