@@ -99,8 +99,6 @@ Function *adjustSrcReturn(Function *srcFn) {
     auto *i32 = Type::getIntNTy(srcFn->getContext(), 32);
     auto *i64 = Type::getIntNTy(srcFn->getContext(), 64);
 
-    actualRetTy = i64;
-
     // build this first to avoid iterator invalidation
     vector<ReturnInst *> RIs;
     for (auto &BB : *srcFn)
@@ -116,23 +114,20 @@ Function *adjustSrcReturn(Function *srcFn) {
             retVal, Type::getIntNTy(srcFn->getContext(), origRetWidth),
             Name + "_bitcast", RI);
       }
-      if (origRetWidth < 32) {
-        if (srcFn->hasRetAttribute(Attribute::ZExt)) {
-          retVal = new ZExtInst(retVal, i64, Name + "_zext", RI);
-        } else {
-          auto sext = new SExtInst(retVal, i32, Name + "_sext", RI);
-          retVal = new ZExtInst(sext, i64, Name + "_zext", RI);
-        }
+      if (srcFn->hasRetAttribute(Attribute::ZExt)) {
+	retVal = new ZExtInst(retVal, i64, Name + "_zext", RI);
       } else {
-        if (srcFn->hasRetAttribute(Attribute::ZExt)) {
-          retVal = new ZExtInst(retVal, i64, Name + "_zext", RI);
-        } else {
+	if (origRetWidth < 32) {
+	  auto sext = new SExtInst(retVal, i32, Name + "_sext", RI);
+	  retVal = new ZExtInst(sext, i64, Name + "_zext", RI);
+	} else {
           retVal = new SExtInst(retVal, i64, Name + "_sext", RI);
-        }
+	}
       }
       ReturnInst::Create(srcFn->getContext(), retVal, RI);
       RI->eraseFromParent();
     }
+    actualRetTy = i64;
   } else {
     actualRetTy = origRetTy;
   }
