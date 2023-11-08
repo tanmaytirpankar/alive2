@@ -115,14 +115,14 @@ Function *adjustSrcReturn(Function *srcFn) {
             Name + "_bitcast", RI);
       }
       if (srcFn->hasRetAttribute(Attribute::ZExt)) {
-	retVal = new ZExtInst(retVal, i64, Name + "_zext", RI);
+        retVal = new ZExtInst(retVal, i64, Name + "_zext", RI);
       } else {
-	if (origRetWidth < 32) {
-	  auto sext = new SExtInst(retVal, i32, Name + "_sext", RI);
-	  retVal = new ZExtInst(sext, i64, Name + "_zext", RI);
-	} else {
+        if (origRetWidth < 32) {
+          auto sext = new SExtInst(retVal, i32, Name + "_sext", RI);
+          retVal = new ZExtInst(sext, i64, Name + "_zext", RI);
+        } else {
           retVal = new SExtInst(retVal, i64, Name + "_sext", RI);
-	}
+        }
       }
       ReturnInst::Create(srcFn->getContext(), retVal, RI);
       RI->eraseFromParent();

@@ -367,6 +367,7 @@ class arm2llvm {
   map<unsigned, Value *> RegFile;
   Value *stackMem{nullptr};
   unordered_map<string, GlobalVariable *> globals;
+  Value *initialSP;
 
   // Map of ADRP MCInsts to the string representations of the operand variable
   // names
@@ -1120,6 +1121,14 @@ class arm2llvm {
     auto zero = getIntConst(0, W);
     auto n = createICmp(ICmpInst::Predicate::ICMP_SLT, V, zero);
     setN(n);
+  }
+
+  void assertSame(Value *a, Value *b) {
+    auto *c = createICmp(ICmpInst::Predicate::ICMP_EQ, a, b);
+    // FIXME -- use our llvm.assert() idea, not llvm.assume() which is fragile
+    auto *assert_decl =
+        Intrinsic::getDeclaration(LiftedModule, Intrinsic::assume);
+    CallInst::Create(assert_decl, {c}, "", LLVMBB);
   }
 
 public:
@@ -2334,6 +2343,11 @@ public:
       break;
     }
 
+      /*
+       * TODO: there's a lot of redundancy across memory operations
+       * here, some serious refactoring is needed
+       */
+
     case AArch64::LDRSBXui:
     case AArch64::LDRSBWui:
     case AArch64::LDRSHXui:
@@ -2653,6 +2667,14 @@ public:
     }
 
     case AArch64::RET: {
+      /*
+       * ABI stuff: on all return paths, check that callee-saved +
+       * other registers have been reset to their previous
+       * values. these values were saved at the top of the function so
+       * the trivially dominate all returns
+       */
+      assertSame(initialSP, readFromReg(AArch64::SP));
+
       auto *retTyp = srcFn.getReturnType();
       if (retTyp->isVoidTy()) {
         createReturn(nullptr);
@@ -2936,6 +2958,7 @@ public:
     // case
     auto paramBase = createGEP(i8, stackMem, {getIntConst(localFrame, 64)}, "");
     createStore(paramBase, RegFile[AArch64::SP]);
+    initialSP = readFromReg(AArch64::SP);
 
     // FP is X29; we'll initialize it later
     createRegStorage(AArch64::FP, 64, "FP");
