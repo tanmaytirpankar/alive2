@@ -83,8 +83,7 @@ Function *adjustSrcReturn(Function *srcFn) {
   }
 
   auto &DL = srcFn->getParent()->getDataLayout();
-  origRetWidth =
-      origRetTy->isVoidTy() ? 0 : DL.getTypeSizeInBits(origRetTy);
+  origRetWidth = origRetTy->isVoidTy() ? 0 : DL.getTypeSizeInBits(origRetTy);
 
   if (origRetWidth > 64) {
     *out << "\nERROR: Unsupported Function Return: Only int/vec/ptr types 64 "
@@ -138,8 +137,8 @@ Function *adjustSrcReturn(Function *srcFn) {
     actualRetTy = origRetTy;
   }
 
-  FunctionType *NFTy = FunctionType::get(
-      actualRetTy, srcFn->getFunctionType()->params(), false);
+  FunctionType *NFTy =
+      FunctionType::get(actualRetTy, srcFn->getFunctionType()->params(), false);
   Function *NF =
       Function::Create(NFTy, srcFn->getLinkage(), srcFn->getAddressSpace(),
                        srcFn->getName(), srcFn->getParent());
@@ -280,9 +279,15 @@ Function *adjustSrc(Function *srcFn) {
   }
 
   auto &DL = srcFn->getParent()->getDataLayout();
-  for (auto &bb : *srcFn)
-    for (auto &i : bb)
+  unsigned llvmInstCount = 0;
+  for (auto &bb : *srcFn) {
+    for (auto &i : bb) {
       checkSupport(i, DL);
+      ++llvmInstCount;
+    }
+  }
+
+  *out << "source function has " << llvmInstCount << " LLVM instructions\n";
 
   srcFn = adjustSrcReturn(srcFn);
 
