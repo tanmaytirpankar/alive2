@@ -119,22 +119,19 @@ Function *adjustSrcReturn(Function *srcFn) {
       }
       if (origRetWidth < 32) {
         if (srcFn->hasRetAttribute(Attribute::ZExt)) {
-          auto zext = new ZExtInst(retVal, i64, Name + "_zext", RI);
-          ReturnInst::Create(srcFn->getContext(), zext, RI);
+          retVal = new ZExtInst(retVal, i64, Name + "_zext", RI);
         } else {
           auto sext = new SExtInst(retVal, i32, Name + "_sext", RI);
-          auto zext = new ZExtInst(sext, i64, Name + "_zext", RI);
-          ReturnInst::Create(srcFn->getContext(), zext, RI);
+          retVal = new ZExtInst(sext, i64, Name + "_zext", RI);
         }
       } else {
         if (srcFn->hasRetAttribute(Attribute::ZExt)) {
-          auto zext = new ZExtInst(retVal, i64, Name + "_zext", RI);
-          ReturnInst::Create(srcFn->getContext(), zext, RI);
+          retVal = new ZExtInst(retVal, i64, Name + "_zext", RI);
         } else {
-          auto sext = new SExtInst(retVal, i64, Name + "_sext", RI);
-          ReturnInst::Create(srcFn->getContext(), sext, RI);
+          retVal = new SExtInst(retVal, i64, Name + "_sext", RI);
         }
       }
+      ReturnInst::Create(srcFn->getContext(), retVal, RI);
       RI->eraseFromParent();
     }
   } else {
