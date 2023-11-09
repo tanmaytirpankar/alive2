@@ -367,7 +367,7 @@ class arm2llvm {
   map<unsigned, Value *> RegFile;
   Value *stackMem{nullptr};
   unordered_map<string, GlobalVariable *> globals;
-  Value *initialSP;
+  Value *initialSP, *initialReg[32];
 
   // Map of ADRP MCInsts to the string representations of the operand variable
   // names
@@ -2673,7 +2673,10 @@ public:
        * values. these values were saved at the top of the function so
        * the trivially dominate all returns
        */
+      // TODO: check FP and LR? vector registers??
       assertSame(initialSP, readFromReg(AArch64::SP));
+      for (unsigned r = 19; r <= 28; ++r)
+	assertSame(initialReg[r], readFromReg(AArch64::X0 + r));
 
       auto *retTyp = srcFn.getReturnType();
       if (retTyp->isVoidTy()) {
@@ -2942,6 +2945,7 @@ public:
       stringstream Name;
       Name << "X" << Reg - AArch64::X0;
       createRegStorage(Reg, 64, Name.str());
+      initialReg[Reg - AArch64::X0] = readFromReg(Reg);
     }
 
     // Allocating storage for thirty-two 128 bit NEON registers
