@@ -120,7 +120,12 @@ public:
   }
 };
 
-// Represents a machine function
+/*
+ * FIXME: this data structure doesn't need to exist, it would be much
+ * better to just run the MCStreamerWrapper twice: first to build the
+ * basic blocks in the lifted function, then a second time to lift the
+ * instructions
+ */
 class MCFunction {
   string name;
   unsigned label_cnt{0};
