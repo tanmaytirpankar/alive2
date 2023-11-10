@@ -3328,6 +3328,12 @@ void reset() {
     LLVMInitializeAArch64TargetMC();
     LLVMInitializeAArch64AsmParser();
     LLVMInitializeAArch64AsmPrinter();
+    string Error;
+    Targ = TargetRegistry::lookupTarget(TripleName, Error);
+    if (!Targ) {
+      *out << Error;
+      exit(-1);
+    }
     initialized = true;
   }
 
