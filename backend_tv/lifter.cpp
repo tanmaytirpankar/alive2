@@ -76,107 +76,10 @@ const unsigned C = 100000002;
 const unsigned V = 100000003;
 } // namespace llvm::AArch64
 
-namespace {
-
-const set<int> s_flag = {
-    AArch64::ADDSWri, AArch64::ADDSWrs, AArch64::ADDSWrx, AArch64::ADDSXri,
-    AArch64::ADDSXrs, AArch64::ADDSXrx, AArch64::SUBSWri, AArch64::SUBSWrs,
-    AArch64::SUBSWrx, AArch64::SUBSXri, AArch64::SUBSXrs, AArch64::SUBSXrx,
-    AArch64::ANDSWri, AArch64::ANDSWrr, AArch64::ANDSWrs, AArch64::ANDSXri,
-    AArch64::ANDSXrr, AArch64::ANDSXrs, AArch64::BICSWrs, AArch64::BICSXrs,
-    AArch64::ADCSXr,  AArch64::ADCSWr,
-};
-
-const set<int> instrs_32 = {
-    AArch64::ADDWrx,   AArch64::ADDSWrs,  AArch64::ADDSWri, AArch64::ADDWrs,
-    AArch64::ADDWri,   AArch64::ADDSWrx,  AArch64::ADCWr,   AArch64::ADCSWr,
-    AArch64::ASRVWr,   AArch64::SUBWri,   AArch64::SUBWrs,  AArch64::SUBWrx,
-    AArch64::SUBSWrs,  AArch64::SUBSWri,  AArch64::SUBSWrx, AArch64::SBFMWri,
-    AArch64::CSELWr,   AArch64::ANDWri,   AArch64::ANDWrr,  AArch64::ANDWrs,
-    AArch64::ANDSWri,  AArch64::ANDSWrr,  AArch64::ANDSWrs, AArch64::MADDWrrr,
-    AArch64::MSUBWrrr, AArch64::EORWri,   AArch64::CSINVWr, AArch64::CSINCWr,
-    AArch64::MOVZWi,   AArch64::MOVNWi,   AArch64::MOVKWi,  AArch64::LSLVWr,
-    AArch64::LSRVWr,   AArch64::ORNWrs,   AArch64::UBFMWri, AArch64::BFMWri,
-    AArch64::ORRWrs,   AArch64::ORRWri,   AArch64::SDIVWr,  AArch64::UDIVWr,
-    AArch64::EXTRWrri, AArch64::EORWrs,   AArch64::RORVWr,  AArch64::RBITWr,
-    AArch64::CLZWr,    AArch64::REVWr,    AArch64::CSNEGWr, AArch64::BICWrs,
-    AArch64::BICSWrs,  AArch64::EONWrs,   AArch64::REV16Wr, AArch64::Bcc,
-    AArch64::CCMPWr,   AArch64::CCMPWi,   AArch64::LDRWui,  AArch64::LDRBBui,
-    AArch64::LDRBui,   AArch64::LDRSBWui, AArch64::LDRSWui, AArch64::LDRSHWui,
-    AArch64::LDRSBWui, AArch64::LDRHHui,  AArch64::LDRHui,  AArch64::STRWui,
-    AArch64::CCMNWi,   AArch64::CCMNWr,   AArch64::STRBBui, AArch64::STRBui,
-    AArch64::STPWi,    AArch64::STRHHui,  AArch64::STRHui,  AArch64::STURWi,
-    AArch64::LDPWi,    AArch64::STRWpre};
-
-const set<int> instrs_64 = {
-    AArch64::ADDXrx,    AArch64::ADDSXrs,   AArch64::ADDSXri,
-    AArch64::ADDXrs,    AArch64::ADDXri,    AArch64::ADDSXrx,
-    AArch64::ADDv4i16,  AArch64::ADDv8i8,   AArch64::ADCXr,
-    AArch64::ADCSXr,    AArch64::ASRVXr,    AArch64::SUBXri,
-    AArch64::SUBXrs,    AArch64::SUBXrx,    AArch64::SUBSXrs,
-    AArch64::SUBSXri,   AArch64::SUBSXrx,   AArch64::SBFMXri,
-    AArch64::CSELXr,    AArch64::ANDXri,    AArch64::ANDXrr,
-    AArch64::ANDXrs,    AArch64::ANDSXri,   AArch64::ANDSXrr,
-    AArch64::ANDSXrs,   AArch64::MADDXrrr,  AArch64::MSUBXrrr,
-    AArch64::EORXri,    AArch64::CSINVXr,   AArch64::CSINCXr,
-    AArch64::MOVZXi,    AArch64::MOVNXi,    AArch64::MOVKXi,
-    AArch64::LSLVXr,    AArch64::LSRVXr,    AArch64::ORNXrs,
-    AArch64::UBFMXri,   AArch64::BFMXri,    AArch64::ORRXrs,
-    AArch64::ORRXri,    AArch64::SDIVXr,    AArch64::UDIVXr,
-    AArch64::EXTRXrri,  AArch64::EORXrs,    AArch64::SMADDLrrr,
-    AArch64::UMADDLrrr, AArch64::RORVXr,    AArch64::RBITXr,
-    AArch64::CLZXr,     AArch64::REVXr,     AArch64::CSNEGXr,
-    AArch64::BICXrs,    AArch64::BICSXrs,   AArch64::EONXrs,
-    AArch64::SMULHrr,   AArch64::UMULHrr,   AArch64::REV32Xr,
-    AArch64::REV16Xr,   AArch64::SMSUBLrrr, AArch64::UMSUBLrrr,
-    AArch64::PHI,       AArch64::TBZW,      AArch64::TBZX,
-    AArch64::TBNZW,     AArch64::TBNZX,     AArch64::B,
-    AArch64::CBZW,      AArch64::CBZX,      AArch64::CBNZW,
-    AArch64::CBNZX,     AArch64::CCMPXr,    AArch64::CCMPXi,
-    AArch64::LDRXui,    AArch64::LDRXpost,  AArch64::LDPXpost,
-    AArch64::LDPXi,     AArch64::LDRDui,    AArch64::STRDui,
-    AArch64::MSR,       AArch64::MRS,       AArch64::LDRSBXui,
-    AArch64::LDRSBXui,  AArch64::LDRSHXui,  AArch64::STRXui,
-    AArch64::STPXi,     AArch64::CCMNXi,    AArch64::CCMNXr,
-    AArch64::STURXi,    AArch64::ADRP,      AArch64::STRXpre,
-};
-
-const set<int> instrs_128 = {
-    AArch64::FMOVXDr,  AArch64::INSvi64gpr, AArch64::LDPQi, AArch64::STPQi,
-    AArch64::ADDv8i16, AArch64::LDRQui,     AArch64::STRQui};
-
-bool has_s(int instr) {
-  return s_flag.contains(instr);
-}
-
-// FIXME -- do this without the strings, just keep a map or something
-BasicBlock *getBBByName(Function &Fn, StringRef name) {
-  for (auto &bb : Fn) {
-    if (bb.getName() == name)
-      return &bb;
-  }
-  assert(false && "BB not found");
-}
-
 // do not delete this line
 mc::RegisterMCTargetOptionsFlags MOF;
 
-string findTargetLabel(MCInst &Inst) {
-  auto num_operands = Inst.getNumOperands();
-  for (unsigned i = 0; i < num_operands; ++i) {
-    auto op = Inst.getOperand(i);
-    if (op.isExpr()) {
-      auto expr = op.getExpr();
-      if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
-        const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*expr);
-        const MCSymbol &Sym = SRE.getSymbol();
-        return Sym.getName().str();
-      }
-    }
-  }
-  assert(false && "Could not find target label in arm branch instruction");
-  UNREACHABLE();
-}
+namespace {
 
 // Represents a basic block of machine instructions
 class MCBasicBlock {
@@ -275,6 +178,23 @@ public:
     BBs[0].addInstBegin(std::move(jmp_instr));
   }
 
+  string findTargetLabel(MCInst &Inst) {
+    auto num_operands = Inst.getNumOperands();
+    for (unsigned i = 0; i < num_operands; ++i) {
+      auto op = Inst.getOperand(i);
+      if (op.isExpr()) {
+	auto expr = op.getExpr();
+	if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
+	  const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*expr);
+	  const MCSymbol &Sym = SRE.getSymbol();
+	  return Sym.getName().str();
+	}
+      }
+    }
+    assert(false && "Could not find target label in arm branch instruction");
+    UNREACHABLE();
+  }
+
   void checkEntryBlock() {
     // If we have an empty assembly function, we need to add an entry block with
     // a return instruction
@@ -305,41 +225,6 @@ public:
     }
   }
 };
-
-// Code taken from llvm. This should be okay for now. But we generally
-// don't want to trust the llvm implementation so we need to complete my
-// implementation at function decode_bit_mask
-uint64_t ror(uint64_t elt, unsigned size) {
-  return ((elt & 1) << (size - 1)) | (elt >> 1);
-}
-
-/// decodeLogicalImmediate - Decode a logical immediate value in the form
-/// "N:immr:imms" (where the immr and imms fields are each 6 bits) into the
-/// integer value it represents with regSize bits.
-uint64_t decodeLogicalImmediate(uint64_t val, unsigned regSize) {
-  // Extract the N, imms, and immr fields.
-  unsigned N = (val >> 12) & 1;
-  unsigned immr = (val >> 6) & 0x3f;
-  unsigned imms = val & 0x3f;
-
-  assert((regSize == 64 || N == 0) && "undefined logical immediate encoding");
-  int len = 31 - llvm::countl_zero((N << 6) | (~imms & 0x3f));
-  assert(len >= 0 && "undefined logical immediate encoding");
-  unsigned size = (1 << len);
-  unsigned R = immr & (size - 1);
-  unsigned S = imms & (size - 1);
-  assert(S != size - 1 && "undefined logical immediate encoding");
-  uint64_t pattern = (1ULL << (S + 1)) - 1;
-  for (unsigned i = 0; i < R; ++i)
-    pattern = ror(pattern, size);
-
-  // Replicate the pattern to fill the regSize.
-  while (size != regSize) {
-    pattern |= (pattern << size);
-    size *= 2;
-  }
-  return pattern;
-}
 
 BasicBlock *getBB(Function &F, MCOperand &jmp_tgt) {
   assert(jmp_tgt.isExpr() && "[getBB] expected expression operand");
@@ -376,6 +261,15 @@ class arm2llvm {
   bool DebugRegs;
   const DataLayout &DL;
 
+  // FIXME -- do this without the strings, just keep a map or something
+  BasicBlock *getBBByName(Function &Fn, StringRef name) {
+    for (auto &bb : Fn) {
+      if (bb.getName() == name)
+	return &bb;
+    }
+    assert(false && "BB not found");
+  }
+
   Type *getIntTy(int bits) {
     // just trying to catch silly errors, remove this sometime
     assert(bits > 0 && bits <= 129);
@@ -392,6 +286,105 @@ class arm2llvm {
     *out << "\nERROR: Unsupported AArch64 instruction: " << str << "\n";
     out->flush();
     exit(-1); // FIXME handle this better
+  }
+
+  const set<int> s_flag = {
+      AArch64::ADDSWri, AArch64::ADDSWrs, AArch64::ADDSWrx, AArch64::ADDSXri,
+      AArch64::ADDSXrs, AArch64::ADDSXrx, AArch64::SUBSWri, AArch64::SUBSWrs,
+      AArch64::SUBSWrx, AArch64::SUBSXri, AArch64::SUBSXrs, AArch64::SUBSXrx,
+      AArch64::ANDSWri, AArch64::ANDSWrr, AArch64::ANDSWrs, AArch64::ANDSXri,
+      AArch64::ANDSXrr, AArch64::ANDSXrs, AArch64::BICSWrs, AArch64::BICSXrs,
+      AArch64::ADCSXr,  AArch64::ADCSWr,
+  };
+
+  const set<int> instrs_32 = {
+      AArch64::ADDWrx,   AArch64::ADDSWrs,  AArch64::ADDSWri, AArch64::ADDWrs,
+      AArch64::ADDWri,   AArch64::ADDSWrx,  AArch64::ADCWr,   AArch64::ADCSWr,
+      AArch64::ASRVWr,   AArch64::SUBWri,   AArch64::SUBWrs,  AArch64::SUBWrx,
+      AArch64::SUBSWrs,  AArch64::SUBSWri,  AArch64::SUBSWrx, AArch64::SBFMWri,
+      AArch64::CSELWr,   AArch64::ANDWri,   AArch64::ANDWrr,  AArch64::ANDWrs,
+      AArch64::ANDSWri,  AArch64::ANDSWrr,  AArch64::ANDSWrs, AArch64::MADDWrrr,
+      AArch64::MSUBWrrr, AArch64::EORWri,   AArch64::CSINVWr, AArch64::CSINCWr,
+      AArch64::MOVZWi,   AArch64::MOVNWi,   AArch64::MOVKWi,  AArch64::LSLVWr,
+      AArch64::LSRVWr,   AArch64::ORNWrs,   AArch64::UBFMWri, AArch64::BFMWri,
+      AArch64::ORRWrs,   AArch64::ORRWri,   AArch64::SDIVWr,  AArch64::UDIVWr,
+      AArch64::EXTRWrri, AArch64::EORWrs,   AArch64::RORVWr,  AArch64::RBITWr,
+      AArch64::CLZWr,    AArch64::REVWr,    AArch64::CSNEGWr, AArch64::BICWrs,
+      AArch64::BICSWrs,  AArch64::EONWrs,   AArch64::REV16Wr, AArch64::Bcc,
+      AArch64::CCMPWr,   AArch64::CCMPWi,   AArch64::LDRWui,  AArch64::LDRBBui,
+      AArch64::LDRBui,   AArch64::LDRSBWui, AArch64::LDRSWui, AArch64::LDRSHWui,
+      AArch64::LDRSBWui, AArch64::LDRHHui,  AArch64::LDRHui,  AArch64::STRWui,
+      AArch64::CCMNWi,   AArch64::CCMNWr,   AArch64::STRBBui, AArch64::STRBui,
+      AArch64::STPWi,    AArch64::STRHHui,  AArch64::STRHui,  AArch64::STURWi,
+      AArch64::LDPWi,    AArch64::STRWpre};
+
+  const set<int> instrs_64 = {
+      AArch64::ADDXrx,    AArch64::ADDSXrs,   AArch64::ADDSXri,
+      AArch64::ADDXrs,    AArch64::ADDXri,    AArch64::ADDSXrx,
+      AArch64::ADDv4i16,  AArch64::ADDv8i8,   AArch64::ADCXr,
+      AArch64::ADCSXr,    AArch64::ASRVXr,    AArch64::SUBXri,
+      AArch64::SUBXrs,    AArch64::SUBXrx,    AArch64::SUBSXrs,
+      AArch64::SUBSXri,   AArch64::SUBSXrx,   AArch64::SBFMXri,
+      AArch64::CSELXr,    AArch64::ANDXri,    AArch64::ANDXrr,
+      AArch64::ANDXrs,    AArch64::ANDSXri,   AArch64::ANDSXrr,
+      AArch64::ANDSXrs,   AArch64::MADDXrrr,  AArch64::MSUBXrrr,
+      AArch64::EORXri,    AArch64::CSINVXr,   AArch64::CSINCXr,
+      AArch64::MOVZXi,    AArch64::MOVNXi,    AArch64::MOVKXi,
+      AArch64::LSLVXr,    AArch64::LSRVXr,    AArch64::ORNXrs,
+      AArch64::UBFMXri,   AArch64::BFMXri,    AArch64::ORRXrs,
+      AArch64::ORRXri,    AArch64::SDIVXr,    AArch64::UDIVXr,
+      AArch64::EXTRXrri,  AArch64::EORXrs,    AArch64::SMADDLrrr,
+      AArch64::UMADDLrrr, AArch64::RORVXr,    AArch64::RBITXr,
+      AArch64::CLZXr,     AArch64::REVXr,     AArch64::CSNEGXr,
+      AArch64::BICXrs,    AArch64::BICSXrs,   AArch64::EONXrs,
+      AArch64::SMULHrr,   AArch64::UMULHrr,   AArch64::REV32Xr,
+      AArch64::REV16Xr,   AArch64::SMSUBLrrr, AArch64::UMSUBLrrr,
+      AArch64::PHI,       AArch64::TBZW,      AArch64::TBZX,
+      AArch64::TBNZW,     AArch64::TBNZX,     AArch64::B,
+      AArch64::CBZW,      AArch64::CBZX,      AArch64::CBNZW,
+      AArch64::CBNZX,     AArch64::CCMPXr,    AArch64::CCMPXi,
+      AArch64::LDRXui,    AArch64::LDRXpost,  AArch64::LDPXpost,
+      AArch64::LDPXi,     AArch64::LDRDui,    AArch64::STRDui,
+      AArch64::MSR,       AArch64::MRS,       AArch64::LDRSBXui,
+      AArch64::LDRSBXui,  AArch64::LDRSHXui,  AArch64::STRXui,
+      AArch64::STPXi,     AArch64::CCMNXi,    AArch64::CCMNXr,
+      AArch64::STURXi,    AArch64::ADRP,      AArch64::STRXpre,
+  };
+
+  const set<int> instrs_128 = {
+      AArch64::FMOVXDr,  AArch64::INSvi64gpr, AArch64::LDPQi, AArch64::STPQi,
+      AArch64::ADDv8i16, AArch64::LDRQui,     AArch64::STRQui};
+
+  bool has_s(int instr) {
+    return s_flag.contains(instr);
+  }
+
+  /// decodeLogicalImmediate - Decode a logical immediate value in the form
+  /// "N:immr:imms" (where the immr and imms fields are each 6 bits) into the
+  /// integer value it represents with regSize bits.
+  uint64_t decodeLogicalImmediate(uint64_t val, unsigned regSize) {
+    // Extract the N, imms, and immr fields.
+    unsigned N = (val >> 12) & 1;
+    unsigned immr = (val >> 6) & 0x3f;
+    unsigned imms = val & 0x3f;
+
+    assert((regSize == 64 || N == 0) && "undefined logical immediate encoding");
+    int len = 31 - llvm::countl_zero((N << 6) | (~imms & 0x3f));
+    assert(len >= 0 && "undefined logical immediate encoding");
+    unsigned size = (1 << len);
+    unsigned R = immr & (size - 1);
+    unsigned S = imms & (size - 1);
+    assert(S != size - 1 && "undefined logical immediate encoding");
+    uint64_t pattern = (1ULL << (S + 1)) - 1;
+    for (unsigned i = 0; i < R; ++i)
+      pattern = ((pattern & 1) << (size - 1)) | (pattern >> 1);
+
+    // Replicate the pattern to fill the regSize.
+    while (size != regSize) {
+      pattern |= (pattern << size);
+      size *= 2;
+    }
+    return pattern;
   }
 
   unsigned getInstSize(int instr) {
@@ -3335,14 +3328,6 @@ void reset() {
     LLVMInitializeAArch64TargetMC();
     LLVMInitializeAArch64AsmParser();
     LLVMInitializeAArch64AsmPrinter();
-
-    string Error;
-    Targ = TargetRegistry::lookupTarget(TripleName, Error);
-    if (!Targ) {
-      *out << Error;
-      exit(-1);
-    }
-
     initialized = true;
   }
 
@@ -3383,9 +3368,9 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
 
   MCContext Ctx(TheTriple, MAI.get(), MRI.get(), STI.get(), &SrcMgr,
                 &MCOptions);
-  std::unique_ptr<MCObjectFileInfo> MOFI(
+  std::unique_ptr<MCObjectFileInfo> MCOFI(
       Targ->createMCObjectFileInfo(Ctx, false, false));
-  Ctx.setObjectFileInfo(MOFI.get());
+  Ctx.setObjectFileInfo(MCOFI.get());
 
   MCStreamerWrapper Str(Ctx, Ana.get(), IP.get(), MRI.get());
   Str.setUseAssemblerInfoForParsing(true);
