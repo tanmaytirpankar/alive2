@@ -159,6 +159,10 @@ Function *adjustSrcReturn(Function *srcFn) {
 void checkTy(Type *t, const DataLayout &DL) {
   if (t->isVoidTy())
     return;
+  if (t->isStructTy()) {
+    *out << "\nERROR: we don't support structures in arguments yet\n\n";
+    exit(-1);
+  }
   if (DL.getTypeSizeInBits(t) > 64) {
     *out << "\nERROR: integer arguments can't be more than 64 bits yet\n\n";
     exit(-1);
@@ -262,6 +266,10 @@ Function *adjustSrc(Function *srcFn) {
   int i = 0;
   for (auto &v : srcFn->args()) {
     auto *ty = v.getType();
+    if (ty->isStructTy()) {
+      *out << "\nERROR: we don't support structures in arguments yet\n\n";
+      exit(-1);
+    }
     auto &DL = srcFn->getParent()->getDataLayout();
     auto orig_width = DL.getTypeSizeInBits(ty);
     cout << "size of arg " << i << " = " << orig_width << endl;
