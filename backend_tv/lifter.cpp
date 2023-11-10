@@ -85,13 +85,11 @@ namespace {
 class MCBasicBlock {
 private:
   string name;
-  using SetTy = SetVector<MCBasicBlock *>;
   vector<MCInst> Instrs;
-  SetTy Succs;
+  SetVector<MCBasicBlock *> Succs;
 
 public:
-  MCBasicBlock(string _name) : name(_name) {}
-  // MCBasicBlock(const MCBasicBlock&) =delete;
+  MCBasicBlock(string name) : name(name) {}
 
   const string &getName() const {
     return name;
@@ -101,8 +99,8 @@ public:
     return Instrs;
   }
 
-  auto size() const {
-    return Instrs.size();
+  bool empty() const {
+    return Instrs.size() == 0;
   }
 
   auto &getSuccs() {
@@ -120,14 +118,6 @@ public:
   void addSucc(MCBasicBlock *succ_block) {
     Succs.insert(succ_block);
   }
-
-  auto succBegin() const {
-    return Succs.begin();
-  }
-
-  auto succEnd() const {
-    return Succs.end();
-  }
 };
 
 // Represents a machine function
@@ -143,7 +133,6 @@ public:
   unordered_map<string, int64_t> globals;
 
   MCFunction() {}
-  MCFunction(string _name) : name(_name) {}
 
   void setName(string _name) {
     name = _name;
@@ -3088,9 +3077,9 @@ public:
   MCFunction MF;
   unsigned cnt{0};
 
-  MCStreamerWrapper(MCContext &Context, MCInstrAnalysis *_IA,
-                    MCInstPrinter *_IP, MCRegisterInfo *_MRI)
-      : MCStreamer(Context), IA(_IA), IP(_IP), MRI(_MRI) {
+  MCStreamerWrapper(MCContext &Context, MCInstrAnalysis *IA,
+                    MCInstPrinter *IP, MCRegisterInfo *MRI)
+      : MCStreamer(Context), IA(IA), IP(IP), MRI(MRI) {
     MF.IA = IA;
     MF.IP = IP;
     MF.MRI = MRI;
@@ -3269,7 +3258,7 @@ public:
       if (i < MF.BBs.size() - 1)
         next_bb_ptr = &MF.BBs[i + 1];
 
-      if (cur_bb.size() == 0) {
+      if (cur_bb.empty()) {
         *out
             << "generateSuccessors, encountered basic block with 0 instructions"
             << '\n';
@@ -3306,7 +3295,7 @@ public:
 
   // Remove empty basic blocks, including .Lfunc_end
   void removeEmptyBlocks() {
-    erase_if(MF.BBs, [](MCBasicBlock b) { return b.size() == 0; });
+    erase_if(MF.BBs, [](MCBasicBlock bb) { return bb.empty(); });
   }
 };
 
