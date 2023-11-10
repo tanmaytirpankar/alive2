@@ -3152,17 +3152,6 @@ public:
     }
   }
 
-  void dumpSymbol(MCSymbol *Symbol) {
-    if (auto ElfSymbol = dyn_cast<MCSymbolELF>(Symbol)) {
-      *out << "  ELF symbol\n";
-      if (auto size = ElfSymbol->getSize()) {
-        printMCExpr(size);
-      } else {
-        *out << "  symbol has no size\n";
-      }
-    }
-  }
-
   virtual bool emitSymbolAttribute(MCSymbol *Symbol,
                                    MCSymbolAttr Attribute) override {
     if (false) {
@@ -3174,7 +3163,6 @@ public:
       *out << "  Common? " << Symbol->isCommon() << "\n";
       *out << "  Varible? " << Symbol->isVariable() << "\n";
       *out << "  Attribute = " << attrName(Attribute) << "\n\n";
-      dumpSymbol(Symbol);
     }
     return true;
   }
@@ -3219,7 +3207,6 @@ public:
     *out << "[[emitLabel " << cur_label << "]]\n";
     curBB = MF.addBlock(cur_label);
     prev_line = ASMLine::label;
-    dumpSymbol(Symbol);
   }
 
   string findTargetLabel(MCInst &Inst) {
