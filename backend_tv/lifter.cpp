@@ -428,9 +428,7 @@ class arm2llvm {
   }
 
   AllocaInst *createAlloca(Type *ty, Value *sz, const string &NameStr) {
-    auto A = new AllocaInst(ty, 0, sz, NameStr, LLVMBB);
-    // TODO initialize ARM memory cells to freeze poison?
-    return A;
+    return new AllocaInst(ty, 0, sz, NameStr, LLVMBB);
   }
 
   GetElementPtrInst *createGEP(Type *ty, Value *v, ArrayRef<Value *> idxlist,
@@ -2989,8 +2987,7 @@ public:
            << ", scalarArgNum = " << scalarArgNum
            << ", stackArgNum = " << stackArgNum << "\n";
       auto *argTy = arg->getType();
-      Value *frozenArg = createFreeze(arg, nextName());
-      auto *val = parameterABIRules(frozenArg, srcArg->hasSExtAttr());
+      auto *val = parameterABIRules(arg, srcArg->hasSExtAttr());
 
       // first 8 integer parameters go in the first 8 integer registers
       if ((argTy->isIntegerTy() || argTy->isPointerTy()) && scalarArgNum < 8) {
@@ -3067,7 +3064,7 @@ class MCStreamerWrapper final : public MCStreamer {
   enum ASMLine { none = 0, label = 1, non_term_instr = 2, terminator = 3 };
 
 private:
-  MCBasicBlock *temp_block{nullptr};
+  MCBasicBlock *curBB{nullptr};
   unsigned prev_line{0};
   MCInstrAnalysis *IA;
   MCInstPrinter *IP;
@@ -3092,9 +3089,9 @@ public:
     assert(prev_line != ASMLine::none);
 
     if (prev_line == ASMLine::terminator)
-      temp_block = MF.addBlock(MF.getLabel());
+      curBB = MF.addBlock(MF.getLabel());
     MCInst curInst(Inst);
-    temp_block->addInst(curInst);
+    curBB->addInst(curInst);
 
     prev_line =
         IA->isTerminator(Inst) ? ASMLine::terminator : ASMLine::non_term_instr;
@@ -3220,7 +3217,7 @@ public:
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
     string cur_label = Symbol->getName().str();
     *out << "[[emitLabel " << cur_label << "]]\n";
-    temp_block = MF.addBlock(cur_label);
+    curBB = MF.addBlock(cur_label);
     prev_line = ASMLine::label;
     dumpSymbol(Symbol);
   }
