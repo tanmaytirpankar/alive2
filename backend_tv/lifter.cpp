@@ -172,12 +172,12 @@ public:
     for (unsigned i = 0; i < num_operands; ++i) {
       auto op = Inst.getOperand(i);
       if (op.isExpr()) {
-	auto expr = op.getExpr();
-	if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
-	  const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*expr);
-	  const MCSymbol &Sym = SRE.getSymbol();
-	  return Sym.getName().str();
-	}
+        auto expr = op.getExpr();
+        if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
+          const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*expr);
+          const MCSymbol &Sym = SRE.getSymbol();
+          return Sym.getName().str();
+        }
       }
     }
     assert(false && "Could not find target label in arm branch instruction");
@@ -215,20 +215,6 @@ public:
   }
 };
 
-BasicBlock *getBB(Function &F, MCOperand &jmp_tgt) {
-  assert(jmp_tgt.isExpr() && "[getBB] expected expression operand");
-  assert((jmp_tgt.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
-         "[getBB] expected symbol ref as jump operand");
-  const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt.getExpr());
-  const MCSymbol &Sym = SRE.getSymbol();
-  StringRef name = Sym.getName();
-  for (auto &bb : F) {
-    if (bb.getName() == name)
-      return &bb;
-  }
-  assert(false && "basic block not found");
-}
-
 class arm2llvm {
   Module *LiftedModule{nullptr};
   LLVMContext &Ctx = LiftedModule->getContext();
@@ -250,11 +236,25 @@ class arm2llvm {
   bool DebugRegs;
   const DataLayout &DL;
 
+  BasicBlock *getBB(Function &F, MCOperand &jmp_tgt) {
+    assert(jmp_tgt.isExpr() && "[getBB] expected expression operand");
+    assert((jmp_tgt.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
+           "[getBB] expected symbol ref as jump operand");
+    const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt.getExpr());
+    const MCSymbol &Sym = SRE.getSymbol();
+    StringRef name = Sym.getName();
+    for (auto &bb : F) {
+      if (bb.getName() == name)
+        return &bb;
+    }
+    assert(false && "basic block not found");
+  }
+
   // FIXME -- do this without the strings, just keep a map or something
   BasicBlock *getBBByName(Function &Fn, StringRef name) {
     for (auto &bb : Fn) {
       if (bb.getName() == name)
-	return &bb;
+        return &bb;
     }
     assert(false && "BB not found");
   }
@@ -3077,8 +3077,8 @@ public:
   MCFunction MF;
   unsigned cnt{0};
 
-  MCStreamerWrapper(MCContext &Context, MCInstrAnalysis *IA,
-                    MCInstPrinter *IP, MCRegisterInfo *MRI)
+  MCStreamerWrapper(MCContext &Context, MCInstrAnalysis *IA, MCInstPrinter *IP,
+                    MCRegisterInfo *MRI)
       : MCStreamer(Context), IA(IA), IP(IP), MRI(MRI) {
     MF.IA = IA;
     MF.IP = IP;
