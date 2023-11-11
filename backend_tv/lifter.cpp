@@ -449,12 +449,11 @@ class arm2llvm {
 
   LoadInst *createLoad(Type *ty, Value *ptr, const string &NameStr = "") {
     return new LoadInst(ty, ptr, (NameStr == "") ? nextName() : NameStr,
-                        LLVMBB);
+                        false, Align(1), LLVMBB);
   }
 
   void createStore(Value *v, Value *ptr) {
-    Align align(1); // FIXME is this correct?
-    new StoreInst(v, ptr, false, align, LLVMBB);
+    new StoreInst(v, ptr, false, Align(1), LLVMBB);
   }
 
   CallInst *createSSubOverflow(Value *a, Value *b) {
