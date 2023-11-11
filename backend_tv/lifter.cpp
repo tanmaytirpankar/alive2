@@ -2117,20 +2117,58 @@ public:
       break;
     }
 
+    // can't directly lift ARM sdiv to LLVM sdiv because the latter
+    // is UB for divide by zero and INT_MAX / -1
     case AArch64::SDIVWr:
     case AArch64::SDIVXr: {
+      auto size = getInstSize(opcode);
+      auto zero = getIntConst(0, size);
+      auto allOnes = createSub(zero, getIntConst(1, size));
+      auto intMax =
+          createShl(getIntConst(1, size), getIntConst(size - 1, size));
       auto lhs = readFromOperand(1);
       auto rhs = readFromOperand(2);
-      auto result = createSDiv(lhs, rhs);
+      auto A = createAlloca(getIntTy(size), getIntConst(1, 64), "");
+      createStore(zero, A);
+      auto rhsIsZero = createICmp(ICmpInst::Predicate::ICMP_EQ, rhs, zero);
+      auto lhsIsIntMax = createICmp(ICmpInst::Predicate::ICMP_EQ, lhs, intMax);
+      auto rhsIsAllOnes =
+          createICmp(ICmpInst::Predicate::ICMP_EQ, rhs, allOnes);
+      auto isOverflow = createAnd(lhsIsIntMax, rhsIsAllOnes);
+      auto cond = createOr(rhsIsZero, isOverflow);
+      auto DivBB = BasicBlock::Create(Ctx, "", &Fn);
+      auto ContBB = BasicBlock::Create(Ctx, "", &Fn);
+      createBranch(cond, ContBB, DivBB);
+      LLVMBB = DivBB;
+      auto divResult = createSDiv(lhs, rhs);
+      createStore(divResult, A);
+      createBranch(ContBB);
+      LLVMBB = ContBB;
+      auto result = createLoad(getIntTy(size), A);
       writeToOutputReg(result);
       break;
     }
 
+    // can't directly lift ARM udiv to LLVM udiv because the latter
+    // is UB for divide by zero
     case AArch64::UDIVWr:
     case AArch64::UDIVXr: {
+      auto size = getInstSize(opcode);
+      auto zero = getIntConst(0, size);
       auto lhs = readFromOperand(1);
       auto rhs = readFromOperand(2);
-      auto result = createUDiv(lhs, rhs);
+      auto A = createAlloca(getIntTy(size), getIntConst(1, 64), "");
+      createStore(zero, A);
+      auto rhsIsZero = createICmp(ICmpInst::Predicate::ICMP_EQ, rhs, zero);
+      auto DivBB = BasicBlock::Create(Ctx, "", &Fn);
+      auto ContBB = BasicBlock::Create(Ctx, "", &Fn);
+      createBranch(rhsIsZero, ContBB, DivBB);
+      LLVMBB = DivBB;
+      auto divResult = createUDiv(lhs, rhs);
+      createStore(divResult, A);
+      createBranch(ContBB);
+      LLVMBB = ContBB;
+      auto result = createLoad(getIntTy(size), A);
       writeToOutputReg(result);
       break;
     }
