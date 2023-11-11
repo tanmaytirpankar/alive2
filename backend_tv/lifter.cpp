@@ -186,7 +186,6 @@ public:
       }
     }
     assert(false && "Could not find target label in arm branch instruction");
-    UNREACHABLE();
   }
 
   void checkEntryBlock() {
@@ -274,12 +273,12 @@ class arm2llvm {
     return ConstantInt::get(Ctx, llvm::APInt(bits, val));
   }
 
-  [[noreturn]] void visitError(MCInst &I) {
+  [[noreturn]] void visitError() {
     out->flush();
-    string str(instrPrinter->getOpcodeName(I.getOpcode()));
+    string str(instrPrinter->getOpcodeName(CurInst->getOpcode()));
     *out << "\nERROR: Unsupported AArch64 instruction: " << str << "\n";
     out->flush();
-    exit(-1); // FIXME handle this better
+    exit(-1);
   }
 
   const set<int> s_flag = {
@@ -390,8 +389,7 @@ class arm2llvm {
       return 128;
     *out << "getInstSize encountered unknown instruction"
          << "\n";
-    visitError(*CurInst);
-    UNREACHABLE();
+    visitError();
   }
 
   // from getShiftType/getShiftValue:
@@ -619,20 +617,6 @@ class arm2llvm {
   CastInst *createTrunc(Value *v, Type *t, const string &NameStr = "") {
     return CastInst::Create(Instruction::Trunc, v, t,
                             (NameStr == "") ? nextName() : NameStr, LLVMBB);
-  }
-
-  // This implements the SMTLIB-like extract operator from Isla traces
-  Value *createExtract(Value *v, unsigned n1, unsigned n2,
-                       const string &NameStr = "") {
-    assert(n1 > n2);
-    if (n2 == 0) {
-      auto *ty = getIntTy(1 + n1);
-      return createTrunc(v, ty);
-    } else {
-      auto *shift = createLShr(v, getIntConst(n2, getBitWidth(v)));
-      auto *ty = getIntTy(1 + n1 - n2);
-      return createTrunc(shift, ty);
-    }
   }
 
   CastInst *createSExt(Value *v, Type *t, const string &NameStr = "") {
@@ -1488,7 +1472,7 @@ public:
 
       // make sure that lhs and rhs conversion succeeded, type lookup succeeded
       if (!ty || !a || !b)
-        visitError(I);
+        visitError();
 
       if (has_s(opcode)) {
         auto ssub = createSSubOverflow(a, b);
@@ -1516,7 +1500,7 @@ public:
       auto a = readFromOperand(1);
       auto b = readFromOperand(2);
       if (!a || !b)
-        visitError(I);
+        visitError();
 
       auto cond_val_imm = getImm(3);
       auto cond_val = conditionHolds(cond_val_imm);
@@ -1777,7 +1761,7 @@ public:
       auto imm_rhs = readFromOperand(1);
 
       if (!lhs || !imm_rhs)
-        visitError(I);
+        visitError();
 
       auto imm_flags = getImm(2);
       auto imm_v_val = getIntConst((imm_flags & 1) ? 1 : 0, 1);
@@ -1820,7 +1804,7 @@ public:
       auto imm_val = getIntConst(decoded_immediate,
                                  size); // FIXME, need to decode immediate val
       if (!a || !imm_val)
-        visitError(I);
+        visitError();
 
       auto res = createXor(a, imm_val);
       writeToOutputReg(res);
@@ -1874,7 +1858,7 @@ public:
       auto a = readFromOperand(1);
       auto b = readFromOperand(2);
       if (!a || !b)
-        visitError(I);
+        visitError();
 
       auto cond_val_imm = getImm(3);
       auto cond_val = conditionHolds(cond_val_imm);
@@ -2526,7 +2510,7 @@ public:
       }
       default: {
         *out << "\nError Unknown opcode\n";
-        visitError(I);
+        visitError();
       }
       }
       assert(size != 0);
@@ -2583,7 +2567,7 @@ public:
       }
       default: {
         *out << "\nError Unknown opcode\n";
-        visitError(I);
+        visitError();
         break;
       }
       }
@@ -2834,7 +2818,7 @@ public:
       *out << funcToString(&Fn);
       *out << "\nError "
               "detected----------partially-lifted-arm-target----------\n";
-      visitError(I);
+      visitError();
     }
   }
 
@@ -2979,8 +2963,7 @@ public:
 
     // implement the callee side of the ABI; FIXME -- this code only
     // supports integer parameters <= 64 bits and will require
-    // significant generalization to handle large parameters, vectors,
-    // and FP values
+    // significant generalization to handle large parameters
     unsigned vecArgNum = 0;
     unsigned scalarArgNum = 0;
     unsigned stackArgNum = 0;
@@ -3227,9 +3210,7 @@ public:
         }
       }
     }
-
     assert(false && "Could not find target label in arm branch instruction");
-    UNREACHABLE();
   }
 
   // Make sure that we have an entry label with no predecessors
