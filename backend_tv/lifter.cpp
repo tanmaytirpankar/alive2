@@ -163,15 +163,6 @@ public:
     assert(false && "block not found");
   }
 
-  void addEntryBlock() {
-    *out << "adding fresh entry block to lifted code\n";
-    BBs.emplace(BBs.begin(), "arm_tv_entry");
-    MCInst jmp_instr;
-    jmp_instr.setOpcode(AArch64::B);
-    jmp_instr.addOperand(MCOperand::createImm(1));
-    BBs[0].addInstBegin(std::move(jmp_instr));
-  }
-
   string findTargetLabel(MCInst &Inst) {
     auto num_operands = Inst.getNumOperands();
     for (unsigned i = 0; i < num_operands; ++i) {
@@ -189,32 +180,24 @@ public:
   }
 
   void checkEntryBlock() {
-    // If we have an empty assembly function, we need to add an entry block with
-    // a return instruction
     if (BBs.empty()) {
+      // If we have an empty assembly function, we need to add an
+      // entry block with a return instruction
       *out << "adding entry block to empty function\n";
       auto new_block = addBlock("entry");
       MCInst ret_instr;
       ret_instr.setOpcode(AArch64::RET);
       new_block->addInstBegin(std::move(ret_instr));
-    }
-
-    // LLVM doesn't let the entry block be a jump target, but assembly
-    // does, so let's fix that up if necessary. alternatively, we
-    // could simply add the new block unconditionally and let
-    // simplifyCFG clean up the mess.
-    const auto &first_block = BBs[0];
-    for (unsigned i = 0; i < BBs.size(); ++i) {
-      auto &cur_bb = BBs[i];
-      auto &last_mc_instr = cur_bb.getInstrs().back();
-      if (IA->isConditionalBranch(last_mc_instr) ||
-          IA->isUnconditionalBranch(last_mc_instr)) {
-        string target = findTargetLabel(last_mc_instr);
-        if (target == first_block.getName()) {
-          addEntryBlock();
-          return;
-        }
-      }
+    } else {
+      // LLVM doesn't let the entry block be a jump target, but assembly
+      // does; we can fix that up by adding an extra block at the start
+      // of the function. simplifyCFG will clean this up when it's not
+      // needed.
+      BBs.emplace(BBs.begin(), "arm_tv_entry");
+      MCInst jmp_instr;
+      jmp_instr.setOpcode(AArch64::B);
+      jmp_instr.addOperand(MCOperand::createImm(1));
+      BBs[0].addInstBegin(std::move(jmp_instr));
     }
   }
 };
