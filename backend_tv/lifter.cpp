@@ -238,7 +238,7 @@ class arm2llvm {
 
   Type *getIntTy(int bits) {
     // just trying to catch silly errors, remove this sometime
-    assert(bits > 0 && bits <= 129);
+    assert(bits > 0 && bits <= 128);
     return Type::getIntNTy(Ctx, bits);
   }
 
