@@ -176,7 +176,7 @@ public:
         }
       }
     }
-    assert(false && "Could not find target label in arm branch instruction");
+    assert(false && "could not find target label in ARM branch instruction");
   }
 
   void checkEntryBlock() {
@@ -224,16 +224,16 @@ class arm2llvm {
       if (bb.getName() == name)
         return &bb;
     }
-    assert(false && "basic block not found");
+    assert(false && "basic block not found in getBB()");
   }
 
   // FIXME -- do this without the strings, just keep a map or something
-  BasicBlock *getBBByName(Function &Fn, StringRef name) {
-    for (auto &bb : Fn) {
+  BasicBlock *getBBByName(Function &F, StringRef name) {
+    for (auto &bb : F) {
       if (bb.getName() == name)
         return &bb;
     }
-    assert(false && "BB not found");
+    assert(false && "basic block not found in getBBByName()");
   }
 
   Type *getIntTy(int bits) {
@@ -1417,7 +1417,7 @@ public:
         break;
       }
       default: {
-        assert(false && "missed case");
+        assert(false && "missed case in ADDv8i16");
         break;
       }
       }
@@ -2072,7 +2072,6 @@ public:
       auto shifted_res = createLShr(masked, getIntConst(pos, size));
       updateOutputReg(shifted_res);
       return;
-      // assert(false && "UBFX not supported");
     }
 
     case AArch64::BFMWri:
@@ -2279,7 +2278,7 @@ public:
         ret = createXor(op1, inverted_op2);
         break;
       default:
-        assert(false && "missed case");
+        assert(false && "missed case in EON/BIC");
       }
 
       // FIXME: it might be better to have EON instruction separate since there
@@ -3248,7 +3247,7 @@ public:
         }
       }
     }
-    assert(false && "Could not find target label in arm branch instruction");
+    assert(false && "could not find target label in arm branch instruction");
   }
 
   // Make sure that we have an entry label with no predecessors
