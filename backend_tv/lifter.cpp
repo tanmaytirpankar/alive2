@@ -448,8 +448,8 @@ class arm2llvm {
   }
 
   LoadInst *createLoad(Type *ty, Value *ptr, const string &NameStr = "") {
-    return new LoadInst(ty, ptr, (NameStr == "") ? nextName() : NameStr,
-                        false, Align(1), LLVMBB);
+    return new LoadInst(ty, ptr, (NameStr == "") ? nextName() : NameStr, false,
+                        Align(1), LLVMBB);
   }
 
   void createStore(Value *v, Value *ptr) {
@@ -799,7 +799,7 @@ class arm2llvm {
     return getRegSize(outReg);
   }
 
-  void writeToOutputReg(Value *V, bool SExt = false) {
+  void updateOutputReg(Value *V, bool SExt = false) {
     auto destReg = CurInst->getOperand(0).getReg();
 
     // important!
@@ -1208,7 +1208,7 @@ public:
       res = createOr(res, NZ);
       res = createOr(res, NC);
       res = createOr(res, NV);
-      writeToOutputReg(res);
+      updateOutputReg(res);
       break;
     }
 
@@ -1324,10 +1324,10 @@ public:
         setC(new_c);
         setNUsingResult(result);
         setZUsingResult(result);
-        writeToOutputReg(result);
+        updateOutputReg(result);
       }
 
-      writeToOutputReg(createAdd(a, b));
+      updateOutputReg(createAdd(a, b));
       break;
     }
 
@@ -1339,7 +1339,7 @@ public:
       auto b = readFromOperand(2);
 
       auto [res, flags] = addWithCarry(a, b, getC());
-      writeToOutputReg(res);
+      updateOutputReg(res);
 
       if (has_s(opcode)) {
         auto [n, z, c, v] = flags;
@@ -1361,7 +1361,7 @@ public:
       auto shift_amt =
           createBinop(b, getIntConst(size, size), Instruction::URem);
       auto res = createAShr(a, shift_amt);
-      writeToOutputReg(res);
+      updateOutputReg(res);
       break;
     }
 
@@ -1395,7 +1395,7 @@ public:
       }
       }
 
-      writeToOutputReg(createVectorAdd(a, b, elementTypeInBits, numElements));
+      updateOutputReg(createVectorAdd(a, b, elementTypeInBits, numElements));
       break;
     }
 
@@ -1481,10 +1481,10 @@ public:
         setZ(createICmp(ICmpInst::Predicate::ICMP_EQ, a, b));
         setV(new_v);
         setNUsingResult(result);
-        writeToOutputReg(result);
+        updateOutputReg(result);
       } else {
         auto sub = createSub(a, b);
-        writeToOutputReg(sub);
+        updateOutputReg(sub);
       }
       break;
     }
@@ -1505,7 +1505,7 @@ public:
       auto cond_val = conditionHolds(cond_val_imm);
 
       auto result = createSelect(cond_val, a, b);
-      writeToOutputReg(result);
+      updateOutputReg(result);
       break;
     }
 
@@ -1546,7 +1546,7 @@ public:
         setV(getIntConst(0, 1));
       }
 
-      writeToOutputReg(and_op);
+      updateOutputReg(and_op);
       break;
     }
 
@@ -1558,7 +1558,7 @@ public:
 
       auto mul = createMul(mul_lhs, mul_rhs);
       auto add = createAdd(mul, addend);
-      writeToOutputReg(add);
+      updateOutputReg(add);
       break;
     }
 
@@ -1572,7 +1572,7 @@ public:
       auto rhs_masked = createAnd(mul_rhs, getIntConst(0xffffffffUL, size));
       auto mul = createMul(lhs_masked, rhs_masked);
       auto add = createAdd(mul, addend);
-      writeToOutputReg(add);
+      updateOutputReg(add);
       break;
     }
 
@@ -1596,7 +1596,7 @@ public:
 
       auto mul = createMul(lhs_ext, rhs_ext);
       auto add = createAdd(mul, addend);
-      writeToOutputReg(add);
+      updateOutputReg(add);
       break;
     }
 
@@ -1627,7 +1627,7 @@ public:
 
       auto mul = createMul(lhs_extended, rhs_extended);
       auto subtract = createSub(minuend, mul);
-      writeToOutputReg(subtract);
+      updateOutputReg(subtract);
       break;
     }
 
@@ -1657,7 +1657,7 @@ public:
 
       // Truncate to the proper size:
       auto trunc = createTrunc(shift, i64);
-      writeToOutputReg(trunc);
+      updateOutputReg(trunc);
       break;
     }
 
@@ -1668,7 +1668,7 @@ public:
       auto minuend = readFromOperand(3);
       auto mul = createMul(mul_lhs, mul_rhs);
       auto sub = createSub(minuend, mul);
-      writeToOutputReg(sub);
+      updateOutputReg(sub);
       break;
     }
 
@@ -1686,7 +1686,7 @@ public:
       // imms == 011111 and size == 32 or when imms == 111111 and size = 64
       if ((size == 32 && imms == 31) || (size == 64 && imms == 63)) {
         auto dst = createAShr(src, r);
-        writeToOutputReg(dst);
+        updateOutputReg(dst);
         return;
       }
 
@@ -1694,7 +1694,7 @@ public:
       if (immr == 0 && imms == 7) {
         auto trunc = createTrunc(src, i8);
         auto dst = createSExt(trunc, ty);
-        writeToOutputReg(dst);
+        updateOutputReg(dst);
         return;
       }
 
@@ -1702,7 +1702,7 @@ public:
       if (immr == 0 && imms == 15) {
         auto trunc = createTrunc(src, i16);
         auto dst = createSExt(trunc, ty);
-        writeToOutputReg(dst);
+        updateOutputReg(dst);
         return;
       }
 
@@ -1710,7 +1710,7 @@ public:
       if (immr == 0 && imms == 31) {
         auto trunc = createTrunc(src, i32);
         auto dst = createSExt(trunc, ty);
-        writeToOutputReg(dst);
+        updateOutputReg(dst);
         return;
       }
 
@@ -1728,7 +1728,7 @@ public:
                                            bitfield_lsb, getIntConst(0, size));
         auto res = createSelect(bitfield_lsb_set, insert_ones, masked);
         auto shifted_res = createShl(res, getIntConst(pos, size));
-        writeToOutputReg(shifted_res);
+        updateOutputReg(shifted_res);
         return;
       }
       // FIXME: this requires checking if SBFX is preferred.
@@ -1746,7 +1746,7 @@ public:
       auto l_shifted = createRawShl(masked, getIntConst(size - width, size));
       auto shifted_res =
           createRawAShr(l_shifted, getIntConst(size - width + pos, size));
-      writeToOutputReg(shifted_res);
+      updateOutputReg(shifted_res);
       return;
     }
 
@@ -1806,7 +1806,7 @@ public:
         visitError();
 
       auto res = createXor(a, imm_val);
-      writeToOutputReg(res);
+      updateOutputReg(res);
       break;
     }
     case AArch64::EORWrs:
@@ -1814,7 +1814,7 @@ public:
       auto lhs = readFromOperand(1);
       auto rhs = readFromOperand(2, getImm(3));
       auto result = createXor(lhs, rhs);
-      writeToOutputReg(result);
+      updateOutputReg(result);
       break;
     }
 
@@ -1868,10 +1868,10 @@ public:
       if (opcode == AArch64::CSNEGWr || opcode == AArch64::CSNEGXr) {
         auto negated_b = createAdd(inverted_b, getIntConst(1, size));
         auto ret = createSelect(cond_val, a, negated_b);
-        writeToOutputReg(ret);
+        updateOutputReg(ret);
       } else {
         auto ret = createSelect(cond_val, a, inverted_b);
-        writeToOutputReg(ret);
+        updateOutputReg(ret);
       }
       break;
     }
@@ -1891,7 +1891,7 @@ public:
       auto inc = createAdd(b, getIntConst(1, size));
       auto sel = createSelect(cond_val, a, inc);
 
-      writeToOutputReg(sel);
+      updateOutputReg(sel);
       break;
     }
 
@@ -1903,7 +1903,7 @@ public:
       auto lhs = readFromOperand(1, getImm(2));
       auto rhs = getIntConst(0, size);
       auto ident = createAdd(lhs, rhs);
-      writeToOutputReg(ident);
+      updateOutputReg(ident);
       break;
     }
 
@@ -1918,7 +1918,7 @@ public:
       auto neg_one = getIntConst(-1, size);
       auto not_lhs = createXor(lhs, neg_one);
 
-      writeToOutputReg(not_lhs);
+      updateOutputReg(not_lhs);
       break;
     }
 
@@ -1927,7 +1927,7 @@ public:
       auto lhs = readFromOperand(1);
       auto rhs = readFromOperand(2);
       auto exp = createShl(lhs, rhs);
-      writeToOutputReg(exp);
+      updateOutputReg(exp);
       break;
     }
 
@@ -1936,7 +1936,7 @@ public:
       auto lhs = readFromOperand(1);
       auto rhs = readFromOperand(2);
       auto exp = createLShr(lhs, rhs);
-      writeToOutputReg(exp);
+      updateOutputReg(exp);
       break;
     }
 
@@ -1949,7 +1949,7 @@ public:
       auto neg_one = getIntConst(-1, size);
       auto not_rhs = createXor(rhs, neg_one);
       auto ident = createOr(lhs, not_rhs);
-      writeToOutputReg(ident);
+      updateOutputReg(ident);
       break;
     }
 
@@ -1974,7 +1974,7 @@ public:
       auto bottom_bits = getIntConst(bitmask, size);
       auto cleared = createAnd(dest, bottom_bits);
       auto ident = createOr(cleared, lhs);
-      writeToOutputReg(ident);
+      updateOutputReg(ident);
       break;
     }
 
@@ -1988,21 +1988,21 @@ public:
       // LSL is preferred when imms != 31 and imms + 1 == immr
       if (size == 32 && imms != 31 && imms + 1 == immr) {
         auto dst = createShl(src, getIntConst(31 - imms, size));
-        writeToOutputReg(dst);
+        updateOutputReg(dst);
         return;
       }
 
       // LSL is preferred when imms != 63 and imms + 1 == immr
       if (size == 64 && imms != 63 && imms + 1 == immr) {
         auto dst = createShl(src, getIntConst(63 - imms, size));
-        writeToOutputReg(dst);
+        updateOutputReg(dst);
         return;
       }
 
       // LSR is preferred when imms == 31 or 63 (size - 1)
       if (imms == size - 1) {
         auto dst = createLShr(src, getIntConst(immr, size));
-        writeToOutputReg(dst);
+        updateOutputReg(dst);
         return;
       }
 
@@ -2013,7 +2013,7 @@ public:
         auto mask = ((uint64_t)1 << (width)) - 1;
         auto masked = createAnd(src, getIntConst(mask, size));
         auto shifted = createShl(masked, getIntConst(pos, size));
-        writeToOutputReg(shifted);
+        updateOutputReg(shifted);
         return;
       }
 
@@ -2021,7 +2021,7 @@ public:
       if (immr == 0 && imms == 7) {
         auto mask = ((uint64_t)1 << 8) - 1;
         auto masked = createAnd(src, getIntConst(mask, size));
-        writeToOutputReg(masked);
+        updateOutputReg(masked);
         return;
       }
 
@@ -2029,7 +2029,7 @@ public:
       if (immr == 0 && imms == 15) {
         auto mask = ((uint64_t)1 << 16) - 1;
         auto masked = createAnd(src, getIntConst(mask, size));
-        writeToOutputReg(masked);
+        updateOutputReg(masked);
         return;
       }
 
@@ -2043,7 +2043,7 @@ public:
 
       auto masked = createAnd(src, getIntConst(mask, size));
       auto shifted_res = createLShr(masked, getIntConst(pos, size));
-      writeToOutputReg(shifted_res);
+      updateOutputReg(shifted_res);
       return;
       // assert(false && "UBFX not supported");
     }
@@ -2068,7 +2068,7 @@ public:
         auto cleared =
             createAnd(dst, getIntConst((uint64_t)(-1) << bits, size));
         auto res = createOr(cleared, shifted);
-        writeToOutputReg(res);
+        updateOutputReg(res);
         return;
       }
 
@@ -2092,7 +2092,7 @@ public:
       auto masked = createAnd(dst, getIntConst(mask, size));
       // place the bitfield
       auto res = createOr(masked, moved);
-      writeToOutputReg(res);
+      updateOutputReg(res);
       return;
     }
 
@@ -2103,7 +2103,7 @@ public:
       auto imm = getImm(2);
       auto decoded = decodeLogicalImmediate(imm, size);
       auto result = createOr(lhs, getIntConst(decoded, size));
-      writeToOutputReg(result);
+      updateOutputReg(result);
       break;
     }
 
@@ -2112,39 +2112,39 @@ public:
       auto lhs = readFromOperand(1);
       auto rhs = readFromOperand(2, getImm(3));
       auto result = createOr(lhs, rhs);
-      writeToOutputReg(result);
+      updateOutputReg(result);
       break;
     }
 
     // can't directly lift ARM sdiv to LLVM sdiv because the latter
-    // is UB for divide by zero and INT_MAX / -1
+    // is UB for divide by zero and INT_MIN / -1
     case AArch64::SDIVWr:
     case AArch64::SDIVXr: {
-      auto size = getInstSize(opcode);
-      auto zero = getIntConst(0, size);
-      auto allOnes = createSub(zero, getIntConst(1, size));
-      auto intMax =
-          createShl(getIntConst(1, size), getIntConst(size - 1, size));
-      auto lhs = readFromOperand(1);
-      auto rhs = readFromOperand(2);
-      auto A = createAlloca(getIntTy(size), getIntConst(1, 64), "");
-      createStore(zero, A);
-      auto rhsIsZero = createICmp(ICmpInst::Predicate::ICMP_EQ, rhs, zero);
-      auto lhsIsIntMax = createICmp(ICmpInst::Predicate::ICMP_EQ, lhs, intMax);
-      auto rhsIsAllOnes =
-          createICmp(ICmpInst::Predicate::ICMP_EQ, rhs, allOnes);
-      auto isOverflow = createAnd(lhsIsIntMax, rhsIsAllOnes);
-      auto cond = createOr(rhsIsZero, isOverflow);
+      auto Size = getInstSize(opcode);
+      auto Zero = getIntConst(0, Size);
+      auto AllOnes = createSub(Zero, getIntConst(1, Size));
+      auto IntMin =
+          createShl(getIntConst(1, Size), getIntConst(Size - 1, Size));
+      auto LHS = readFromOperand(1);
+      auto RHS = readFromOperand(2);
+      auto ResMem = createAlloca(getIntTy(Size), getIntConst(1, 64), "");
+      createStore(Zero, ResMem);
+      auto RHSIsZero = createICmp(ICmpInst::Predicate::ICMP_EQ, RHS, Zero);
+      auto LHSIsIntMin = createICmp(ICmpInst::Predicate::ICMP_EQ, LHS, IntMin);
+      auto RHSIsAllOnes =
+          createICmp(ICmpInst::Predicate::ICMP_EQ, RHS, AllOnes);
+      auto IsOverflow = createAnd(LHSIsIntMin, RHSIsAllOnes);
+      auto Cond = createOr(RHSIsZero, IsOverflow);
       auto DivBB = BasicBlock::Create(Ctx, "", &Fn);
       auto ContBB = BasicBlock::Create(Ctx, "", &Fn);
-      createBranch(cond, ContBB, DivBB);
+      createBranch(Cond, ContBB, DivBB);
       LLVMBB = DivBB;
-      auto divResult = createSDiv(lhs, rhs);
-      createStore(divResult, A);
+      auto DivResult = createSDiv(LHS, RHS);
+      createStore(DivResult, ResMem);
       createBranch(ContBB);
       LLVMBB = ContBB;
-      auto result = createLoad(getIntTy(size), A);
-      writeToOutputReg(result);
+      auto result = createLoad(getIntTy(Size), ResMem);
+      updateOutputReg(result);
       break;
     }
 
@@ -2168,7 +2168,7 @@ public:
       createBranch(ContBB);
       LLVMBB = ContBB;
       auto result = createLoad(getIntTy(size), A);
-      writeToOutputReg(result);
+      updateOutputReg(result);
       break;
     }
 
@@ -2178,7 +2178,7 @@ public:
       auto op2 = readFromOperand(2);
       auto shift = readFromOperand(3);
       auto result = createFShr(op1, op2, shift);
-      writeToOutputReg(result);
+      updateOutputReg(result);
       break;
     }
 
@@ -2187,7 +2187,7 @@ public:
       auto op = readFromOperand(1);
       auto shift = readFromOperand(2);
       auto result = createFShr(op, op, shift);
-      writeToOutputReg(result);
+      updateOutputReg(result);
       break;
     }
 
@@ -2195,20 +2195,20 @@ public:
     case AArch64::RBITXr: {
       auto op = readFromOperand(1);
       auto result = createBitReverse(op);
-      writeToOutputReg(result);
+      updateOutputReg(result);
       break;
     }
 
     case AArch64::REVWr:
     case AArch64::REVXr:
-      writeToOutputReg(createBSwap(readFromOperand(1)));
+      updateOutputReg(createBSwap(readFromOperand(1)));
       break;
 
     case AArch64::CLZWr:
     case AArch64::CLZXr: {
       auto op = readFromOperand(1);
       auto result = createCtlz(op);
-      writeToOutputReg(result);
+      updateOutputReg(result);
       break;
     }
 
@@ -2264,7 +2264,7 @@ public:
         setV(getIntConst(0, 1));
       }
 
-      writeToOutputReg(ret);
+      updateOutputReg(ret);
       break;
     }
 
@@ -2279,7 +2279,7 @@ public:
       auto second_part_and =
           createAnd(second_part, getIntConst(0x00FF00FF00FF00FFUL, size));
       auto combined_val = createOr(first_part_and, second_part_and);
-      writeToOutputReg(combined_val);
+      updateOutputReg(combined_val);
       break;
     }
 
@@ -2296,7 +2296,7 @@ public:
       auto reverse_val = createBSwap(val);
       auto ret =
           createFShr(reverse_val, reverse_val, getIntConst(size / 2, size));
-      writeToOutputReg(ret);
+      updateOutputReg(ret);
       break;
     }
 
@@ -2315,7 +2315,7 @@ public:
       auto q_shift = createLShr(q_reg_val, getIntConst(64, 128));
       auto q_cleared = createShl(q_shift, getIntConst(64, 128));
       auto mov_res = createOr(q_cleared, val);
-      writeToOutputReg(mov_res);
+      updateOutputReg(mov_res);
       cur_vol_regs[MCBB][op_0.getReg()] = mov_res;
 #endif
       break;
@@ -2344,7 +2344,7 @@ public:
 
       auto q_cleared = createShl(q_reg_val, mask);
       auto mov_res = createAnd(q_cleared, val);
-      writeToOutputReg(mov_res);
+      updateOutputReg(mov_res);
       cur_vol_regs[MCBB][op_0.getReg()] = mov_res;
 #endif
       break;
@@ -2373,7 +2373,7 @@ public:
         assert(false);
 
       auto loaded = makeLoad(base, imm * size, size);
-      writeToOutputReg(loaded, /*SExt=*/true);
+      updateOutputReg(loaded, /*SExt=*/true);
       break;
     }
 
@@ -2408,7 +2408,7 @@ public:
       } else {
         auto [base, imm] = getParamsLoadImmed();
         auto loaded = makeLoad(base, imm * size, size);
-        writeToOutputReg(loaded);
+        updateOutputReg(loaded);
       }
       break;
     }
@@ -2986,7 +2986,7 @@ public:
     createRegStorage(AArch64::LR, 64, "LR");
 
     // initializing to zero makes loads from XZR work; stores are
-    // handled in writeToOutputReg()
+    // handled in updateOutputReg()
     createRegStorage(AArch64::XZR, 64, "XZR");
     createStore(getIntConst(0, 64), RegFile[AArch64::XZR]);
 
