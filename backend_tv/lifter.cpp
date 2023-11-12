@@ -2329,7 +2329,7 @@ public:
     // assuming that the source is always an x register
     // This might not be the case but we need to look at the assembly emitter
     case AArch64::FMOVXDr: {
-      assert(false); // avoid executing old code
+      assert(false && "need to implement FMOVXDr");
 #if 0
       // zero extended x register to 128 bits
       auto val = readFromOperand(1);
@@ -2350,7 +2350,7 @@ public:
     // assuming that the source is always an x register
     // This might not be the case but we need to look at the assembly emitter
     case AArch64::INSvi64gpr: {
-      assert(false); // avoid executing old code
+      assert(false && "need to implement INSvi64gpr");
 #if 0
       auto &op_0 = CurInst->getOperand(0);
       auto &op_1 = CurInst->getOperand(1);
