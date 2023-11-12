@@ -180,25 +180,15 @@ public:
   }
 
   void checkEntryBlock() {
-    if (BBs.empty()) {
-      // If we have an empty assembly function, we need to add an
-      // entry block with a return instruction
-      *out << "adding entry block to empty function\n";
-      auto new_block = addBlock("entry");
-      MCInst ret_instr;
-      ret_instr.setOpcode(AArch64::RET);
-      new_block->addInstBegin(std::move(ret_instr));
-    } else {
-      // LLVM doesn't let the entry block be a jump target, but assembly
-      // does; we can fix that up by adding an extra block at the start
-      // of the function. simplifyCFG will clean this up when it's not
-      // needed.
-      BBs.emplace(BBs.begin(), "arm_tv_entry");
-      MCInst jmp_instr;
-      jmp_instr.setOpcode(AArch64::B);
-      jmp_instr.addOperand(MCOperand::createImm(1));
-      BBs[0].addInstBegin(std::move(jmp_instr));
-    }
+    // LLVM doesn't let the entry block be a jump target, but assembly
+    // does; we can fix that up by adding an extra block at the start
+    // of the function. simplifyCFG will clean this up when it's not
+    // needed.
+    BBs.emplace(BBs.begin(), "arm_tv_entry");
+    MCInst jmp_instr;
+    jmp_instr.setOpcode(AArch64::B);
+    jmp_instr.addOperand(MCOperand::createImm(1));
+    BBs[0].addInstBegin(std::move(jmp_instr));
   }
 };
 
@@ -1083,6 +1073,55 @@ class arm2llvm {
     CallInst::Create(assert_decl, {c}, "", LLVMBB);
   }
 
+  void doReturn() {
+    auto i32 = getIntTy(32);
+    auto i64 = getIntTy(64);
+
+    /*
+     * ABI stuff: on all return paths, check that callee-saved +
+     * other registers have been reset to their previous
+     * values. these values were saved at the top of the function so
+     * the trivially dominate all returns
+     */
+    // TODO: check FP and LR? vector registers??
+    assertSame(initialSP, readFromReg(AArch64::SP));
+    for (unsigned r = 19; r <= 28; ++r)
+      assertSame(initialReg[r], readFromReg(AArch64::X0 + r));
+
+    auto *retTyp = srcFn.getReturnType();
+    if (retTyp->isVoidTy()) {
+      createReturn(nullptr);
+    } else {
+      Value *retVal = nullptr;
+      if (retTyp->isVectorTy()) {
+        retVal = readFromReg(AArch64::Q0);
+      } else {
+        retVal = readFromReg(AArch64::X0);
+      }
+      if (retTyp->isPointerTy()) {
+        retVal = new IntToPtrInst(retVal, PointerType::get(Ctx, 0), "", LLVMBB);
+      } else {
+        auto retWidth = DL.getTypeSizeInBits(retTyp);
+        auto retValWidth = DL.getTypeSizeInBits(retVal->getType());
+
+        if (retWidth < retValWidth)
+          retVal = createTrunc(retVal, getIntTy(retWidth));
+
+        // mask off any don't-care bits
+        if (has_ret_attr && (origRetWidth < 32)) {
+          assert(retWidth >= origRetWidth);
+          assert(retWidth == 64);
+          auto trunc = createTrunc(retVal, i32);
+          retVal = createZExt(trunc, i64);
+        }
+
+        if (retTyp->isVectorTy() && !has_ret_attr)
+          retVal = createCast(retVal, retTyp, Instruction::BitCast);
+      }
+      createReturn(retVal);
+    }
+  }
+
 public:
   arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
            MCInstPrinter *instrPrinter, bool DebugRegs)
@@ -1167,6 +1206,11 @@ public:
     auto i128 = getIntTy(128);
 
     switch (opcode) {
+
+    // we're abusing this opcode -- better hope we don't run across these for
+    // real
+    case AArch64::SEH_Nop:
+      break;
 
     case AArch64::MRS: {
       // https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/NZCV--Condition-Flags
@@ -2664,53 +2708,9 @@ public:
       break;
     }
 
-    case AArch64::RET: {
-      /*
-       * ABI stuff: on all return paths, check that callee-saved +
-       * other registers have been reset to their previous
-       * values. these values were saved at the top of the function so
-       * the trivially dominate all returns
-       */
-      // TODO: check FP and LR? vector registers??
-      assertSame(initialSP, readFromReg(AArch64::SP));
-      for (unsigned r = 19; r <= 28; ++r)
-        assertSame(initialReg[r], readFromReg(AArch64::X0 + r));
-
-      auto *retTyp = srcFn.getReturnType();
-      if (retTyp->isVoidTy()) {
-        createReturn(nullptr);
-      } else {
-        Value *retVal = nullptr;
-        if (retTyp->isVectorTy()) {
-          retVal = readFromReg(AArch64::Q0);
-        } else {
-          retVal = readFromReg(AArch64::X0);
-        }
-        if (retTyp->isPointerTy()) {
-          retVal =
-              new IntToPtrInst(retVal, PointerType::get(Ctx, 0), "", LLVMBB);
-        } else {
-          auto retWidth = DL.getTypeSizeInBits(retTyp);
-          auto retValWidth = DL.getTypeSizeInBits(retVal->getType());
-
-          if (retWidth < retValWidth)
-            retVal = createTrunc(retVal, getIntTy(retWidth));
-
-          // mask off any don't-care bits
-          if (has_ret_attr && (origRetWidth < 32)) {
-            assert(retWidth >= origRetWidth);
-            assert(retWidth == 64);
-            auto trunc = createTrunc(retVal, i32);
-            retVal = createZExt(trunc, i64);
-          }
-
-          if (retTyp->isVectorTy() && !has_ret_attr)
-            retVal = createCast(retVal, retTyp, Instruction::BitCast);
-        }
-        createReturn(retVal);
-      }
+    case AArch64::RET:
+      doReturn();
       break;
-    }
 
     case AArch64::B: {
       const auto &op = CurInst->getOperand(0);
@@ -3053,10 +3053,17 @@ public:
 
       // machine code falls through but LLVM isn't allowed to
       if (!LLVMBB->getTerminator()) {
-        assert(MCBB->getSuccs().size() == 1 &&
-               "expected 1 successor for block with no terminator");
-        auto *dst = getBBByName(*Fn, MCBB->getSuccs()[0]->getName());
-        createBranch(dst);
+        auto succs = MCBB->getSuccs().size();
+        if (succs == 0) {
+          // this should only happen when we have a function with a
+          // single, empty basic block, which should only when we
+          // started with an LLVM function whose body is something
+          // like UNREACHABLE
+          doReturn();
+        } else if (succs == 1) {
+          auto *dst = getBBByName(*Fn, MCBB->getSuccs()[0]->getName());
+          createBranch(dst);
+        }
       }
     }
     return Fn;
@@ -3077,6 +3084,7 @@ private:
   MCInstrAnalysis *IA;
   MCInstPrinter *IP;
   MCRegisterInfo *MRI;
+  bool FunctionEnded = false;
 
 public:
   MCFunction MF;
@@ -3211,10 +3219,20 @@ public:
   }
 
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
-    string cur_label = Symbol->getName().str();
-    *out << "[[emitLabel " << cur_label << "]]\n";
-    curBB = MF.addBlock(cur_label);
-    prev_line = ASMLine::label;
+    string Lab = Symbol->getName().str();
+    *out << "[[emitLabel " << Lab << "]]\n";
+    if (Lab == ".Lfunc_end0")
+      FunctionEnded = true;
+    if (!FunctionEnded) {
+      curBB = MF.addBlock(Lab);
+      MCInst nop;
+      // subsequent logic can be a bit simpler if we assume each BB
+      // contains at least one instruction. might need to revisit this
+      // later on.
+      nop.setOpcode(AArch64::SEH_Nop);
+      curBB->addInstBegin(std::move(nop));
+      prev_line = ASMLine::label;
+    }
   }
 
   string findTargetLabel(MCInst &Inst) {
