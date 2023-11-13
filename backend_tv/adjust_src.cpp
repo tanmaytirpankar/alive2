@@ -156,6 +156,7 @@ Function *adjustSrcReturn(Function *srcFn) {
   return NF;
 }
 
+#if 0
 void checkTy(Type *t, const DataLayout &DL) {
   if (t->isVoidTy())
     return;
@@ -181,6 +182,7 @@ void checkTy(Type *t, const DataLayout &DL) {
     exit(-1);
   }
 }
+#endif
 
 void checkSupport(Instruction &i, const DataLayout &DL) {
   for (auto &op : i.operands()) {
@@ -222,14 +224,8 @@ void checkSupport(Instruction &i, const DataLayout &DL) {
         exit(-1);
       }
     } else {
-      // FIXME
-      if (ci->arg_size() > 1) {
-        *out << "\nERROR: only zero or one arguments supported for now\n\n";
-        exit(-1);
-      }
-      if (ci->arg_size() == 1)
-        checkTy(ci->getArgOperand(0)->getType(), DL);
-      checkTy(ci->getType(), DL);
+      *out << "\nERROR: calls not supported\n\n";
+      exit(-1);
     }
     auto callee = (string)ci->getCalledFunction()->getName();
     if (callee.find("llvm.objc") != string::npos) {
