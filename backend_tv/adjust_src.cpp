@@ -317,6 +317,10 @@ Function *adjustSrc(Function *srcFn) {
     ++i;
   }
 
+  auto RT = dyn_cast<VectorType>(srcFn->getReturnType());
+  if (RT)
+    checkVectorTy(RT);
+
   auto &DL = srcFn->getParent()->getDataLayout();
   unsigned llvmInstCount = 0;
   for (auto &bb : *srcFn) {
