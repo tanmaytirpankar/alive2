@@ -297,7 +297,7 @@ class arm2llvm {
       AArch64::CCMNWr,   AArch64::STRBBui,  AArch64::STRBui,
       AArch64::STPWi,    AArch64::STRHHui,  AArch64::STRHui,
       AArch64::STURWi,   AArch64::STRSui,   AArch64::LDPWi,
-      AArch64::STRWpre};
+      AArch64::STRWpre,  AArch64::FADDSrr};
 
   const set<int> instrs_64 = {
       AArch64::ADDXrx,    AArch64::ADDSXrs,   AArch64::ADDSXri,
@@ -539,6 +539,10 @@ class arm2llvm {
 
   BinaryOperator *createAdd(Value *a, Value *b) {
     return BinaryOperator::Create(Instruction::Add, a, b, nextName(), LLVMBB);
+  }
+
+  BinaryOperator *createFAdd(Value *a, Value *b) {
+    return BinaryOperator::Create(Instruction::FAdd, a, b, nextName(), LLVMBB);
   }
 
   BinaryOperator *createSub(Value *a, Value *b) {
@@ -1136,7 +1140,7 @@ class arm2llvm {
       createReturn(nullptr);
     } else {
       Value *retVal = nullptr;
-      if (retTyp->isVectorTy()) {
+      if (retTyp->isVectorTy() || retTyp->isFloatingPointTy()) {
         retVal = readFromReg(AArch64::Q0);
       } else {
         retVal = readFromReg(AArch64::X0);
@@ -1158,7 +1162,8 @@ class arm2llvm {
           retVal = createZExt(trunc, i64);
         }
 
-        if (retTyp->isVectorTy() && !has_ret_attr)
+        if ((retTyp->isVectorTy() || retTyp->isFloatingPointTy()) &&
+            !has_ret_attr)
           retVal = createCast(retVal, retTyp, Instruction::BitCast);
       }
       createReturn(retVal);
@@ -1431,6 +1436,17 @@ public:
       auto shift_amt =
           createBinop(b, getIntConst(size, size), Instruction::URem);
       auto res = createAShr(a, shift_amt);
+      updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::FADDSrr: {
+      auto a = createCast(readFromOperand(1), Type::getFloatTy(Ctx),
+                          Instruction::BitCast);
+      auto b = createCast(readFromOperand(2), Type::getFloatTy(Ctx),
+                          Instruction::BitCast);
+      auto res =
+          createCast(createFAdd(a, b), getIntTy(32), Instruction::BitCast);
       updateOutputReg(res);
       break;
     }
@@ -2982,6 +2998,9 @@ public:
     auto i32 = getIntTy(32);
     auto i64 = getIntTy(64);
     auto origWidth = DL.getTypeSizeInBits(V->getType());
+    // FIXME -- do sext/zext for these
+    if (V->getType()->isFloatingPointTy())
+      return V;
     if (V->getType()->isVectorTy())
       V = createCast(V, getIntTy(origWidth), Instruction::BitCast, nextName());
     if (origWidth < 64) {
@@ -3133,7 +3152,8 @@ public:
       }
 
       // first 8 vector/FP parameters go in the first 8 vector registers
-      if ((argTy->isVectorTy() || argTy->isFloatingPointTy()) && vecArgNum < 8) {
+      if ((argTy->isVectorTy() || argTy->isFloatingPointTy()) &&
+          vecArgNum < 8) {
         auto Reg = AArch64::Q0 + vecArgNum;
         createStore(val, RegFile[Reg]);
         ++vecArgNum;

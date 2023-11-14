@@ -76,9 +76,10 @@ Function *adjustSrcReturn(Function *srcFn) {
   auto *origRetTy = srcFn->getReturnType();
 
   if (!(origRetTy->isIntegerTy() || origRetTy->isVectorTy() ||
-        origRetTy->isPointerTy() || origRetTy->isVoidTy())) {
+        origRetTy->isPointerTy() || origRetTy->isVoidTy() ||
+        origRetTy->isFloatingPointTy())) {
     *out << "\nERROR: Unsupported Function Return Type: Only int, ptr, vec, "
-            "and void supported for now\n\n";
+            "float, and void supported for now\n\n";
     exit(-1);
   }
 
