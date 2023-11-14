@@ -1123,7 +1123,9 @@ class arm2llvm {
      * values. these values were saved at the top of the function so
      * the trivially dominate all returns
      */
-    // TODO: check FP and LR? vector registers??
+    // TODO: make sure code doesn't touch 16, 17?
+    // check FP and LR?
+    // z8-z23 are callee-saved
     assertSame(initialSP, readFromReg(AArch64::SP));
     for (unsigned r = 19; r <= 28; ++r)
       assertSame(initialReg[r], readFromReg(AArch64::X0 + r));
