@@ -333,10 +333,10 @@ class arm2llvm {
       AArch64::XTNv8i8,
   };
 
-  const set<int> instrs_128 = {AArch64::FMOVXDr,  AArch64::INSvi64gpr,
-                               AArch64::LDPQi,    AArch64::STPQi,
-                               AArch64::ADDv8i16, AArch64::UADDLv8i8_v8i16,
-                               AArch64::LDRQui,   AArch64::STRQui};
+  const set<int> instrs_128 = {
+      AArch64::FMOVXDr,  AArch64::INSvi64gpr, AArch64::LDPQi,
+      AArch64::STPQi,    AArch64::ADDv8i16,   AArch64::UADDLv8i8_v8i16,
+      AArch64::ADDv4i32, AArch64::LDRQui,     AArch64::STRQui};
 
   bool has_s(int instr) {
     return s_flag.contains(instr);
@@ -1434,8 +1434,9 @@ public:
       break;
     }
 
-    case AArch64::ADDv8i8:
     case AArch64::ADDv4i16:
+    case AArch64::ADDv4i32:
+    case AArch64::ADDv8i8:
     case AArch64::ADDv8i16:
     case AArch64::UADDLv8i8_v8i16: {
       auto a = readFromOperand(1);
@@ -1444,29 +1445,31 @@ public:
       int numElements;
 
       switch (opcode) {
-      case AArch64::UADDLv8i8_v8i16: {
-        a = createTrunc(a, getIntTy(64));
-        b = createTrunc(b, getIntTy(64));
-      }
-      case AArch64::ADDv8i8: {
-        numElements = 8;
-        elementTypeInBits = 8;
-        break;
-      }
-      case AArch64::ADDv4i16: {
+      case AArch64::ADDv4i16:
         numElements = 4;
         elementTypeInBits = 16;
         break;
-      }
-      case AArch64::ADDv8i16: {
+      case AArch64::ADDv4i32:
+        numElements = 4;
+        elementTypeInBits = 32;
+        break;
+      case AArch64::ADDv8i8:
+        numElements = 8;
+        elementTypeInBits = 8;
+        break;
+      case AArch64::ADDv8i16:
         numElements = 8;
         elementTypeInBits = 16;
         break;
-      }
-      default: {
+      case AArch64::UADDLv8i8_v8i16:
+        a = createTrunc(a, getIntTy(64));
+        b = createTrunc(b, getIntTy(64));
+        numElements = 8;
+        elementTypeInBits = 8;
+        break;
+      default:
         assert(false && "missed case");
         break;
-      }
       }
 
       updateOutputReg(createVectorAdd(a, b, elementTypeInBits, numElements));

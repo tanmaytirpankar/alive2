@@ -85,10 +85,17 @@ Function *adjustSrcReturn(Function *srcFn) {
   auto &DL = srcFn->getParent()->getDataLayout();
   origRetWidth = origRetTy->isVoidTy() ? 0 : DL.getTypeSizeInBits(origRetTy);
 
-  if (origRetWidth > 64) {
-    *out << "\nERROR: Unsupported Function Return: Only int/vec/ptr types 64 "
-            "bits or smaller supported for now\n\n";
-    exit(-1);
+  if (origRetTy->isVectorTy()) {
+    if (origRetWidth > 128) {
+      *out << "\nERROR: Unsupported Function Return: vector > 128 bits\n\n";
+      exit(-1);
+    }
+  } else {
+    if (origRetWidth > 64) {
+      *out << "\nERROR: Unsupported Function Return: Only int/vec/ptr types 64 "
+              "bits or smaller supported for now\n\n";
+      exit(-1);
+    }
   }
 
   has_ret_attr = srcFn->hasRetAttribute(Attribute::SExt) ||
@@ -273,10 +280,17 @@ Function *adjustSrc(Function *srcFn) {
     auto &DL = srcFn->getParent()->getDataLayout();
     auto orig_width = DL.getTypeSizeInBits(ty);
     cout << "size of arg " << i << " = " << orig_width << endl;
-    if (orig_width > 64) {
-      *out << "\nERROR: Unsupported function argument: Only integer / vector / "
-              "pointer parameters 64 bits or smaller supported for now\n\n";
-      exit(-1);
+    if (ty->isVectorTy()) {
+      if (orig_width > 128) {
+        *out << "\nERROR: Vector arguments >128 bits not supported\n\n";
+        exit(-1);
+      }
+    } else {
+      if (orig_width > 64) {
+        *out << "\nERROR: Unsupported function argument: Only integer / "
+                "pointer parameters 64 bits or smaller supported for now\n\n";
+        exit(-1);
+      }
     }
     ++i;
   }
