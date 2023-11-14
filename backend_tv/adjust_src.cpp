@@ -251,10 +251,6 @@ void checkSupport(Instruction &i, const DataLayout &DL) {
   }
 }
 
-bool isPowerOfTwo(unsigned n) {
-  return (n & (n - 1)) == 0;
-}
-
 void checkVectorTy(VectorType *Ty) {
   auto *EltTy = Ty->getElementType();
   if (auto *IntTy = dyn_cast<IntegerType>(EltTy)) {
@@ -264,13 +260,14 @@ void checkVectorTy(VectorType *Ty) {
       exit(-1);
     }
     auto Count = Ty->getElementCount().getFixedValue();
-    if (!isPowerOfTwo(Count)) {
-      *out << "\nERROR: Only vectors with a power-of-2 number of elements are "
-              "supported\n\n";
+    auto VecSize = (Count * Width) / 8;
+    if (VecSize != 8 && VecSize != 16) {
+      *out << "\nERROR: Only short vectors 8 and 16 bytes long are supported, "
+              "please see Section 5.4 of AAPCS64 for more details\n\n";
       exit(-1);
     }
   } else {
-    *out << "\nERROR: only vectors of integers supported for now\n\n";
+    *out << "\nERROR: Only vectors of integers supported for now\n\n";
     exit(-1);
   }
 }
@@ -281,7 +278,7 @@ namespace lifter {
 
 Function *adjustSrc(Function *srcFn) {
   if (srcFn->getCallingConv() != CallingConv::C) {
-    *out << "\nERROR: only the C calling convention is supported\n\n";
+    *out << "\nERROR: Only the C calling convention is supported\n\n";
     exit(-1);
   }
 
