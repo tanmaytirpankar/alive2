@@ -263,7 +263,8 @@ void checkVectorTy(VectorType *Ty) {
     auto VecSize = (Count * Width) / 8;
     if (VecSize != 8 && VecSize != 16) {
       *out << "\nERROR: Only short vectors 8 and 16 bytes long are supported, "
-              "please see Section 5.4 of AAPCS64 for more details\n\n";
+              "in parameters and return values; please see Section 5.4 of "
+              "AAPCS64 for more details\n\n";
       exit(-1);
     }
   } else {
