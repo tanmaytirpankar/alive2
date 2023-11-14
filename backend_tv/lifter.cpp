@@ -333,10 +333,11 @@ class arm2llvm {
       AArch64::STRXpre,   AArch64::XTNv8i8,
   };
 
-  const set<int> instrs_128 = {
-      AArch64::FMOVXDr,  AArch64::INSvi64gpr, AArch64::LDPQi,
-      AArch64::STPQi,    AArch64::ADDv8i16,   AArch64::UADDLv8i8_v8i16,
-      AArch64::ADDv4i32, AArch64::LDRQui,     AArch64::STRQui};
+  const set<int> instrs_128 = {AArch64::FMOVXDr,  AArch64::INSvi64gpr,
+                               AArch64::LDPQi,    AArch64::STPQi,
+                               AArch64::ADDv8i16, AArch64::UADDLv8i8_v8i16,
+                               AArch64::ADDv2i64, AArch64::ADDv4i32,
+                               AArch64::LDRQui,   AArch64::STRQui};
 
   bool has_s(int instr) {
     return s_flag.contains(instr);
@@ -1435,6 +1436,7 @@ public:
     }
 
     case AArch64::ADDv2i32:
+    case AArch64::ADDv2i64:
     case AArch64::ADDv4i16:
     case AArch64::ADDv4i32:
     case AArch64::ADDv8i8:
@@ -1449,6 +1451,10 @@ public:
       case AArch64::ADDv2i32:
         numElements = 2;
         elementTypeInBits = 32;
+        break;
+      case AArch64::ADDv2i64:
+        numElements = 2;
+        elementTypeInBits = 64;
         break;
       case AArch64::ADDv4i16:
         numElements = 4;
