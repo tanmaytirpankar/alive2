@@ -302,35 +302,35 @@ class arm2llvm {
   const set<int> instrs_64 = {
       AArch64::ADDXrx,    AArch64::ADDSXrs,   AArch64::ADDSXri,
       AArch64::ADDXrs,    AArch64::ADDXri,    AArch64::ADDSXrx,
-      AArch64::ADDv4i16,  AArch64::ADDv8i8,   AArch64::ADCXr,
-      AArch64::ADCSXr,    AArch64::ASRVXr,    AArch64::SUBXri,
-      AArch64::SUBXrs,    AArch64::SUBXrx,    AArch64::SUBSXrs,
-      AArch64::SUBSXri,   AArch64::SUBSXrx,   AArch64::SBFMXri,
-      AArch64::CSELXr,    AArch64::ANDXri,    AArch64::ANDXrr,
-      AArch64::ANDXrs,    AArch64::ANDSXri,   AArch64::ANDSXrr,
-      AArch64::ANDSXrs,   AArch64::MADDXrrr,  AArch64::MSUBXrrr,
-      AArch64::EORXri,    AArch64::CSINVXr,   AArch64::CSINCXr,
-      AArch64::MOVZXi,    AArch64::MOVNXi,    AArch64::MOVKXi,
-      AArch64::LSLVXr,    AArch64::LSRVXr,    AArch64::ORNXrs,
-      AArch64::UBFMXri,   AArch64::BFMXri,    AArch64::ORRXrs,
-      AArch64::ORRXri,    AArch64::SDIVXr,    AArch64::UDIVXr,
-      AArch64::EXTRXrri,  AArch64::EORXrs,    AArch64::SMADDLrrr,
-      AArch64::UMADDLrrr, AArch64::RORVXr,    AArch64::RBITXr,
-      AArch64::CLZXr,     AArch64::REVXr,     AArch64::CSNEGXr,
-      AArch64::BICXrs,    AArch64::BICSXrs,   AArch64::EONXrs,
-      AArch64::SMULHrr,   AArch64::UMULHrr,   AArch64::REV32Xr,
-      AArch64::REV16Xr,   AArch64::SMSUBLrrr, AArch64::UMSUBLrrr,
-      AArch64::PHI,       AArch64::TBZW,      AArch64::TBZX,
-      AArch64::TBNZW,     AArch64::TBNZX,     AArch64::B,
-      AArch64::CBZW,      AArch64::CBZX,      AArch64::CBNZW,
-      AArch64::CBNZX,     AArch64::CCMPXr,    AArch64::CCMPXi,
-      AArch64::LDRXui,    AArch64::LDRXpost,  AArch64::LDPXpost,
-      AArch64::LDPXi,     AArch64::LDRDui,    AArch64::STRDui,
-      AArch64::MSR,       AArch64::MRS,       AArch64::LDRSBXui,
-      AArch64::LDRSBXui,  AArch64::LDRSHXui,  AArch64::STRXui,
-      AArch64::STPXi,     AArch64::CCMNXi,    AArch64::CCMNXr,
-      AArch64::STURXi,    AArch64::ADRP,      AArch64::STRXpre,
-      AArch64::XTNv8i8,
+      AArch64::ADDv2i32,  AArch64::ADDv4i16,  AArch64::ADDv8i8,
+      AArch64::ADCXr,     AArch64::ADCSXr,    AArch64::ASRVXr,
+      AArch64::SUBXri,    AArch64::SUBXrs,    AArch64::SUBXrx,
+      AArch64::SUBSXrs,   AArch64::SUBSXri,   AArch64::SUBSXrx,
+      AArch64::SBFMXri,   AArch64::CSELXr,    AArch64::ANDXri,
+      AArch64::ANDXrr,    AArch64::ANDXrs,    AArch64::ANDSXri,
+      AArch64::ANDSXrr,   AArch64::ANDSXrs,   AArch64::MADDXrrr,
+      AArch64::MSUBXrrr,  AArch64::EORXri,    AArch64::CSINVXr,
+      AArch64::CSINCXr,   AArch64::MOVZXi,    AArch64::MOVNXi,
+      AArch64::MOVKXi,    AArch64::LSLVXr,    AArch64::LSRVXr,
+      AArch64::ORNXrs,    AArch64::UBFMXri,   AArch64::BFMXri,
+      AArch64::ORRXrs,    AArch64::ORRXri,    AArch64::SDIVXr,
+      AArch64::UDIVXr,    AArch64::EXTRXrri,  AArch64::EORXrs,
+      AArch64::SMADDLrrr, AArch64::UMADDLrrr, AArch64::RORVXr,
+      AArch64::RBITXr,    AArch64::CLZXr,     AArch64::REVXr,
+      AArch64::CSNEGXr,   AArch64::BICXrs,    AArch64::BICSXrs,
+      AArch64::EONXrs,    AArch64::SMULHrr,   AArch64::UMULHrr,
+      AArch64::REV32Xr,   AArch64::REV16Xr,   AArch64::SMSUBLrrr,
+      AArch64::UMSUBLrrr, AArch64::PHI,       AArch64::TBZW,
+      AArch64::TBZX,      AArch64::TBNZW,     AArch64::TBNZX,
+      AArch64::B,         AArch64::CBZW,      AArch64::CBZX,
+      AArch64::CBNZW,     AArch64::CBNZX,     AArch64::CCMPXr,
+      AArch64::CCMPXi,    AArch64::LDRXui,    AArch64::LDRXpost,
+      AArch64::LDPXpost,  AArch64::LDPXi,     AArch64::LDRDui,
+      AArch64::STRDui,    AArch64::MSR,       AArch64::MRS,
+      AArch64::LDRSBXui,  AArch64::LDRSBXui,  AArch64::LDRSHXui,
+      AArch64::STRXui,    AArch64::STPXi,     AArch64::CCMNXi,
+      AArch64::CCMNXr,    AArch64::STURXi,    AArch64::ADRP,
+      AArch64::STRXpre,   AArch64::XTNv8i8,
   };
 
   const set<int> instrs_128 = {
@@ -1434,6 +1434,7 @@ public:
       break;
     }
 
+    case AArch64::ADDv2i32:
     case AArch64::ADDv4i16:
     case AArch64::ADDv4i32:
     case AArch64::ADDv8i8:
@@ -1445,6 +1446,10 @@ public:
       int numElements;
 
       switch (opcode) {
+      case AArch64::ADDv2i32:
+        numElements = 2;
+        elementTypeInBits = 32;
+        break;
       case AArch64::ADDv4i16:
         numElements = 4;
         elementTypeInBits = 16;
