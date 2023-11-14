@@ -251,6 +251,30 @@ void checkSupport(Instruction &i, const DataLayout &DL) {
   }
 }
 
+bool isPowerOfTwo(unsigned n) {
+  return (n & (n - 1)) == 0;
+}
+
+void checkVectorTy(VectorType *Ty) {
+  auto *EltTy = Ty->getElementType();
+  if (auto *IntTy = dyn_cast<IntegerType>(EltTy)) {
+    auto Width = IntTy->getBitWidth();
+    if (Width != 8 && Width != 16 && Width != 32 && Width != 64) {
+      *out << "\nERROR: Only vectors of i8, i16, i32, i64 are supported\n\n";
+      exit(-1);
+    }
+    auto Count = Ty->getElementCount().getFixedValue();
+    if (!isPowerOfTwo(Count)) {
+      *out << "\nERROR: Only vectors with a power-of-2 number of elements are "
+              "supported\n\n";
+      exit(-1);
+    }
+  } else {
+    *out << "\nERROR: only vectors of integers supported for now\n\n";
+    exit(-1);
+  }
+}
+
 } // namespace
 
 namespace lifter {
@@ -281,6 +305,7 @@ Function *adjustSrc(Function *srcFn) {
     auto orig_width = DL.getTypeSizeInBits(ty);
     cout << "size of arg " << i << " = " << orig_width << endl;
     if (ty->isVectorTy()) {
+      checkVectorTy(dyn_cast<VectorType>(ty));
       if (orig_width > 128) {
         *out << "\nERROR: Vector arguments >128 bits not supported\n\n";
         exit(-1);
