@@ -299,10 +299,6 @@ Function *adjustSrc(Function *srcFn) {
       *out << "\nERROR: we don't support arrays in arguments yet\n\n";
       exit(-1);
     }
-    if (ty->isFloatTy()) {
-      *out << "\nERROR: we don't support floats in arguments yet\n\n";
-      exit(-1);
-    }
     auto &DL = srcFn->getParent()->getDataLayout();
     auto orig_width = DL.getTypeSizeInBits(ty);
     cout << "size of arg " << i << " = " << orig_width << endl;

@@ -3132,8 +3132,8 @@ public:
         goto end;
       }
 
-      // first 8 vector parameters go in the first 8 vector registers
-      if (argTy->isVectorTy() && vecArgNum < 8) {
+      // first 8 vector/FP parameters go in the first 8 vector registers
+      if ((argTy->isVectorTy() || argTy->isFloatingPointTy()) && vecArgNum < 8) {
         auto Reg = AArch64::Q0 + vecArgNum;
         createStore(val, RegFile[Reg]);
         ++vecArgNum;
