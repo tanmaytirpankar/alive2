@@ -295,6 +295,10 @@ Function *adjustSrc(Function *srcFn) {
       *out << "\nERROR: we don't support structures in arguments yet\n\n";
       exit(-1);
     }
+    if (ty->isArrayTy()) {
+      *out << "\nERROR: we don't support arrays in arguments yet\n\n";
+      exit(-1);
+    }
     if (ty->isFloatTy()) {
       *out << "\nERROR: we don't support floats in arguments yet\n\n";
       exit(-1);
@@ -330,15 +334,9 @@ Function *adjustSrc(Function *srcFn) {
       ++llvmInstCount;
     }
   }
-
   *out << "source function has " << llvmInstCount << " LLVM instructions\n";
 
-  srcFn = adjustSrcReturn(srcFn);
-
-  *out << "\n---------- src.ll (args/return adjusted) -------\n";
-  *out << moduleToString(srcFn->getParent());
-
-  return srcFn;
+  return adjustSrcReturn(srcFn);
 }
 
 } // namespace lifter
