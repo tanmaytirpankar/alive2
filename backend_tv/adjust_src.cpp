@@ -221,7 +221,7 @@ void checkSupport(Instruction &i, const DataLayout &DL) {
     exit(-1);
   }
   if (auto *li = dyn_cast<LoadInst>(&i)) {
-    auto *ty = li->getPointerOperandType();
+    auto *ty = li->getType();
     unsigned w = ty->getScalarSizeInBits();
     if ((w % 8) != 0) {
       *out << "\nERROR: loads that have padding are disabled until we fix some "
