@@ -337,7 +337,8 @@ class arm2llvm {
       AArch64::FMOVXDr,  AArch64::INSvi64gpr, AArch64::LDPQi,
       AArch64::STPQi,    AArch64::ADDv8i16,   AArch64::UADDLv8i8_v8i16,
       AArch64::ADDv2i64, AArch64::ADDv4i32,   AArch64::ADDv16i8,
-      AArch64::LDRQui,   AArch64::STRQui};
+      AArch64::LDRQui,   AArch64::STRQui,     AArch64::FMOVDi,
+      AArch64::FMOVSi,   AArch64::FMOVWSr};
 
   bool has_s(int instr) {
     return s_flag.contains(instr);
@@ -1114,6 +1115,29 @@ class arm2llvm {
     CallInst::Create(assert_decl, {c}, "", LLVMBB);
   }
 
+  inline uint64_t Replicate(uint64_t bit, int N) {
+    if (!bit)
+      return 0;
+    if (N == 64)
+      return 0xffffffffffffffffLL;
+    return (1ULL << N) - 1;
+  }
+
+  // this and the helper function above are from:
+  // https://github.com/agustingianni/retools
+  inline uint64_t VFPExpandImm(uint64_t imm8, unsigned N) {
+    unsigned E = ((N == 32) ? 8 : 11) - 2; // E in {6, 9}
+    unsigned F = N - E - 1;                // F in {25, 54}
+    uint64_t imm8_6 = (imm8 >> 6) & 1;     // imm8<6>
+    uint64_t sign = (imm8 >> 7) & 1;       // imm8<7>
+    // NOT(imm8<6>):Replicate(imm8<6>,{5, 8})
+    uint64_t exp = ((imm8_6 ^ 1) << (E - 1)) | Replicate(imm8_6, E - 1);
+    // imm8<5:0> : Zeros({19, 48})
+    uint64_t frac = ((imm8 & 0x3f) << (F - 6)) | Replicate(0, F - 6);
+    uint64_t res = (sign << (E + F)) | (exp << F) | frac;
+    return res;
+  }
+
   void doReturn() {
     auto i32 = getIntTy(32);
     auto i64 = getIntTy(64);
@@ -1433,6 +1457,52 @@ public:
           createBinop(b, getIntConst(size, size), Instruction::URem);
       auto res = createAShr(a, shift_amt);
       updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::FMOVWSr:
+    case AArch64::FMOVXDr: {
+      auto v = readFromOperand(1);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::FMOVSi:
+    case AArch64::FMOVDi: {
+      auto imm = CurInst->getOperand(1).getImm();
+      assert(imm <= 256);
+      int w = (opcode == AArch64::FMOVSi) ? 32 : 64;
+      auto floatVal = getIntConst(VFPExpandImm(imm, w), 64);
+      updateOutputReg(floatVal);
+      break;
+    }
+
+    // assuming that the source is always an x register
+    // This might not be the case but we need to look at the assembly emitter
+    case AArch64::INSvi64gpr: {
+      assert(false && "need to implement INSvi64gpr");
+#if 0
+      auto &op_0 = CurInst->getOperand(0);
+      auto &op_1 = CurInst->getOperand(1);
+      assert(op_0.isReg() && op_1.isReg());
+      assert((op_0.getReg() == op_1.getReg()) &&
+             "this form of INSvi64gpr is not supported yet");
+      auto op_index = getImm(2);
+      auto val = readFromOperand(3);
+      auto q_reg_val = cur_vol_regs[MCBB][op_0.getReg()];
+      // FIXME make this a utility function that uses index and size
+      auto mask = getIntConst(-1, 128);
+
+      if (op_index > 0) {
+        mask = createShl(mask, getIntConst(64, 128));
+        val = createShl(val, getIntConst(64, 128));
+      }
+
+      auto q_cleared = createShl(q_reg_val, mask);
+      auto mov_res = createAnd(q_cleared, val);
+      updateOutputReg(mov_res);
+      cur_vol_regs[MCBB][op_0.getReg()] = mov_res;
+#endif
       break;
     }
 
@@ -2422,56 +2492,6 @@ public:
       auto ret =
           createFShr(reverse_val, reverse_val, getIntConst(size / 2, size));
       updateOutputReg(ret);
-      break;
-    }
-
-    // assuming that the source is always an x register
-    // This might not be the case but we need to look at the assembly emitter
-    case AArch64::FMOVXDr: {
-      assert(false && "need to implement FMOVXDr");
-#if 0
-      // zero extended x register to 128 bits
-      auto val = readFromOperand(1);
-      auto &op_0 = CurInst->getOperand(0);
-      auto q_reg_val = cur_vol_regs[MCBB][op_0.getReg()];
-      assert(q_reg_val && "volatile register's value not in cache");
-
-      // zero out the bottom 64-bits of the vector register by shifting
-      auto q_shift = createLShr(q_reg_val, getIntConst(64, 128));
-      auto q_cleared = createShl(q_shift, getIntConst(64, 128));
-      auto mov_res = createOr(q_cleared, val);
-      updateOutputReg(mov_res);
-      cur_vol_regs[MCBB][op_0.getReg()] = mov_res;
-#endif
-      break;
-    }
-
-    // assuming that the source is always an x register
-    // This might not be the case but we need to look at the assembly emitter
-    case AArch64::INSvi64gpr: {
-      assert(false && "need to implement INSvi64gpr");
-#if 0
-      auto &op_0 = CurInst->getOperand(0);
-      auto &op_1 = CurInst->getOperand(1);
-      assert(op_0.isReg() && op_1.isReg());
-      assert((op_0.getReg() == op_1.getReg()) &&
-             "this form of INSvi64gpr is not supported yet");
-      auto op_index = getImm(2);
-      auto val = readFromOperand(3);
-      auto q_reg_val = cur_vol_regs[MCBB][op_0.getReg()];
-      // FIXME make this a utility function that uses index and size
-      auto mask = getIntConst(-1, 128);
-
-      if (op_index > 0) {
-        mask = createShl(mask, getIntConst(64, 128));
-        val = createShl(val, getIntConst(64, 128));
-      }
-
-      auto q_cleared = createShl(q_reg_val, mask);
-      auto mov_res = createAnd(q_cleared, val);
-      updateOutputReg(mov_res);
-      cur_vol_regs[MCBB][op_0.getReg()] = mov_res;
-#endif
       break;
     }
 
