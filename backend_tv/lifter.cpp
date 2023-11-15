@@ -297,7 +297,8 @@ class arm2llvm {
       AArch64::CCMNWr,   AArch64::STRBBui,  AArch64::STRBui,
       AArch64::STPWi,    AArch64::STRHHui,  AArch64::STRHui,
       AArch64::STURWi,   AArch64::STRSui,   AArch64::LDPWi,
-      AArch64::STRWpre,  AArch64::FADDSrr,  AArch64::FSUBSrr};
+      AArch64::STRWpre,  AArch64::FADDSrr,  AArch64::FSUBSrr,
+      AArch64::FCMPSrr};
 
   const set<int> instrs_64 = {
       AArch64::ADDXrx,    AArch64::ADDSXrs,   AArch64::ADDSXri,
@@ -332,7 +333,7 @@ class arm2llvm {
       AArch64::STRXui,    AArch64::STPXi,     AArch64::CCMNXi,
       AArch64::CCMNXr,    AArch64::STURXi,    AArch64::ADRP,
       AArch64::STRXpre,   AArch64::XTNv8i8,   AArch64::FADDDrr,
-      AArch64::FSUBDrr};
+      AArch64::FSUBDrr,   AArch64::FCMPDrr};
 
   const set<int> instrs_128 = {
       AArch64::FMOVXDr,  AArch64::INSvi64gpr,      AArch64::LDPQi,
@@ -523,6 +524,10 @@ class arm2llvm {
 
   ICmpInst *createICmp(ICmpInst::Predicate p, Value *a, Value *b) {
     return new ICmpInst(*LLVMBB, p, a, b, nextName());
+  }
+
+  FCmpInst *createFCmp(FCmpInst::Predicate p, Value *a, Value *b) {
+    return new FCmpInst(*LLVMBB, p, a, b, nextName());
   }
 
   BinaryOperator *createBinop(Value *a, Value *b, Instruction::BinaryOps op) {
@@ -1537,6 +1542,25 @@ public:
       auto res =
           createCast(createBinop(a, b, op), sizeTy, Instruction::BitCast);
       updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::FCMPSrr:
+    case AArch64::FCMPDrr: {
+      Type *fTy;
+      if (opcode == AArch64::FCMPSrr) {
+        fTy = Type::getFloatTy(Ctx);
+      } else if (opcode == AArch64::FCMPDrr) {
+        fTy = Type::getDoubleTy(Ctx);
+      } else {
+        assert(false && "missed a case");
+      }
+      auto a = createCast(readFromOperand(0), fTy, Instruction::BitCast);
+      auto b = createCast(readFromOperand(1), fTy, Instruction::BitCast);
+      setN(createFCmp(FCmpInst::Predicate::FCMP_OLT, a, b));
+      setZ(createFCmp(FCmpInst::Predicate::FCMP_OEQ, a, b));
+      setC(createFCmp(FCmpInst::Predicate::FCMP_UGT, a, b));
+      setV(createFCmp(FCmpInst::Predicate::FCMP_UNO, a, b));
       break;
     }
 
