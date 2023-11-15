@@ -220,6 +220,14 @@ void checkSupport(Instruction &i, const DataLayout &DL) {
     *out << "\nERROR: int2ptr instructions not supported yet\n\n";
     exit(-1);
   }
+  if (auto *li = dyn_cast<LoadInst>(&i)) {
+    auto *ty = li->getPointerOperandType();
+    unsigned w = ty->getScalarSizeInBits();
+    if ((w % 8) != 0) {
+      *out << "\nERROR: loads that have padding are disabled until we fix some ABI issues\n\n";
+      exit(-1);
+    }
+  }
   if (isa<InvokeInst>(&i)) {
     *out << "\nERROR: invoke instructions not supported\n\n";
     exit(-1);
