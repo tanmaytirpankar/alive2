@@ -303,6 +303,7 @@ class arm2llvm {
       AArch64::ADDXrx,    AArch64::ADDSXrs,   AArch64::ADDSXri,
       AArch64::ADDXrs,    AArch64::ADDXri,    AArch64::ADDSXrx,
       AArch64::ADDv2i32,  AArch64::ADDv4i16,  AArch64::ADDv8i8,
+      AArch64::SUBv2i32,  AArch64::SUBv4i16,  AArch64::SUBv8i8,
       AArch64::ADCXr,     AArch64::ADCSXr,    AArch64::ASRVXr,
       AArch64::SUBXri,    AArch64::SUBXrs,    AArch64::SUBXrx,
       AArch64::SUBSXrs,   AArch64::SUBSXri,   AArch64::SUBSXrx,
@@ -334,11 +335,13 @@ class arm2llvm {
       AArch64::FSUBDrr};
 
   const set<int> instrs_128 = {
-      AArch64::FMOVXDr,  AArch64::INSvi64gpr, AArch64::LDPQi,
-      AArch64::STPQi,    AArch64::ADDv8i16,   AArch64::UADDLv8i8_v8i16,
-      AArch64::ADDv2i64, AArch64::ADDv4i32,   AArch64::ADDv16i8,
-      AArch64::LDRQui,   AArch64::STRQui,     AArch64::FMOVDi,
-      AArch64::FMOVSi,   AArch64::FMOVWSr};
+      AArch64::FMOVXDr,  AArch64::INSvi64gpr,      AArch64::LDPQi,
+      AArch64::STPQi,    AArch64::ADDv8i16,        AArch64::UADDLv8i8_v8i16,
+      AArch64::ADDv2i64, AArch64::ADDv4i32,        AArch64::ADDv16i8,
+      AArch64::SUBv8i16, AArch64::USUBLv8i8_v8i16, AArch64::SUBv2i64,
+      AArch64::SUBv4i32, AArch64::SUBv16i8,        AArch64::LDRQui,
+      AArch64::STRQui,   AArch64::FMOVDi,          AArch64::FMOVSi,
+      AArch64::FMOVWSr};
 
   bool has_s(int instr) {
     return s_flag.contains(instr);
@@ -636,9 +639,9 @@ class arm2llvm {
 
   // Creates LLVM IR instructions which takes two values with the same number of
   // bits, bit casting them to vectors of numElements elements of size
-  // elementTypeInBits and adding them.
-  BinaryOperator *createVectorAdd(Value *a, Value *b, int elementTypeInBits,
-                                  int numElements) {
+  // elementTypeInBits and doing an operation on them.
+  BinaryOperator *createVectorOp(Instruction::BinaryOps op, Value *a, Value *b,
+                                 int elementTypeInBits, int numElements) {
     assert(getBitWidth(a) == getBitWidth(b) &&
            "Expected values of same bit width");
 
@@ -659,6 +662,7 @@ class arm2llvm {
     // Vector extension for instructions that require it
     switch (CurInst->getOpcode()) {
     case AArch64::UADDLv8i8_v8i16:
+    case AArch64::USUBLv8i8_v8i16:
       a_vector = createZExt(
           a_vector, VectorType::get(getIntTy(2 * elementTypeInBits),
                                     ElementCount::getFixed(numElements)));
@@ -667,9 +671,7 @@ class arm2llvm {
                                     ElementCount::getFixed(numElements)));
       break;
     }
-
-    return BinaryOperator::Create(Instruction::Add, a_vector, b_vector,
-                                  nextName(), LLVMBB);
+    return createBinop(a_vector, b_vector, op);
   }
 
   // Returns Bit Width of Value V
@@ -1545,42 +1547,84 @@ public:
     case AArch64::ADDv8i8:
     case AArch64::ADDv8i16:
     case AArch64::ADDv16i8:
-    case AArch64::UADDLv8i8_v8i16: {
+    case AArch64::UADDLv8i8_v8i16:
+    case AArch64::SUBv2i32:
+    case AArch64::SUBv2i64:
+    case AArch64::SUBv4i16:
+    case AArch64::SUBv4i32:
+    case AArch64::SUBv8i8:
+    case AArch64::SUBv8i16:
+    case AArch64::SUBv16i8:
+    case AArch64::USUBLv8i8_v8i16: {
       auto a = readFromOperand(1);
       auto b = readFromOperand(2);
+
+      Instruction::BinaryOps op;
+      switch (opcode) {
+      case AArch64::ADDv2i32:
+      case AArch64::ADDv2i64:
+      case AArch64::ADDv4i16:
+      case AArch64::ADDv4i32:
+      case AArch64::ADDv8i8:
+      case AArch64::ADDv8i16:
+      case AArch64::ADDv16i8:
+      case AArch64::UADDLv8i8_v8i16:
+        op = Instruction::Add;
+        break;
+      case AArch64::SUBv2i32:
+      case AArch64::SUBv2i64:
+      case AArch64::SUBv4i16:
+      case AArch64::SUBv4i32:
+      case AArch64::SUBv8i8:
+      case AArch64::SUBv8i16:
+      case AArch64::SUBv16i8:
+      case AArch64::USUBLv8i8_v8i16:
+        op = Instruction::Sub;
+        break;
+      default:
+        assert(false && "missed a case");
+      }
+
       int elementTypeInBits;
       int numElements;
-
       switch (opcode) {
+      case AArch64::SUBv2i32:
       case AArch64::ADDv2i32:
         numElements = 2;
         elementTypeInBits = 32;
         break;
       case AArch64::ADDv2i64:
+      case AArch64::SUBv2i64:
         numElements = 2;
         elementTypeInBits = 64;
         break;
       case AArch64::ADDv4i16:
+      case AArch64::SUBv4i16:
         numElements = 4;
         elementTypeInBits = 16;
         break;
       case AArch64::ADDv4i32:
+      case AArch64::SUBv4i32:
         numElements = 4;
         elementTypeInBits = 32;
         break;
       case AArch64::ADDv8i8:
+      case AArch64::SUBv8i8:
         numElements = 8;
         elementTypeInBits = 8;
         break;
       case AArch64::ADDv8i16:
+      case AArch64::SUBv8i16:
         numElements = 8;
         elementTypeInBits = 16;
         break;
       case AArch64::ADDv16i8:
+      case AArch64::SUBv16i8:
         numElements = 16;
         elementTypeInBits = 8;
         break;
       case AArch64::UADDLv8i8_v8i16:
+      case AArch64::USUBLv8i8_v8i16:
         a = createTrunc(a, getIntTy(64));
         b = createTrunc(b, getIntTy(64));
         numElements = 8;
@@ -1591,7 +1635,7 @@ public:
         break;
       }
 
-      updateOutputReg(createVectorAdd(a, b, elementTypeInBits, numElements));
+      updateOutputReg(createVectorOp(op, a, b, elementTypeInBits, numElements));
       break;
     }
 

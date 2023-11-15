@@ -224,7 +224,8 @@ void checkSupport(Instruction &i, const DataLayout &DL) {
     auto *ty = li->getPointerOperandType();
     unsigned w = ty->getScalarSizeInBits();
     if ((w % 8) != 0) {
-      *out << "\nERROR: loads that have padding are disabled until we fix some ABI issues\n\n";
+      *out << "\nERROR: loads that have padding are disabled until we fix some "
+              "ABI issues\n\n";
       exit(-1);
     }
   }
