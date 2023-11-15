@@ -297,7 +297,7 @@ class arm2llvm {
       AArch64::CCMNWr,   AArch64::STRBBui,  AArch64::STRBui,
       AArch64::STPWi,    AArch64::STRHHui,  AArch64::STRHui,
       AArch64::STURWi,   AArch64::STRSui,   AArch64::LDPWi,
-      AArch64::STRWpre,  AArch64::FADDSrr};
+      AArch64::STRWpre,  AArch64::FADDSrr,  AArch64::FSUBSrr};
 
   const set<int> instrs_64 = {
       AArch64::ADDXrx,    AArch64::ADDSXrs,   AArch64::ADDSXri,
@@ -330,8 +330,8 @@ class arm2llvm {
       AArch64::LDRSBXui,  AArch64::LDRSBXui,  AArch64::LDRSHXui,
       AArch64::STRXui,    AArch64::STPXi,     AArch64::CCMNXi,
       AArch64::CCMNXr,    AArch64::STURXi,    AArch64::ADRP,
-      AArch64::STRXpre,   AArch64::XTNv8i8,
-  };
+      AArch64::STRXpre,   AArch64::XTNv8i8,   AArch64::FADDDrr,
+      AArch64::FSUBDrr};
 
   const set<int> instrs_128 = {
       AArch64::FMOVXDr,  AArch64::INSvi64gpr, AArch64::LDPQi,
@@ -539,10 +539,6 @@ class arm2llvm {
 
   BinaryOperator *createAdd(Value *a, Value *b) {
     return BinaryOperator::Create(Instruction::Add, a, b, nextName(), LLVMBB);
-  }
-
-  BinaryOperator *createFAdd(Value *a, Value *b) {
-    return BinaryOperator::Create(Instruction::FAdd, a, b, nextName(), LLVMBB);
   }
 
   BinaryOperator *createSub(Value *a, Value *b) {
@@ -1440,13 +1436,34 @@ public:
       break;
     }
 
-    case AArch64::FADDSrr: {
-      auto a = createCast(readFromOperand(1), Type::getFloatTy(Ctx),
-                          Instruction::BitCast);
-      auto b = createCast(readFromOperand(2), Type::getFloatTy(Ctx),
-                          Instruction::BitCast);
+    case AArch64::FADDSrr:
+    case AArch64::FADDDrr:
+    case AArch64::FSUBSrr:
+    case AArch64::FSUBDrr: {
+      Instruction::BinaryOps op;
+      if (opcode == AArch64::FADDSrr || opcode == AArch64::FADDDrr) {
+        op = Instruction::FAdd;
+      } else if (opcode == AArch64::FSUBSrr || opcode == AArch64::FSUBDrr) {
+        op = Instruction::FSub;
+      } else {
+        assert(false && "missed a case");
+      }
+
+      Type *fTy;
+      if (opcode == AArch64::FADDSrr || opcode == AArch64::FSUBSrr) {
+        fTy = Type::getFloatTy(Ctx);
+      } else if (opcode == AArch64::FADDDrr || opcode == AArch64::FSUBDrr) {
+        fTy = Type::getDoubleTy(Ctx);
+      } else {
+        assert(false && "missed a case");
+      }
+
+      auto a = createCast(readFromOperand(1), fTy, Instruction::BitCast);
+      auto b = createCast(readFromOperand(2), fTy, Instruction::BitCast);
+
+      auto sizeTy = getIntTy(getInstSize(opcode));
       auto res =
-          createCast(createFAdd(a, b), getIntTy(32), Instruction::BitCast);
+          createCast(createBinop(a, b, op), sizeTy, Instruction::BitCast);
       updateOutputReg(res);
       break;
     }
