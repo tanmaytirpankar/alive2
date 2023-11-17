@@ -336,7 +336,7 @@ class arm2llvm {
       AArch64::FSUBDrr,   AArch64::FCMPDrr};
 
   const set<int> instrs_128 = {
-      AArch64::FMOVXDr,  AArch64::INSvi64gpr,      AArch64::LDPQi,
+      AArch64::FMOVXDr,  AArch64::LDPQi,
       AArch64::STPQi,    AArch64::ADDv8i16,        AArch64::UADDLv8i8_v8i16,
       AArch64::ADDv2i64, AArch64::ADDv4i32,        AArch64::ADDv16i8,
       AArch64::SUBv8i16, AArch64::USUBLv8i8_v8i16, AArch64::SUBv2i64,
