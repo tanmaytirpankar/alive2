@@ -3182,12 +3182,13 @@ public:
     // iterate through globals of the LLVM srnFn's parent module
     for (auto &srcFnGlobal : srcFn.getParent()->globals()) {
       // If the global has not been created yet, create it
-      if (globals[srcFnGlobal.getName().str()] == nullptr) {
+      auto name = srcFnGlobal.getName();
+      if (globals[name.str()] == nullptr) {
         auto *AT = ArrayType::get(
             i8, srcFnGlobal.getValueType()->getPrimitiveSizeInBits() / 8);
         auto *g = new GlobalVariable(*LiftedModule, AT, false,
                                      GlobalValue::LinkageTypes::ExternalLinkage,
-                                     nullptr, srcFnGlobal.getName());
+                                     nullptr, name);
         g->setAlignment(MaybeAlign(16));
         globals[srcFnGlobal.getName().str()] = g;
       }
