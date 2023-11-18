@@ -1,3 +1,8 @@
+source_filename = "M2"
+target datalayout = "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128"
+target triple = "aarch64-linux-gnu"
+
+
 define dso_local i32 @two_stars(ptr noundef %0) #0 {
   %2 = alloca ptr, align 8
   store ptr %0, ptr %2, align 8

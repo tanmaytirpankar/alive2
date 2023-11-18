@@ -132,7 +132,7 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   if (opt_debug_regs)
     exit(0);
 
-  *out << "about to compare functions\n";
+  *out << "\n";
   out->flush();
 
   if (!opt_skip_verification)
