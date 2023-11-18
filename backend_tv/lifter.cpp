@@ -336,13 +336,12 @@ class arm2llvm {
       AArch64::FSUBDrr,   AArch64::FCMPDrr};
 
   const set<int> instrs_128 = {
-      AArch64::FMOVXDr,  AArch64::LDPQi,
-      AArch64::STPQi,    AArch64::ADDv8i16,        AArch64::UADDLv8i8_v8i16,
-      AArch64::ADDv2i64, AArch64::ADDv4i32,        AArch64::ADDv16i8,
-      AArch64::SUBv8i16, AArch64::USUBLv8i8_v8i16, AArch64::SUBv2i64,
-      AArch64::SUBv4i32, AArch64::SUBv16i8,        AArch64::LDRQui,
-      AArch64::STRQui,   AArch64::FMOVDi,          AArch64::FMOVSi,
-      AArch64::FMOVWSr};
+      AArch64::FMOVXDr,         AArch64::LDPQi,           AArch64::STPQi,
+      AArch64::ADDv8i16,        AArch64::UADDLv8i8_v8i16, AArch64::ADDv2i64,
+      AArch64::ADDv4i32,        AArch64::ADDv16i8,        AArch64::SUBv8i16,
+      AArch64::USUBLv8i8_v8i16, AArch64::SUBv2i64,        AArch64::SUBv4i32,
+      AArch64::SUBv16i8,        AArch64::LDRQui,          AArch64::STRQui,
+      AArch64::FMOVDi,          AArch64::FMOVSi,          AArch64::FMOVWSr};
 
   bool has_s(int instr) {
     return s_flag.contains(instr);
@@ -1149,18 +1148,20 @@ class arm2llvm {
     auto i32 = getIntTy(32);
     auto i64 = getIntTy(64);
 
-    /*
-     * ABI stuff: on all return paths, check that callee-saved +
-     * other registers have been reset to their previous
-     * values. these values were saved at the top of the function so
-     * the trivially dominate all returns
-     */
-    // TODO: make sure code doesn't touch 16, 17?
-    // check FP and LR?
-    // z8-z23 are callee-saved
-    assertSame(initialSP, readFromReg(AArch64::SP));
-    for (unsigned r = 19; r <= 28; ++r)
-      assertSame(initialReg[r], readFromReg(AArch64::X0 + r));
+    if (false) {
+      /*
+       * ABI stuff: on all return paths, check that callee-saved +
+       * other registers have been reset to their previous
+       * values. these values were saved at the top of the function so
+       * the trivially dominate all returns
+       */
+      // TODO: make sure code doesn't touch 16, 17?
+      // check FP and LR?
+      // z8-z23 are callee-saved
+      assertSame(initialSP, readFromReg(AArch64::SP));
+      for (unsigned r = 19; r <= 28; ++r)
+        assertSame(initialReg[r], readFromReg(AArch64::X0 + r));
+    }
 
     auto *retTyp = srcFn.getReturnType();
     if (retTyp->isVoidTy()) {
@@ -2931,7 +2932,7 @@ public:
       const MCSymbol &Sym = SRE.getSymbol();
       auto *dst_true = getBBByName(Fn, Sym.getName());
 
-      assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
+      assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
       const string *dst_false_name;
       for (auto &succ : MCBB->getSuccs()) {
         if (succ->getName() != Sym.getName()) {

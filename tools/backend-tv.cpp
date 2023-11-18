@@ -123,7 +123,10 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   *out << lifter::moduleToString(M2.get());
 
   auto err = optimize_module(M2.get(), opt_optimize_tgt);
-  assert(err.empty());
+  if (!err.empty()) {
+    *out << "\n\nERROR running LLVM optimizations\n\n";
+    exit(-1);
+  }
 
   *out << "\n\nafter optimization:\n\n";
   *out << lifter::moduleToString(M2.get());
