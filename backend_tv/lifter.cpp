@@ -2933,6 +2933,7 @@ public:
              "expected symbol ref as bcc operand");
       const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt_op.getExpr());
       const MCSymbol &Sym = SRE.getSymbol();
+
       auto *dst_true = getBBByName(Fn, Sym.getName());
 
       assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
@@ -2943,8 +2944,8 @@ public:
           break;
         }
       }
-      assert(dst_false_name != nullptr);
-      auto *dst_false = getBBByName(Fn, *dst_false_name);
+      auto *dst_false =
+          getBBByName(Fn, dst_false_name ? *dst_false_name : Sym.getName());
 
       createBranch(cond_val, dst_true, dst_false);
       break;
@@ -3024,8 +3025,8 @@ public:
           break;
         }
       }
-      assert(dst_true_name != nullptr);
-      auto *dst_true = getBBByName(Fn, *dst_true_name);
+      auto *dst_true =
+          getBBByName(Fn, dst_true_name ? *dst_true_name : Sym.getName());
 
       if (opcode == AArch64::TBNZW || opcode == AArch64::TBNZX)
         createBranch(cond_val, dst_false, dst_true);
@@ -3336,12 +3337,12 @@ public:
         }
         if (argTy->isPointerTy() || getBitWidth(val) == 64) {
           auto addr =
-            createGEP(i64, paramBase, {getIntConst(stackArgNum, 64)}, "");
+              createGEP(i64, paramBase, {getIntConst(stackArgNum, 64)}, "");
           createStore(val, addr);
           ++stackArgNum;
         } else if (getBitWidth(val) == 128) {
           auto addr =
-            createGEP(i64, paramBase, {getIntConst(stackArgNum, 64)}, "");
+              createGEP(i64, paramBase, {getIntConst(stackArgNum, 64)}, "");
           createStore(val, addr);
           stackArgNum += 2;
         } else {
