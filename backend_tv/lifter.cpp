@@ -3328,7 +3328,7 @@ public:
                   "exceeded\n\n";
           exit(-1);
         }
-        if (getBitWidth(val) == 64) {
+        if (argTy->isPointerTy() || getBitWidth(val) == 64) {
           auto addr =
             createGEP(i64, paramBase, {getIntConst(stackArgNum, 64)}, "");
           createStore(val, addr);
