@@ -2936,13 +2936,14 @@ public:
       auto *dst_true = getBBByName(Fn, Sym.getName());
 
       assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
-      const string *dst_false_name;
+      const string *dst_false_name = nullptr;
       for (auto &succ : MCBB->getSuccs()) {
         if (succ->getName() != Sym.getName()) {
           dst_false_name = &succ->getName();
           break;
         }
       }
+      assert(dst_false_name != nullptr);
       auto *dst_false = getBBByName(Fn, *dst_false_name);
 
       createBranch(cond_val, dst_true, dst_false);
@@ -2958,13 +2959,14 @@ public:
       auto dst_true = getBB(Fn, CurInst->getOperand(1));
       assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
 
-      const string *dst_false_name;
+      const string *dst_false_name = nullptr;
       for (auto &succ : MCBB->getSuccs()) {
         if (succ->getName() != dst_true->getName()) {
           dst_false_name = &succ->getName();
           break;
         }
       }
+      assert(dst_false_name != nullptr);
       auto *dst_false = getBBByName(Fn, *dst_false_name);
       createBranch(cond_val, dst_true, dst_false);
       break;
@@ -2980,13 +2982,14 @@ public:
       auto dst_true = getBB(Fn, CurInst->getOperand(1));
       assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
 
-      const string *dst_false_name;
+      const string *dst_false_name = nullptr;
       for (auto &succ : MCBB->getSuccs()) {
         if (succ->getName() != dst_true->getName()) {
           dst_false_name = &succ->getName();
           break;
         }
       }
+      assert(dst_false_name != nullptr);
       auto *dst_false = getBBByName(Fn, *dst_false_name);
       createBranch(cond_val, dst_true, dst_false);
       break;
@@ -3014,13 +3017,14 @@ public:
 
       assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
 
-      const string *dst_true_name;
+      const string *dst_true_name = nullptr;
       for (auto &succ : MCBB->getSuccs()) {
         if (succ->getName() != Sym.getName()) {
           dst_true_name = &succ->getName();
           break;
         }
       }
+      assert(dst_true_name != nullptr);
       auto *dst_true = getBBByName(Fn, *dst_true_name);
 
       if (opcode == AArch64::TBNZW || opcode == AArch64::TBNZX)
