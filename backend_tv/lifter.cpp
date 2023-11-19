@@ -1486,6 +1486,7 @@ public:
       break;
     }
 
+#if 0
     // assuming that the source is always an x register
     // This might not be the case but we need to look at the assembly emitter
     case AArch64::INSvi64gpr: {
@@ -1514,6 +1515,7 @@ public:
 #endif
       break;
     }
+#endif
 
     case AArch64::FADDSrr:
     case AArch64::FADDDrr:
@@ -3010,7 +3012,7 @@ public:
           SRE.getSymbol(); // FIXME refactor this into a function
       auto *dst_false = getBBByName(Fn, Sym.getName());
 
-      assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
+      assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
 
       const string *dst_true_name;
       for (auto &succ : MCBB->getSuccs()) {
