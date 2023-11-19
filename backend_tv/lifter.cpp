@@ -3229,9 +3229,9 @@ public:
     }
 
     // number of 8-byte stack slots for paramters
-    const int stackSlots = 16;
+    const int stackSlots = 32;
     // amount of stack available for use by the lifted function, in bytes
-    const int localFrame = 512;
+    const int localFrame = 1024;
 
     auto *allocTy = FunctionType::get(PointerType::get(Ctx, 0), {i32}, false);
     auto *myAlloc = Function::Create(allocTy, GlobalValue::ExternalLinkage, 0,
