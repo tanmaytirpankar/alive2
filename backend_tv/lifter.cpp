@@ -3328,10 +3328,19 @@ public:
                   "exceeded\n\n";
           exit(-1);
         }
-        auto addr =
+        if (getBitWidth(val) == 64) {
+          auto addr =
             createGEP(i64, paramBase, {getIntConst(stackArgNum, 64)}, "");
-        createStore(val, addr);
-        ++stackArgNum;
+          createStore(val, addr);
+          ++stackArgNum;
+        } else if (getBitWidth(val) == 128) {
+          auto addr =
+            createGEP(i64, paramBase, {getIntConst(stackArgNum, 64)}, "");
+          createStore(val, addr);
+          stackArgNum += 2;
+        } else {
+          assert(false);
+        }
       }
 
     end:;
