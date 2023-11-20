@@ -382,7 +382,7 @@ class arm2llvm {
       AArch64::USUBLv8i8_v8i16, AArch64::SUBv2i64,        AArch64::SUBv4i32,
       AArch64::SUBv16i8,        AArch64::LDRQui,          AArch64::STRQui,
       AArch64::FMOVDi,          AArch64::FMOVSi,          AArch64::FMOVWSr,
-      AArch64::CNTv16i8,
+      AArch64::CNTv16i8,        AArch64::MOVIv2d_ns,
   };
 
   bool has_s(int instr) {
@@ -1043,6 +1043,18 @@ class arm2llvm {
     return createLoad(getIntTy(1), dealiasReg(AArch64::C));
   }
 
+  uint64_t replicate8(uint64_t v) {
+    uint64_t ret = 0;
+    for (int i = 0; i < 8; ++i) {
+      bool b = (v & 128) != 0;
+      if (b)
+        ret |= 0xff;
+      ret <<= 8;
+      v <<= 1;
+    }
+    return ret;
+  }
+
   Value *conditionHolds(uint64_t cond) {
     assert(cond < 16);
 
@@ -1627,6 +1639,15 @@ public:
       setZ(createFCmp(FCmpInst::Predicate::FCMP_OEQ, a, b));
       setC(createFCmp(FCmpInst::Predicate::FCMP_UGT, a, b));
       setV(createFCmp(FCmpInst::Predicate::FCMP_UNO, a, b));
+      break;
+    }
+
+    case AArch64::MOVIv2d_ns: {
+      auto imm = getIntConst(replicate8(getImm(1)), 64);
+      auto imm2 = createZExt(imm, i128);
+      auto shifted = createRawShl(imm2, getIntConst(64, 128));
+      auto orred = createOr(shifted, imm2);
+      updateOutputReg(orred);
       break;
     }
 
