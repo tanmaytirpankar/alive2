@@ -1047,9 +1047,9 @@ class arm2llvm {
     uint64_t ret = 0;
     for (int i = 0; i < 8; ++i) {
       bool b = (v & 128) != 0;
+      ret <<= 8;
       if (b)
         ret |= 0xff;
-      ret <<= 8;
       v <<= 1;
     }
     return ret;
