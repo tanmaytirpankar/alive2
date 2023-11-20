@@ -382,7 +382,7 @@ class arm2llvm {
       AArch64::USUBLv8i8_v8i16, AArch64::SUBv2i64,        AArch64::SUBv4i32,
       AArch64::SUBv16i8,        AArch64::LDRQui,          AArch64::STRQui,
       AArch64::FMOVDi,          AArch64::FMOVSi,          AArch64::FMOVWSr,
-      AArch64::CNTv16i8,        AArch64::MOVIv2d_ns,
+      AArch64::CNTv16i8,        AArch64::MOVIv2d_ns,      AArch64::MOVIv4i32,
   };
 
   bool has_s(int instr) {
@@ -1064,6 +1064,17 @@ class arm2llvm {
     return createOr(shifted, vext);
   }
 
+  Value *copy32to128(Value *v) {
+    auto i128 = getIntTy(128);
+    auto vext = createZExt(v, i128);
+    auto ret = getIntConst(64, 128);
+    for (int i = 0; i < 4; i++) {
+      ret = createRawShl(ret, getIntConst(32, 128));
+      ret = createOr(ret, vext);
+    }
+    return ret;
+  }
+
   Value *conditionHolds(uint64_t cond) {
     assert(cond < 16);
 
@@ -1654,6 +1665,14 @@ public:
     case AArch64::MOVIv2d_ns: {
       auto imm = getIntConst(replicate8(getImm(1)), 64);
       updateOutputReg(copy64to128(imm));
+      break;
+    }
+
+    case AArch64::MOVIv4i32: {
+      auto imm1 = getImm(1);
+      auto imm2 = getImm(2);
+      auto val = getIntConst(imm1 << imm2, 32);
+      updateOutputReg(copy32to128(val));
       break;
     }
 
