@@ -440,11 +440,11 @@ class arm2llvm {
 
     switch (shift_type) {
     case 0:
-      return createShl(value, exp);
+      return createMaskedShl(value, exp);
     case 1:
-      return createLShr(value, exp);
+      return createMaskedLShr(value, exp);
     case 2:
-      return createAShr(value, exp);
+      return createMaskedAShr(value, exp);
     case 3:
       // ROR shift
       return createFShr(value, value, exp);
@@ -605,7 +605,7 @@ class arm2llvm {
     return BinaryOperator::Create(Instruction::LShr, a, b, nextName(), LLVMBB);
   }
 
-  Value *createLShr(Value *a, Value *b) {
+  Value *createMaskedLShr(Value *a, Value *b) {
     assert(a->getType() == b->getType() && "Expected values of same type");
 
     // Get an LLVM mask for b to get shift value less than bit width of a
@@ -623,7 +623,7 @@ class arm2llvm {
     return BinaryOperator::Create(Instruction::AShr, a, b, nextName(), LLVMBB);
   }
 
-  Value *createAShr(Value *a, Value *b) {
+  Value *createMaskedAShr(Value *a, Value *b) {
     assert(a->getType() == b->getType() && "Expected values of same type");
 
     // Get an LLVM mask for b to get shift value less than bit width of a
@@ -641,7 +641,7 @@ class arm2llvm {
     return BinaryOperator::Create(Instruction::Shl, a, b, nextName(), LLVMBB);
   }
 
-  Value *createShl(Value *a, Value *b) {
+  Value *createMaskedShl(Value *a, Value *b) {
     assert(a->getType() == b->getType() && "Expected values of same type");
 
     // Get an LLVM mask for b to get shift value less than bit width of a
@@ -1376,10 +1376,10 @@ public:
       auto C = createZExt(getC(), i64);
       auto V = createZExt(getV(), i64);
 
-      auto NS = createShl(N, getIntConst(31, 64));
-      auto NZ = createShl(Z, getIntConst(30, 64));
-      auto NC = createShl(C, getIntConst(29, 64));
-      auto NV = createShl(V, getIntConst(28, 64));
+      auto NS = createMaskedShl(N, getIntConst(31, 64));
+      auto NZ = createMaskedShl(Z, getIntConst(30, 64));
+      auto NC = createMaskedShl(C, getIntConst(29, 64));
+      auto NV = createMaskedShl(V, getIntConst(28, 64));
 
       Value *res = getIntConst(0, 64);
       res = createOr(res, NS);
@@ -1401,10 +1401,10 @@ public:
       auto i64_0 = getIntConst(0, 64);
       auto i64_1 = getIntConst(1, 64);
 
-      auto Nmask = createShl(i64_1, getIntConst(31, 64));
-      auto Zmask = createShl(i64_1, getIntConst(30, 64));
-      auto Cmask = createShl(i64_1, getIntConst(29, 64));
-      auto Vmask = createShl(i64_1, getIntConst(28, 64));
+      auto Nmask = createMaskedShl(i64_1, getIntConst(31, 64));
+      auto Zmask = createMaskedShl(i64_1, getIntConst(30, 64));
+      auto Cmask = createMaskedShl(i64_1, getIntConst(29, 64));
+      auto Vmask = createMaskedShl(i64_1, getIntConst(28, 64));
 
       auto reg = readFromOperand(1);
       auto Nval = createAnd(Nmask, reg);
@@ -1468,7 +1468,7 @@ public:
 
         // shift may not be there, it may just be the extend
         if (shift != 0)
-          b = createShl(b, getIntConst(shift, size));
+          b = createMaskedShl(b, getIntConst(shift, size));
         break;
       }
       default:
@@ -1538,7 +1538,7 @@ public:
 
       auto shift_amt =
           createBinop(b, getIntConst(size, size), Instruction::URem);
-      auto res = createAShr(a, shift_amt);
+      auto res = createMaskedAShr(a, shift_amt);
       updateOutputReg(res);
       break;
     }
@@ -1578,11 +1578,11 @@ public:
       auto mask = getIntConst(-1, 128);
 
       if (op_index > 0) {
-        mask = createShl(mask, getIntConst(64, 128));
-        val = createShl(val, getIntConst(64, 128));
+        mask = createMaskedShl(mask, getIntConst(64, 128));
+        val = createMaskedShl(val, getIntConst(64, 128));
       }
 
-      auto q_cleared = createShl(q_reg_val, mask);
+      auto q_cleared = createMaskedShl(q_reg_val, mask);
       auto mov_res = createAnd(q_cleared, val);
       updateOutputReg(mov_res);
       cur_vol_regs[MCBB][op_0.getReg()] = mov_res;
@@ -1813,7 +1813,7 @@ public:
 
         // shift may not be there, it may just be the extend
         if (shift != 0)
-          b = createShl(b, getIntConst(shift, size));
+          b = createMaskedShl(b, getIntConst(shift, size));
         break;
       }
       default:
@@ -2004,7 +2004,7 @@ public:
       auto mul = createMul(lhs_extended, rhs_extended);
       // After multiplying, shift down 64 bits to get the top half of the i128
       // into the bottom half
-      auto shift = createLShr(mul, getIntConst(64, 128));
+      auto shift = createMaskedLShr(mul, getIntConst(64, 128));
 
       // Truncate to the proper size:
       auto trunc = createTrunc(shift, i64);
@@ -2036,7 +2036,7 @@ public:
       // arithmetic shift right (ASR) alias is perferred when:
       // imms == 011111 and size == 32 or when imms == 111111 and size = 64
       if ((size == 32 && imms == 31) || (size == 64 && imms == 63)) {
-        auto dst = createAShr(src, r);
+        auto dst = createMaskedAShr(src, r);
         updateOutputReg(dst);
         return;
       }
@@ -2078,7 +2078,7 @@ public:
         auto bitfield_lsb_set = createICmp(ICmpInst::Predicate::ICMP_NE,
                                            bitfield_lsb, getIntConst(0, size));
         auto res = createSelect(bitfield_lsb_set, insert_ones, masked);
-        auto shifted_res = createShl(res, getIntConst(pos, size));
+        auto shifted_res = createMaskedShl(res, getIntConst(pos, size));
         updateOutputReg(shifted_res);
         return;
       }
@@ -2277,7 +2277,7 @@ public:
     case AArch64::LSLVXr: {
       auto lhs = readFromOperand(1);
       auto rhs = readFromOperand(2);
-      auto exp = createShl(lhs, rhs);
+      auto exp = createMaskedShl(lhs, rhs);
       updateOutputReg(exp);
       break;
     }
@@ -2286,7 +2286,7 @@ public:
     case AArch64::LSRVXr: {
       auto lhs = readFromOperand(1);
       auto rhs = readFromOperand(2);
-      auto exp = createLShr(lhs, rhs);
+      auto exp = createMaskedLShr(lhs, rhs);
       updateOutputReg(exp);
       break;
     }
@@ -2338,21 +2338,21 @@ public:
 
       // LSL is preferred when imms != 31 and imms + 1 == immr
       if (size == 32 && imms != 31 && imms + 1 == immr) {
-        auto dst = createShl(src, getIntConst(31 - imms, size));
+        auto dst = createMaskedShl(src, getIntConst(31 - imms, size));
         updateOutputReg(dst);
         return;
       }
 
       // LSL is preferred when imms != 63 and imms + 1 == immr
       if (size == 64 && imms != 63 && imms + 1 == immr) {
-        auto dst = createShl(src, getIntConst(63 - imms, size));
+        auto dst = createMaskedShl(src, getIntConst(63 - imms, size));
         updateOutputReg(dst);
         return;
       }
 
       // LSR is preferred when imms == 31 or 63 (size - 1)
       if (imms == size - 1) {
-        auto dst = createLShr(src, getIntConst(immr, size));
+        auto dst = createMaskedLShr(src, getIntConst(immr, size));
         updateOutputReg(dst);
         return;
       }
@@ -2363,7 +2363,7 @@ public:
         auto width = imms + 1;
         auto mask = ((uint64_t)1 << (width)) - 1;
         auto masked = createAnd(src, getIntConst(mask, size));
-        auto shifted = createShl(masked, getIntConst(pos, size));
+        auto shifted = createMaskedShl(masked, getIntConst(pos, size));
         updateOutputReg(shifted);
         return;
       }
@@ -2393,7 +2393,7 @@ public:
       auto pos = immr;
 
       auto masked = createAnd(src, getIntConst(mask, size));
-      auto shifted_res = createLShr(masked, getIntConst(pos, size));
+      auto shifted_res = createMaskedLShr(masked, getIntConst(pos, size));
       updateOutputReg(shifted_res);
       return;
     }
@@ -2414,7 +2414,7 @@ public:
         auto mask = (((uint64_t)1 << bits) - 1) << pos;
 
         auto masked = createAnd(src, getIntConst(mask, size));
-        auto shifted = createLShr(masked, getIntConst(pos, size));
+        auto shifted = createMaskedLShr(masked, getIntConst(pos, size));
         auto cleared =
             createAnd(dst, getIntConst((uint64_t)(-1) << bits, size));
         auto res = createOr(cleared, shifted);
@@ -2436,7 +2436,7 @@ public:
           createAnd(src, getIntConst(~((uint64_t)-1 << bits), size));
 
       // move the bitfield into position
-      auto moved = createShl(bitfield, getIntConst(pos, size));
+      auto moved = createMaskedShl(bitfield, getIntConst(pos, size));
 
       // carve out a place for the bitfield
       auto masked = createAnd(dst, getIntConst(mask, size));
@@ -2474,7 +2474,7 @@ public:
       auto Zero = getIntConst(0, Size);
       auto AllOnes = createSub(Zero, getIntConst(1, Size));
       auto IntMin =
-          createShl(getIntConst(1, Size), getIntConst(Size - 1, Size));
+          createMaskedShl(getIntConst(1, Size), getIntConst(Size - 1, Size));
       auto LHS = readFromOperand(1);
       auto RHS = readFromOperand(2);
       auto ResMem = createAlloca(getIntTy(Size), getIntConst(1, 64), "");
@@ -2622,10 +2622,10 @@ public:
       // REV16Xr: Reverse bytes of 64 bit value in 16-bit half-words.
       auto size = getInstSize(opcode);
       auto val = readFromOperand(1);
-      auto first_part = createShl(val, getIntConst(8, size));
+      auto first_part = createMaskedShl(val, getIntConst(8, size));
       auto first_part_and =
           createAnd(first_part, getIntConst(0xFF00FF00FF00FF00UL, size));
-      auto second_part = createLShr(val, getIntConst(8, size));
+      auto second_part = createMaskedLShr(val, getIntConst(8, size));
       auto second_part_and =
           createAnd(second_part, getIntConst(0x00FF00FF00FF00FFUL, size));
       auto combined_val = createOr(first_part_and, second_part_and);
@@ -3087,7 +3087,7 @@ public:
       auto operand = readFromOperand(0);
       assert(operand != nullptr && "operand is null");
       auto bit_pos = getImm(1);
-      auto shift = createLShr(operand, getIntConst(bit_pos, size));
+      auto shift = createMaskedLShr(operand, getIntConst(bit_pos, size));
       auto cond_val = createTrunc(shift, i1);
 
       auto &jmp_tgt_op = CurInst->getOperand(2);
