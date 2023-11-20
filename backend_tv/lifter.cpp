@@ -1055,6 +1055,13 @@ class arm2llvm {
     return ret;
   }
 
+  Value *copy64to128(Value *v) {
+    auto i128 = getIntTy(128);
+    auto vext = createZExt(v, i128);
+    auto shifted = createRawShl(vext, getIntConst(64, 128));
+    return createOr(shifted, vext);
+  }
+
   Value *conditionHolds(uint64_t cond) {
     assert(cond < 16);
 
@@ -1644,10 +1651,7 @@ public:
 
     case AArch64::MOVIv2d_ns: {
       auto imm = getIntConst(replicate8(getImm(1)), 64);
-      auto imm2 = createZExt(imm, i128);
-      auto shifted = createRawShl(imm2, getIntConst(64, 128));
-      auto orred = createOr(shifted, imm2);
-      updateOutputReg(orred);
+      updateOutputReg(copy64to128(imm));
       break;
     }
 
