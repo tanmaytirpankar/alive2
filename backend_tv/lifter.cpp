@@ -383,7 +383,8 @@ class arm2llvm {
       AArch64::SUBv16i8,        AArch64::LDRQui,          AArch64::STRQui,
       AArch64::FMOVDi,          AArch64::FMOVSi,          AArch64::FMOVWSr,
       AArch64::CNTv16i8,        AArch64::MOVIv2d_ns,      AArch64::MOVIv4i32,
-      AArch64::EXTv16i8,
+      AArch64::EXTv16i8,        AArch64::DUPv2i64gpr,     AArch64::MOVIv2i32,
+      AArch64::DUPv4i32gpr,
   };
 
   bool has_s(int instr) {
@@ -1068,12 +1069,19 @@ class arm2llvm {
   Value *copy32to128(Value *v) {
     auto i128 = getIntTy(128);
     auto vext = createZExt(v, i128);
-    auto ret = getIntConst(64, 128);
+    auto ret = getIntConst(0, 128);
     for (int i = 0; i < 4; i++) {
       ret = createRawShl(ret, getIntConst(32, 128));
       ret = createOr(ret, vext);
     }
     return ret;
+  }
+
+  Value *copy32to64(Value *v) {
+    auto i64 = getIntTy(64);
+    auto vext = createZExt(v, i64);
+    auto ret = createRawShl(vext, getIntConst(32, 64));
+    return createOr(ret, vext);
   }
 
   Value *concat(Value *a, Value *b) {
@@ -1678,6 +1686,14 @@ public:
       break;
     }
 
+    case AArch64::MOVIv2i32: {
+      auto imm1 = getImm(1);
+      auto imm2 = getImm(2);
+      auto val = getIntConst(imm1 << imm2, 32);
+      updateOutputReg(copy32to64(val));
+      break;
+    }
+
     case AArch64::MOVIv4i32: {
       auto imm1 = getImm(1);
       auto imm2 = getImm(2);
@@ -1693,6 +1709,16 @@ public:
       auto both = concat(b, a);
       auto shifted = createRawLShr(both, getIntConst(8 * imm, 256));
       updateOutputReg(createTrunc(shifted, i128));
+      break;
+    }
+
+    case AArch64::DUPv4i32gpr: {
+      updateOutputReg(copy32to128(readFromOperand(1)));
+      break;
+    }
+
+    case AArch64::DUPv2i64gpr: {
+      updateOutputReg(copy64to128(readFromOperand(1)));
       break;
     }
 
