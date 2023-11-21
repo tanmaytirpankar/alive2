@@ -1690,7 +1690,7 @@ public:
       auto a = readFromOperand(1);
       auto b = readFromOperand(2);
       auto imm = getImm(3);
-      auto both = concat(a, b);
+      auto both = concat(b, a);
       auto shifted = createRawLShr(both, getIntConst(8 * imm, 256));
       updateOutputReg(createTrunc(shifted, i128));
       break;
