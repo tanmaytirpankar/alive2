@@ -246,7 +246,7 @@ class arm2llvm {
 
   Type *getIntTy(unsigned int bits) {
     // just trying to catch silly errors, remove this sometime
-    assert(bits > 0 && bits <= 128);
+    assert(bits > 0 && bits <= 256);
     return Type::getIntNTy(Ctx, bits);
   }
 
@@ -383,6 +383,7 @@ class arm2llvm {
       AArch64::SUBv16i8,        AArch64::LDRQui,          AArch64::STRQui,
       AArch64::FMOVDi,          AArch64::FMOVSi,          AArch64::FMOVWSr,
       AArch64::CNTv16i8,        AArch64::MOVIv2d_ns,      AArch64::MOVIv4i32,
+      AArch64::EXTv16i8,
   };
 
   bool has_s(int instr) {
@@ -1075,6 +1076,15 @@ class arm2llvm {
     return ret;
   }
 
+  Value *concat(Value *a, Value *b) {
+    int wa = getBitWidth(a);
+    int wb = getBitWidth(b);
+    auto wide_a = createZExt(a, getIntTy(wa + wb));
+    auto wide_b = createZExt(b, getIntTy(wa + wb));
+    auto shifted_a = createRawShl(wide_a, getIntConst(wb, wa + wb));
+    return createOr(shifted_a, wide_b);
+  }
+
   Value *conditionHolds(uint64_t cond) {
     assert(cond < 16);
 
@@ -1673,6 +1683,16 @@ public:
       auto imm2 = getImm(2);
       auto val = getIntConst(imm1 << imm2, 32);
       updateOutputReg(copy32to128(val));
+      break;
+    }
+
+    case AArch64::EXTv16i8: {
+      auto a = readFromOperand(1);
+      auto b = readFromOperand(2);
+      auto imm = getImm(3);
+      auto both = concat(a, b);
+      auto shifted = createRawLShr(both, getIntConst(8 * imm, 256));
+      updateOutputReg(createTrunc(shifted, i128));
       break;
     }
 
