@@ -328,15 +328,15 @@ class arm2llvm {
       AArch64::REVWr,    AArch64::CSNEGWr,  AArch64::BICWrs,
       AArch64::BICSWrs,  AArch64::EONWrs,   AArch64::REV16Wr,
       AArch64::Bcc,      AArch64::CCMPWr,   AArch64::CCMPWi,
-      AArch64::LDRWui,   AArch64::LDRSui,   AArch64::LDRBBui,
-      AArch64::LDRBui,   AArch64::LDRSBWui, AArch64::LDRSWui,
-      AArch64::LDRSHWui, AArch64::LDRSBWui, AArch64::LDRHHui,
-      AArch64::LDRHui,   AArch64::STRWui,   AArch64::CCMNWi,
-      AArch64::CCMNWr,   AArch64::STRBBui,  AArch64::STRBui,
-      AArch64::STPWi,    AArch64::STRHHui,  AArch64::STRHui,
-      AArch64::STURWi,   AArch64::STRSui,   AArch64::LDPWi,
-      AArch64::STRWpre,  AArch64::FADDSrr,  AArch64::FSUBSrr,
-      AArch64::FCMPSrr};
+      AArch64::LDRWui,   AArch64::LDRWroX,  AArch64::LDRSui,
+      AArch64::LDRBBui,  AArch64::LDRBui,   AArch64::LDRSBWui,
+      AArch64::LDRSWui,  AArch64::LDRSHWui, AArch64::LDRSBWui,
+      AArch64::LDRHHui,  AArch64::LDRHui,   AArch64::STRWui,
+      AArch64::CCMNWi,   AArch64::CCMNWr,   AArch64::STRBBui,
+      AArch64::STRBui,   AArch64::STPWi,    AArch64::STRHHui,
+      AArch64::STRHui,   AArch64::STURWi,   AArch64::STRSui,
+      AArch64::LDPWi,    AArch64::STRWpre,  AArch64::FADDSrr,
+      AArch64::FSUBSrr,  AArch64::FCMPSrr};
 
   const set<int> instrs_64 = {
       AArch64::ADDXrx,    AArch64::ADDSXrs,   AArch64::ADDSXri,
@@ -372,7 +372,8 @@ class arm2llvm {
       AArch64::CCMNXr,    AArch64::STURXi,    AArch64::ADRP,
       AArch64::STRXpre,   AArch64::XTNv8i8,   AArch64::FADDDrr,
       AArch64::FSUBDrr,   AArch64::FCMPDrr,   AArch64::NOTv8i8,
-      AArch64::CNTv8i8,AArch64::ANDv8i8, AArch64::ORRv8i8, AArch64::EORv8i8,
+      AArch64::CNTv8i8,   AArch64::ANDv8i8,   AArch64::ORRv8i8,
+      AArch64::EORv8i8,
   };
 
   const set<int> instrs_128 = {
@@ -384,7 +385,8 @@ class arm2llvm {
       AArch64::FMOVDi,          AArch64::FMOVSi,          AArch64::FMOVWSr,
       AArch64::CNTv16i8,        AArch64::MOVIv2d_ns,      AArch64::MOVIv4i32,
       AArch64::EXTv16i8,        AArch64::DUPv2i64gpr,     AArch64::MOVIv2i32,
-      AArch64::DUPv4i32gpr,     AArch64::ANDv16i8, AArch64::ORRv16i8, AArch64::EORv16i8,
+      AArch64::DUPv4i32gpr,     AArch64::ANDv16i8,        AArch64::ORRv16i8,
+      AArch64::EORv16i8,
   };
 
   bool has_s(int instr) {
@@ -1322,6 +1324,34 @@ public:
     return CurInst->getOperand(idx).getImm();
   }
 
+  tuple<Value *, Value *> getParamsLoadReg() {
+    auto &op0 = CurInst->getOperand(0);
+    auto &op1 = CurInst->getOperand(1);
+    auto &op2 = CurInst->getOperand(2);
+    assert(op0.isReg() && op1.isReg() && op2.isReg());
+    auto baseReg = op1.getReg();
+    auto offsetReg = op2.getReg();
+    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
+           (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
+           (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
+    assert((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
+           (offsetReg == AArch64::FP) || (offsetReg == AArch64::XZR) ||
+           (offsetReg >= AArch64::W0 && offsetReg <= AArch64::W28) ||
+           (offsetReg == AArch64::WZR));
+    auto baseAddr = readPtrFromReg(baseReg);
+    auto offset = readFromReg(offsetReg);
+    return make_pair(baseAddr, offset);
+  }
+
+  Value *makeLoadWithOffset(Value *base, Value *offset, int size) {
+    // Create a GEP instruction based on a byte addressing basis (8 bits)
+    // returning pointer to base + offset
+    auto ptr = createGEP(getIntTy(8), base, {offset}, "");
+
+    // Load Value val in the pointer returned by the GEP instruction
+    return createLoad(getIntTy(8 * size), ptr);
+  }
+
   tuple<Value *, int> getParamsLoadImmed() {
     auto &op0 = CurInst->getOperand(0);
     auto &op1 = CurInst->getOperand(1);
@@ -1338,7 +1368,7 @@ public:
 
   // Creates instructions to store val in memory pointed by base + offset
   // offset and size are in bytes
-  Value *makeLoad(Value *base, int offset, int size) {
+  Value *makeLoadWithOffset(Value *base, int offset, int size) {
     // Get offset as a 64-bit LLVM constant
     auto offsetVal = getIntConst(offset, 64);
 
@@ -2767,7 +2797,7 @@ public:
       else
         assert(false);
 
-      auto loaded = makeLoad(base, imm * size, size);
+      auto loaded = makeLoadWithOffset(base, imm * size, size);
       updateOutputReg(loaded, /*SExt=*/true);
       break;
     }
@@ -2800,7 +2830,7 @@ public:
         Value *globalVar = getExprVar(op2.getExpr());
         if (opcode == AArch64::LDRBBui || opcode == AArch64::LDRHHui ||
             opcode == AArch64::LDRWui) {
-          auto loaded = makeLoad(globalVar, 0, size);
+          auto loaded = makeLoadWithOffset(globalVar, 0, size);
           updateOutputReg(loaded);
         } else {
           auto reg = CurInst->getOperand(0).getReg();
@@ -2810,7 +2840,7 @@ public:
         }
       } else {
         auto [base, imm] = getParamsLoadImmed();
-        auto loaded = makeLoad(base, imm * size, size);
+        auto loaded = makeLoadWithOffset(base, imm * size, size);
         updateOutputReg(loaded);
       }
       break;
@@ -2834,7 +2864,7 @@ public:
       auto ptrReg = op0.getReg();
       auto addr = readPtrFromReg(ptrReg);
       auto imm = op3.getImm();
-      auto loaded = makeLoad(addr, imm * size, size);
+      auto loaded = makeLoadWithOffset(addr, imm * size, size);
       updateReg(loaded, destReg);
       auto offsetVal = getIntConst(imm, 64);
       auto toUpdate = readFromReg(ptrReg);
@@ -2842,7 +2872,18 @@ public:
       updateReg(added, ptrReg);
       break;
     }
+    case AArch64::LDRWroX: {
+      unsigned size;
+      if (opcode == AArch64::LDRWroX)
+        size = 4;
+      else
+        assert(false);
 
+      auto [base, offset] = getParamsLoadReg();
+      auto loaded = makeLoadWithOffset(base, offset, size);
+      updateOutputReg(loaded);
+      break;
+    }
     case AArch64::STRBBui: {
       auto [base, imm, val] = getParamsStoreImmed();
       storeToMemory(base, imm * 1, 1, createTrunc(val, i8));
@@ -2956,11 +2997,11 @@ public:
       auto out1 = op0.getReg();
       auto out2 = op1.getReg();
       if (out1 != AArch64::XZR && out1 != AArch64::WZR) {
-        auto loaded = makeLoad(baseAddr, imm * size, size);
+        auto loaded = makeLoadWithOffset(baseAddr, imm * size, size);
         updateReg(loaded, out1);
       }
       if (out2 != AArch64::XZR && out2 != AArch64::WZR) {
-        auto loaded = makeLoad(baseAddr, (imm + 1) * size, size);
+        auto loaded = makeLoadWithOffset(baseAddr, (imm + 1) * size, size);
         updateReg(loaded, out2);
       }
       break;
@@ -3033,8 +3074,8 @@ public:
       auto addr = readPtrFromReg(baseReg);
       auto r1 = op1.getReg();
       auto r2 = op2.getReg();
-      auto loaded1 = makeLoad(addr, 0, size);
-      auto loaded2 = makeLoad(addr, size, size);
+      auto loaded1 = makeLoadWithOffset(addr, 0, size);
+      auto loaded2 = makeLoadWithOffset(addr, size, size);
       updateReg(loaded1, r1);
       updateReg(loaded2, r2);
 
