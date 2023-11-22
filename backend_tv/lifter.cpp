@@ -336,7 +336,8 @@ class arm2llvm {
       AArch64::STRBui,   AArch64::STPWi,    AArch64::STRHHui,
       AArch64::STRHui,   AArch64::STURWi,   AArch64::STRSui,
       AArch64::LDPWi,    AArch64::STRWpre,  AArch64::FADDSrr,
-      AArch64::FSUBSrr,  AArch64::FCMPSrr};
+      AArch64::FSUBSrr,  AArch64::FCMPSrr,
+  };
 
   const set<int> instrs_64 = {
       AArch64::ADDXrx,    AArch64::ADDSXrs,   AArch64::ADDSXri,
@@ -386,7 +387,7 @@ class arm2llvm {
       AArch64::CNTv16i8,        AArch64::MOVIv2d_ns,      AArch64::MOVIv4i32,
       AArch64::EXTv16i8,        AArch64::DUPv2i64gpr,     AArch64::MOVIv2i32,
       AArch64::DUPv4i32gpr,     AArch64::ANDv16i8,        AArch64::ORRv16i8,
-      AArch64::EORv16i8,
+      AArch64::EORv16i8,        AArch64::UMOVvi32,        AArch64::UMOVvi8,
   };
 
   bool has_s(int instr) {
@@ -1061,6 +1062,14 @@ class arm2llvm {
     return ret;
   }
 
+  Value *maskLower(Value *v, unsigned b) {
+    auto w = getBitWidth(v);
+    auto one = getIntConst(1, w);
+    auto shifted = createRawShl(one, getIntConst(b, w));
+    auto sub = createSub(shifted, one);
+    return createAnd(v, sub);
+  }
+
   Value *copy64to128(Value *v) {
     auto i128 = getIntTy(128);
     auto vext = createZExt(v, i128);
@@ -1710,6 +1719,25 @@ public:
       break;
     }
 
+    case AArch64::UMOVvi8:
+    case AArch64::UMOVvi32: {
+      unsigned sz;
+      if (opcode == AArch64::UMOVvi8) {
+        sz = 8;
+      } else if (opcode == AArch64::UMOVvi32) {
+        sz = 32;
+      } else {
+        assert(false);
+      }
+      auto val = readFromOperand(1);
+      *out << "widht = " << getBitWidth(val) << "\n";
+      auto imm = getImm(2);
+      auto shifted = createRawLShr(val, getIntConst(imm * sz, 128));
+      auto masked = maskLower(shifted, sz);
+      updateOutputReg(createTrunc(masked, i32));
+      break;
+    }
+
     case AArch64::MOVIv2d_ns: {
       auto imm = getIntConst(replicate8(getImm(1)), 64);
       updateOutputReg(copy64to128(imm));
@@ -1743,7 +1771,8 @@ public:
     }
 
     case AArch64::DUPv4i32gpr: {
-      updateOutputReg(copy32to128(readFromOperand(1)));
+      auto t = createTrunc(readFromOperand(1), i32);
+      updateOutputReg(copy32to128(t));
       break;
     }
 
