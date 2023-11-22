@@ -384,7 +384,7 @@ class arm2llvm {
       AArch64::FMOVDi,          AArch64::FMOVSi,          AArch64::FMOVWSr,
       AArch64::CNTv16i8,        AArch64::MOVIv2d_ns,      AArch64::MOVIv4i32,
       AArch64::EXTv16i8,        AArch64::DUPv2i64gpr,     AArch64::MOVIv2i32,
-      AArch64::DUPv4i32gpr,
+      AArch64::DUPv4i32gpr,     AArch64::ANDv16i8, AArch64::ORRv16i8,
   };
 
   bool has_s(int instr) {
@@ -1737,7 +1737,9 @@ public:
     case AArch64::SUBv8i8:
     case AArch64::SUBv8i16:
     case AArch64::SUBv16i8:
-    case AArch64::USUBLv8i8_v8i16: {
+    case AArch64::USUBLv8i8_v8i16:
+    case AArch64::ANDv16i8:
+    case AArch64::ORRv16i8: {
       auto a = readFromOperand(1);
       auto b = readFromOperand(2);
 
@@ -1762,6 +1764,12 @@ public:
       case AArch64::SUBv16i8:
       case AArch64::USUBLv8i8_v8i16:
         op = Instruction::Sub;
+        break;
+      case AArch64::ANDv16i8:
+        op = Instruction::And;
+        break;
+      case AArch64::ORRv16i8:
+        op = Instruction::Or;
         break;
       default:
         assert(false && "missed a case");
@@ -1802,6 +1810,8 @@ public:
         break;
       case AArch64::ADDv16i8:
       case AArch64::SUBv16i8:
+      case AArch64::ANDv16i8:
+      case AArch64::ORRv16i8:
         numElements = 16;
         elementTypeInBits = 8;
         break;
