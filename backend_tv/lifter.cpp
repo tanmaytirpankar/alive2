@@ -460,10 +460,6 @@ class arm2llvm {
     }
   }
 
-  Value *reg_shift(int value, int size, int encodedShift) {
-    return reg_shift(getIntConst(value, size), encodedShift);
-  }
-
   // lifted instructions are named using the number of the ARM
   // instruction they come from
   string nextName() {
@@ -840,6 +836,10 @@ class arm2llvm {
     createStore(v, dealiasReg(reg));
   }
 
+  // FIXME 1: get rid of the shifting case here, push that into instructions
+  // FIXME 2: only handle registers, and put calls for immediates and exprs
+  //          into other functions that instructions invoke directly
+  // FIXME 3: just use register size directly, stop relying on getInstSize!!
   // TODO: make it so that lshr generates code on register lookups
   // some instructions make use of this, and the semantics need to be
   // worked out
