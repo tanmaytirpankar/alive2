@@ -372,7 +372,7 @@ class arm2llvm {
       AArch64::CCMNXr,    AArch64::STURXi,    AArch64::ADRP,
       AArch64::STRXpre,   AArch64::XTNv8i8,   AArch64::FADDDrr,
       AArch64::FSUBDrr,   AArch64::FCMPDrr,   AArch64::NOTv8i8,
-      AArch64::CNTv8i8,
+      AArch64::CNTv8i8,AArch64::ANDv8i8, AArch64::ORRv8i8, AArch64::EORv8i8,
   };
 
   const set<int> instrs_128 = {
@@ -384,7 +384,7 @@ class arm2llvm {
       AArch64::FMOVDi,          AArch64::FMOVSi,          AArch64::FMOVWSr,
       AArch64::CNTv16i8,        AArch64::MOVIv2d_ns,      AArch64::MOVIv4i32,
       AArch64::EXTv16i8,        AArch64::DUPv2i64gpr,     AArch64::MOVIv2i32,
-      AArch64::DUPv4i32gpr,     AArch64::ANDv16i8, AArch64::ORRv16i8,
+      AArch64::DUPv4i32gpr,     AArch64::ANDv16i8, AArch64::ORRv16i8, AArch64::EORv16i8,
   };
 
   bool has_s(int instr) {
@@ -1738,7 +1738,11 @@ public:
     case AArch64::SUBv8i16:
     case AArch64::SUBv16i8:
     case AArch64::USUBLv8i8_v8i16:
+    case AArch64::EORv8i8:
+    case AArch64::EORv16i8:
+    case AArch64::ANDv8i8:
     case AArch64::ANDv16i8:
+    case AArch64::ORRv8i8:
     case AArch64::ORRv16i8: {
       auto a = readFromOperand(1);
       auto b = readFromOperand(2);
@@ -1765,9 +1769,15 @@ public:
       case AArch64::USUBLv8i8_v8i16:
         op = Instruction::Sub;
         break;
+      case AArch64::EORv8i8:
+      case AArch64::EORv16i8:
+        op = Instruction::Xor;
+        break;
+      case AArch64::ANDv8i8:
       case AArch64::ANDv16i8:
         op = Instruction::And;
         break;
+      case AArch64::ORRv8i8:
       case AArch64::ORRv16i8:
         op = Instruction::Or;
         break;
@@ -1800,6 +1810,9 @@ public:
         break;
       case AArch64::ADDv8i8:
       case AArch64::SUBv8i8:
+      case AArch64::EORv8i8:
+      case AArch64::ANDv8i8:
+      case AArch64::ORRv8i8:
         numElements = 8;
         elementTypeInBits = 8;
         break;
@@ -1810,6 +1823,7 @@ public:
         break;
       case AArch64::ADDv16i8:
       case AArch64::SUBv16i8:
+      case AArch64::EORv16i8:
       case AArch64::ANDv16i8:
       case AArch64::ORRv16i8:
         numElements = 16;
