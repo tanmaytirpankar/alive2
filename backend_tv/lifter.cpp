@@ -310,73 +310,74 @@ class arm2llvm {
   };
 
   const set<int> instrs_32 = {
-      AArch64::ADDWrx,   AArch64::ADDSWrs,  AArch64::ADDSWri,
-      AArch64::ADDWrs,   AArch64::ADDWri,   AArch64::ADDSWrx,
-      AArch64::ADCWr,    AArch64::ADCSWr,   AArch64::ASRVWr,
-      AArch64::SUBWri,   AArch64::SUBWrs,   AArch64::SUBWrx,
-      AArch64::SUBSWrs,  AArch64::SUBSWri,  AArch64::SUBSWrx,
-      AArch64::SBFMWri,  AArch64::CSELWr,   AArch64::ANDWri,
-      AArch64::ANDWrr,   AArch64::ANDWrs,   AArch64::ANDSWri,
-      AArch64::ANDSWrr,  AArch64::ANDSWrs,  AArch64::MADDWrrr,
-      AArch64::MSUBWrrr, AArch64::EORWri,   AArch64::CSINVWr,
-      AArch64::CSINCWr,  AArch64::MOVZWi,   AArch64::MOVNWi,
-      AArch64::MOVKWi,   AArch64::LSLVWr,   AArch64::LSRVWr,
-      AArch64::ORNWrs,   AArch64::UBFMWri,  AArch64::BFMWri,
-      AArch64::ORRWrs,   AArch64::ORRWri,   AArch64::SDIVWr,
-      AArch64::UDIVWr,   AArch64::EXTRWrri, AArch64::EORWrs,
-      AArch64::RORVWr,   AArch64::RBITWr,   AArch64::CLZWr,
-      AArch64::REVWr,    AArch64::CSNEGWr,  AArch64::BICWrs,
-      AArch64::BICSWrs,  AArch64::EONWrs,   AArch64::REV16Wr,
-      AArch64::Bcc,      AArch64::CCMPWr,   AArch64::CCMPWi,
-      AArch64::LDRWui,   AArch64::LDRWroX,  AArch64::LDRSui,
-      AArch64::LDRBBui,  AArch64::LDRBui,   AArch64::LDRSBWui,
-      AArch64::LDRSWui,  AArch64::LDRSHWui, AArch64::LDRSBWui,
-      AArch64::LDRHHui,  AArch64::LDRHui,   AArch64::STRWui,
-      AArch64::STRWroX,  AArch64::CCMNWi,   AArch64::CCMNWr,
-      AArch64::STRBBui,  AArch64::STRBui,   AArch64::STPWi,
-      AArch64::STRHHui,  AArch64::STRHui,   AArch64::STURWi,
-      AArch64::STRSui,   AArch64::LDPWi,    AArch64::STRWpre,
-      AArch64::FADDSrr,  AArch64::FSUBSrr,  AArch64::FCMPSrr,
-      AArch64::FMOVSWr,
+      AArch64::ADDWrx,    AArch64::ADDSWrs,    AArch64::ADDSWri,
+      AArch64::ADDWrs,    AArch64::ADDWri,     AArch64::ADDSWrx,
+      AArch64::ADCWr,     AArch64::ADCSWr,     AArch64::ASRVWr,
+      AArch64::SUBWri,    AArch64::SUBWrs,     AArch64::SUBWrx,
+      AArch64::SUBSWrs,   AArch64::SUBSWri,    AArch64::SUBSWrx,
+      AArch64::SBFMWri,   AArch64::CSELWr,     AArch64::ANDWri,
+      AArch64::ANDWrr,    AArch64::ANDWrs,     AArch64::ANDSWri,
+      AArch64::ANDSWrr,   AArch64::ANDSWrs,    AArch64::MADDWrrr,
+      AArch64::MSUBWrrr,  AArch64::EORWri,     AArch64::CSINVWr,
+      AArch64::CSINCWr,   AArch64::MOVZWi,     AArch64::MOVNWi,
+      AArch64::MOVKWi,    AArch64::LSLVWr,     AArch64::LSRVWr,
+      AArch64::ORNWrs,    AArch64::UBFMWri,    AArch64::BFMWri,
+      AArch64::ORRWrs,    AArch64::ORRWri,     AArch64::SDIVWr,
+      AArch64::UDIVWr,    AArch64::EXTRWrri,   AArch64::EORWrs,
+      AArch64::RORVWr,    AArch64::RBITWr,     AArch64::CLZWr,
+      AArch64::REVWr,     AArch64::CSNEGWr,    AArch64::BICWrs,
+      AArch64::BICSWrs,   AArch64::EONWrs,     AArch64::REV16Wr,
+      AArch64::Bcc,       AArch64::CCMPWr,     AArch64::CCMPWi,
+      AArch64::LDRWui,    AArch64::LDRWroX,    AArch64::LDRSui,
+      AArch64::LDRBBui,   AArch64::LDRBui,     AArch64::LDRSBWui,
+      AArch64::LDRSWui,   AArch64::LDRSHWui,   AArch64::LDRSBWui,
+      AArch64::LDRHHui,   AArch64::LDRHui,     AArch64::STRWui,
+      AArch64::STRWroX,   AArch64::CCMNWi,     AArch64::CCMNWr,
+      AArch64::STRBBui,   AArch64::STRBui,     AArch64::STPWi,
+      AArch64::STRHHui,   AArch64::STRHui,     AArch64::STURWi,
+      AArch64::STRSui,    AArch64::LDPWi,      AArch64::STRWpre,
+      AArch64::FADDSrr,   AArch64::FSUBSrr,    AArch64::FCMPSrr,
+      AArch64::FMOVSWr,   AArch64::INSvi32gpr, AArch64::INSvi16gpr,
+      AArch64::INSvi8gpr,
   };
 
   const set<int> instrs_64 = {
-      AArch64::ADDXrx,    AArch64::ADDSXrs,   AArch64::ADDSXri,
-      AArch64::ADDXrs,    AArch64::ADDXri,    AArch64::ADDSXrx,
-      AArch64::ADDv2i32,  AArch64::ADDv4i16,  AArch64::ADDv8i8,
-      AArch64::SUBv2i32,  AArch64::SUBv4i16,  AArch64::SUBv8i8,
-      AArch64::ADCXr,     AArch64::ADCSXr,    AArch64::ASRVXr,
-      AArch64::SUBXri,    AArch64::SUBXrs,    AArch64::SUBXrx,
-      AArch64::SUBSXrs,   AArch64::SUBSXri,   AArch64::SUBSXrx,
-      AArch64::SBFMXri,   AArch64::CSELXr,    AArch64::ANDXri,
-      AArch64::ANDXrr,    AArch64::ANDXrs,    AArch64::ANDSXri,
-      AArch64::ANDSXrr,   AArch64::ANDSXrs,   AArch64::MADDXrrr,
-      AArch64::MSUBXrrr,  AArch64::EORXri,    AArch64::CSINVXr,
-      AArch64::CSINCXr,   AArch64::MOVZXi,    AArch64::MOVNXi,
-      AArch64::MOVKXi,    AArch64::LSLVXr,    AArch64::LSRVXr,
-      AArch64::ORNXrs,    AArch64::UBFMXri,   AArch64::BFMXri,
-      AArch64::ORRXrs,    AArch64::ORRXri,    AArch64::SDIVXr,
-      AArch64::UDIVXr,    AArch64::EXTRXrri,  AArch64::EORXrs,
-      AArch64::SMADDLrrr, AArch64::UMADDLrrr, AArch64::RORVXr,
-      AArch64::RBITXr,    AArch64::CLZXr,     AArch64::REVXr,
-      AArch64::CSNEGXr,   AArch64::BICXrs,    AArch64::BICSXrs,
-      AArch64::EONXrs,    AArch64::SMULHrr,   AArch64::UMULHrr,
-      AArch64::REV32Xr,   AArch64::REV16Xr,   AArch64::SMSUBLrrr,
-      AArch64::UMSUBLrrr, AArch64::PHI,       AArch64::TBZW,
-      AArch64::TBZX,      AArch64::TBNZW,     AArch64::TBNZX,
-      AArch64::B,         AArch64::CBZW,      AArch64::CBZX,
-      AArch64::CBNZW,     AArch64::CBNZX,     AArch64::CCMPXr,
-      AArch64::CCMPXi,    AArch64::LDRXui,    AArch64::LDRXpost,
-      AArch64::LDPXpost,  AArch64::LDPXi,     AArch64::LDRDui,
-      AArch64::LDRXroX,   AArch64::STRDui,    AArch64::MSR,
-      AArch64::MRS,       AArch64::LDRSBXui,  AArch64::LDRSBXui,
-      AArch64::LDRSHXui,  AArch64::STRXui,    AArch64::STRXroX,
-      AArch64::STPXi,     AArch64::CCMNXi,    AArch64::CCMNXr,
-      AArch64::STURXi,    AArch64::ADRP,      AArch64::STRXpre,
-      AArch64::XTNv8i8,   AArch64::FADDDrr,   AArch64::FSUBDrr,
-      AArch64::FCMPDrr,   AArch64::NOTv8i8,   AArch64::CNTv8i8,
-      AArch64::ANDv8i8,   AArch64::ORRv8i8,   AArch64::EORv8i8,
-      AArch64::FMOVDXr,
+      AArch64::ADDXrx,    AArch64::ADDSXrs,    AArch64::ADDSXri,
+      AArch64::ADDXrs,    AArch64::ADDXri,     AArch64::ADDSXrx,
+      AArch64::ADDv2i32,  AArch64::ADDv4i16,   AArch64::ADDv8i8,
+      AArch64::SUBv2i32,  AArch64::SUBv4i16,   AArch64::SUBv8i8,
+      AArch64::ADCXr,     AArch64::ADCSXr,     AArch64::ASRVXr,
+      AArch64::SUBXri,    AArch64::SUBXrs,     AArch64::SUBXrx,
+      AArch64::SUBSXrs,   AArch64::SUBSXri,    AArch64::SUBSXrx,
+      AArch64::SBFMXri,   AArch64::CSELXr,     AArch64::ANDXri,
+      AArch64::ANDXrr,    AArch64::ANDXrs,     AArch64::ANDSXri,
+      AArch64::ANDSXrr,   AArch64::ANDSXrs,    AArch64::MADDXrrr,
+      AArch64::MSUBXrrr,  AArch64::EORXri,     AArch64::CSINVXr,
+      AArch64::CSINCXr,   AArch64::MOVZXi,     AArch64::MOVNXi,
+      AArch64::MOVKXi,    AArch64::LSLVXr,     AArch64::LSRVXr,
+      AArch64::ORNXrs,    AArch64::UBFMXri,    AArch64::BFMXri,
+      AArch64::ORRXrs,    AArch64::ORRXri,     AArch64::SDIVXr,
+      AArch64::UDIVXr,    AArch64::EXTRXrri,   AArch64::EORXrs,
+      AArch64::SMADDLrrr, AArch64::UMADDLrrr,  AArch64::RORVXr,
+      AArch64::RBITXr,    AArch64::CLZXr,      AArch64::REVXr,
+      AArch64::CSNEGXr,   AArch64::BICXrs,     AArch64::BICSXrs,
+      AArch64::EONXrs,    AArch64::SMULHrr,    AArch64::UMULHrr,
+      AArch64::REV32Xr,   AArch64::REV16Xr,    AArch64::SMSUBLrrr,
+      AArch64::UMSUBLrrr, AArch64::PHI,        AArch64::TBZW,
+      AArch64::TBZX,      AArch64::TBNZW,      AArch64::TBNZX,
+      AArch64::B,         AArch64::CBZW,       AArch64::CBZX,
+      AArch64::CBNZW,     AArch64::CBNZX,      AArch64::CCMPXr,
+      AArch64::CCMPXi,    AArch64::LDRXui,     AArch64::LDRXpost,
+      AArch64::LDPXpost,  AArch64::LDPXi,      AArch64::LDRDui,
+      AArch64::LDRXroX,   AArch64::STRDui,     AArch64::MSR,
+      AArch64::MRS,       AArch64::LDRSBXui,   AArch64::LDRSBXui,
+      AArch64::LDRSHXui,  AArch64::STRXui,     AArch64::STRXroX,
+      AArch64::STPXi,     AArch64::CCMNXi,     AArch64::CCMNXr,
+      AArch64::STURXi,    AArch64::ADRP,       AArch64::STRXpre,
+      AArch64::XTNv8i8,   AArch64::FADDDrr,    AArch64::FSUBDrr,
+      AArch64::FCMPDrr,   AArch64::NOTv8i8,    AArch64::CNTv8i8,
+      AArch64::ANDv8i8,   AArch64::ORRv8i8,    AArch64::EORv8i8,
+      AArch64::FMOVDXr,   AArch64::INSvi64gpr,
   };
 
   const set<int> instrs_128 = {
@@ -674,9 +675,12 @@ class arm2llvm {
     return BinaryOperator::Create(Instruction::Xor, a, b, nextName(), LLVMBB);
   }
 
-  BinaryOperator *createLogicalNot(Value *a) {
+  BinaryOperator *createNot(Value *a) {
     auto *ty = a->getType();
-    auto NegOne = ConstantInt::getSigned(ty, -1);
+    auto Zero = ConstantInt::get(ty, 0);
+    auto One = ConstantInt::get(ty, 1);
+    auto NegOne =
+        BinaryOperator::Create(Instruction::Sub, Zero, One, nextName(), LLVMBB);
     return BinaryOperator::Create(Instruction::Xor, a, NegOne, nextName(),
                                   LLVMBB);
   }
@@ -1055,6 +1059,13 @@ class arm2llvm {
       v <<= 1;
     }
     return ret;
+  }
+
+  Value *getLowOnes(int ones, int w) {
+    auto zero = getIntConst(0, ones);
+    auto one = getIntConst(1, ones);
+    auto minusOne = createSub(zero, one);
+    return createZExt(minusOne, getIntTy(w));
   }
 
   Value *maskLower(Value *v, unsigned b) {
@@ -1646,6 +1657,34 @@ public:
       break;
     }
 
+    case AArch64::INSvi8gpr:
+    case AArch64::INSvi16gpr:
+    case AArch64::INSvi32gpr:
+    case AArch64::INSvi64gpr: {
+      unsigned w;
+      if (opcode == AArch64::INSvi8gpr) {
+        w = 8;
+      } else if (opcode == AArch64::INSvi16gpr) {
+        w = 16;
+      } else if (opcode == AArch64::INSvi32gpr) {
+        w = 32;
+      } else if (opcode == AArch64::INSvi64gpr) {
+        w = 64;
+      } else {
+        assert(false);
+      }
+      auto val = createZExt(readFromOperand(3), i128);
+      auto imm = getImm(2);
+      auto shiftAmt = getIntConst(imm * w, 128);
+      auto shifted = createRawShl(val, shiftAmt);
+      auto mask = createRawShl(getLowOnes(w, 128), shiftAmt);
+      auto orig = readFromReg(CurInst->getOperand(1).getReg());
+      auto masked = createAnd(orig, createNot(mask));
+      auto masked2 = createOr(masked, shifted);
+      updateOutputReg(masked2);
+      break;
+    }
+
     case AArch64::FMOVSWr:
     case AArch64::FMOVDXr:
     case AArch64::FMOVWSr:
@@ -1657,7 +1696,7 @@ public:
 
     case AArch64::FMOVSi:
     case AArch64::FMOVDi: {
-      auto imm = CurInst->getOperand(1).getImm();
+      auto imm = getImm(1);
       assert(imm <= 256);
       int w = (opcode == AArch64::FMOVSi) ? 32 : 64;
       auto floatVal = getIntConst(VFPExpandImm(imm, w), 64);
