@@ -878,11 +878,6 @@ class arm2llvm {
     return V;
   }
 
-  unsigned getOutputRegSize() {
-    auto outReg = CurInst->getOperand(0).getReg();
-    return getRegSize(outReg);
-  }
-
   void updateOutputReg(Value *V, bool SExt = false) {
     auto destReg = CurInst->getOperand(0).getReg();
 
