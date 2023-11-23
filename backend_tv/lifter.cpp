@@ -337,6 +337,7 @@ class arm2llvm {
       AArch64::STRHHui,  AArch64::STRHui,   AArch64::STURWi,
       AArch64::STRSui,   AArch64::LDPWi,    AArch64::STRWpre,
       AArch64::FADDSrr,  AArch64::FSUBSrr,  AArch64::FCMPSrr,
+      AArch64::FMOVSWr,
   };
 
   const set<int> instrs_64 = {
@@ -1650,6 +1651,7 @@ public:
       break;
     }
 
+    case AArch64::FMOVSWr:
     case AArch64::FMOVWSr:
     case AArch64::FMOVXDr: {
       auto v = readFromOperand(1);
