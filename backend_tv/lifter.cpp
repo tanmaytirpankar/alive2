@@ -441,6 +441,9 @@ class arm2llvm {
   // LLVM encodes its shifts into immediates (ARM doesn't, it has a shift
   // field in the instruction)
   Value *reg_shift(Value *value, int encodedShift) {
+    if (encodedShift == 0)
+      return value;
+
     int shift_type = (encodedShift >> 6) & 0x7;
     auto W = getBitWidth(value);
     auto exp = getIntConst(encodedShift & 0x3f, W);
@@ -838,14 +841,13 @@ class arm2llvm {
     createStore(v, dealiasReg(reg));
   }
 
-  // FIXME 1: get rid of the shifting case here, push that into instructions
   // FIXME 2: only handle registers, and put calls for immediates and exprs
   //          into other functions that instructions invoke directly
   // FIXME 3: just use register size directly, stop relying on getInstSize!!
   // TODO: make it so that lshr generates code on register lookups
   // some instructions make use of this, and the semantics need to be
   // worked out
-  Value *readFromOperand(int idx, int shift = 0) {
+  Value *readFromOperand(int idx) {
     auto op = CurInst->getOperand(idx);
     auto size = getInstSize(CurInst->getOpcode());
     // Expr operand is required for a combination of ADRP and ADDXri address
@@ -873,10 +875,6 @@ class arm2llvm {
     } else {
       V = getExprVar(op.getExpr());
     }
-
-    if (shift != 0)
-      V = reg_shift(V, shift);
-
     return V;
   }
 
@@ -1581,7 +1579,8 @@ public:
         break;
       }
       default:
-        b = readFromOperand(2, getImm(3));
+        b = readFromOperand(2);
+        b = reg_shift(b, getImm(3));
         if (b->getType()->isPointerTy()) {
           // This control path is for PC-Relative addressing.
           auto reg = CurInst->getOperand(0).getReg();
@@ -1670,37 +1669,6 @@ public:
       updateOutputReg(floatVal);
       break;
     }
-
-#if 0
-    // assuming that the source is always an x register
-    // This might not be the case but we need to look at the assembly emitter
-    case AArch64::INSvi64gpr: {
-      assert(false && "need to implement INSvi64gpr");
-#if 0
-      auto &op_0 = CurInst->getOperand(0);
-      auto &op_1 = CurInst->getOperand(1);
-      assert(op_0.isReg() && op_1.isReg());
-      assert((op_0.getReg() == op_1.getReg()) &&
-             "this form of INSvi64gpr is not supported yet");
-      auto op_index = getImm(2);
-      auto val = readFromOperand(3);
-      auto q_reg_val = cur_vol_regs[MCBB][op_0.getReg()];
-      // FIXME make this a utility function that uses index and size
-      auto mask = getIntConst(-1, 128);
-
-      if (op_index > 0) {
-        mask = createMaskedShl(mask, getIntConst(64, 128));
-        val = createMaskedShl(val, getIntConst(64, 128));
-      }
-
-      auto q_cleared = createMaskedShl(q_reg_val, mask);
-      auto mov_res = createAnd(q_cleared, val);
-      updateOutputReg(mov_res);
-      cur_vol_regs[MCBB][op_0.getReg()] = mov_res;
-#endif
-      break;
-    }
-#endif
 
     case AArch64::FADDSrr:
     case AArch64::FADDDrr:
@@ -2005,7 +1973,8 @@ public:
         break;
       }
       default:
-        b = readFromOperand(2, getImm(3));
+        b = readFromOperand(2);
+        b = reg_shift(b, getImm(3));
       }
 
       // make sure that lhs and rhs conversion succeeded, type lookup succeeded
@@ -2351,7 +2320,8 @@ public:
     case AArch64::EORWrs:
     case AArch64::EORXrs: {
       auto lhs = readFromOperand(1);
-      auto rhs = readFromOperand(2, getImm(3));
+      auto rhs = readFromOperand(2);
+      rhs = reg_shift(rhs, getImm(3));
       auto result = createXor(lhs, rhs);
       updateOutputReg(result);
       break;
@@ -2439,7 +2409,8 @@ public:
       auto size = getInstSize(opcode);
       assert(CurInst->getOperand(0).isReg());
       assert(CurInst->getOperand(1).isImm());
-      auto lhs = readFromOperand(1, getImm(2));
+      auto lhs = readFromOperand(1);
+      lhs = reg_shift(lhs, getImm(2));
       auto rhs = getIntConst(0, size);
       auto ident = createAdd(lhs, rhs);
       updateOutputReg(ident);
@@ -2453,7 +2424,8 @@ public:
       assert(CurInst->getOperand(1).isImm());
       assert(CurInst->getOperand(2).isImm());
 
-      auto lhs = readFromOperand(1, getImm(2));
+      auto lhs = readFromOperand(1);
+      lhs = reg_shift(lhs, getImm(2));
       auto neg_one = getIntConst(-1, size);
       auto not_lhs = createXor(lhs, neg_one);
 
@@ -2483,7 +2455,8 @@ public:
     case AArch64::ORNXrs: {
       auto size = getInstSize(opcode);
       auto lhs = readFromOperand(1);
-      auto rhs = readFromOperand(2, getImm(3));
+      auto rhs = readFromOperand(2);
+      rhs = reg_shift(rhs, getImm(3));
 
       auto neg_one = getIntConst(-1, size);
       auto not_rhs = createXor(rhs, neg_one);
@@ -2496,7 +2469,8 @@ public:
     case AArch64::MOVKXi: {
       auto size = getInstSize(opcode);
       auto dest = readFromOperand(1);
-      auto lhs = readFromOperand(2, getImm(3));
+      auto lhs = readFromOperand(2);
+      lhs = reg_shift(lhs, getImm(3));
 
       uint64_t bitmask;
       auto shift_amt = getImm(3);
@@ -2648,7 +2622,8 @@ public:
     case AArch64::ORRWrs:
     case AArch64::ORRXrs: {
       auto lhs = readFromOperand(1);
-      auto rhs = readFromOperand(2, getImm(3));
+      auto rhs = readFromOperand(2);
+      rhs = reg_shift(rhs, getImm(3));
       auto result = createOr(lhs, rhs);
       updateOutputReg(result);
       break;
