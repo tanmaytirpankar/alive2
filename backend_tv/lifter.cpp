@@ -376,6 +376,7 @@ class arm2llvm {
       AArch64::XTNv8i8,   AArch64::FADDDrr,   AArch64::FSUBDrr,
       AArch64::FCMPDrr,   AArch64::NOTv8i8,   AArch64::CNTv8i8,
       AArch64::ANDv8i8,   AArch64::ORRv8i8,   AArch64::EORv8i8,
+      AArch64::FMOVDXr,
   };
 
   const set<int> instrs_128 = {
@@ -1652,6 +1653,7 @@ public:
     }
 
     case AArch64::FMOVSWr:
+    case AArch64::FMOVDXr:
     case AArch64::FMOVWSr:
     case AArch64::FMOVXDr: {
       auto v = readFromOperand(1);
