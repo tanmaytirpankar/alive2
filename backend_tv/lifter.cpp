@@ -738,6 +738,11 @@ class arm2llvm {
                             (NameStr == "") ? nextName() : NameStr, LLVMBB);
   }
 
+  CastInst *createBitCast(Value *v, Type *t, const string &NameStr = "") {
+    return CastInst::Create(Instruction::BitCast, v, t,
+                            (NameStr == "") ? nextName() : NameStr, LLVMBB);
+  }
+
   CastInst *createCast(Value *v, Type *t, Instruction::CastOps op,
                        const string &NameStr = "") {
     return CastInst::Create(op, v, t, (NameStr == "") ? nextName() : NameStr,
@@ -754,17 +759,13 @@ class arm2llvm {
 
     // Create cast to reinterpret bits as a vector type
     Value *a_vector =
-        createCast(a,
-                   VectorType::get(getIntTy(elementTypeInBits),
-                                   ElementCount::getFixed(numElements)),
-                   Instruction::BitCast);
+        createBitCast(a, VectorType::get(getIntTy(elementTypeInBits),
+                                         ElementCount::getFixed(numElements)));
 
     // Create cast to reinterpret bits as a vector type
     Value *b_vector =
-        createCast(b,
-                   VectorType::get(getIntTy(elementTypeInBits),
-                                   ElementCount::getFixed(numElements)),
-                   Instruction::BitCast);
+        createBitCast(b, VectorType::get(getIntTy(elementTypeInBits),
+                                         ElementCount::getFixed(numElements)));
 
     // Vector extension for instructions that require it
     switch (CurInst->getOpcode()) {
@@ -925,7 +926,7 @@ class arm2llvm {
 
     if (V->getType()->isVectorTy()) {
       // Cast to integer type before storing into register
-      V = createCast(V, getIntTy(W), Instruction::BitCast);
+      V = createBitCast(V, getIntTy(W));
     }
 
     // Create LLVM instructions extending the Value V if it is smaller than the
@@ -1363,7 +1364,7 @@ class arm2llvm {
 
         if ((retTyp->isVectorTy() || retTyp->isFloatingPointTy()) &&
             !has_ret_attr)
-          retVal = createCast(retVal, retTyp, Instruction::BitCast);
+          retVal = createBitCast(retVal, retTyp);
       }
       createReturn(retVal);
     }
@@ -1767,19 +1768,17 @@ public:
         assert(false && "missed a case");
       }
 
-      auto a = createCast(readFromOperand(1), fTy, Instruction::BitCast);
-      auto b = createCast(readFromOperand(2), fTy, Instruction::BitCast);
+      auto a = createBitCast(readFromOperand(1), fTy);
+      auto b = createBitCast(readFromOperand(2), fTy);
 
       auto sizeTy = getIntTy(getInstSize(opcode));
-      auto res =
-          createCast(createBinop(a, b, op), sizeTy, Instruction::BitCast);
+      auto res = createBitCast(createBinop(a, b, op), sizeTy);
       updateOutputReg(res);
       break;
     }
 
     case AArch64::FCVTZSUWSr: {
-      auto val1 = createCast(readFromOperand(1), Type::getFloatTy(Ctx),
-                             Instruction::BitCast);
+      auto val1 = createBitCast(readFromOperand(1), Type::getFloatTy(Ctx));
       auto val2 = createConvertFloatToS32(val1);
       updateOutputReg(val2);
       break;
@@ -1788,7 +1787,7 @@ public:
     case AArch64::FCVTSHr: {
       auto val1 = createTrunc(readFromOperand(1), i16);
       auto val3 = createConvertFromFP16(val1, Type::getFloatTy(Ctx));
-      auto val4 = createCast(val3, i32, Instruction::BitCast);
+      auto val4 = createBitCast(val3, i32);
       updateOutputReg(val4);
       break;
     }
@@ -1803,8 +1802,8 @@ public:
       } else {
         assert(false && "missed a case");
       }
-      auto a = createCast(readFromOperand(0), fTy, Instruction::BitCast);
-      auto b = createCast(readFromOperand(1), fTy, Instruction::BitCast);
+      auto a = createBitCast(readFromOperand(0), fTy);
+      auto b = createBitCast(readFromOperand(1), fTy);
       setN(createFCmp(FCmpInst::Predicate::FCMP_OLT, a, b));
       setZ(createFCmp(FCmpInst::Predicate::FCMP_OEQ, a, b));
       setC(createFCmp(FCmpInst::Predicate::FCMP_UGT, a, b));
@@ -3460,11 +3459,9 @@ public:
       // BitCast src to a vector of numElements x (2*elementSize)
       assert(numElements * (2 * elementSize) == 128 &&
              "BitCasting to wrong type");
-      Value *src_vector =
-          createCast(src,
-                     VectorType::get(getIntTy(2 * elementSize),
-                                     ElementCount::getFixed(numElements)),
-                     Instruction::BitCast);
+      Value *src_vector = createBitCast(
+          src, VectorType::get(getIntTy(2 * elementSize),
+                               ElementCount::getFixed(numElements)));
       Value *new_dest_vector = createTrunc(
           src_vector, VectorType::get(getIntTy(elementSize),
                                       ElementCount::getFixed(numElements)));
@@ -3473,9 +3470,8 @@ public:
         // Have to preserve the lower 64 bits so, read from register and insert
         // to the upper 64 bits
         Value *dest = readFromReg(op0.getReg());
-        Value *original_dest_vector = createCast(
-            dest, VectorType::get(getIntTy(64), ElementCount::getFixed(2)),
-            Instruction::BitCast);
+        Value *original_dest_vector = createBitCast(
+            dest, VectorType::get(getIntTy(64), ElementCount::getFixed(2)));
 
         new_dest_vector = createInsertElement(
             original_dest_vector, new_dest_vector, getIntConst(1, 32));
@@ -3521,9 +3517,8 @@ public:
       }
 
       // Bit-cast the truncated source value and -1 to a vector of 8 x 8-bit
-      auto src_vector = createCast(
-          src, VectorType::get(i8, ElementCount::getFixed(numElements)),
-          Instruction::BitCast);
+      auto src_vector = createBitCast(
+          src, VectorType::get(i8, ElementCount::getFixed(numElements)));
       Value *result;
 
       // Performing the operation
@@ -3536,9 +3531,8 @@ public:
           // For some reason, creating a 128 bit -1 is not working...
           neg_one_vals.push_back(ConstantInt::get(Ctx, llvm::APInt(64, -1)));
         auto neg_one = getVectorConst(neg_one_vals);
-        auto neg_one_vector = createCast(
-            neg_one, VectorType::get(i8, ElementCount::getFixed(numElements)),
-            Instruction::BitCast);
+        auto neg_one_vector = createBitCast(
+            neg_one, VectorType::get(i8, ElementCount::getFixed(numElements)));
 
         // Perform bitwise NOT operation on the source value by XORing it with
         // -1
@@ -3587,7 +3581,7 @@ public:
     if (V->getType()->isFloatingPointTy())
       return V;
     if (V->getType()->isVectorTy())
-      V = createCast(V, getIntTy(origWidth), Instruction::BitCast, nextName());
+      V = createBitCast(V, getIntTy(origWidth));
     if (origWidth < 64) {
       assert(V->getType()->isIntegerTy());
       auto op = argIsSExt ? Instruction::SExt : Instruction::ZExt;
