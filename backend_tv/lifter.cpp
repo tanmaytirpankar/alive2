@@ -120,12 +120,6 @@ public:
   }
 };
 
-/*
- * FIXME: this data structure doesn't need to exist, it would be much
- * better to just run the MCStreamerWrapper twice: first to build the
- * basic blocks in the lifted function, then a second time to lift the
- * instructions
- */
 class MCFunction {
   string name;
   unsigned label_cnt{0};
@@ -381,17 +375,41 @@ class arm2llvm {
   };
 
   const set<int> instrs_128 = {
-      AArch64::FMOVXDr,         AArch64::LDPQi,           AArch64::STPQi,
-      AArch64::ADDv8i16,        AArch64::UADDLv8i8_v8i16, AArch64::ADDv2i64,
-      AArch64::ADDv4i32,        AArch64::ADDv16i8,        AArch64::SUBv8i16,
-      AArch64::USUBLv8i8_v8i16, AArch64::SUBv2i64,        AArch64::SUBv4i32,
-      AArch64::SUBv16i8,        AArch64::LDRQui,          AArch64::STRQui,
-      AArch64::FMOVDi,          AArch64::FMOVSi,          AArch64::FMOVWSr,
-      AArch64::CNTv16i8,        AArch64::MOVIv2d_ns,      AArch64::MOVIv4i32,
-      AArch64::EXTv16i8,        AArch64::DUPv2i64gpr,     AArch64::MOVIv2i32,
-      AArch64::DUPv4i32gpr,     AArch64::ANDv16i8,        AArch64::ORRv16i8,
-      AArch64::EORv16i8,        AArch64::UMOVvi32,        AArch64::UMOVvi8,
-      AArch64::MOVIv16b_ns,     AArch64::UMOVvi64,        AArch64::UMOVvi16,
+      AArch64::FMOVXDr,
+      AArch64::LDPQi,
+      AArch64::STPQi,
+      AArch64::ADDv8i16,
+      AArch64::UADDLv8i8_v8i16,
+      AArch64::ADDv2i64,
+      AArch64::ADDv4i32,
+      AArch64::ADDv16i8,
+      AArch64::SUBv8i16,
+      AArch64::USUBLv8i8_v8i16,
+      AArch64::SUBv2i64,
+      AArch64::SUBv4i32,
+      AArch64::SUBv16i8,
+      AArch64::LDRQui,
+      AArch64::STRQui,
+      AArch64::FMOVDi,
+      AArch64::FMOVSi,
+      AArch64::FMOVWSr,
+      AArch64::CNTv16i8,
+      AArch64::MOVIv2d_ns,
+      AArch64::MOVIv4i32,
+      AArch64::EXTv16i8,
+      AArch64::DUPv2i64gpr,
+      AArch64::MOVIv2i32,
+      AArch64::DUPv4i32gpr,
+      AArch64::ANDv16i8,
+      AArch64::ORRv16i8,
+      AArch64::EORv16i8,
+      AArch64::UMOVvi32,
+      AArch64::UMOVvi8,
+      AArch64::MOVIv16b_ns,
+      AArch64::UMOVvi64,
+      AArch64::UMOVvi16,
+      AArch64::SMOVvi16to32,
+      AArch64::SMOVvi16to32_idx0,
   };
 
   bool has_s(int instr) {
@@ -1791,6 +1809,18 @@ public:
       setZ(createFCmp(FCmpInst::Predicate::FCMP_OEQ, a, b));
       setC(createFCmp(FCmpInst::Predicate::FCMP_UGT, a, b));
       setV(createFCmp(FCmpInst::Predicate::FCMP_UNO, a, b));
+      break;
+    }
+
+    case AArch64::SMOVvi16to32:
+    case AArch64::SMOVvi16to32_idx0: {
+      auto val = readFromOperand(1);
+      auto imm = getImm(2);
+      auto shiftAmt = getIntConst(imm * 16, 128);
+      auto shifted = createRawLShr(val, shiftAmt);
+      auto trunced = createTrunc(shifted, i16);
+      auto sexted = createSExt(trunced, i32);
+      updateOutputReg(sexted);
       break;
     }
 
