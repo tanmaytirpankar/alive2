@@ -1637,7 +1637,7 @@ public:
         break;
       }
       default:
-        b = readInputReg(2);
+        b = readFromOperand(2);
         b = reg_shift(b, getImm(3));
         if (b->getType()->isPointerTy()) {
           // This control path is for PC-Relative addressing.
@@ -1660,10 +1660,8 @@ public:
         auto sadd = createSAddOverflow(a, b);
         auto result = createExtractValue(sadd, {0});
         auto new_v = createExtractValue(sadd, {1});
-
         auto uadd = createUAddOverflow(a, b);
         auto new_c = createExtractValue(uadd, {1});
-
         setV(new_v);
         setC(new_c);
         setNUsingResult(result);
