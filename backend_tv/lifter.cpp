@@ -876,9 +876,19 @@ class arm2llvm {
     createStore(v, dealiasReg(reg));
   }
 
-  // FIXME 2: only handle registers, and put calls for immediates and exprs
-  //          into other functions that instructions invoke directly
-  // FIXME 3: just use register size directly, stop relying on getInstSize!!
+  Value *readInputReg(int idx) {
+    auto op = CurInst->getOperand(idx);
+    assert(op.isReg());
+    auto reg = op.getReg();
+    auto regSize = getRegSize(reg);
+    auto val = readFromReg(reg);
+    if (regSize < getBitWidth(val))
+      val = createTrunc(val, getIntTy(regSize));
+    return val;
+  }
+
+  // FIXME: stop using this -- instructions should know what they're loading
+  // FIXME: then remove getInstSize!
   // TODO: make it so that lshr generates code on register lookups
   // some instructions make use of this, and the semantics need to be
   // worked out
@@ -1561,7 +1571,7 @@ public:
       auto Cmask = createMaskedShl(i64_1, getIntConst(29, 64));
       auto Vmask = createMaskedShl(i64_1, getIntConst(28, 64));
 
-      auto reg = readFromOperand(1);
+      auto reg = readInputReg(1);
       auto Nval = createAnd(Nmask, reg);
       auto Zval = createAnd(Zmask, reg);
       auto Cval = createAnd(Cmask, reg);
@@ -1608,7 +1618,7 @@ public:
         unsigned extendSize = 8 << (extendType % 4);
         auto shift = extendImm & 0x7;
 
-        b = readFromOperand(2);
+        b = readInputReg(2);
 
         // Make sure to not to trunc to the same size as the parameter.
         // Sometimes ADDrx is generated using 32 bit registers and "extends" to
@@ -1627,7 +1637,7 @@ public:
         break;
       }
       default:
-        b = readFromOperand(2);
+        b = readInputReg(2);
         b = reg_shift(b, getImm(3));
         if (b->getType()->isPointerTy()) {
           // This control path is for PC-Relative addressing.
@@ -1715,9 +1725,9 @@ public:
       } else {
         assert(false);
       }
-      auto val = createZExt(readFromOperand(3), i128);
-      auto imm = getImm(2);
-      auto shiftAmt = getIntConst(imm * w, 128);
+      auto val = createZExt(createTrunc(readFromOperand(3), getIntTy(w)), i128);
+      auto lane = getImm(2);
+      auto shiftAmt = getIntConst(lane * w, 128);
       auto shifted = createRawShl(val, shiftAmt);
       auto mask = createRawShl(getLowOnes(w, 128), shiftAmt);
       auto orig = readFromReg(CurInst->getOperand(1).getReg());
