@@ -3126,6 +3126,7 @@ public:
       storeToMemoryImmOffset(shiftedPtr, 0, 8, valToStore);
       break;
     }
+
     case AArch64::STRWroX:
     case AArch64::STRXroX: {
       auto [base, offset, val] = getParamsStoreReg();
@@ -3143,6 +3144,7 @@ public:
       }
       break;
     }
+
     case AArch64::LDPWi:
     case AArch64::LDPXi:
     case AArch64::LDPQi: {
@@ -3640,7 +3642,7 @@ public:
 
     auto Fn =
         Function::Create(srcFn.getFunctionType(), GlobalValue::ExternalLinkage,
-                         0, srcFn.getName() + "-tgt", LiftedModule);
+                         0, srcFn.getName(), LiftedModule);
 
     // create LLVM-side basic blocks
     vector<pair<BasicBlock *, MCBasicBlock *>> BBs;
