@@ -1618,7 +1618,7 @@ public:
         unsigned extendSize = 8 << (extendType % 4);
         auto shift = extendImm & 0x7;
 
-        b = readInputReg(2);
+        b = readFromOperand(2);
 
         // Make sure to not to trunc to the same size as the parameter.
         // Sometimes ADDrx is generated using 32 bit registers and "extends" to
