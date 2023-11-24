@@ -338,7 +338,7 @@ class arm2llvm {
       AArch64::STRSui,    AArch64::LDPWi,      AArch64::STRWpre,
       AArch64::FADDSrr,   AArch64::FSUBSrr,    AArch64::FCMPSrr,
       AArch64::FMOVSWr,   AArch64::INSvi32gpr, AArch64::INSvi16gpr,
-      AArch64::INSvi8gpr,
+      AArch64::INSvi8gpr, AArch64::FCVTSHr,    AArch64::FCVTZSUWSr,
   };
 
   const set<int> instrs_64 = {
@@ -391,6 +391,7 @@ class arm2llvm {
       AArch64::EXTv16i8,        AArch64::DUPv2i64gpr,     AArch64::MOVIv2i32,
       AArch64::DUPv4i32gpr,     AArch64::ANDv16i8,        AArch64::ORRv16i8,
       AArch64::EORv16i8,        AArch64::UMOVvi32,        AArch64::UMOVvi8,
+      AArch64::MOVIv16b_ns,     AArch64::UMOVvi64,        AArch64::UMOVvi16,
   };
 
   bool has_s(int instr) {
@@ -528,6 +529,17 @@ class arm2llvm {
     auto ctpop_decl =
         Intrinsic::getDeclaration(LiftedModule, Intrinsic::ctpop, v->getType());
     return CallInst::Create(ctpop_decl, {v}, nextName(), LLVMBB);
+  }
+
+  // first argument is an i16
+  CallInst *createConvertFromFP16(Value *v, Type *ty) {
+    auto cvt_decl = Intrinsic::getDeclaration(LiftedModule,
+                                              Intrinsic::convert_from_fp16, ty);
+    return CallInst::Create(cvt_decl, {v}, nextName(), LLVMBB);
+  }
+
+  CastInst *createConvertFloatToS32(Value *v) {
+    return new FPToSIInst(v, getIntTy(32), nextName(), LLVMBB);
   }
 
   ExtractElementInst *createExtractElement(Value *v, Value *idx) {
@@ -1076,11 +1088,15 @@ class arm2llvm {
     return createAnd(v, sub);
   }
 
-  Value *copy64to128(Value *v) {
+  Value *copy8to128(Value *v) {
     auto i128 = getIntTy(128);
     auto vext = createZExt(v, i128);
-    auto shifted = createRawShl(vext, getIntConst(64, 128));
-    return createOr(shifted, vext);
+    auto ret = getIntConst(0, 128);
+    for (int i = 0; i < 16; i++) {
+      ret = createRawShl(ret, getIntConst(8, 128));
+      ret = createOr(ret, vext);
+    }
+    return ret;
   }
 
   Value *copy32to128(Value *v) {
@@ -1092,6 +1108,13 @@ class arm2llvm {
       ret = createOr(ret, vext);
     }
     return ret;
+  }
+
+  Value *copy64to128(Value *v) {
+    auto i128 = getIntTy(128);
+    auto vext = createZExt(v, i128);
+    auto shifted = createRawShl(vext, getIntConst(64, 128));
+    return createOr(shifted, vext);
   }
 
   Value *copy32to64(Value *v) {
@@ -1736,6 +1759,22 @@ public:
       break;
     }
 
+    case AArch64::FCVTZSUWSr: {
+      auto val1 = createCast(readFromOperand(1), Type::getFloatTy(Ctx),
+                             Instruction::BitCast);
+      auto val2 = createConvertFloatToS32(val1);
+      updateOutputReg(val2);
+      break;
+    }
+
+    case AArch64::FCVTSHr: {
+      auto val1 = createTrunc(readFromOperand(1), i16);
+      auto val3 = createConvertFromFP16(val1, Type::getFloatTy(Ctx));
+      auto val4 = createCast(val3, i32, Instruction::BitCast);
+      updateOutputReg(val4);
+      break;
+    }
+
     case AArch64::FCMPSrr:
     case AArch64::FCMPDrr: {
       Type *fTy;
@@ -1756,21 +1795,33 @@ public:
     }
 
     case AArch64::UMOVvi8:
-    case AArch64::UMOVvi32: {
+    case AArch64::UMOVvi16:
+    case AArch64::UMOVvi32:
+    case AArch64::UMOVvi64: {
       unsigned sz;
       if (opcode == AArch64::UMOVvi8) {
         sz = 8;
+      } else if (opcode == AArch64::UMOVvi16) {
+        sz = 16;
       } else if (opcode == AArch64::UMOVvi32) {
         sz = 32;
+      } else if (opcode == AArch64::UMOVvi64) {
+        sz = 64;
       } else {
         assert(false);
       }
       auto val = readFromOperand(1);
-      *out << "widht = " << getBitWidth(val) << "\n";
       auto imm = getImm(2);
-      auto shifted = createRawLShr(val, getIntConst(imm * sz, 128));
+      auto shiftAmt = getIntConst(imm * sz, 128);
+      auto shifted = createRawLShr(val, shiftAmt);
       auto masked = maskLower(shifted, sz);
-      updateOutputReg(createTrunc(masked, i32));
+      updateOutputReg(createTrunc(masked, i64));
+      break;
+    }
+
+    case AArch64::MOVIv16b_ns: {
+      auto v = getIntConst(getImm(1), 8);
+      updateOutputReg(copy8to128(v));
       break;
     }
 
