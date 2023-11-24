@@ -1571,7 +1571,7 @@ public:
       auto Cmask = createMaskedShl(i64_1, getIntConst(29, 64));
       auto Vmask = createMaskedShl(i64_1, getIntConst(28, 64));
 
-      auto reg = readInputReg(1);
+      auto reg = readFromOperand(1);
       auto Nval = createAnd(Nmask, reg);
       auto Zval = createAnd(Zmask, reg);
       auto Cval = createAnd(Cmask, reg);
@@ -1660,8 +1660,10 @@ public:
         auto sadd = createSAddOverflow(a, b);
         auto result = createExtractValue(sadd, {0});
         auto new_v = createExtractValue(sadd, {1});
+
         auto uadd = createUAddOverflow(a, b);
         auto new_c = createExtractValue(uadd, {1});
+
         setV(new_v);
         setC(new_c);
         setNUsingResult(result);
