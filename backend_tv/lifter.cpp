@@ -2989,7 +2989,7 @@ public:
       if (op2.isExpr()) {
         Value *globalVar = getExprVar(op2.getExpr());
         if (opcode == AArch64::LDRBBui || opcode == AArch64::LDRHHui ||
-            opcode == AArch64::LDRWui) {
+            opcode == AArch64::LDRWui || opcode == AArch64::LDRXui) {
           auto loaded = makeLoadWithOffset(globalVar, 0, size);
           updateOutputReg(loaded);
         } else {
