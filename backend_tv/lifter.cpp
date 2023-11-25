@@ -372,7 +372,7 @@ class arm2llvm {
       AArch64::FCMPDrr,    AArch64::NOTv8i8,    AArch64::CNTv8i8,
       AArch64::ANDv8i8,    AArch64::ORRv8i8,    AArch64::EORv8i8,
       AArch64::FMOVDXr,    AArch64::INSvi64gpr, AArch64::MOVID,
-      AArch64::FCVTZSUWDr,
+      AArch64::FCVTZSUWDr, AArch64::FMOVDr,
   };
 
   const set<int> instrs_128 = {
@@ -412,6 +412,9 @@ class arm2llvm {
       AArch64::SMOVvi16to32,
       AArch64::SMOVvi16to32_idx0,
       AArch64::INSvi64lane,
+      AArch64::INSvi8lane,
+      AArch64::INSvi16lane,
+      AArch64::INSvi32lane,
   };
 
   bool has_s(int instr) {
@@ -1129,6 +1132,7 @@ class arm2llvm {
   Value *insertIntoVector(Value *orig, Value *elt, unsigned width,
                           unsigned lane) {
     assert(getBitWidth(orig) == 128);
+    assert(width == 8 || width == 16 || width == 32 || width == 64);
     assert(getBitWidth(elt) == width);
     auto i128 = getIntTy(128);
     auto eltExt = createZExt(elt, i128);
@@ -1136,8 +1140,7 @@ class arm2llvm {
     auto shifted = createRawShl(eltExt, shiftAmt);
     auto mask = createRawShl(getLowOnes(width, 128), shiftAmt);
     auto masked = createAnd(orig, createNot(mask));
-    auto masked2 = createOr(masked, shifted);
-    return masked2;
+    return createOr(masked, shifted);
   }
 
   Value *copy8to128(Value *v) {
@@ -1732,9 +1735,22 @@ public:
       break;
     }
 
+    case AArch64::INSvi8lane:
+    case AArch64::INSvi16lane:
+    case AArch64::INSvi32lane:
     case AArch64::INSvi64lane: {
       unsigned w;
-      w = 64;
+      if (opcode == AArch64::INSvi8lane) {
+        w = 8;
+      } else if (opcode == AArch64::INSvi16lane) {
+        w = 16;
+      } else if (opcode == AArch64::INSvi32lane) {
+        w = 32;
+      } else if (opcode == AArch64::INSvi64lane) {
+        w = 64;
+      } else {
+        assert(false);
+      }
       auto ext = extractFromVector(readFromOperand(3), w, getImm(4));
       auto ins = insertIntoVector(readFromOperand(1), ext, w, getImm(2));
       updateOutputReg(ins);
@@ -1771,7 +1787,8 @@ public:
     case AArch64::FMOVSWr:
     case AArch64::FMOVDXr:
     case AArch64::FMOVWSr:
-    case AArch64::FMOVXDr: {
+    case AArch64::FMOVXDr:
+    case AArch64::FMOVDr: {
       auto v = readFromOperand(1);
       updateOutputReg(v);
       break;
