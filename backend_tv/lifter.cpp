@@ -336,42 +336,43 @@ class arm2llvm {
   };
 
   const set<int> instrs_64 = {
-      AArch64::ADDXrx,    AArch64::ADDSXrs,    AArch64::ADDSXri,
-      AArch64::ADDXrs,    AArch64::ADDXri,     AArch64::ADDSXrx,
-      AArch64::ADDv2i32,  AArch64::ADDv4i16,   AArch64::ADDv8i8,
-      AArch64::SUBv2i32,  AArch64::SUBv4i16,   AArch64::SUBv8i8,
-      AArch64::ADCXr,     AArch64::ADCSXr,     AArch64::ASRVXr,
-      AArch64::SUBXri,    AArch64::SUBXrs,     AArch64::SUBXrx,
-      AArch64::SUBSXrs,   AArch64::SUBSXri,    AArch64::SUBSXrx,
-      AArch64::SBFMXri,   AArch64::CSELXr,     AArch64::ANDXri,
-      AArch64::ANDXrr,    AArch64::ANDXrs,     AArch64::ANDSXri,
-      AArch64::ANDSXrr,   AArch64::ANDSXrs,    AArch64::MADDXrrr,
-      AArch64::MSUBXrrr,  AArch64::EORXri,     AArch64::CSINVXr,
-      AArch64::CSINCXr,   AArch64::MOVZXi,     AArch64::MOVNXi,
-      AArch64::MOVKXi,    AArch64::LSLVXr,     AArch64::LSRVXr,
-      AArch64::ORNXrs,    AArch64::UBFMXri,    AArch64::BFMXri,
-      AArch64::ORRXrs,    AArch64::ORRXri,     AArch64::SDIVXr,
-      AArch64::UDIVXr,    AArch64::EXTRXrri,   AArch64::EORXrs,
-      AArch64::SMADDLrrr, AArch64::UMADDLrrr,  AArch64::RORVXr,
-      AArch64::RBITXr,    AArch64::CLZXr,      AArch64::REVXr,
-      AArch64::CSNEGXr,   AArch64::BICXrs,     AArch64::BICSXrs,
-      AArch64::EONXrs,    AArch64::SMULHrr,    AArch64::UMULHrr,
-      AArch64::REV32Xr,   AArch64::REV16Xr,    AArch64::SMSUBLrrr,
-      AArch64::UMSUBLrrr, AArch64::PHI,        AArch64::TBZW,
-      AArch64::TBZX,      AArch64::TBNZW,      AArch64::TBNZX,
-      AArch64::B,         AArch64::CBZW,       AArch64::CBZX,
-      AArch64::CBNZW,     AArch64::CBNZX,      AArch64::CCMPXr,
-      AArch64::CCMPXi,    AArch64::LDRXui,     AArch64::LDRXpost,
-      AArch64::LDPXpost,  AArch64::LDPXi,      AArch64::LDRDui,
-      AArch64::LDRXroX,   AArch64::STRDui,     AArch64::MSR,
-      AArch64::MRS,       AArch64::LDRSBXui,   AArch64::LDRSBXui,
-      AArch64::LDRSHXui,  AArch64::STRXui,     AArch64::STRXroX,
-      AArch64::STPXi,     AArch64::CCMNXi,     AArch64::CCMNXr,
-      AArch64::STURXi,    AArch64::ADRP,       AArch64::STRXpre,
-      AArch64::XTNv8i8,   AArch64::FADDDrr,    AArch64::FSUBDrr,
-      AArch64::FCMPDrr,   AArch64::NOTv8i8,    AArch64::CNTv8i8,
-      AArch64::ANDv8i8,   AArch64::ORRv8i8,    AArch64::EORv8i8,
-      AArch64::FMOVDXr,   AArch64::INSvi64gpr,
+      AArch64::ADDXrx,     AArch64::ADDSXrs,    AArch64::ADDSXri,
+      AArch64::ADDXrs,     AArch64::ADDXri,     AArch64::ADDSXrx,
+      AArch64::ADDv2i32,   AArch64::ADDv4i16,   AArch64::ADDv8i8,
+      AArch64::SUBv2i32,   AArch64::SUBv4i16,   AArch64::SUBv8i8,
+      AArch64::ADCXr,      AArch64::ADCSXr,     AArch64::ASRVXr,
+      AArch64::SUBXri,     AArch64::SUBXrs,     AArch64::SUBXrx,
+      AArch64::SUBSXrs,    AArch64::SUBSXri,    AArch64::SUBSXrx,
+      AArch64::SBFMXri,    AArch64::CSELXr,     AArch64::ANDXri,
+      AArch64::ANDXrr,     AArch64::ANDXrs,     AArch64::ANDSXri,
+      AArch64::ANDSXrr,    AArch64::ANDSXrs,    AArch64::MADDXrrr,
+      AArch64::MSUBXrrr,   AArch64::EORXri,     AArch64::CSINVXr,
+      AArch64::CSINCXr,    AArch64::MOVZXi,     AArch64::MOVNXi,
+      AArch64::MOVKXi,     AArch64::LSLVXr,     AArch64::LSRVXr,
+      AArch64::ORNXrs,     AArch64::UBFMXri,    AArch64::BFMXri,
+      AArch64::ORRXrs,     AArch64::ORRXri,     AArch64::SDIVXr,
+      AArch64::UDIVXr,     AArch64::EXTRXrri,   AArch64::EORXrs,
+      AArch64::SMADDLrrr,  AArch64::UMADDLrrr,  AArch64::RORVXr,
+      AArch64::RBITXr,     AArch64::CLZXr,      AArch64::REVXr,
+      AArch64::CSNEGXr,    AArch64::BICXrs,     AArch64::BICSXrs,
+      AArch64::EONXrs,     AArch64::SMULHrr,    AArch64::UMULHrr,
+      AArch64::REV32Xr,    AArch64::REV16Xr,    AArch64::SMSUBLrrr,
+      AArch64::UMSUBLrrr,  AArch64::PHI,        AArch64::TBZW,
+      AArch64::TBZX,       AArch64::TBNZW,      AArch64::TBNZX,
+      AArch64::B,          AArch64::CBZW,       AArch64::CBZX,
+      AArch64::CBNZW,      AArch64::CBNZX,      AArch64::CCMPXr,
+      AArch64::CCMPXi,     AArch64::LDRXui,     AArch64::LDRXpost,
+      AArch64::LDPXpost,   AArch64::LDPXi,      AArch64::LDRDui,
+      AArch64::LDRXroX,    AArch64::STRDui,     AArch64::MSR,
+      AArch64::MRS,        AArch64::LDRSBXui,   AArch64::LDRSBXui,
+      AArch64::LDRSHXui,   AArch64::STRXui,     AArch64::STRXroX,
+      AArch64::STPXi,      AArch64::CCMNXi,     AArch64::CCMNXr,
+      AArch64::STURXi,     AArch64::ADRP,       AArch64::STRXpre,
+      AArch64::XTNv8i8,    AArch64::FADDDrr,    AArch64::FSUBDrr,
+      AArch64::FCMPDrr,    AArch64::NOTv8i8,    AArch64::CNTv8i8,
+      AArch64::ANDv8i8,    AArch64::ORRv8i8,    AArch64::EORv8i8,
+      AArch64::FMOVDXr,    AArch64::INSvi64gpr, AArch64::MOVID,
+      AArch64::FCVTZSUWDr,
   };
 
   const set<int> instrs_128 = {
@@ -410,6 +411,7 @@ class arm2llvm {
       AArch64::UMOVvi16,
       AArch64::SMOVvi16to32,
       AArch64::SMOVvi16to32_idx0,
+      AArch64::INSvi64lane,
   };
 
   bool has_s(int instr) {
@@ -556,8 +558,8 @@ class arm2llvm {
     return CallInst::Create(cvt_decl, {v}, nextName(), LLVMBB);
   }
 
-  CastInst *createConvertFloatToS32(Value *v) {
-    return new FPToSIInst(v, getIntTy(32), nextName(), LLVMBB);
+  CastInst *createConvertFPToSI(Value *v, Type *ty) {
+    return new FPToSIInst(v, ty, nextName(), LLVMBB);
   }
 
   ExtractElementInst *createExtractElement(Value *v, Value *idx) {
@@ -1090,7 +1092,7 @@ class arm2llvm {
     return createLoad(getIntTy(1), dealiasReg(AArch64::C));
   }
 
-  uint64_t replicate8(uint64_t v) {
+  uint64_t replicate8to64(uint64_t v) {
     uint64_t ret = 0;
     for (int i = 0; i < 8; ++i) {
       bool b = (v & 128) != 0;
@@ -1115,6 +1117,27 @@ class arm2llvm {
     auto shifted = createRawShl(one, getIntConst(b, w));
     auto sub = createSub(shifted, one);
     return createAnd(v, sub);
+  }
+
+  Value *extractFromVector(Value *val, unsigned width, unsigned lane) {
+    assert(getBitWidth(val) == 128);
+    auto shiftAmt = getIntConst(lane * width, 128);
+    auto shifted = createRawLShr(val, shiftAmt);
+    return createTrunc(shifted, getIntTy(width));
+  }
+
+  Value *insertIntoVector(Value *orig, Value *elt, unsigned width,
+                          unsigned lane) {
+    assert(getBitWidth(orig) == 128);
+    assert(getBitWidth(elt) == width);
+    auto i128 = getIntTy(128);
+    auto eltExt = createZExt(elt, i128);
+    auto shiftAmt = getIntConst(lane * width, 128);
+    auto shifted = createRawShl(eltExt, shiftAmt);
+    auto mask = createRawShl(getLowOnes(width, 128), shiftAmt);
+    auto masked = createAnd(orig, createNot(mask));
+    auto masked2 = createOr(masked, shifted);
+    return masked2;
   }
 
   Value *copy8to128(Value *v) {
@@ -1709,6 +1732,15 @@ public:
       break;
     }
 
+    case AArch64::INSvi64lane: {
+      unsigned w;
+      w = 64;
+      auto ext = extractFromVector(readFromOperand(3), w, getImm(4));
+      auto ins = insertIntoVector(readFromOperand(1), ext, w, getImm(2));
+      updateOutputReg(ins);
+      break;
+    }
+
     case AArch64::INSvi8gpr:
     case AArch64::INSvi16gpr:
     case AArch64::INSvi32gpr:
@@ -1726,17 +1758,13 @@ public:
         assert(false);
       }
       auto val = readFromOperand(3);
+      // need to clear extraneous bits
       if (w < 32)
-	val = createTrunc(val, getIntTy(w));
-      val = createZExt(val, i128);
+        val = createTrunc(val, getIntTy(w));
       auto lane = getImm(2);
-      auto shiftAmt = getIntConst(lane * w, 128);
-      auto shifted = createRawShl(val, shiftAmt);
-      auto mask = createRawShl(getLowOnes(w, 128), shiftAmt);
       auto orig = readFromReg(CurInst->getOperand(1).getReg());
-      auto masked = createAnd(orig, createNot(mask));
-      auto masked2 = createOr(masked, shifted);
-      updateOutputReg(masked2);
+      auto inserted = insertIntoVector(orig, val, w, lane);
+      updateOutputReg(inserted);
       break;
     }
 
@@ -1790,9 +1818,16 @@ public:
       break;
     }
 
+    case AArch64::FCVTZSUWDr: {
+      auto val1 = createBitCast(readFromOperand(1), Type::getDoubleTy(Ctx));
+      auto val2 = createConvertFPToSI(val1, getIntTy(32));
+      updateOutputReg(val2);
+      break;
+    }
+
     case AArch64::FCVTZSUWSr: {
       auto val1 = createBitCast(readFromOperand(1), Type::getFloatTy(Ctx));
-      auto val2 = createConvertFloatToS32(val1);
+      auto val2 = createConvertFPToSI(val1, getIntTy(32));
       updateOutputReg(val2);
       break;
     }
@@ -1867,8 +1902,9 @@ public:
       break;
     }
 
+    case AArch64::MOVID:
     case AArch64::MOVIv2d_ns: {
-      auto imm = getIntConst(replicate8(getImm(1)), 64);
+      auto imm = getIntConst(replicate8to64(getImm(1)), 64);
       updateOutputReg(copy64to128(imm));
       break;
     }
@@ -3816,8 +3852,8 @@ public:
       auto &mc_instrs = mc_bb->getInstrs();
 
       for (auto &inst : mc_instrs) {
-	*out << "  ";
-	inst.dump();
+        *out << "  ";
+        inst.dump();
         if (DebugRegs)
           printRegs();
         llvmInstNum = 0;
