@@ -398,9 +398,7 @@ class arm2llvm {
       AArch64::MOVIv2d_ns,
       AArch64::MOVIv4i32,
       AArch64::EXTv16i8,
-      AArch64::DUPv2i64gpr,
       AArch64::MOVIv2i32,
-      AArch64::DUPv4i32gpr,
       AArch64::ANDv16i8,
       AArch64::ORRv16i8,
       AArch64::EORv16i8,
@@ -415,6 +413,14 @@ class arm2llvm {
       AArch64::INSvi8lane,
       AArch64::INSvi16lane,
       AArch64::INSvi32lane,
+      AArch64::DUPv16i8gpr,
+      AArch64::DUPv8i16gpr,
+      AArch64::DUPv4i32gpr,
+      AArch64::DUPv2i64gpr,
+      AArch64::DUPv16i8lane,
+      AArch64::DUPv8i16lane,
+      AArch64::DUPv4i32lane,
+      AArch64::DUPv2i64lane,
   };
 
   bool has_s(int instr) {
@@ -1143,7 +1149,7 @@ class arm2llvm {
     return createOr(masked, shifted);
   }
 
-  Value *copy8to128(Value *v) {
+  Value *dup8to128(Value *v) {
     auto i128 = getIntTy(128);
     auto vext = createZExt(v, i128);
     auto ret = getIntConst(0, 128);
@@ -1154,7 +1160,18 @@ class arm2llvm {
     return ret;
   }
 
-  Value *copy32to128(Value *v) {
+  Value *dup16to128(Value *v) {
+    auto i128 = getIntTy(128);
+    auto vext = createZExt(v, i128);
+    auto ret = getIntConst(0, 128);
+    for (int i = 0; i < 8; i++) {
+      ret = createRawShl(ret, getIntConst(16, 128));
+      ret = createOr(ret, vext);
+    }
+    return ret;
+  }
+
+  Value *dup32to128(Value *v) {
     auto i128 = getIntTy(128);
     auto vext = createZExt(v, i128);
     auto ret = getIntConst(0, 128);
@@ -1165,14 +1182,14 @@ class arm2llvm {
     return ret;
   }
 
-  Value *copy64to128(Value *v) {
+  Value *dup64to128(Value *v) {
     auto i128 = getIntTy(128);
     auto vext = createZExt(v, i128);
     auto shifted = createRawShl(vext, getIntConst(64, 128));
     return createOr(shifted, vext);
   }
 
-  Value *copy32to64(Value *v) {
+  Value *dup32to64(Value *v) {
     auto i64 = getIntTy(64);
     auto vext = createZExt(v, i64);
     auto ret = createRawShl(vext, getIntConst(32, 64));
@@ -1915,14 +1932,14 @@ public:
 
     case AArch64::MOVIv16b_ns: {
       auto v = getIntConst(getImm(1), 8);
-      updateOutputReg(copy8to128(v));
+      updateOutputReg(dup8to128(v));
       break;
     }
 
     case AArch64::MOVID:
     case AArch64::MOVIv2d_ns: {
       auto imm = getIntConst(replicate8to64(getImm(1)), 64);
-      updateOutputReg(copy64to128(imm));
+      updateOutputReg(dup64to128(imm));
       break;
     }
 
@@ -1930,7 +1947,7 @@ public:
       auto imm1 = getImm(1);
       auto imm2 = getImm(2);
       auto val = getIntConst(imm1 << imm2, 32);
-      updateOutputReg(copy32to64(val));
+      updateOutputReg(dup32to64(val));
       break;
     }
 
@@ -1938,7 +1955,7 @@ public:
       auto imm1 = getImm(1);
       auto imm2 = getImm(2);
       auto val = getIntConst(imm1 << imm2, 32);
-      updateOutputReg(copy32to128(val));
+      updateOutputReg(dup32to128(val));
       break;
     }
 
@@ -1952,14 +1969,50 @@ public:
       break;
     }
 
+    case AArch64::DUPv16i8gpr: {
+      auto t = createTrunc(readFromOperand(1), i8);
+      updateOutputReg(dup8to128(t));
+      break;
+    }
+
+    case AArch64::DUPv8i16gpr: {
+      auto t = createTrunc(readFromOperand(1), i16);
+      updateOutputReg(dup16to128(t));
+      break;
+    }
+
     case AArch64::DUPv4i32gpr: {
       auto t = createTrunc(readFromOperand(1), i32);
-      updateOutputReg(copy32to128(t));
+      updateOutputReg(dup32to128(t));
       break;
     }
 
     case AArch64::DUPv2i64gpr: {
-      updateOutputReg(copy64to128(readFromOperand(1)));
+      updateOutputReg(dup64to128(readFromOperand(1)));
+      break;
+    }
+
+    case AArch64::DUPv16i8lane: {
+      auto ext = extractFromVector(readFromOperand(1), 8, getImm(2));
+      updateOutputReg(dup8to128(ext));
+      break;
+    }
+
+    case AArch64::DUPv8i16lane: {
+      auto ext = extractFromVector(readFromOperand(1), 16, getImm(2));
+      updateOutputReg(dup16to128(ext));
+      break;
+    }
+
+    case AArch64::DUPv4i32lane: {
+      auto ext = extractFromVector(readFromOperand(1), 32, getImm(2));
+      updateOutputReg(dup32to128(ext));
+      break;
+    }
+
+    case AArch64::DUPv2i64lane: {
+      auto ext = extractFromVector(readFromOperand(1), 64, getImm(2));
+      updateOutputReg(dup64to128(ext));
       break;
     }
 
