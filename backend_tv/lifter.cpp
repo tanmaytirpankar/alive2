@@ -1725,7 +1725,10 @@ public:
       } else {
         assert(false);
       }
-      auto val = createZExt(createTrunc(readFromOperand(3), getIntTy(w)), i128);
+      auto val = readFromOperand(3);
+      if (w < 32)
+	val = createTrunc(val, getIntTy(w));
+      val = createZExt(val, i128);
       auto lane = getImm(2);
       auto shiftAmt = getIntConst(lane * w, 128);
       auto shifted = createRawShl(val, shiftAmt);
@@ -2991,7 +2994,7 @@ public:
       if (op2.isExpr()) {
         Value *globalVar = getExprVar(op2.getExpr());
         if (opcode == AArch64::LDRBBui || opcode == AArch64::LDRHHui ||
-            opcode == AArch64::LDRWui || opcode == AArch64::LDRXui) {
+            opcode == AArch64::LDRWui) { // || opcode == AArch64::LDRXui) {
           auto loaded = makeLoadWithOffset(globalVar, 0, size);
           updateOutputReg(loaded);
         } else {
@@ -3812,11 +3815,13 @@ public:
       MCBB = mc_bb;
       auto &mc_instrs = mc_bb->getInstrs();
 
-      for (auto &mc_instr : mc_instrs) {
+      for (auto &inst : mc_instrs) {
+	*out << "  ";
+	inst.dump();
         if (DebugRegs)
           printRegs();
         llvmInstNum = 0;
-        mc_visit(mc_instr, *Fn);
+        mc_visit(inst, *Fn);
         ++armInstNum;
       }
 
