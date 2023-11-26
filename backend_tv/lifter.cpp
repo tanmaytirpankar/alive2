@@ -337,79 +337,230 @@ class arm2llvm {
   };
 
   const set<int> instrs_64 = {
-      AArch64::ADDXrx,     AArch64::ADDSXrs,    AArch64::ADDSXri,
-      AArch64::ADDXrs,     AArch64::ADDXri,     AArch64::ADDSXrx,
-      AArch64::ADDv2i32,   AArch64::ADDv4i16,   AArch64::ADDv8i8,
-      AArch64::SUBv2i32,   AArch64::SUBv4i16,   AArch64::SUBv8i8,
-      AArch64::ADCXr,      AArch64::ADCSXr,     AArch64::ASRVXr,
-      AArch64::SUBXri,     AArch64::SUBXrs,     AArch64::SUBXrx,
-      AArch64::SUBSXrs,    AArch64::SUBSXri,    AArch64::SUBSXrx,
-      AArch64::SBFMXri,    AArch64::CSELXr,     AArch64::ANDXri,
-      AArch64::ANDXrr,     AArch64::ANDXrs,     AArch64::ANDSXri,
-      AArch64::ANDSXrr,    AArch64::ANDSXrs,    AArch64::MADDXrrr,
-      AArch64::MSUBXrrr,   AArch64::EORXri,     AArch64::CSINVXr,
-      AArch64::CSINCXr,    AArch64::MOVZXi,     AArch64::MOVNXi,
-      AArch64::MOVKXi,     AArch64::LSLVXr,     AArch64::LSRVXr,
-      AArch64::ORNXrs,     AArch64::UBFMXri,    AArch64::BFMXri,
-      AArch64::ORRXrs,     AArch64::ORRXri,     AArch64::SDIVXr,
-      AArch64::UDIVXr,     AArch64::EXTRXrri,   AArch64::EORXrs,
-      AArch64::SMADDLrrr,  AArch64::UMADDLrrr,  AArch64::RORVXr,
-      AArch64::RBITXr,     AArch64::CLZXr,      AArch64::REVXr,
-      AArch64::CSNEGXr,    AArch64::BICXrs,     AArch64::BICSXrs,
-      AArch64::EONXrs,     AArch64::SMULHrr,    AArch64::UMULHrr,
-      AArch64::REV32Xr,    AArch64::REV16Xr,    AArch64::SMSUBLrrr,
-      AArch64::UMSUBLrrr,  AArch64::PHI,        AArch64::TBZW,
-      AArch64::TBZX,       AArch64::TBNZW,      AArch64::TBNZX,
-      AArch64::B,          AArch64::CBZW,       AArch64::CBZX,
-      AArch64::CBNZW,      AArch64::CBNZX,      AArch64::CCMPXr,
-      AArch64::CCMPXi,     AArch64::LDRXui,     AArch64::LDRXpost,
-      AArch64::LDPXpost,   AArch64::LDPXi,      AArch64::LDRDui,
-      AArch64::LDRXroW,    AArch64::LDRXroX,    AArch64::STRDui,
-      AArch64::MSR,        AArch64::MRS,        AArch64::LDRSBXui,
-      AArch64::LDRSBXui,   AArch64::LDRSHXui,   AArch64::STRXui,
-      AArch64::STRXroW,    AArch64::STRXroX,    AArch64::STPXi,
-      AArch64::CCMNXi,     AArch64::CCMNXr,     AArch64::STURXi,
-      AArch64::ADRP,       AArch64::STRXpre,    AArch64::XTNv8i8,
-      AArch64::FADDDrr,    AArch64::FSUBDrr,    AArch64::FCMPDrr,
-      AArch64::NOTv8i8,    AArch64::CNTv8i8,    AArch64::ANDv8i8,
-      AArch64::ORRv8i8,    AArch64::EORv8i8,    AArch64::FMOVDXr,
-      AArch64::INSvi64gpr, AArch64::ADDXrx,     AArch64::ADDSXrs,
-      AArch64::ADDSXri,    AArch64::ADDXrs,     AArch64::ADDXri,
-      AArch64::ADDSXrx,    AArch64::ADDv2i32,   AArch64::ADDv4i16,
-      AArch64::ADDv8i8,    AArch64::SUBv2i32,   AArch64::SUBv4i16,
-      AArch64::SUBv8i8,    AArch64::ADCXr,      AArch64::ADCSXr,
-      AArch64::ASRVXr,     AArch64::SUBXri,     AArch64::SUBXrs,
-      AArch64::SUBXrx,     AArch64::SUBSXrs,    AArch64::SUBSXri,
-      AArch64::SUBSXrx,    AArch64::SBFMXri,    AArch64::CSELXr,
-      AArch64::ANDXri,     AArch64::ANDXrr,     AArch64::ANDXrs,
-      AArch64::ANDSXri,    AArch64::ANDSXrr,    AArch64::ANDSXrs,
-      AArch64::MADDXrrr,   AArch64::MSUBXrrr,   AArch64::EORXri,
-      AArch64::CSINVXr,    AArch64::CSINCXr,    AArch64::MOVZXi,
-      AArch64::MOVNXi,     AArch64::MOVKXi,     AArch64::LSLVXr,
-      AArch64::LSRVXr,     AArch64::ORNXrs,     AArch64::UBFMXri,
-      AArch64::BFMXri,     AArch64::ORRXrs,     AArch64::ORRXri,
-      AArch64::SDIVXr,     AArch64::UDIVXr,     AArch64::EXTRXrri,
-      AArch64::EORXrs,     AArch64::SMADDLrrr,  AArch64::UMADDLrrr,
-      AArch64::RORVXr,     AArch64::RBITXr,     AArch64::CLZXr,
-      AArch64::REVXr,      AArch64::CSNEGXr,    AArch64::BICXrs,
-      AArch64::BICSXrs,    AArch64::EONXrs,     AArch64::SMULHrr,
-      AArch64::UMULHrr,    AArch64::REV32Xr,    AArch64::REV16Xr,
-      AArch64::SMSUBLrrr,  AArch64::UMSUBLrrr,  AArch64::PHI,
-      AArch64::TBZW,       AArch64::TBZX,       AArch64::TBNZW,
-      AArch64::TBNZX,      AArch64::B,          AArch64::CBZW,
-      AArch64::CBZX,       AArch64::CBNZW,      AArch64::CBNZX,
-      AArch64::CCMPXr,     AArch64::CCMPXi,     AArch64::LDRXui,
-      AArch64::LDRXpost,   AArch64::LDPXpost,   AArch64::LDPXi,
-      AArch64::LDRDui,     AArch64::LDRXroX,    AArch64::STRDui,
-      AArch64::MSR,        AArch64::MRS,        AArch64::LDRSBXui,
-      AArch64::LDRSBXui,   AArch64::LDRSHXui,   AArch64::STRXui,
-      AArch64::STRXroX,    AArch64::STPXi,      AArch64::CCMNXi,
-      AArch64::CCMNXr,     AArch64::STURXi,     AArch64::ADRP,
-      AArch64::STRXpre,    AArch64::XTNv8i8,    AArch64::FADDDrr,
-      AArch64::FSUBDrr,    AArch64::FCMPDrr,    AArch64::NOTv8i8,
-      AArch64::CNTv8i8,    AArch64::ANDv8i8,    AArch64::ORRv8i8,
-      AArch64::EORv8i8,    AArch64::FMOVDXr,    AArch64::INSvi64gpr,
-      AArch64::MOVID,      AArch64::FCVTZSUWDr, AArch64::FMOVDr,
+      AArch64::ADDXrx,
+      AArch64::ADDSXrs,
+      AArch64::ADDSXri,
+      AArch64::ADDXrs,
+      AArch64::ADDXri,
+      AArch64::ADDSXrx,
+      AArch64::ADDv2i32,
+      AArch64::ADDv4i16,
+      AArch64::ADDv8i8,
+      AArch64::SUBv2i32,
+      AArch64::SUBv4i16,
+      AArch64::SUBv8i8,
+      AArch64::ADCXr,
+      AArch64::ADCSXr,
+      AArch64::ASRVXr,
+      AArch64::SUBXri,
+      AArch64::SUBXrs,
+      AArch64::SUBXrx,
+      AArch64::SUBSXrs,
+      AArch64::SUBSXri,
+      AArch64::SUBSXrx,
+      AArch64::SBFMXri,
+      AArch64::CSELXr,
+      AArch64::ANDXri,
+      AArch64::ANDXrr,
+      AArch64::ANDXrs,
+      AArch64::ANDSXri,
+      AArch64::ANDSXrr,
+      AArch64::ANDSXrs,
+      AArch64::MADDXrrr,
+      AArch64::MSUBXrrr,
+      AArch64::EORXri,
+      AArch64::CSINVXr,
+      AArch64::CSINCXr,
+      AArch64::MOVZXi,
+      AArch64::MOVNXi,
+      AArch64::MOVKXi,
+      AArch64::LSLVXr,
+      AArch64::LSRVXr,
+      AArch64::ORNXrs,
+      AArch64::UBFMXri,
+      AArch64::BFMXri,
+      AArch64::ORRXrs,
+      AArch64::ORRXri,
+      AArch64::SDIVXr,
+      AArch64::UDIVXr,
+      AArch64::EXTRXrri,
+      AArch64::EORXrs,
+      AArch64::SMADDLrrr,
+      AArch64::UMADDLrrr,
+      AArch64::RORVXr,
+      AArch64::RBITXr,
+      AArch64::CLZXr,
+      AArch64::REVXr,
+      AArch64::CSNEGXr,
+      AArch64::BICXrs,
+      AArch64::BICSXrs,
+      AArch64::EONXrs,
+      AArch64::SMULHrr,
+      AArch64::UMULHrr,
+      AArch64::REV32Xr,
+      AArch64::REV16Xr,
+      AArch64::SMSUBLrrr,
+      AArch64::UMSUBLrrr,
+      AArch64::PHI,
+      AArch64::TBZW,
+      AArch64::TBZX,
+      AArch64::TBNZW,
+      AArch64::TBNZX,
+      AArch64::B,
+      AArch64::CBZW,
+      AArch64::CBZX,
+      AArch64::CBNZW,
+      AArch64::CBNZX,
+      AArch64::CCMPXr,
+      AArch64::CCMPXi,
+      AArch64::LDRXui,
+      AArch64::LDRXpost,
+      AArch64::LDPXpost,
+      AArch64::LDPXi,
+      AArch64::LDRDui,
+      AArch64::LDRXroW,
+      AArch64::LDRXroX,
+      AArch64::STRDui,
+      AArch64::MSR,
+      AArch64::MRS,
+      AArch64::LDRSBXui,
+      AArch64::LDRSBXui,
+      AArch64::LDRSHXui,
+      AArch64::STRXui,
+      AArch64::STRXroW,
+      AArch64::STRXroX,
+      AArch64::STPXi,
+      AArch64::CCMNXi,
+      AArch64::CCMNXr,
+      AArch64::STURXi,
+      AArch64::ADRP,
+      AArch64::STRXpre,
+      AArch64::XTNv8i8,
+      AArch64::FADDDrr,
+      AArch64::FSUBDrr,
+      AArch64::FCMPDrr,
+      AArch64::NOTv8i8,
+      AArch64::CNTv8i8,
+      AArch64::ANDv8i8,
+      AArch64::ORRv8i8,
+      AArch64::EORv8i8,
+      AArch64::FMOVDXr,
+      AArch64::INSvi64gpr,
+      AArch64::ADDXrx,
+      AArch64::ADDSXrs,
+      AArch64::ADDSXri,
+      AArch64::ADDXrs,
+      AArch64::ADDXri,
+      AArch64::ADDSXrx,
+      AArch64::ADDv2i32,
+      AArch64::ADDv4i16,
+      AArch64::ADDv8i8,
+      AArch64::SUBv2i32,
+      AArch64::SUBv4i16,
+      AArch64::SUBv8i8,
+      AArch64::ADCXr,
+      AArch64::ADCSXr,
+      AArch64::ASRVXr,
+      AArch64::SUBXri,
+      AArch64::SUBXrs,
+      AArch64::SUBXrx,
+      AArch64::SUBSXrs,
+      AArch64::SUBSXri,
+      AArch64::SUBSXrx,
+      AArch64::SBFMXri,
+      AArch64::CSELXr,
+      AArch64::ANDXri,
+      AArch64::ANDXrr,
+      AArch64::ANDXrs,
+      AArch64::ANDSXri,
+      AArch64::ANDSXrr,
+      AArch64::ANDSXrs,
+      AArch64::MADDXrrr,
+      AArch64::MSUBXrrr,
+      AArch64::EORXri,
+      AArch64::CSINVXr,
+      AArch64::CSINCXr,
+      AArch64::MOVZXi,
+      AArch64::MOVNXi,
+      AArch64::MOVKXi,
+      AArch64::LSLVXr,
+      AArch64::LSRVXr,
+      AArch64::ORNXrs,
+      AArch64::UBFMXri,
+      AArch64::BFMXri,
+      AArch64::ORRXrs,
+      AArch64::ORRXri,
+      AArch64::SDIVXr,
+      AArch64::UDIVXr,
+      AArch64::EXTRXrri,
+      AArch64::EORXrs,
+      AArch64::SMADDLrrr,
+      AArch64::UMADDLrrr,
+      AArch64::RORVXr,
+      AArch64::RBITXr,
+      AArch64::CLZXr,
+      AArch64::REVXr,
+      AArch64::CSNEGXr,
+      AArch64::BICXrs,
+      AArch64::BICSXrs,
+      AArch64::EONXrs,
+      AArch64::SMULHrr,
+      AArch64::UMULHrr,
+      AArch64::REV32Xr,
+      AArch64::REV16Xr,
+      AArch64::SMSUBLrrr,
+      AArch64::UMSUBLrrr,
+      AArch64::PHI,
+      AArch64::TBZW,
+      AArch64::TBZX,
+      AArch64::TBNZW,
+      AArch64::TBNZX,
+      AArch64::B,
+      AArch64::CBZW,
+      AArch64::CBZX,
+      AArch64::CBNZW,
+      AArch64::CBNZX,
+      AArch64::CCMPXr,
+      AArch64::CCMPXi,
+      AArch64::LDRXui,
+      AArch64::LDRXpost,
+      AArch64::LDPXpost,
+      AArch64::LDPXi,
+      AArch64::LDRDui,
+      AArch64::LDRXroX,
+      AArch64::STRDui,
+      AArch64::MSR,
+      AArch64::MRS,
+      AArch64::LDRSBXui,
+      AArch64::LDRSBXui,
+      AArch64::LDRSHXui,
+      AArch64::STRXui,
+      AArch64::STRXroX,
+      AArch64::STPXi,
+      AArch64::CCMNXi,
+      AArch64::CCMNXr,
+      AArch64::STURXi,
+      AArch64::ADRP,
+      AArch64::STRXpre,
+      AArch64::FADDDrr,
+      AArch64::FSUBDrr,
+      AArch64::FCMPDrr,
+      AArch64::NOTv8i8,
+      AArch64::CNTv8i8,
+      AArch64::ANDv8i8,
+      AArch64::ORRv8i8,
+      AArch64::EORv8i8,
+      AArch64::FMOVDXr,
+      AArch64::INSvi64gpr,
+      AArch64::MOVID,
+      AArch64::FCVTZSUWDr,
+      AArch64::FMOVDr,
+      AArch64::DUPv2i32gpr,
+      AArch64::UMULLv2i32_v2i64,
+      AArch64::UADDLv8i8_v8i16,
+      AArch64::USUBLv8i8_v8i16,
+      AArch64::XTNv2i32,
+      AArch64::MLSv2i32,
   };
 
   const set<int> instrs_128 = {
@@ -417,12 +568,10 @@ class arm2llvm {
       AArch64::LDPQi,
       AArch64::STPQi,
       AArch64::ADDv8i16,
-      AArch64::UADDLv8i8_v8i16,
       AArch64::ADDv2i64,
       AArch64::ADDv4i32,
       AArch64::ADDv16i8,
       AArch64::SUBv8i16,
-      AArch64::USUBLv8i8_v8i16,
       AArch64::SUBv2i64,
       AArch64::SUBv4i32,
       AArch64::SUBv16i8,
@@ -460,6 +609,7 @@ class arm2llvm {
       AArch64::DUPv2i64lane,
       AArch64::MOVIv8i16,
       AArch64::REV64v4i32,
+      AArch64::USHRv2i64_shift,
   };
 
   bool has_s(int instr) {
@@ -821,6 +971,7 @@ class arm2llvm {
     switch (CurInst->getOpcode()) {
     case AArch64::UADDLv8i8_v8i16:
     case AArch64::USUBLv8i8_v8i16:
+    case AArch64::UMULLv2i32_v2i64:
       a_vector = createZExt(
           a_vector, VectorType::get(getIntTy(2 * elementTypeInBits),
                                     ElementCount::getFixed(numElements)));
@@ -2173,6 +2324,12 @@ public:
       break;
     }
 
+    case AArch64::DUPv2i32gpr: {
+      auto t = createTrunc(readFromOperand(1), i32);
+      updateOutputReg(dup32to64(t));
+      break;
+    }
+
     case AArch64::DUPv2i64gpr: {
       updateOutputReg(dup64to128(readFromOperand(1)));
       break;
@@ -2223,7 +2380,9 @@ public:
     case AArch64::ANDv8i8:
     case AArch64::ANDv16i8:
     case AArch64::ORRv8i8:
-    case AArch64::ORRv16i8: {
+    case AArch64::ORRv16i8:
+    case AArch64::UMULLv2i32_v2i64:
+    case AArch64::USHRv2i64_shift: {
       auto a = readFromOperand(1);
       auto b = readFromOperand(2);
 
@@ -2261,6 +2420,12 @@ public:
       case AArch64::ORRv16i8:
         op = Instruction::Or;
         break;
+      case AArch64::UMULLv2i32_v2i64:
+        op = Instruction::Mul;
+        break;
+      case AArch64::USHRv2i64_shift:
+        op = Instruction::LShr;
+        break;
       default:
         assert(false && "missed a case");
       }
@@ -2275,6 +2440,7 @@ public:
         break;
       case AArch64::ADDv2i64:
       case AArch64::SUBv2i64:
+      case AArch64::USHRv2i64_shift:
         numElements = 2;
         elementTypeInBits = 64;
         break;
@@ -2309,10 +2475,12 @@ public:
         numElements = 16;
         elementTypeInBits = 8;
         break;
+      case AArch64::UMULLv2i32_v2i64:
+        numElements = 2;
+        elementTypeInBits = 32;
+        break;
       case AArch64::UADDLv8i8_v8i16:
       case AArch64::USUBLv8i8_v8i16:
-        a = createTrunc(a, getIntTy(64));
-        b = createTrunc(b, getIntTy(64));
         numElements = 8;
         elementTypeInBits = 8;
         break;
@@ -2322,6 +2490,16 @@ public:
       }
 
       updateOutputReg(createVectorOp(op, a, b, elementTypeInBits, numElements));
+      break;
+    }
+
+    case AArch64::MLSv2i32: {
+      auto accum = readFromOperand(1);
+      auto a = readFromOperand(2);
+      auto b = readFromOperand(3);
+      auto v1 = createVectorOp(Instruction::Mul, a, b, 32, 2);
+      auto v2 = createVectorOp(Instruction::Sub, accum, v1, 32, 2);
+      updateOutputReg(v2);
       break;
     }
 
@@ -3742,7 +3920,9 @@ public:
         createBranch(cond_val, dst_true, dst_false);
       break;
     }
-    case AArch64::XTNv8i8: {
+
+    case AArch64::XTNv8i8:
+    case AArch64::XTNv2i32: {
       auto &op0 = CurInst->getOperand(0);
       auto &op1 = CurInst->getOperand(1);
       assert(isSIMDandFPReg(op0) && isSIMDandFPReg(op0));
@@ -3761,6 +3941,11 @@ public:
       case AArch64::XTNv8i8:
         numElements = 8;
         elementSize = 8;
+        part = 0;
+        break;
+      case AArch64::XTNv2i32:
+        numElements = 2;
+        elementSize = 32;
         part = 0;
         break;
       default:
@@ -3795,6 +3980,7 @@ public:
       updateOutputReg(new_dest_vector);
       break;
     }
+
     case AArch64::NOTv8i8:
     case AArch64::NOTv16i8:
     case AArch64::CNTv8i8:
@@ -3852,12 +4038,14 @@ public:
         result = createXor(src_vector, neg_one_vector);
         break;
       }
+
       case AArch64::CNTv8i8:
       case AArch64::CNTv16i8: {
         // Create an intrinsic for CTPOP
         result = createCTPOP(src_vector);
         break;
       }
+
       default: {
         *out << "\nError Unknown opcode\n";
         visitError();
