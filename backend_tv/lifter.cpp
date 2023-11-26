@@ -2424,6 +2424,13 @@ public:
         op = Instruction::Mul;
         break;
       case AArch64::USHRv2i64_shift:
+        if (CurInst->getOperand(2).isImm()) {
+          auto c = dyn_cast<Constant>(b);
+          assert(c);
+          auto *vTy = VectorType::get(i64, ElementCount::getFixed(2));
+          auto shiftVal = c->getUniqueInteger();
+          b = ConstantInt::get(vTy, shiftVal.getLimitedValue(), false);
+        }
         op = Instruction::LShr;
         break;
       default:
