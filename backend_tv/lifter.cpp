@@ -1351,9 +1351,9 @@ class arm2llvm {
     assert(eltsize == 8 || eltsize == 16 || eltsize == 32);
     assert(getBitWidth(in) == 128);
     Value *rev = getIntConst(0, 128);
-    for (int i = 0; i < 2; ++i) {
+    for (unsigned i = 0; i < 2; ++i) {
       auto innerCount = 64 / eltsize;
-      for (int j = 0; j < innerCount; j++) {
+      for (unsigned j = 0; j < innerCount; j++) {
         auto elt = extractFromVector(in, eltsize, (i * innerCount) + j);
         rev = insertIntoVector(rev, elt, eltsize,
                                (i * innerCount) + innerCount - j - 1);
