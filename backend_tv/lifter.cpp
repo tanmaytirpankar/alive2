@@ -459,6 +459,7 @@ class arm2llvm {
       AArch64::DUPv4i32lane,
       AArch64::DUPv2i64lane,
       AArch64::MOVIv8i16,
+      AArch64::REV64v4i32,
   };
 
   bool has_s(int instr) {
@@ -1193,6 +1194,21 @@ class arm2llvm {
     auto mask = createRawShl(getLowOnes(width, 128), shiftAmt);
     auto masked = createAnd(orig, createNot(mask));
     return createOr(masked, shifted);
+  }
+
+  Value *rev64(Value *in, unsigned eltsize) {
+    assert(eltsize == 8 || eltsize == 16 || eltsize == 32);
+    assert(getBitWidth(in) == 128);
+    Value *rev = getIntConst(0, 128);
+    for (int i = 0; i < 2; ++i) {
+      auto innerCount = 64 / eltsize;
+      for (int j = 0; j < innerCount; j++) {
+        auto elt = extractFromVector(in, eltsize, (i * innerCount) + j);
+        rev = insertIntoVector(rev, elt, eltsize,
+                               (i * innerCount) + innerCount - j - 1);
+      }
+    }
+    return rev;
   }
 
   Value *dup8to128(Value *v) {
@@ -2130,6 +2146,12 @@ public:
       auto both = concat(b, a);
       auto shifted = createRawLShr(both, getIntConst(8 * imm, 256));
       updateOutputReg(createTrunc(shifted, i128));
+      break;
+    }
+
+    case AArch64::REV64v4i32: {
+      auto v = rev64(readFromOperand(1), 32);
+      updateOutputReg(v);
       break;
     }
 
