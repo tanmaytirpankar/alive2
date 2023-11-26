@@ -458,6 +458,7 @@ class arm2llvm {
       AArch64::DUPv8i16lane,
       AArch64::DUPv4i32lane,
       AArch64::DUPv2i64lane,
+      AArch64::MOVIv8i16,
   };
 
   bool has_s(int instr) {
@@ -499,7 +500,8 @@ class arm2llvm {
       return 64;
     if (instrs_128.contains(instr))
       return 128;
-    *out << "getInstSize encountered unknown instruction" << "\n";
+    *out << "getInstSize encountered unknown instruction"
+         << "\n";
     visitError();
   }
 
@@ -2094,6 +2096,14 @@ public:
     case AArch64::MOVIv2d_ns: {
       auto imm = getIntConst(replicate8to64(getImm(1)), 64);
       updateOutputReg(dup64to128(imm));
+      break;
+    }
+
+    case AArch64::MOVIv8i16: {
+      auto imm1 = getImm(1);
+      auto imm2 = getImm(2);
+      auto val = getIntConst(imm1 << imm2, 16);
+      updateOutputReg(dup16to128(val));
       break;
     }
 
@@ -4231,8 +4241,8 @@ public:
     *out << "  creating " << Size << " byte global ELF object " << name << "\n";
     MF.globals[name] = Size;
     Symbol->print(ss, nullptr);
-    *out << sss << " " << "size = " << Size
-         << " Align = " << ByteAlignment.value() << "\n\n";
+    *out << sss << " "
+         << "size = " << Size << " Align = " << ByteAlignment.value() << "\n\n";
   }
 
   virtual void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
