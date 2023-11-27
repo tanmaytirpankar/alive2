@@ -435,7 +435,6 @@ class arm2llvm {
       AArch64::STURXi,
       AArch64::ADRP,
       AArch64::STRXpre,
-      AArch64::XTNv8i8,
       AArch64::FADDDrr,
       AArch64::FSUBDrr,
       AArch64::FCMPDrr,
@@ -560,6 +559,8 @@ class arm2llvm {
       AArch64::UADDLv8i8_v8i16,
       AArch64::USUBLv8i8_v8i16,
       AArch64::XTNv2i32,
+      AArch64::XTNv4i16,
+      AArch64::XTNv8i8,
       AArch64::MLSv2i32,
   };
 
@@ -743,7 +744,7 @@ class arm2llvm {
     return CallInst::Create(uadd_decl, {a, b}, nextName(), LLVMBB);
   }
 
-  CallInst *createCTPOP(Value *v) {
+  CallInst *createCtPop(Value *v) {
     auto ctpop_decl =
         Intrinsic::getDeclaration(LiftedModule, Intrinsic::ctpop, v->getType());
     return CallInst::Create(ctpop_decl, {v}, nextName(), LLVMBB);
@@ -3928,8 +3929,9 @@ public:
       break;
     }
 
-    case AArch64::XTNv8i8:
-    case AArch64::XTNv2i32: {
+    case AArch64::XTNv2i32:
+    case AArch64::XTNv4i16:
+    case AArch64::XTNv8i8: {
       auto &op0 = CurInst->getOperand(0);
       auto &op1 = CurInst->getOperand(1);
       assert(isSIMDandFPReg(op0) && isSIMDandFPReg(op0));
@@ -3948,6 +3950,11 @@ public:
       case AArch64::XTNv8i8:
         numElements = 8;
         elementSize = 8;
+        part = 0;
+        break;
+      case AArch64::XTNv4i16:
+        numElements = 4;
+        elementSize = 16;
         part = 0;
         break;
       case AArch64::XTNv2i32:
@@ -4022,34 +4029,24 @@ public:
       }
       }
 
-      // Bit-cast the truncated source value and -1 to a vector of 8 x 8-bit
-      auto src_vector = createBitCast(
-          src, VectorType::get(i8, ElementCount::getFixed(numElements)));
-      Value *result;
+      auto *vTy = VectorType::get(getIntTy(elementSize),
+				  ElementCount::getFixed(numElements));
+      auto src_vector = createBitCast(src, vTy);
 
-      // Performing the operation
+      // Perform the operation
       switch (opcode) {
       case AArch64::NOTv8i8:
       case AArch64::NOTv16i8: {
-        // Create an integer value for -1
-        vector<Constant *> neg_one_vals;
-        for (unsigned int i = 0; i < numElements / elementSize; i++)
-          // For some reason, creating a 128 bit -1 is not working...
-          neg_one_vals.push_back(ConstantInt::get(Ctx, llvm::APInt(64, -1)));
-        auto neg_one = getVectorConst(neg_one_vals);
-        auto neg_one_vector = createBitCast(
-            neg_one, VectorType::get(i8, ElementCount::getFixed(numElements)));
-
-        // Perform bitwise NOT operation on the source value by XORing it with
-        // -1
-        result = createXor(src_vector, neg_one_vector);
+        auto neg_one = ConstantInt::get(vTy, APInt::getAllOnes(elementSize));
+        // Perform bitwise NOT operation by XORing it with -1
+        updateOutputReg(createXor(src_vector, neg_one));
         break;
       }
 
       case AArch64::CNTv8i8:
       case AArch64::CNTv16i8: {
         // Create an intrinsic for CTPOP
-        result = createCTPOP(src_vector);
+        updateOutputReg(createCtPop(src_vector));
         break;
       }
 
@@ -4060,8 +4057,6 @@ public:
       }
       }
 
-      // Write to destination register
-      updateOutputReg(result);
       break;
     }
     default:
