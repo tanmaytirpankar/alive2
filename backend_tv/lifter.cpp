@@ -968,8 +968,9 @@ class arm2llvm {
   // Creates LLVM IR instructions which takes two values with the same number of
   // bits, bit casting them to vectors of numElements elements of size
   // elementTypeInBits and doing an operation on them.
-  BinaryOperator *createVectorOp(Instruction::BinaryOps op, Value *a, Value *b,
-                                 int elementTypeInBits, int numElements) {
+  Value *createVectorOp(function<Value *(Value *, Value *)> op, Value *a,
+                        Value *b, int elementTypeInBits, int numElements,
+                        bool zext) {
     assert(getBitWidth(a) == getBitWidth(b) &&
            "Expected values of same bit width");
 
@@ -984,19 +985,15 @@ class arm2llvm {
                                          ElementCount::getFixed(numElements)));
 
     // Vector extension for instructions that require it
-    switch (CurInst->getOpcode()) {
-    case AArch64::UADDLv8i8_v8i16:
-    case AArch64::USUBLv8i8_v8i16:
-    case AArch64::UMULLv2i32_v2i64:
+    if (zext) {
       a_vector = createZExt(
           a_vector, VectorType::get(getIntTy(2 * elementTypeInBits),
                                     ElementCount::getFixed(numElements)));
       b_vector = createZExt(
           b_vector, VectorType::get(getIntTy(2 * elementTypeInBits),
                                     ElementCount::getFixed(numElements)));
-      break;
     }
-    return createBinop(a_vector, b_vector, op);
+    return op(a_vector, b_vector);
   }
 
   // Returns Bit Width of Value V
@@ -2417,7 +2414,7 @@ public:
       auto a = readFromOperand(1);
       auto b = readFromOperand(2);
 
-      Instruction::BinaryOps op;
+      function<Value *(Value *, Value *)> op;
       switch (opcode) {
       case AArch64::ADDv2i32:
       case AArch64::ADDv2i64:
@@ -2427,7 +2424,7 @@ public:
       case AArch64::ADDv8i16:
       case AArch64::ADDv16i8:
       case AArch64::UADDLv8i8_v8i16:
-        op = Instruction::Add;
+        op = [&](Value *a, Value *b) { return createAdd(a, b); };
         break;
       case AArch64::SUBv2i32:
       case AArch64::SUBv2i64:
@@ -2437,32 +2434,34 @@ public:
       case AArch64::SUBv8i16:
       case AArch64::SUBv16i8:
       case AArch64::USUBLv8i8_v8i16:
-        op = Instruction::Sub;
+        op = [&](Value *a, Value *b) { return createSub(a, b); };
         break;
       case AArch64::EORv8i8:
       case AArch64::EORv16i8:
-        op = Instruction::Xor;
+        op = [&](Value *a, Value *b) { return createXor(a, b); };
         break;
       case AArch64::ANDv8i8:
       case AArch64::ANDv16i8:
-        op = Instruction::And;
+        op = [&](Value *a, Value *b) { return createAnd(a, b); };
         break;
       case AArch64::ORRv8i8:
       case AArch64::ORRv16i8:
-        op = Instruction::Or;
+        op = [&](Value *a, Value *b) { return createOr(a, b); };
         break;
       case AArch64::UMULLv2i32_v2i64:
-        op = Instruction::Mul;
+        op = [&](Value *a, Value *b) { return createMul(a, b); };
         break;
       case AArch64::USHRv2i64_shift:
         if (CurInst->getOperand(2).isImm()) {
+          // get the constant
           auto c = dyn_cast<Constant>(b);
           assert(c);
+          // now make a splat of it
           auto *vTy = VectorType::get(i64, ElementCount::getFixed(2));
           auto shiftVal = c->getUniqueInteger();
           b = ConstantInt::get(vTy, shiftVal.getLimitedValue(), false);
         }
-        op = Instruction::LShr;
+        op = [&](Value *a, Value *b) { return createRawLShr(a, b); };
         break;
       default:
         assert(false && "missed a case");
@@ -2527,7 +2526,12 @@ public:
         break;
       }
 
-      updateOutputReg(createVectorOp(op, a, b, elementTypeInBits, numElements));
+      bool zext = (CurInst->getOpcode() == AArch64::UADDLv8i8_v8i16) ||
+                  (CurInst->getOpcode() == AArch64::USUBLv8i8_v8i16) ||
+                  (CurInst->getOpcode() == AArch64::UMULLv2i32_v2i64);
+
+      updateOutputReg(
+          createVectorOp(op, a, b, elementTypeInBits, numElements, zext));
       break;
     }
 
@@ -2535,8 +2539,12 @@ public:
       auto accum = readFromOperand(1);
       auto a = readFromOperand(2);
       auto b = readFromOperand(3);
-      auto v1 = createVectorOp(Instruction::Mul, a, b, 32, 2);
-      auto v2 = createVectorOp(Instruction::Sub, accum, v1, 32, 2);
+      auto v1 =
+          createVectorOp([&](Value *a, Value *b) { return createMul(a, b); }, a,
+                         b, 32, 2, /*zext=*/false);
+      auto v2 =
+          createVectorOp([&](Value *a, Value *b) { return createSub(a, b); },
+                         accum, v1, 32, 2, /*zext=*/false);
       updateOutputReg(v2);
       break;
     }
