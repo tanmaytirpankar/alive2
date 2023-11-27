@@ -544,8 +544,6 @@ class arm2llvm {
       AArch64::FADDDrr,
       AArch64::FSUBDrr,
       AArch64::FCMPDrr,
-      AArch64::NOTv8i8,
-      AArch64::CNTv8i8,
       AArch64::ANDv8i8,
       AArch64::ORRv8i8,
       AArch64::EORv8i8,
@@ -562,6 +560,10 @@ class arm2llvm {
       AArch64::XTNv4i16,
       AArch64::XTNv8i8,
       AArch64::MLSv2i32,
+      AArch64::NEGv1i64,
+      AArch64::NEGv4i16,
+      AArch64::NEGv8i8,
+      AArch64::NEGv2i32,
   };
 
   const set<int> instrs_128 = {
@@ -611,6 +613,11 @@ class arm2llvm {
       AArch64::MOVIv8i16,
       AArch64::REV64v4i32,
       AArch64::USHRv2i64_shift,
+      AArch64::NOTv16i8,
+      AArch64::NEGv16i8,
+      AArch64::NEGv8i16,
+      AArch64::NEGv2i64,
+      AArch64::NEGv4i32,
   };
 
   bool has_s(int instr) {
@@ -3995,46 +4002,71 @@ public:
       break;
     }
 
+    case AArch64::NEGv1i64:
+    case AArch64::NEGv4i16:
+    case AArch64::NEGv8i8:
+    case AArch64::NEGv16i8:
+    case AArch64::NEGv2i32:
+    case AArch64::NEGv8i16:
+    case AArch64::NEGv2i64:
+    case AArch64::NEGv4i32:
     case AArch64::NOTv8i8:
     case AArch64::NOTv16i8:
     case AArch64::CNTv8i8:
     case AArch64::CNTv16i8: {
-      // Getting source register
-      auto &op1 = CurInst->getOperand(1);
-
-      assert(isSIMDandFPReg(op1) && "ERROR: Expected SIMD&FP registers");
-
-      // Read source value
-      auto src = readFromReg(op1.getReg());
+      auto src = readFromOperand(1);
       u_int64_t elementSize, numElements;
 
       switch (opcode) {
+      case AArch64::NEGv1i64:
+        elementSize = 64;
+        numElements = 1;
+        break;
+      case AArch64::NEGv4i16:
+        elementSize = 16;
+        numElements = 4;
+        break;
+      case AArch64::NEGv2i32:
+        elementSize = 32;
+        numElements = 2;
+        break;
+      case AArch64::NEGv8i16:
+        elementSize = 16;
+        numElements = 8;
+        break;
+      case AArch64::NEGv2i64:
+        elementSize = 64;
+        numElements = 2;
+        break;
+      case AArch64::NEGv4i32:
+        elementSize = 32;
+        numElements = 4;
+        break;
+      case AArch64::NEGv8i8:
       case AArch64::NOTv8i8:
-      case AArch64::CNTv8i8: {
-        src = createTrunc(src, getIntTy(64));
+      case AArch64::CNTv8i8:
         elementSize = 8;
         numElements = 8;
         break;
-      }
+      case AArch64::NEGv16i8:
       case AArch64::NOTv16i8:
-      case AArch64::CNTv16i8: {
+      case AArch64::CNTv16i8:
         elementSize = 8;
         numElements = 16;
         break;
-      }
-      default: {
+      default:
         *out << "\nError Unknown opcode\n";
         visitError();
         break;
       }
-      }
 
       auto *vTy = VectorType::get(getIntTy(elementSize),
-				  ElementCount::getFixed(numElements));
+                                  ElementCount::getFixed(numElements));
       auto src_vector = createBitCast(src, vTy);
 
       // Perform the operation
       switch (opcode) {
+
       case AArch64::NOTv8i8:
       case AArch64::NOTv16i8: {
         auto neg_one = ConstantInt::get(vTy, APInt::getAllOnes(elementSize));
@@ -4047,6 +4079,19 @@ public:
       case AArch64::CNTv16i8: {
         // Create an intrinsic for CTPOP
         updateOutputReg(createCtPop(src_vector));
+        break;
+      }
+
+      case AArch64::NEGv1i64:
+      case AArch64::NEGv4i16:
+      case AArch64::NEGv8i8:
+      case AArch64::NEGv16i8:
+      case AArch64::NEGv2i32:
+      case AArch64::NEGv8i16:
+      case AArch64::NEGv2i64:
+      case AArch64::NEGv4i32: {
+        auto zeroes = ConstantInt::get(vTy, APInt::getZero(elementSize));
+        updateOutputReg(createSub(zeroes, src_vector));
         break;
       }
 
