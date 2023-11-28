@@ -350,6 +350,10 @@ class arm2llvm {
       AArch64::USHLv1i64,
       AArch64::USHLv4i16,
       AArch64::USHLv2i32,
+      AArch64::SSHLv8i8,
+      AArch64::SSHLv1i64,
+      AArch64::SSHLv4i16,
+      AArch64::SSHLv2i32,
       AArch64::SUBv2i32,
       AArch64::SUBv4i16,
       AArch64::SUBv8i8,
@@ -634,6 +638,10 @@ class arm2llvm {
       AArch64::USHLv8i16,
       AArch64::USHLv4i32,
       AArch64::USHLv2i64,
+      AArch64::SSHLv16i8,
+      AArch64::SSHLv8i16,
+      AArch64::SSHLv4i32,
+      AArch64::SSHLv2i64,
   };
 
   bool has_s(int instr) {
@@ -979,8 +987,8 @@ class arm2llvm {
   // them. In cases where LLVM does not have an appropriate vector
   // instruction, we perform the operation element-wise.
   Value *createVectorOp(function<Value *(Value *, Value *)> op, Value *a,
-                        Value *b, unsigned elementTypeInBits, unsigned numElements,
-                        bool elementWise, bool zext) {
+                        Value *b, unsigned elementTypeInBits,
+                        unsigned numElements, bool elementWise, bool zext) {
     assert(getBitWidth(a) == getBitWidth(b) &&
            "Expected values of same bit width");
 
@@ -1389,6 +1397,16 @@ class arm2llvm {
     auto neg = createSub(zero, b);
     auto posRes = createMaskedShl(a, b);
     auto negRes = createMaskedLShr(a, neg);
+    return createSelect(c, posRes, negRes);
+  }
+
+  // negative shift exponents go the other direction
+  Value *createSSHL(Value *a, Value *b) {
+    auto zero = getIntConst(0, getBitWidth(b));
+    auto c = createICmp(ICmpInst::Predicate::ICMP_SGT, b, zero);
+    auto neg = createSub(zero, b);
+    auto posRes = createMaskedShl(a, b);
+    auto negRes = createMaskedAShr(a, neg);
     return createSelect(c, posRes, negRes);
   }
 
@@ -2450,6 +2468,14 @@ public:
     case AArch64::USHLv4i32:
     case AArch64::USHLv8i8:
     case AArch64::USHLv2i64:
+    case AArch64::SSHLv1i64:
+    case AArch64::SSHLv4i16:
+    case AArch64::SSHLv16i8:
+    case AArch64::SSHLv8i16:
+    case AArch64::SSHLv2i32:
+    case AArch64::SSHLv4i32:
+    case AArch64::SSHLv8i8:
+    case AArch64::SSHLv2i64:
     case AArch64::USHRv2i64_shift: {
       auto a = readFromOperand(1);
       auto b = readFromOperand(2);
@@ -2466,6 +2492,17 @@ public:
       case AArch64::USHLv8i8:
       case AArch64::USHLv2i64:
         op = [&](Value *a, Value *b) { return createUSHL(a, b); };
+        elementWise = true;
+        break;
+      case AArch64::SSHLv1i64:
+      case AArch64::SSHLv4i16:
+      case AArch64::SSHLv16i8:
+      case AArch64::SSHLv8i16:
+      case AArch64::SSHLv2i32:
+      case AArch64::SSHLv4i32:
+      case AArch64::SSHLv8i8:
+      case AArch64::SSHLv2i64:
+        op = [&](Value *a, Value *b) { return createSSHL(a, b); };
         elementWise = true;
         break;
       case AArch64::ADDv2i32:
@@ -2524,18 +2561,21 @@ public:
       bool zext = false;
       switch (opcode) {
       case AArch64::USHLv1i64:
+      case AArch64::SSHLv1i64:
         numElements = 1;
         elementTypeInBits = 64;
         break;
       case AArch64::SUBv2i32:
       case AArch64::ADDv2i32:
       case AArch64::USHLv2i32:
+      case AArch64::SSHLv2i32:
         numElements = 2;
         elementTypeInBits = 32;
         break;
       case AArch64::ADDv2i64:
       case AArch64::SUBv2i64:
       case AArch64::USHLv2i64:
+      case AArch64::SSHLv2i64:
         numElements = 2;
         elementTypeInBits = 64;
         break;
@@ -2546,12 +2586,14 @@ public:
       case AArch64::ADDv4i16:
       case AArch64::SUBv4i16:
       case AArch64::USHLv4i16:
+      case AArch64::SSHLv4i16:
         numElements = 4;
         elementTypeInBits = 16;
         break;
       case AArch64::ADDv4i32:
       case AArch64::SUBv4i32:
       case AArch64::USHLv4i32:
+      case AArch64::SSHLv4i32:
         numElements = 4;
         elementTypeInBits = 32;
         break;
@@ -2561,12 +2603,14 @@ public:
       case AArch64::ANDv8i8:
       case AArch64::ORRv8i8:
       case AArch64::USHLv8i8:
+      case AArch64::SSHLv8i8:
         numElements = 8;
         elementTypeInBits = 8;
         break;
       case AArch64::ADDv8i16:
       case AArch64::SUBv8i16:
       case AArch64::USHLv8i16:
+      case AArch64::SSHLv8i16:
         numElements = 8;
         elementTypeInBits = 16;
         break;
@@ -2576,6 +2620,7 @@ public:
       case AArch64::ANDv16i8:
       case AArch64::ORRv16i8:
       case AArch64::USHLv16i8:
+      case AArch64::SSHLv16i8:
         numElements = 16;
         elementTypeInBits = 8;
         break;
