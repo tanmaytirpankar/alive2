@@ -979,7 +979,7 @@ class arm2llvm {
   // them. In cases where LLVM does not have an appropriate vector
   // instruction, we perform the operation element-wise.
   Value *createVectorOp(function<Value *(Value *, Value *)> op, Value *a,
-                        Value *b, int elementTypeInBits, int numElements,
+                        Value *b, unsigned elementTypeInBits, unsigned numElements,
                         bool elementWise, bool zext) {
     assert(getBitWidth(a) == getBitWidth(b) &&
            "Expected values of same bit width");
