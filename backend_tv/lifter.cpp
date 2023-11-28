@@ -346,6 +346,10 @@ class arm2llvm {
       AArch64::ADDv2i32,
       AArch64::ADDv4i16,
       AArch64::ADDv8i8,
+      AArch64::USHLv8i8,
+      AArch64::USHLv1i64,
+      AArch64::USHLv4i16,
+      AArch64::USHLv2i32,
       AArch64::SUBv2i32,
       AArch64::SUBv4i16,
       AArch64::SUBv8i8,
@@ -626,6 +630,10 @@ class arm2llvm {
       AArch64::NEGv8i16,
       AArch64::NEGv2i64,
       AArch64::NEGv4i32,
+      AArch64::USHLv16i8,
+      AArch64::USHLv8i16,
+      AArch64::USHLv4i32,
+      AArch64::USHLv2i64,
   };
 
   bool has_s(int instr) {
@@ -965,35 +973,42 @@ class arm2llvm {
                             LLVMBB);
   }
 
-  // Creates LLVM IR instructions which takes two values with the same number of
-  // bits, bit casting them to vectors of numElements elements of size
-  // elementTypeInBits and doing an operation on them.
+  // Creates LLVM IR instructions which takes two values with the same
+  // number of bits, bit casting them to vectors of numElements
+  // elements of size elementTypeInBits and doing an operation on
+  // them. In cases where LLVM does not have an appropriate vector
+  // instruction, we perform the operation element-wise.
   Value *createVectorOp(function<Value *(Value *, Value *)> op, Value *a,
                         Value *b, int elementTypeInBits, int numElements,
-                        bool zext) {
+                        bool elementWise, bool zext) {
     assert(getBitWidth(a) == getBitWidth(b) &&
            "Expected values of same bit width");
 
-    // Create cast to reinterpret bits as a vector type
-    Value *a_vector =
-        createBitCast(a, VectorType::get(getIntTy(elementTypeInBits),
-                                         ElementCount::getFixed(numElements)));
+    auto ec = ElementCount::getFixed(numElements);
+    auto eTy = getIntTy(elementTypeInBits);
 
-    // Create cast to reinterpret bits as a vector type
-    Value *b_vector =
-        createBitCast(b, VectorType::get(getIntTy(elementTypeInBits),
-                                         ElementCount::getFixed(numElements)));
+    a = createBitCast(a, VectorType::get(eTy, ec));
+    b = createBitCast(b, VectorType::get(eTy, ec));
 
-    // Vector extension for instructions that require it
+    // some instructions double element widths
     if (zext) {
-      a_vector = createZExt(
-          a_vector, VectorType::get(getIntTy(2 * elementTypeInBits),
-                                    ElementCount::getFixed(numElements)));
-      b_vector = createZExt(
-          b_vector, VectorType::get(getIntTy(2 * elementTypeInBits),
-                                    ElementCount::getFixed(numElements)));
+      eTy = getIntTy(2 * elementTypeInBits);
+      a = createZExt(a, VectorType::get(eTy, ec));
+      b = createZExt(b, VectorType::get(eTy, ec));
     }
-    return op(a_vector, b_vector);
+
+    if (elementWise) {
+      Value *res = ConstantVector::getSplat(ec, UndefValue::get(eTy));
+      for (unsigned i = 0; i < numElements; ++i) {
+        auto aa = createExtractElement(a, getIntConst(i, 32));
+        auto bb = createExtractElement(b, getIntConst(i, 32));
+        auto cc = op(aa, bb);
+        res = createInsertElement(res, cc, getIntConst(i, 32));
+      }
+      return res;
+    } else {
+      return op(a, b);
+    }
   }
 
   // Returns Bit Width of Value V
@@ -1339,25 +1354,39 @@ class arm2llvm {
     return createAnd(v, sub);
   }
 
-  Value *extractFromVector(Value *val, unsigned width, unsigned lane) {
-    assert(getBitWidth(val) == 128);
-    auto shiftAmt = getIntConst(lane * width, 128);
-    auto shifted = createRawLShr(val, shiftAmt);
-    return createTrunc(shifted, getIntTy(width));
+  Value *extractFromVector(Value *val, unsigned eltWidth, unsigned lane) {
+    unsigned w = getBitWidth(val);
+    assert(w == 64 || w == 128);
+    assert(lane >= 0);
+    if (lane != 0) {
+      auto shiftAmt = getIntConst(lane * eltWidth, w);
+      val = createRawLShr(val, shiftAmt);
+    }
+    return createTrunc(val, getIntTy(eltWidth));
   }
 
-  Value *insertIntoVector(Value *orig, Value *elt, unsigned width,
+  Value *insertIntoVector(Value *orig, Value *elt, unsigned eltWidth,
                           unsigned lane) {
-    assert(getBitWidth(orig) == 128);
-    assert(width == 8 || width == 16 || width == 32 || width == 64);
-    assert(getBitWidth(elt) == width);
-    auto i128 = getIntTy(128);
-    auto eltExt = createZExt(elt, i128);
-    auto shiftAmt = getIntConst(lane * width, 128);
+    unsigned w = getBitWidth(orig);
+    assert(w == 64 || w == 128);
+    assert(eltWidth == 8 || eltWidth == 16 || eltWidth == 32 || eltWidth == 64);
+    assert(getBitWidth(elt) == eltWidth);
+    auto wTy = getIntTy(w);
+    auto eltExt = createZExt(elt, wTy);
+    auto shiftAmt = getIntConst(lane * eltWidth, w);
     auto shifted = createRawShl(eltExt, shiftAmt);
-    auto mask = createRawShl(getLowOnes(width, 128), shiftAmt);
+    auto mask = createRawShl(getLowOnes(eltWidth, w), shiftAmt);
     auto masked = createAnd(orig, createNot(mask));
     return createOr(masked, shifted);
+  }
+
+  Value *createUSHL(Value *a, Value *b) {
+    auto zero = getIntConst(0, getBitWidth(b));
+    auto c = createICmp(ICmpInst::Predicate::ICMP_SGT, b, zero);
+    auto neg = createSub(zero, b);
+    auto posRes = createMaskedShl(a, b);
+    auto negRes = createMaskedLShr(a, neg);
+    return createSelect(c, posRes, negRes);
   }
 
   Value *rev64(Value *in, unsigned eltsize) {
@@ -2410,12 +2439,32 @@ public:
     case AArch64::ORRv8i8:
     case AArch64::ORRv16i8:
     case AArch64::UMULLv2i32_v2i64:
+    case AArch64::USHLv1i64:
+    case AArch64::USHLv4i16:
+    case AArch64::USHLv16i8:
+    case AArch64::USHLv8i16:
+    case AArch64::USHLv2i32:
+    case AArch64::USHLv4i32:
+    case AArch64::USHLv8i8:
+    case AArch64::USHLv2i64:
     case AArch64::USHRv2i64_shift: {
       auto a = readFromOperand(1);
       auto b = readFromOperand(2);
+      bool elementWise = false;
 
       function<Value *(Value *, Value *)> op;
       switch (opcode) {
+      case AArch64::USHLv1i64:
+      case AArch64::USHLv4i16:
+      case AArch64::USHLv16i8:
+      case AArch64::USHLv8i16:
+      case AArch64::USHLv2i32:
+      case AArch64::USHLv4i32:
+      case AArch64::USHLv8i8:
+      case AArch64::USHLv2i64:
+        op = [&](Value *a, Value *b) { return createUSHL(a, b); };
+        elementWise = true;
+        break;
       case AArch64::ADDv2i32:
       case AArch64::ADDv2i64:
       case AArch64::ADDv4i16:
@@ -2456,7 +2505,7 @@ public:
           // get the constant
           auto c = dyn_cast<Constant>(b);
           assert(c);
-          // now make a splat of it
+          // make a splat of it
           auto *vTy = VectorType::get(i64, ElementCount::getFixed(2));
           auto shiftVal = c->getUniqueInteger();
           b = ConstantInt::get(vTy, shiftVal.getLimitedValue(), false);
@@ -2469,25 +2518,37 @@ public:
 
       int elementTypeInBits;
       int numElements;
+      bool zext = false;
       switch (opcode) {
+      case AArch64::USHLv1i64:
+        numElements = 1;
+        elementTypeInBits = 64;
+        break;
       case AArch64::SUBv2i32:
       case AArch64::ADDv2i32:
+      case AArch64::USHLv2i32:
         numElements = 2;
         elementTypeInBits = 32;
         break;
       case AArch64::ADDv2i64:
       case AArch64::SUBv2i64:
+      case AArch64::USHLv2i64:
+        numElements = 2;
+        elementTypeInBits = 64;
+        break;
       case AArch64::USHRv2i64_shift:
         numElements = 2;
         elementTypeInBits = 64;
         break;
       case AArch64::ADDv4i16:
       case AArch64::SUBv4i16:
+      case AArch64::USHLv4i16:
         numElements = 4;
         elementTypeInBits = 16;
         break;
       case AArch64::ADDv4i32:
       case AArch64::SUBv4i32:
+      case AArch64::USHLv4i32:
         numElements = 4;
         elementTypeInBits = 32;
         break;
@@ -2496,11 +2557,13 @@ public:
       case AArch64::EORv8i8:
       case AArch64::ANDv8i8:
       case AArch64::ORRv8i8:
+      case AArch64::USHLv8i8:
         numElements = 8;
         elementTypeInBits = 8;
         break;
       case AArch64::ADDv8i16:
       case AArch64::SUBv8i16:
+      case AArch64::USHLv8i16:
         numElements = 8;
         elementTypeInBits = 16;
         break;
@@ -2509,29 +2572,29 @@ public:
       case AArch64::EORv16i8:
       case AArch64::ANDv16i8:
       case AArch64::ORRv16i8:
+      case AArch64::USHLv16i8:
         numElements = 16;
         elementTypeInBits = 8;
         break;
       case AArch64::UMULLv2i32_v2i64:
         numElements = 2;
         elementTypeInBits = 32;
+        zext = true;
         break;
       case AArch64::UADDLv8i8_v8i16:
       case AArch64::USUBLv8i8_v8i16:
         numElements = 8;
         elementTypeInBits = 8;
+        zext = true;
         break;
       default:
         assert(false && "missed case");
         break;
       }
 
-      bool zext = (CurInst->getOpcode() == AArch64::UADDLv8i8_v8i16) ||
-                  (CurInst->getOpcode() == AArch64::USUBLv8i8_v8i16) ||
-                  (CurInst->getOpcode() == AArch64::UMULLv2i32_v2i64);
-
-      updateOutputReg(
-          createVectorOp(op, a, b, elementTypeInBits, numElements, zext));
+      auto res = createVectorOp(op, a, b, elementTypeInBits, numElements,
+                                elementWise, zext);
+      updateOutputReg(res);
       break;
     }
 
@@ -2541,10 +2604,10 @@ public:
       auto b = readFromOperand(3);
       auto v1 =
           createVectorOp([&](Value *a, Value *b) { return createMul(a, b); }, a,
-                         b, 32, 2, /*zext=*/false);
+                         b, 32, 2, /*cast=*/false, /*zext=*/false);
       auto v2 =
           createVectorOp([&](Value *a, Value *b) { return createSub(a, b); },
-                         accum, v1, 32, 2, /*zext=*/false);
+                         accum, v1, 32, 2, /*cast=*/false, /*zext=*/false);
       updateOutputReg(v2);
       break;
     }
