@@ -1411,7 +1411,7 @@ class arm2llvm {
     auto wTy = getIntTy(w);
     auto vext = createZExt(v, wTy);
     auto ret = getIntConst(0, w);
-    for (int i = 0; i < elts; i++) {
+    for (unsigned i = 0; i < elts; i++) {
       ret = createRawShl(ret, getIntConst(eltSize, w));
       ret = createOr(ret, vext);
     }
