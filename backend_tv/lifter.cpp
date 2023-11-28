@@ -1354,6 +1354,7 @@ class arm2llvm {
     return createAnd(v, sub);
   }
 
+  // like LLVM's ExtractElement, but works on scalar values
   Value *extractFromVector(Value *val, unsigned eltWidth, unsigned lane) {
     unsigned w = getBitWidth(val);
     assert(w == 64 || w == 128);
@@ -1365,6 +1366,7 @@ class arm2llvm {
     return createTrunc(val, getIntTy(eltWidth));
   }
 
+  // like LLVM's InsertElement, but works on scalar values
   Value *insertIntoVector(Value *orig, Value *elt, unsigned eltWidth,
                           unsigned lane) {
     unsigned w = getBitWidth(orig);
@@ -1380,6 +1382,7 @@ class arm2llvm {
     return createOr(masked, shifted);
   }
 
+  // negative shift exponents go the other direction
   Value *createUSHL(Value *a, Value *b) {
     auto zero = getIntConst(0, getBitWidth(b));
     auto c = createICmp(ICmpInst::Predicate::ICMP_SGT, b, zero);
