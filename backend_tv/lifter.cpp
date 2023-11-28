@@ -333,7 +333,8 @@ class arm2llvm {
       AArch64::LDPWi,      AArch64::STRWpre,    AArch64::FADDSrr,
       AArch64::FSUBSrr,    AArch64::FCMPSrr,    AArch64::FMOVSWr,
       AArch64::INSvi32gpr, AArch64::INSvi16gpr, AArch64::INSvi8gpr,
-      AArch64::FCVTSHr,    AArch64::FCVTZSUWSr,
+      AArch64::FCVTSHr,    AArch64::FCVTZSUWSr, AArch64::FCSELSrrr,
+
   };
 
   const set<int> instrs_64 = {
@@ -574,6 +575,7 @@ class arm2llvm {
       AArch64::NEGv2i32,
       AArch64::DUPv8i8gpr,
       AArch64::DUPv4i16gpr,
+      AArch64::FCSELDrrr,
   };
 
   const set<int> instrs_128 = {
@@ -2751,6 +2753,8 @@ public:
       break;
     }
 
+    case AArch64::FCSELDrrr:
+    case AArch64::FCSELSrrr:
     case AArch64::CSELWr:
     case AArch64::CSELXr: {
       assert(CurInst->getNumOperands() == 4); // dst, lhs, rhs, cond
