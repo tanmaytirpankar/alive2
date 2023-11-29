@@ -2268,7 +2268,7 @@ public:
       auto a = createBitCast(readFromOperand(0), fTy);
       Value *b;
       if (opcode == AArch64::FCMPSri || opcode == AArch64::FCMPDri) {
-        b = ConstantFP::get(fTy, 0.0d);
+        b = ConstantFP::get(fTy, 0.0);
       } else {
         b = createBitCast(readFromOperand(1), fTy);
       }
