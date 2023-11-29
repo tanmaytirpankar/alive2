@@ -576,6 +576,8 @@ class arm2llvm {
       AArch64::DUPv8i8gpr,
       AArch64::DUPv4i16gpr,
       AArch64::FCSELDrrr,
+      AArch64::UADDLVv8i8v,
+      AArch64::UADDLVv4i16v,
   };
 
   const set<int> instrs_128 = {
@@ -644,6 +646,9 @@ class arm2llvm {
       AArch64::SSHLv8i16,
       AArch64::SSHLv4i32,
       AArch64::SSHLv2i64,
+      AArch64::UADDLVv8i16v,
+      AArch64::UADDLVv4i32v,
+      AArch64::UADDLVv16i8v,
   };
 
   bool has_s(int instr) {
@@ -4148,6 +4153,11 @@ public:
       break;
     }
 
+    case AArch64::UADDLVv8i16v:
+    case AArch64::UADDLVv4i32v:
+    case AArch64::UADDLVv8i8v:
+    case AArch64::UADDLVv4i16v:
+    case AArch64::UADDLVv16i8v:
     case AArch64::NEGv1i64:
     case AArch64::NEGv4i16:
     case AArch64::NEGv8i8:
@@ -4169,6 +4179,7 @@ public:
         numElements = 1;
         break;
       case AArch64::NEGv4i16:
+      case AArch64::UADDLVv4i16v:
         elementSize = 16;
         numElements = 4;
         break;
@@ -4177,6 +4188,7 @@ public:
         numElements = 2;
         break;
       case AArch64::NEGv8i16:
+      case AArch64::UADDLVv8i16v:
         elementSize = 16;
         numElements = 8;
         break;
@@ -4185,9 +4197,11 @@ public:
         numElements = 2;
         break;
       case AArch64::NEGv4i32:
+      case AArch64::UADDLVv4i32v:
         elementSize = 32;
         numElements = 4;
         break;
+      case AArch64::UADDLVv8i8v:
       case AArch64::NEGv8i8:
       case AArch64::NOTv8i8:
       case AArch64::CNTv8i8:
@@ -4195,6 +4209,7 @@ public:
         numElements = 8;
         break;
       case AArch64::NEGv16i8:
+      case AArch64::UADDLVv16i8v:
       case AArch64::NOTv16i8:
       case AArch64::CNTv16i8:
         elementSize = 8;
@@ -4212,6 +4227,22 @@ public:
 
       // Perform the operation
       switch (opcode) {
+
+      case AArch64::UADDLVv8i16v:
+      case AArch64::UADDLVv4i32v:
+      case AArch64::UADDLVv8i8v:
+      case AArch64::UADDLVv4i16v:
+      case AArch64::UADDLVv16i8v: {
+        auto bigTy = getIntTy(2 * elementSize);
+        Value *sum = getIntConst(0, 2 * elementSize);
+        for (unsigned i = 0; i < numElements; ++i) {
+          auto elt = createExtractElement(src_vector, getIntConst(i, 32));
+          auto ext = createZExt(elt, bigTy);
+          sum = createAdd(sum, ext);
+        }
+        updateOutputReg(sum);
+        break;
+      }
 
       case AArch64::NOTv8i8:
       case AArch64::NOTv16i8: {
