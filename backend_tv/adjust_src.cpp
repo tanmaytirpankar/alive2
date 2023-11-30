@@ -51,6 +51,7 @@
 #include <fstream>
 #include <iostream>
 #include <ranges>
+#include <set>
 #include <sstream>
 #include <unordered_map>
 #include <utility>
@@ -192,9 +193,11 @@ void checkTy(Type *t, const DataLayout &DL) {
 }
 #endif
 
-void checkSupport(Instruction &i, const DataLayout &DL) {
+void checkSupport(Instruction &i, const DataLayout &DL, set<Type *> &typeSet) {
+  typeSet.insert(i.getType());
   for (auto &op : i.operands()) {
     auto *ty = op.get()->getType();
+    typeSet.insert(ty);
     if (auto *pty = dyn_cast<PointerType>(ty)) {
       if (pty->getAddressSpace() != 0) {
         *out << "\nERROR: address spaces other than 0 are unsupported\n\n";
@@ -332,16 +335,26 @@ Function *adjustSrc(Function *srcFn) {
   if (RT)
     checkVectorTy(RT);
 
+  set<Type *> typeSet;
+
   auto &DL = srcFn->getParent()->getDataLayout();
   unsigned llvmInstCount = 0;
   for (auto &bb : *srcFn) {
     for (auto &i : bb) {
-      checkSupport(i, DL);
+      checkSupport(i, DL, typeSet);
       ++llvmInstCount;
     }
   }
-  *out << "source function has " << llvmInstCount << " LLVM instructions\n";
 
+  auto &Ctx = srcFn->getContext();
+  if (typeSet.find(Type::getFloatTy(Ctx)) != typeSet.end() ||
+      typeSet.find(Type::getDoubleTy(Ctx)) != typeSet.end() ||
+      typeSet.find(Type::getHalfTy(Ctx)) != typeSet.end()) {
+    *out << "\nERROR: Not supporting float types for now\n\n";
+    exit(-1);
+  }
+
+  *out << "source function has " << llvmInstCount << " LLVM instructions\n";
   return adjustSrcReturn(srcFn);
 }
 

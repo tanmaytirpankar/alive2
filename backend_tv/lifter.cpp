@@ -1178,47 +1178,33 @@ class arm2llvm {
   void updateOutputReg(Value *V, bool SExt = false) {
     auto destReg = CurInst->getOperand(0).getReg();
 
-    // important!
+    // important -- squash updates to the zero register
     if (destReg == AArch64::WZR || destReg == AArch64::XZR)
       return;
 
-    // BitWidth of Value V to be written
-    unsigned int W = getBitWidth(V);
-    size_t destRegSize = getRegSize(mapRegToBackingReg(destReg));
+    // FIXME do we really want to do this? and if so do this for
+    // floats too?
+    if (V->getType()->isVectorTy())
+      V = createBitCast(V, getIntTy(getBitWidth(V)));
 
-    if (V->getType()->isVectorTy()) {
-      // Cast to integer type before storing into register
-      V = createBitCast(V, getIntTy(W));
-    }
+    auto destRegSize = getRegSize(destReg);
+    auto realRegSize = getRegSize(mapRegToBackingReg(destReg));
 
-    // Create LLVM instructions extending the Value V if it is smaller than the
-    // specified backing registers Xn or Vn
-    if (W != destRegSize) {
-      if (!(destRegSize == 32 || destRegSize == 64 || destRegSize == 128)) {
-        *out << "\nERROR: only 32, 64, and 128 bit registers supported for "
-                "now\n\n";
-        exit(-1);
-      }
+    // important to chop the value down to the destination register
+    // size before extending it again
+    if (destRegSize < getBitWidth(V))
+      V = createTrunc(V, getIntTy(destRegSize));
 
-      assert(!V->getType()->isVectorTy() && "Value should not be vector type "
-                                            "before extension");
+    // now sign extend if asked and appropriate
+    if (SExt && getBitWidth(V) < 32 && destRegSize == 32)
+      V = createSExt(V, getIntTy(32));
+    if (SExt && getBitWidth(V) < 64 && destRegSize == 64)
+      V = createSExt(V, getIntTy(64));
 
-      // if the s flag is set, the value is smaller than 32 bits, and
-      // the register we are storing it in _is_ 32 bits, we sign
-      // extend to 32 bits before zero-extending to 64
-      // We need to handle the first case without destRegSize since the backing
-      // store does not have a 32 bit register.
-      if (SExt && destReg >= AArch64::W0 && destReg <= AArch64::W30 && W < 32) {
-        V = createSExt(V, getIntTy(32));
-        V = createZExt(V, getIntTy(64));
-      } else if (destRegSize == 64 && W < 64) {
-        auto op = SExt ? Instruction::SExt : Instruction::ZExt;
-        V = createCast(V, getIntTy(64), op);
-      } else {
-        // Always zero extend to 128 bits when storing into SIMD/FP registers
-        V = createZExt(V, getIntTy(128));
-      }
-    }
+    // annnnd zero out the rest of the destination reg!
+    if (getBitWidth(V) < realRegSize)
+      V = createZExt(V, getIntTy(realRegSize));
+
     updateReg(V, destReg);
   }
 
