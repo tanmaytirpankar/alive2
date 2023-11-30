@@ -1182,7 +1182,7 @@ class arm2llvm {
     if (destReg == AArch64::WZR || destReg == AArch64::XZR)
       return;
 
-    // FIXME do we really want to do this? and if so do this for
+    // FIXME do we really want to do this? and if so, do this for
     // floats too?
     if (V->getType()->isVectorTy())
       V = createBitCast(V, getIntTy(getBitWidth(V)));
@@ -4310,30 +4310,66 @@ public:
     RegFile[Reg] = A;
   }
 
-  Value *parameterABIRules(Value *V, bool argIsSExt) {
+  /*
+   * the idea here is that if a parameter is, for example, 8 bits,
+   * then we only want to initialize the lower 8 bits of the register
+   * or stack slot, with the remaining bits containing junk, in order
+   * to detect cases where the compiler incorrectly emits code
+   * depending on that junk. on the other hand, if a parameter is
+   * signext or zeroext then we have to actually initialize those
+   * higher bits.
+   *
+   * FIXME -- this code was originally developed for scalar parameters
+   * and we're mostly sort of hoping it also works for vectors. this
+   * should work fine as long as the only vectors we accept are 64 and
+   * 128 bits, which seemed (as of Nov 2023) to be the only ones with
+   * a stable ABI
+   */
+  Value *parameterABIRules(Value *V, bool isSExt, bool isZExt) {
+    auto i8 = getIntTy(8);
     auto i32 = getIntTy(32);
-    auto i64 = getIntTy(64);
-    auto origWidth = DL.getTypeSizeInBits(V->getType());
-    // FIXME -- do sext/zext for these
-    if (V->getType()->isFloatingPointTy())
+    auto argTy = V->getType();
+    int targetWidth;
+
+    // these are already sized appropriately for their register or
+    // stack slot
+    if (argTy->isPointerTy())
       return V;
-    if (V->getType()->isVectorTy())
-      V = createBitCast(V, getIntTy(origWidth));
-    if (origWidth < 64) {
-      assert(V->getType()->isIntegerTy());
-      auto op = argIsSExt ? Instruction::SExt : Instruction::ZExt;
-      if (origWidth == 1) {
-        V = createCast(V, i32, op, nextName());
-        V = createZExt(V, i64, nextName());
-      } else {
-        if (origWidth < 32) {
-          V = createCast(V, i32, op, nextName());
-          V = createZExt(V, i64, nextName());
-        } else {
-          V = createCast(V, i64, op, nextName());
-        }
-      }
+
+    if (argTy->isVectorTy() || argTy->isFloatingPointTy()) {
+      argTy = getIntTy(getBitWidth(V));
+      V = createBitCast(V, argTy);
+      targetWidth = 128;
+    } else {
+      targetWidth = 64;
     }
+
+    assert(argTy->isIntegerTy());
+
+    /*
+     * i1 has special two ABI rules. first, by default, an i1 is
+     * implicitly zero-extended to i8. this is from AAPCS64. second,
+     * if the i1 is a signext parameter, then this overrides the
+     * zero-extension rule. this is from the LLVM folks.
+     */
+    if (getBitWidth(V) == 1) {
+      if (isSExt)
+        V = createSExt(V, i32, nextName());
+      else
+        V = createZExt(V, i8, nextName());
+    }
+
+    if (isSExt) {
+      if (getBitWidth(V) < 32)
+        V = createSExt(V, i32, nextName());
+      else if (getBitWidth(V) > 32 && getBitWidth(V) < targetWidth)
+        V = createSExt(V, getIntTy(targetWidth));
+    }
+
+    if (isZExt && getBitWidth(V) < targetWidth) {
+      V = createZExt(V, getIntTy(targetWidth));
+    }
+
     return V;
   }
 
@@ -4399,9 +4435,9 @@ public:
     // If you comment this loop out, global tests 101 and above crash since the
     // assembly does not have a global which is reference in the instructions...
 
-    // This loop looks through globals in the source LLVM IR and creates a global
-    // value for those that were not found in the assembly (If a global is in the
-    // assembly, it would have been created by the first loop)
+    // This loop looks through globals in the source LLVM IR and creates a
+    // global value for those that were not found in the assembly (If a global
+    // is in the assembly, it would have been created by the first loop)
     for (auto &srcFnGlobal : srcFn.getParent()->globals()) {
       // If the global has not been created yet, create it
       auto name = srcFnGlobal.getName();
@@ -4492,7 +4528,8 @@ public:
            << ", scalarArgNum = " << scalarArgNum
            << ", stackArgNum = " << stackArgNum << "\n";
       auto *argTy = arg->getType();
-      auto *val = parameterABIRules(arg, srcArg->hasSExtAttr());
+      auto *val =
+          parameterABIRules(arg, srcArg->hasSExtAttr(), srcArg->hasZExtAttr());
 
       // first 8 integer parameters go in the first 8 integer registers
       if ((argTy->isIntegerTy() || argTy->isPointerTy()) && scalarArgNum < 8) {
@@ -4518,7 +4555,7 @@ public:
                   "exceeded\n\n";
           exit(-1);
         }
-        if (argTy->isPointerTy() || getBitWidth(val) == 64) {
+        if (argTy->isPointerTy() || argTy->isIntegerTy()) {
           auto addr =
               createGEP(i64, paramBase, {getIntConst(stackArgNum, 64)}, "");
           createStore(val, addr);
