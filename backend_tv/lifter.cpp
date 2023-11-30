@@ -579,6 +579,9 @@ class arm2llvm {
       AArch64::FCSELDrrr,
       AArch64::UADDLVv8i8v,
       AArch64::UADDLVv4i16v,
+      AArch64::UADDLPv4i16_v2i32,
+      AArch64::UADDLPv2i32_v1i64,
+      AArch64::UADDLPv8i8_v4i16,
   };
 
   const set<int> instrs_128 = {
@@ -650,6 +653,9 @@ class arm2llvm {
       AArch64::UADDLVv8i16v,
       AArch64::UADDLVv4i32v,
       AArch64::UADDLVv16i8v,
+      AArch64::UADDLPv8i16_v4i32,
+      AArch64::UADDLPv4i32_v2i64,
+      AArch64::UADDLPv16i8_v8i16,
   };
 
   bool has_s(int instr) {
@@ -4165,6 +4171,12 @@ public:
       break;
     }
 
+    case AArch64::UADDLPv4i16_v2i32:
+    case AArch64::UADDLPv2i32_v1i64:
+    case AArch64::UADDLPv8i8_v4i16:
+    case AArch64::UADDLPv8i16_v4i32:
+    case AArch64::UADDLPv4i32_v2i64:
+    case AArch64::UADDLPv16i8_v8i16:
     case AArch64::UADDLVv8i16v:
     case AArch64::UADDLVv4i32v:
     case AArch64::UADDLVv8i8v:
@@ -4192,15 +4204,18 @@ public:
         break;
       case AArch64::NEGv4i16:
       case AArch64::UADDLVv4i16v:
+      case AArch64::UADDLPv4i16_v2i32:
         elementSize = 16;
         numElements = 4;
         break;
       case AArch64::NEGv2i32:
+      case AArch64::UADDLPv2i32_v1i64:
         elementSize = 32;
         numElements = 2;
         break;
       case AArch64::NEGv8i16:
       case AArch64::UADDLVv8i16v:
+      case AArch64::UADDLPv8i16_v4i32:
         elementSize = 16;
         numElements = 8;
         break;
@@ -4210,10 +4225,12 @@ public:
         break;
       case AArch64::NEGv4i32:
       case AArch64::UADDLVv4i32v:
+      case AArch64::UADDLPv4i32_v2i64:
         elementSize = 32;
         numElements = 4;
         break;
       case AArch64::UADDLVv8i8v:
+      case AArch64::UADDLPv8i8_v4i16:
       case AArch64::NEGv8i8:
       case AArch64::NOTv8i8:
       case AArch64::CNTv8i8:
@@ -4222,6 +4239,7 @@ public:
         break;
       case AArch64::NEGv16i8:
       case AArch64::UADDLVv16i8v:
+      case AArch64::UADDLPv16i8_v8i16:
       case AArch64::NOTv16i8:
       case AArch64::CNTv16i8:
         elementSize = 8;
@@ -4239,6 +4257,27 @@ public:
 
       // Perform the operation
       switch (opcode) {
+
+      case AArch64::UADDLPv4i16_v2i32:
+      case AArch64::UADDLPv2i32_v1i64:
+      case AArch64::UADDLPv8i8_v4i16:
+      case AArch64::UADDLPv8i16_v4i32:
+      case AArch64::UADDLPv4i32_v2i64:
+      case AArch64::UADDLPv16i8_v8i16: {
+        auto bigEltTy = getIntTy(2 * elementSize);
+        Value *res = ConstantVector::getSplat(
+            ElementCount::getFixed(numElements / 2), UndefValue::get(bigEltTy));
+        for (unsigned i = 0; i < numElements; i += 2) {
+          auto elt1 = createExtractElement(src_vector, getIntConst(i, 32));
+          auto elt2 = createExtractElement(src_vector, getIntConst(i + 1, 32));
+          auto ext1 = createZExt(elt1, bigEltTy);
+          auto ext2 = createZExt(elt2, bigEltTy);
+          auto sum = createAdd(ext1, ext2);
+          res = createInsertElement(res, sum, getIntConst(i / 2, 32));
+        }
+        updateOutputReg(res);
+        break;
+      }
 
       case AArch64::UADDLVv8i16v:
       case AArch64::UADDLVv4i32v:
