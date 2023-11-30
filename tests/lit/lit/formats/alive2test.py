@@ -95,7 +95,7 @@ class Alive2Test(TestFormat):
         return lit.Test.UNSUPPORTED, ''      
 
     if alive_tv_5:
-      cmd = ['./backend-tv', '-smt-to=20000', '-always-verify', '-disable-undef-input', '-disable-poison-input', '-asm-input']
+      cmd = ['./backend-tv', '-smt-to=20000', '-always-verify', '-asm-input']
       if not os.path.isfile('backend-tv'):
         return lit.Test.UNSUPPORTED, ''      
 

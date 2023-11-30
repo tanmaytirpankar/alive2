@@ -1,6 +1,8 @@
-; CHECK: No such file or directory
+; CHECK: 1 incorrect
 
-define i32 @f(i32, i32) {
-  %x = add i32 %0, %1
-  ret i32 %x
+define i32 @add(i16, i16) {
+2:
+  %a = add i16 %0, %1
+  %b = zext i16 %a to i32
+  ret i32 %b
 }
