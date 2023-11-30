@@ -4329,7 +4329,7 @@ public:
     auto i8 = getIntTy(8);
     auto i32 = getIntTy(32);
     auto argTy = V->getType();
-    int targetWidth;
+    unsigned targetWidth;
 
     // these are already sized appropriately for their register or
     // stack slot
