@@ -355,12 +355,10 @@ expr Pointer::isBlockAligned(uint64_t align, bool exact) const {
 }
 
 expr Pointer::isAligned(uint64_t align) {
-  if (align == 0)
-    return isNull();
   if (align == 1)
     return true;
   if (!is_power2(align))
-    return false;
+    return isNull();
 
   auto offset = getOffset();
   if (isUndef(offset))
@@ -395,10 +393,9 @@ expr Pointer::isAligned(const expr &align) {
     return isAligned(n);
 
   return
-    expr::mkIf(align == 0,
-               isNull(),
-               align.isPowerOf2() &&
-                 getAddress().urem(align.zextOrTrunc(bits_ptr_address)) == 0);
+    expr::mkIf(align.isPowerOf2(),
+               getAddress().urem(align.zextOrTrunc(bits_ptr_address)) == 0,
+               isNull());
 }
 
 static pair<expr, expr> is_dereferenceable(Pointer &p,
@@ -505,11 +502,11 @@ expr Pointer::getAllocType() const {
                    expr::mkUInt(0, 2));
 }
 
-expr Pointer::isStackAllocated() const {
+expr Pointer::isStackAllocated(bool simplify) const {
   // 1) if a stack object is returned by a callee it's UB
   // 2) if a stack object is given as argument by the caller, we can upgrade it
   //    to a global object, so we can do POR here.
-  if (!has_alloca || isLocal().isFalse())
+  if (simplify && (!has_alloca || isLocal().isFalse()))
     return false;
   return getAllocType() == STACK;
 }
