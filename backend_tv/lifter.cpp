@@ -586,6 +586,7 @@ class arm2llvm {
       AArch64::CMHIv4i16,
       AArch64::CMHIv2i32,
       AArch64::CMHIv1i64,
+      AArch64::BIFv8i8,
   };
 
   const set<int> instrs_128 = {
@@ -664,6 +665,7 @@ class arm2llvm {
       AArch64::CMHIv8i16,
       AArch64::CMHIv4i32,
       AArch64::CMHIv2i64,
+      AArch64::BIFv16i8,
   };
 
   bool has_s(int instr) {
@@ -2466,6 +2468,16 @@ public:
       break;
     }
 
+    case AArch64::BIFv8i8:
+    case AArch64::BIFv16i8: {
+      auto op1 = readFromOperand(1);
+      auto op4 = readFromOperand(2);
+      auto op3 = createNot(readFromOperand(3));
+      auto res = createXor(op1, createAnd(createXor(op1, op4), op3));
+      updateOutputReg(res);
+      break;
+    }
+
     case AArch64::CMHIv8i8:
     case AArch64::CMHIv4i16:
     case AArch64::CMHIv2i32:
@@ -2532,7 +2544,6 @@ public:
         op = [&](Value *a, Value *b) {
           return createICmp(ICmpInst::Predicate::ICMP_UGT, a, b);
         };
-        elementWise = false;
         isICmp = true;
         break;
       case AArch64::USHLv1i64:
