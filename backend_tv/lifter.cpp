@@ -757,8 +757,7 @@ class arm2llvm {
   }
 
   LoadInst *createLoad(Type *ty, Value *ptr) {
-    return new LoadInst(ty, ptr, nextName(), false,
-                        Align(1), LLVMBB);
+    return new LoadInst(ty, ptr, nextName(), false, Align(1), LLVMBB);
   }
 
   void createStore(Value *v, Value *ptr) {
@@ -949,8 +948,7 @@ class arm2llvm {
   }
 
   BinaryOperator *createOr(Value *a, Value *b) {
-    return BinaryOperator::Create(
-        Instruction::Or, a, b, nextName(), LLVMBB);
+    return BinaryOperator::Create(Instruction::Or, a, b, nextName(), LLVMBB);
   }
 
   BinaryOperator *createXor(Value *a, Value *b) {
@@ -971,34 +969,28 @@ class arm2llvm {
     return new FreezeInst(v, nextName(), LLVMBB);
   }
 
-  CastInst *createTrunc(Value *v, Type *t, const string &NameStr = "") {
-    return CastInst::Create(Instruction::Trunc, v, t,
-                            (NameStr == "") ? nextName() : NameStr, LLVMBB);
+  CastInst *createTrunc(Value *v, Type *t) {
+    return CastInst::Create(Instruction::Trunc, v, t, nextName(), LLVMBB);
   }
 
-  CastInst *createSExt(Value *v, Type *t, const string &NameStr = "") {
-    return CastInst::Create(Instruction::SExt, v, t,
-                            (NameStr == "") ? nextName() : NameStr, LLVMBB);
+  CastInst *createSExt(Value *v, Type *t) {
+    return CastInst::Create(Instruction::SExt, v, t, nextName(), LLVMBB);
   }
 
   InsertElementInst *createInsertElement(Value *vec, Value *val, Value *index) {
     return InsertElementInst::Create(vec, val, index, nextName(), LLVMBB);
   }
 
-  CastInst *createZExt(Value *v, Type *t, const string &NameStr = "") {
-    return CastInst::Create(Instruction::ZExt, v, t,
-                            (NameStr == "") ? nextName() : NameStr, LLVMBB);
+  CastInst *createZExt(Value *v, Type *t) {
+    return CastInst::Create(Instruction::ZExt, v, t, nextName(), LLVMBB);
   }
 
-  CastInst *createBitCast(Value *v, Type *t, const string &NameStr = "") {
-    return CastInst::Create(Instruction::BitCast, v, t,
-                            (NameStr == "") ? nextName() : NameStr, LLVMBB);
+  CastInst *createBitCast(Value *v, Type *t) {
+    return CastInst::Create(Instruction::BitCast, v, t, nextName(), LLVMBB);
   }
 
-  CastInst *createCast(Value *v, Type *t, Instruction::CastOps op,
-                       const string &NameStr = "") {
-    return CastInst::Create(op, v, t, (NameStr == "") ? nextName() : NameStr,
-                            LLVMBB);
+  CastInst *createCast(Value *v, Type *t, Instruction::CastOps op) {
+    return CastInst::Create(op, v, t, nextName(), LLVMBB);
   }
 
   // Creates LLVM IR instructions which takes two values with the same
@@ -4399,7 +4391,7 @@ public:
 
     if (isSExt) {
       if (getBitWidth(V) < 32)
-        V = createSExt(V, i32, nextName());
+        V = createSExt(V, i32);
       else if (getBitWidth(V) > 32 && getBitWidth(V) < targetWidth)
         V = createSExt(V, getIntTy(targetWidth));
     }
