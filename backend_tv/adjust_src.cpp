@@ -350,8 +350,11 @@ Function *adjustSrc(Function *srcFn) {
   if (typeSet.find(Type::getFloatTy(Ctx)) != typeSet.end() ||
       typeSet.find(Type::getDoubleTy(Ctx)) != typeSet.end() ||
       typeSet.find(Type::getHalfTy(Ctx)) != typeSet.end()) {
-    *out << "\nERROR: Not supporting float types for now\n\n";
-    exit(-1);
+    if (true) {
+      *out << "\nERROR: Not supporting float until this issue gets resolved\n";
+      *out << "https://github.com/AliveToolkit/alive2/issues/982\n\n";
+      exit(-1);
+    }
   }
 
   *out << "source function has " << llvmInstCount << " LLVM instructions\n";

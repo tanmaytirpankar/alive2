@@ -1048,25 +1048,20 @@ class arm2llvm {
     return res;
   }
 
-  // Returns Bit Width of Value V
   static unsigned int getBitWidth(Value *V) {
-    unsigned int bitWidth = 0;
-
-    // If vector type, compute bitwidth using product of size of each element
-    // and number of elements.
-    if (V->getType()->isVectorTy()) {
-      auto *v_type = (VectorType *)V->getType();
-      bitWidth = v_type->getScalarSizeInBits() *
-                 v_type->getElementCount().getFixedValue();
-    } else if (V->getType()->isIntegerTy()) {
-      bitWidth = V->getType()->getIntegerBitWidth();
+    auto ty = V->getType();
+    if (auto vTy = dyn_cast<VectorType>(ty)) {
+      return vTy->getScalarSizeInBits() *
+             vTy->getElementCount().getFixedValue();
+    } else if (ty->isIntegerTy()) {
+      return ty->getIntegerBitWidth();
+    } else if (ty->isFloatTy()) {
+      return 32;
+    } else if (ty->isDoubleTy()) {
+      return 64;
     } else {
       assert(false && "Unhandled type");
     }
-
-    assert(bitWidth && "Could not determine bit width of value\n");
-
-    return bitWidth;
   }
 
   // Returns bitWidth corresponding the registers.
