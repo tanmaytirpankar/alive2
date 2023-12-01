@@ -756,8 +756,8 @@ class arm2llvm {
     BranchInst::Create(dst, LLVMBB);
   }
 
-  LoadInst *createLoad(Type *ty, Value *ptr, const string &NameStr = "") {
-    return new LoadInst(ty, ptr, (NameStr == "") ? nextName() : NameStr, false,
+  LoadInst *createLoad(Type *ty, Value *ptr) {
+    return new LoadInst(ty, ptr, nextName(), false,
                         Align(1), LLVMBB);
   }
 
@@ -948,9 +948,9 @@ class arm2llvm {
     return BinaryOperator::Create(Instruction::And, a, b, nextName(), LLVMBB);
   }
 
-  BinaryOperator *createOr(Value *a, Value *b, const string &NameStr = "") {
+  BinaryOperator *createOr(Value *a, Value *b) {
     return BinaryOperator::Create(
-        Instruction::Or, a, b, (NameStr == "") ? nextName() : NameStr, LLVMBB);
+        Instruction::Or, a, b, nextName(), LLVMBB);
   }
 
   BinaryOperator *createXor(Value *a, Value *b) {
@@ -967,8 +967,8 @@ class arm2llvm {
                                   LLVMBB);
   }
 
-  FreezeInst *createFreeze(Value *v, const string &NameStr = "") {
-    return new FreezeInst(v, (NameStr == "") ? nextName() : NameStr, LLVMBB);
+  FreezeInst *createFreeze(Value *v) {
+    return new FreezeInst(v, nextName(), LLVMBB);
   }
 
   CastInst *createTrunc(Value *v, Type *t, const string &NameStr = "") {
@@ -1118,15 +1118,14 @@ class arm2llvm {
   }
 
   // always does a full-width read
-  Value *readFromReg(unsigned Reg, const string &NameStr = "") {
+  Value *readFromReg(unsigned Reg) {
     auto RegAddr = dealiasReg(Reg);
-    return createLoad(getIntTy(getRegSize(mapRegToBackingReg(Reg))), RegAddr,
-                      NameStr);
+    return createLoad(getIntTy(getRegSize(mapRegToBackingReg(Reg))), RegAddr);
   }
 
-  Value *readPtrFromReg(unsigned Reg, const string &NameStr = "") {
+  Value *readPtrFromReg(unsigned Reg) {
     auto RegAddr = dealiasReg(Reg);
-    return createLoad(PointerType::get(Ctx, 0), RegAddr, NameStr);
+    return createLoad(PointerType::get(Ctx, 0), RegAddr);
   }
 
   void updateReg(Value *v, u_int64_t reg) {
@@ -4393,9 +4392,9 @@ public:
      */
     if (getBitWidth(V) == 1) {
       if (isSExt)
-        V = createSExt(V, i32, nextName());
+        V = createSExt(V, i32);
       else
-        V = createZExt(V, i8, nextName());
+        V = createZExt(V, i8);
     }
 
     if (isSExt) {
