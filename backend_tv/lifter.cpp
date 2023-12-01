@@ -582,6 +582,10 @@ class arm2llvm {
       AArch64::UADDLPv4i16_v2i32,
       AArch64::UADDLPv2i32_v1i64,
       AArch64::UADDLPv8i8_v4i16,
+      AArch64::CMHIv8i8,
+      AArch64::CMHIv4i16,
+      AArch64::CMHIv2i32,
+      AArch64::CMHIv1i64,
   };
 
   const set<int> instrs_128 = {
@@ -656,6 +660,10 @@ class arm2llvm {
       AArch64::UADDLPv8i16_v4i32,
       AArch64::UADDLPv4i32_v2i64,
       AArch64::UADDLPv16i8_v8i16,
+      AArch64::CMHIv16i8,
+      AArch64::CMHIv8i16,
+      AArch64::CMHIv4i32,
+      AArch64::CMHIv2i64,
   };
 
   bool has_s(int instr) {
@@ -1000,15 +1008,17 @@ class arm2llvm {
   // instruction, we perform the operation element-wise.
   Value *createVectorOp(function<Value *(Value *, Value *)> op, Value *a,
                         Value *b, unsigned elementTypeInBits,
-                        unsigned numElements, bool elementWise, bool zext) {
+                        unsigned numElements, bool elementWise, bool zext,
+                        bool isICmp) {
     assert(getBitWidth(a) == getBitWidth(b) &&
            "Expected values of same bit width");
 
     auto ec = ElementCount::getFixed(numElements);
     auto eTy = getIntTy(elementTypeInBits);
+    auto vTy = VectorType::get(eTy, ec);
 
-    a = createBitCast(a, VectorType::get(eTy, ec));
-    b = createBitCast(b, VectorType::get(eTy, ec));
+    a = createBitCast(a, vTy);
+    b = createBitCast(b, vTy);
 
     // some instructions double element widths
     if (zext) {
@@ -1017,18 +1027,21 @@ class arm2llvm {
       b = createZExt(b, VectorType::get(eTy, ec));
     }
 
+    Value *res = nullptr;
     if (elementWise) {
-      Value *res = ConstantVector::getSplat(ec, UndefValue::get(eTy));
+      res = ConstantVector::getSplat(ec, UndefValue::get(eTy));
       for (unsigned i = 0; i < numElements; ++i) {
         auto aa = createExtractElement(a, getIntConst(i, 32));
         auto bb = createExtractElement(b, getIntConst(i, 32));
         auto cc = op(aa, bb);
         res = createInsertElement(res, cc, getIntConst(i, 32));
       }
-      return res;
     } else {
-      return op(a, b);
+      res = op(a, b);
     }
+    if (isICmp)
+      res = createSExt(res, vTy);
+    return res;
   }
 
   // Returns Bit Width of Value V
@@ -2453,6 +2466,14 @@ public:
       break;
     }
 
+    case AArch64::CMHIv8i8:
+    case AArch64::CMHIv4i16:
+    case AArch64::CMHIv2i32:
+    case AArch64::CMHIv1i64:
+    case AArch64::CMHIv16i8:
+    case AArch64::CMHIv8i16:
+    case AArch64::CMHIv4i32:
+    case AArch64::CMHIv2i64:
     case AArch64::ADDv2i32:
     case AArch64::ADDv2i64:
     case AArch64::ADDv4i16:
@@ -2496,9 +2517,24 @@ public:
       auto a = readFromOperand(1);
       auto b = readFromOperand(2);
       bool elementWise = false;
+      bool isICmp = false;
 
       function<Value *(Value *, Value *)> op;
       switch (opcode) {
+      case AArch64::CMHIv8i8:
+      case AArch64::CMHIv4i16:
+      case AArch64::CMHIv2i32:
+      case AArch64::CMHIv1i64:
+      case AArch64::CMHIv16i8:
+      case AArch64::CMHIv8i16:
+      case AArch64::CMHIv4i32:
+      case AArch64::CMHIv2i64:
+        op = [&](Value *a, Value *b) {
+          return createICmp(ICmpInst::Predicate::ICMP_UGT, a, b);
+        };
+        elementWise = false;
+        isICmp = true;
+        break;
       case AArch64::USHLv1i64:
       case AArch64::USHLv4i16:
       case AArch64::USHLv16i8:
@@ -2576,6 +2612,7 @@ public:
       int numElements;
       bool zext = false;
       switch (opcode) {
+      case AArch64::CMHIv1i64:
       case AArch64::USHLv1i64:
       case AArch64::SSHLv1i64:
         numElements = 1;
@@ -2584,6 +2621,7 @@ public:
       case AArch64::SUBv2i32:
       case AArch64::ADDv2i32:
       case AArch64::USHLv2i32:
+      case AArch64::CMHIv2i32:
       case AArch64::SSHLv2i32:
         numElements = 2;
         elementTypeInBits = 32;
@@ -2591,6 +2629,7 @@ public:
       case AArch64::ADDv2i64:
       case AArch64::SUBv2i64:
       case AArch64::USHLv2i64:
+      case AArch64::CMHIv2i64:
       case AArch64::SSHLv2i64:
         numElements = 2;
         elementTypeInBits = 64;
@@ -2602,6 +2641,7 @@ public:
       case AArch64::ADDv4i16:
       case AArch64::SUBv4i16:
       case AArch64::USHLv4i16:
+      case AArch64::CMHIv4i16:
       case AArch64::SSHLv4i16:
         numElements = 4;
         elementTypeInBits = 16;
@@ -2609,6 +2649,7 @@ public:
       case AArch64::ADDv4i32:
       case AArch64::SUBv4i32:
       case AArch64::USHLv4i32:
+      case AArch64::CMHIv4i32:
       case AArch64::SSHLv4i32:
         numElements = 4;
         elementTypeInBits = 32;
@@ -2619,6 +2660,7 @@ public:
       case AArch64::ANDv8i8:
       case AArch64::ORRv8i8:
       case AArch64::USHLv8i8:
+      case AArch64::CMHIv8i8:
       case AArch64::SSHLv8i8:
         numElements = 8;
         elementTypeInBits = 8;
@@ -2626,6 +2668,7 @@ public:
       case AArch64::ADDv8i16:
       case AArch64::SUBv8i16:
       case AArch64::USHLv8i16:
+      case AArch64::CMHIv8i16:
       case AArch64::SSHLv8i16:
         numElements = 8;
         elementTypeInBits = 16;
@@ -2636,6 +2679,7 @@ public:
       case AArch64::ANDv16i8:
       case AArch64::ORRv16i8:
       case AArch64::USHLv16i8:
+      case AArch64::CMHIv16i8:
       case AArch64::SSHLv16i8:
         numElements = 16;
         elementTypeInBits = 8;
@@ -2657,7 +2701,7 @@ public:
       }
 
       auto res = createVectorOp(op, a, b, elementTypeInBits, numElements,
-                                elementWise, zext);
+                                elementWise, zext, isICmp);
       updateOutputReg(res);
       break;
     }
@@ -2666,12 +2710,12 @@ public:
       auto accum = readFromOperand(1);
       auto a = readFromOperand(2);
       auto b = readFromOperand(3);
-      auto v1 =
-          createVectorOp([&](Value *a, Value *b) { return createMul(a, b); }, a,
-                         b, 32, 2, /*cast=*/false, /*zext=*/false);
-      auto v2 =
-          createVectorOp([&](Value *a, Value *b) { return createSub(a, b); },
-                         accum, v1, 32, 2, /*cast=*/false, /*zext=*/false);
+      auto v1 = createVectorOp(
+          [&](Value *a, Value *b) { return createMul(a, b); }, a, b, 32, 2,
+          /*cast=*/false, /*zext=*/false, /*isICmp=*/false);
+      auto v2 = createVectorOp(
+          [&](Value *a, Value *b) { return createSub(a, b); }, accum, v1, 32, 2,
+          /*cast=*/false, /*zext=*/false, /*isICmp=*/false);
       updateOutputReg(v2);
       break;
     }
