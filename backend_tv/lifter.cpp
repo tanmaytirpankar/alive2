@@ -587,6 +587,7 @@ class arm2llvm {
       AArch64::CMHIv2i32,
       AArch64::CMHIv1i64,
       AArch64::BIFv8i8,
+      AArch64::BSLv8i8,
   };
 
   const set<int> instrs_128 = {
@@ -666,6 +667,7 @@ class arm2llvm {
       AArch64::CMHIv4i32,
       AArch64::CMHIv2i64,
       AArch64::BIFv16i8,
+      AArch64::BSLv16i8,
   };
 
   bool has_s(int instr) {
@@ -2473,6 +2475,16 @@ public:
       auto op1 = readFromOperand(1);
       auto op4 = readFromOperand(2);
       auto op3 = createNot(readFromOperand(3));
+      auto res = createXor(op1, createAnd(createXor(op1, op4), op3));
+      updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::BSLv8i8:
+    case AArch64::BSLv16i8: {
+      auto op1 = readFromOperand(3);
+      auto op4 = readFromOperand(2);
+      auto op3 = readFromOperand(1);
       auto res = createXor(op1, createAnd(createXor(op1, op4), op3));
       updateOutputReg(res);
       break;
