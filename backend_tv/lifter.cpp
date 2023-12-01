@@ -588,6 +588,9 @@ class arm2llvm {
       AArch64::CMHIv1i64,
       AArch64::BIFv8i8,
       AArch64::BSLv8i8,
+      AArch64::BICv4i16,
+      AArch64::BICv8i8,
+      AArch64::BICv2i32,
   };
 
   const set<int> instrs_128 = {
@@ -668,6 +671,9 @@ class arm2llvm {
       AArch64::CMHIv2i64,
       AArch64::BIFv16i8,
       AArch64::BSLv16i8,
+      AArch64::BICv8i16,
+      AArch64::BICv4i32,
+      AArch64::BICv16i8,
   };
 
   bool has_s(int instr) {
@@ -2485,6 +2491,12 @@ public:
       break;
     }
 
+    case AArch64::BICv4i16:
+    case AArch64::BICv8i8:
+    case AArch64::BICv2i32:
+    case AArch64::BICv8i16:
+    case AArch64::BICv4i32:
+    case AArch64::BICv16i8:
     case AArch64::CMHIv8i8:
     case AArch64::CMHIv4i16:
     case AArch64::CMHIv2i32:
@@ -2540,6 +2552,15 @@ public:
 
       function<Value *(Value *, Value *)> op;
       switch (opcode) {
+      case AArch64::BICv4i16:
+      case AArch64::BICv8i8:
+      case AArch64::BICv2i32:
+      case AArch64::BICv8i16:
+      case AArch64::BICv4i32:
+      case AArch64::BICv16i8:
+        op = [&](Value *a, Value *b) { return createAnd(a, createNot(b)); };
+        elementWise = true;
+        break;
       case AArch64::CMHIv8i8:
       case AArch64::CMHIv4i16:
       case AArch64::CMHIv2i32:
@@ -2641,6 +2662,7 @@ public:
       case AArch64::USHLv2i32:
       case AArch64::CMHIv2i32:
       case AArch64::SSHLv2i32:
+      case AArch64::BICv2i32:
         numElements = 2;
         elementTypeInBits = 32;
         break;
@@ -2661,6 +2683,7 @@ public:
       case AArch64::USHLv4i16:
       case AArch64::CMHIv4i16:
       case AArch64::SSHLv4i16:
+      case AArch64::BICv4i16:
         numElements = 4;
         elementTypeInBits = 16;
         break;
@@ -2669,6 +2692,7 @@ public:
       case AArch64::USHLv4i32:
       case AArch64::CMHIv4i32:
       case AArch64::SSHLv4i32:
+      case AArch64::BICv4i32:
         numElements = 4;
         elementTypeInBits = 32;
         break;
@@ -2680,6 +2704,7 @@ public:
       case AArch64::USHLv8i8:
       case AArch64::CMHIv8i8:
       case AArch64::SSHLv8i8:
+      case AArch64::BICv8i8:
         numElements = 8;
         elementTypeInBits = 8;
         break;
@@ -2688,6 +2713,7 @@ public:
       case AArch64::USHLv8i16:
       case AArch64::CMHIv8i16:
       case AArch64::SSHLv8i16:
+      case AArch64::BICv8i16:
         numElements = 8;
         elementTypeInBits = 16;
         break;
@@ -2699,6 +2725,7 @@ public:
       case AArch64::USHLv16i8:
       case AArch64::CMHIv16i8:
       case AArch64::SSHLv16i8:
+      case AArch64::BICv16i8:
         numElements = 16;
         elementTypeInBits = 8;
         break;
