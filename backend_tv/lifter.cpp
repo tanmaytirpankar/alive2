@@ -304,37 +304,40 @@ class arm2llvm {
   };
 
   const set<int> instrs_32 = {
-      AArch64::ADDWrx,    AArch64::ADDSWrs,    AArch64::ADDSWri,
-      AArch64::ADDWrs,    AArch64::ADDWri,     AArch64::ADDSWrx,
-      AArch64::ADCWr,     AArch64::ADCSWr,     AArch64::ASRVWr,
-      AArch64::SUBWri,    AArch64::SUBWrs,     AArch64::SUBWrx,
-      AArch64::SUBSWrs,   AArch64::SUBSWri,    AArch64::SUBSWrx,
-      AArch64::SBFMWri,   AArch64::CSELWr,     AArch64::ANDWri,
-      AArch64::ANDWrr,    AArch64::ANDWrs,     AArch64::ANDSWri,
-      AArch64::ANDSWrr,   AArch64::ANDSWrs,    AArch64::MADDWrrr,
-      AArch64::MSUBWrrr,  AArch64::EORWri,     AArch64::CSINVWr,
-      AArch64::CSINCWr,   AArch64::MOVZWi,     AArch64::MOVNWi,
-      AArch64::MOVKWi,    AArch64::LSLVWr,     AArch64::LSRVWr,
-      AArch64::ORNWrs,    AArch64::UBFMWri,    AArch64::BFMWri,
-      AArch64::ORRWrs,    AArch64::ORRWri,     AArch64::SDIVWr,
-      AArch64::UDIVWr,    AArch64::EXTRWrri,   AArch64::EORWrs,
-      AArch64::RORVWr,    AArch64::RBITWr,     AArch64::CLZWr,
-      AArch64::REVWr,     AArch64::CSNEGWr,    AArch64::BICWrs,
-      AArch64::BICSWrs,   AArch64::EONWrs,     AArch64::REV16Wr,
-      AArch64::Bcc,       AArch64::CCMPWr,     AArch64::CCMPWi,
-      AArch64::LDRWui,    AArch64::LDRWroW,    AArch64::LDRWroX,
-      AArch64::LDRSui,    AArch64::LDRBBui,    AArch64::LDRBui,
-      AArch64::LDRSBWui,  AArch64::LDRSWui,    AArch64::LDRSHWui,
-      AArch64::LDRSBWui,  AArch64::LDRHHui,    AArch64::LDRHui,
-      AArch64::STRWui,    AArch64::STRWroW,    AArch64::STRWroX,
-      AArch64::CCMNWi,    AArch64::CCMNWr,     AArch64::STRBBui,
-      AArch64::STRBui,    AArch64::STPWi,      AArch64::STRHHui,
-      AArch64::STRHui,    AArch64::STURWi,     AArch64::STRSui,
-      AArch64::LDPWi,     AArch64::STRWpre,    AArch64::FADDSrr,
-      AArch64::FSUBSrr,   AArch64::FCMPSrr,    AArch64::FCMPSri,
-      AArch64::FMOVSWr,   AArch64::INSvi32gpr, AArch64::INSvi16gpr,
-      AArch64::INSvi8gpr, AArch64::FCVTSHr,    AArch64::FCVTZSUWSr,
-      AArch64::FCSELSrrr, AArch64::FMULSrr,    AArch64::FABSSr,
+      AArch64::ADDWrx,     AArch64::ADDSWrs,    AArch64::ADDSWri,
+      AArch64::ADDWrs,     AArch64::ADDWri,     AArch64::ADDSWrx,
+      AArch64::ADCWr,      AArch64::ADCSWr,     AArch64::ASRVWr,
+      AArch64::SUBWri,     AArch64::SUBWrs,     AArch64::SUBWrx,
+      AArch64::SUBSWrs,    AArch64::SUBSWri,    AArch64::SUBSWrx,
+      AArch64::SBFMWri,    AArch64::CSELWr,     AArch64::ANDWri,
+      AArch64::ANDWrr,     AArch64::ANDWrs,     AArch64::ANDSWri,
+      AArch64::ANDSWrr,    AArch64::ANDSWrs,    AArch64::MADDWrrr,
+      AArch64::MSUBWrrr,   AArch64::EORWri,     AArch64::CSINVWr,
+      AArch64::CSINCWr,    AArch64::MOVZWi,     AArch64::MOVNWi,
+      AArch64::MOVKWi,     AArch64::LSLVWr,     AArch64::LSRVWr,
+      AArch64::ORNWrs,     AArch64::UBFMWri,    AArch64::BFMWri,
+      AArch64::ORRWrs,     AArch64::ORRWri,     AArch64::SDIVWr,
+      AArch64::UDIVWr,     AArch64::EXTRWrri,   AArch64::EORWrs,
+      AArch64::RORVWr,     AArch64::RBITWr,     AArch64::CLZWr,
+      AArch64::REVWr,      AArch64::CSNEGWr,    AArch64::BICWrs,
+      AArch64::BICSWrs,    AArch64::EONWrs,     AArch64::REV16Wr,
+      AArch64::Bcc,        AArch64::CCMPWr,     AArch64::CCMPWi,
+      AArch64::LDRWui,     AArch64::LDRBBroW,   AArch64::LDRBBroX,
+      AArch64::LDRHHroW,   AArch64::LDRHHroX,   AArch64::LDRWroW,
+      AArch64::LDRWroX,    AArch64::LDRSui,     AArch64::LDRBBui,
+      AArch64::LDRBui,     AArch64::LDRSBWui,   AArch64::LDRSWui,
+      AArch64::LDRSHWui,   AArch64::LDRSBWui,   AArch64::LDRHHui,
+      AArch64::LDRHui,     AArch64::STRWui,     AArch64::STRBBroW,
+      AArch64::STRBBroX,   AArch64::STRHHroW,   AArch64::STRHHroX,
+      AArch64::STRWroW,    AArch64::STRWroX,    AArch64::CCMNWi,
+      AArch64::CCMNWr,     AArch64::STRBBui,    AArch64::STRBui,
+      AArch64::STPWi,      AArch64::STRHHui,    AArch64::STRHui,
+      AArch64::STURWi,     AArch64::STRSui,     AArch64::LDPWi,
+      AArch64::STRWpre,    AArch64::FADDSrr,    AArch64::FSUBSrr,
+      AArch64::FCMPSrr,    AArch64::FCMPSri,    AArch64::FMOVSWr,
+      AArch64::INSvi32gpr, AArch64::INSvi16gpr, AArch64::INSvi8gpr,
+      AArch64::FCVTSHr,    AArch64::FCVTZSUWSr, AArch64::FCSELSrrr,
+      AArch64::FMULSrr,    AArch64::FABSSr,
   };
 
   const set<int> instrs_64 = {
@@ -1708,7 +1711,7 @@ public:
     return CurInst->getOperand(idx).getImm();
   }
 
-  enum ExtendType { UXTB, UXTH, UXTW, UXTX, SXTB, SXTH, SXTW, SXTX };
+  enum ExtendType { SXTB, SXTH, SXTW, SXTX, UXTB, UXTH, UXTW, UXTX };
 
   // Follows the "Library pseudocode for aarch64/instrs/extendreg/ExtendReg"
   // from ARM manual
@@ -1722,7 +1725,7 @@ public:
     //    auto size = getInstSize(opcode);
     auto size = 64;
     auto ty = getIntTy(size);
-    auto isSigned = (extType & 0x4) != 0;
+    auto isSigned = (extType & 0x4) != 0x4;
 
     // extendSize is necessary so that we can start with the word size
     // ARM wants us to (byte, half, full) and then sign extend to a new
@@ -1769,6 +1772,16 @@ public:
 
     int extTyp, shiftAmt;
     switch (CurInst->getOpcode()) {
+    case AArch64::LDRBBroW: {
+      extTyp = extendTypeVal ? SXTW : UXTW;
+      shiftAmt = 0;
+      break;
+    }
+    case AArch64::LDRHHroW: {
+      extTyp = extendTypeVal ? SXTW : UXTW;
+      shiftAmt = shiftAmtVal ? 1 : 0;
+      break;
+    }
     case AArch64::LDRWroW:
       extTyp = extendTypeVal ? SXTW : UXTW;
       shiftAmt = shiftAmtVal ? 2 : 0;
@@ -1777,15 +1790,29 @@ public:
       extTyp = extendTypeVal ? SXTW : UXTW;
       shiftAmt = shiftAmtVal ? 3 : 0;
       break;
+    case AArch64::LDRBBroX: {
+      // The manual assigns a value LSL to extTyp if extendTypeVal is 1
+      // which for a value of 64 bits, is the same as UXTX
+      extTyp = extendTypeVal ? SXTX : UXTX;
+      shiftAmt = 0;
+      break;
+    }
+    case AArch64::LDRHHroX: {
+      // The manual assigns a value LSL to extTyp if extendTypeVal is 1
+      // which for a value of 64 bits, is the same as UXTX
+      extTyp = extendTypeVal ? SXTX : UXTX;
+      shiftAmt = shiftAmtVal ? 1 : 0;
+      break;
+    }
     case AArch64::LDRWroX:
-      // The manual assigns a value LSL to extTyp which for a value of 64
-      // bits, is the same as UXTX
+      // The manual assigns a value LSL to extTyp if extendTypeVal is 1
+      // which for a value of 64 bits, is the same as UXTX
       extTyp = extendTypeVal ? SXTX : UXTX;
       shiftAmt = shiftAmtVal ? 2 : 0;
       break;
     case AArch64::LDRXroX:
-      // The manual assigns a value LSL to extTyp which for a value of 64
-      // bits, is the same as UXTX
+      // The manual assigns a value LSL to extTyp if extendTypeVal is 1
+      // which for a value of 64 bits, is the same as UXTX
       extTyp = extendTypeVal ? SXTX : UXTX;
       shiftAmt = shiftAmtVal ? 3 : 0;
       break;
@@ -1862,6 +1889,14 @@ public:
 
     int extTyp, shiftAmt;
     switch (CurInst->getOpcode()) {
+    case AArch64::STRBBroW:
+      extTyp = extendTypeVal ? SXTW : UXTW;
+      shiftAmt = 0;
+      break;
+    case AArch64::STRHHroW:
+      extTyp = extendTypeVal ? SXTW : UXTW;
+      shiftAmt = shiftAmtVal ? 1 : 0;
+      break;
     case AArch64::STRWroW:
       extTyp = extendTypeVal ? SXTW : UXTW;
       shiftAmt = shiftAmtVal ? 2 : 0;
@@ -1870,15 +1905,27 @@ public:
       extTyp = extendTypeVal ? SXTW : UXTW;
       shiftAmt = shiftAmtVal ? 3 : 0;
       break;
+    case AArch64::STRBBroX:
+      // The manual assigns a value LSL to extTyp if extendTypeVal is 1
+      // which for a value of 64 bits, is the same as UXTX
+      extTyp = extendTypeVal ? SXTX : UXTX;
+      shiftAmt = 0;
+      break;
+    case AArch64::STRHHroX:
+      // The manual assigns a value LSL to extTyp if extendTypeVal is 1
+      // which for a value of 64 bits, is the same as UXTX
+      extTyp = extendTypeVal ? SXTX : UXTX;
+      shiftAmt = shiftAmtVal ? 1 : 0;
+      break;
     case AArch64::STRWroX:
-      // The manual assigns a value LSL to extTyp which for a value of 64
-      // bits, is the same as UXTX
+      // The manual assigns a value LSL to extTyp if extendTypeVal is 1
+      // which for a value of 64 bits, is the same as UXTX
       extTyp = extendTypeVal ? SXTX : UXTX;
       shiftAmt = shiftAmtVal ? 2 : 0;
       break;
     case AArch64::STRXroX:
-      // The manual assigns a value LSL to extTyp which for a value of 64
-      // bits, is the same as UXTX
+      // The manual assigns a value LSL to extTyp if extendTypeVal is 1
+      // which for a value of 64 bits, is the same as UXTX
       extTyp = extendTypeVal ? SXTX : UXTX;
       shiftAmt = shiftAmtVal ? 3 : 0;
       break;
@@ -3792,6 +3839,10 @@ public:
       updateReg(added, ptrReg);
       break;
     }
+    case AArch64::LDRBBroW:
+    case AArch64::LDRBBroX:
+    case AArch64::LDRHHroW:
+    case AArch64::LDRHHroX:
     case AArch64::LDRWroW:
     case AArch64::LDRWroX:
     case AArch64::LDRXroW:
@@ -3799,6 +3850,14 @@ public:
       unsigned size;
 
       switch (opcode) {
+      case AArch64::LDRBBroW:
+      case AArch64::LDRBBroX:
+        size = 1;
+        break;
+      case AArch64::LDRHHroW:
+      case AArch64::LDRHHroX:
+        size = 2;
+        break;
       case AArch64::LDRWroX:
       case AArch64::LDRWroW:
         size = 4;
@@ -3888,6 +3947,10 @@ public:
       storeToMemoryImmOffset(shiftedPtr, 0, 8, valToStore);
       break;
     }
+    case AArch64::STRBBroW:
+    case AArch64::STRBBroX:
+    case AArch64::STRHHroW:
+    case AArch64::STRHHroX:
     case AArch64::STRWroW:
     case AArch64::STRWroX:
     case AArch64::STRXroW:
@@ -3895,6 +3958,14 @@ public:
       auto [base, offset, val] = getParamsStoreReg();
 
       switch (opcode) {
+      case AArch64::STRBBroW:
+      case AArch64::STRBBroX:
+        storeToMemoryValOffset(base, offset, 1, createTrunc(val, i8));
+        break;
+      case AArch64::STRHHroW:
+      case AArch64::STRHHroX:
+        storeToMemoryValOffset(base, offset, 2, createTrunc(val, i16));
+        break;
       case AArch64::STRWroW:
       case AArch64::STRWroX:
         storeToMemoryValOffset(base, offset, 4, createTrunc(val, i32));
@@ -4583,13 +4654,9 @@ public:
       // If the global has not been created yet, create it
       auto name = srcFnGlobal.getName();
       if (globals[name.str()] == nullptr) {
-        // Gets 2nd argument to ArrayType::get from the size in bytes of the
-        // source global value
-        auto *AT = ArrayType::get(
-            i8, srcFnGlobal.getValueType()->getPrimitiveSizeInBits() / 8);
-        auto *g = new GlobalVariable(*LiftedModule, AT, false,
-                                     GlobalValue::LinkageTypes::ExternalLinkage,
-                                     nullptr, name);
+        auto *g = new GlobalVariable(
+            *LiftedModule, srcFnGlobal.getValueType(), false,
+            GlobalValue::LinkageTypes::ExternalLinkage, nullptr, name);
         g->setAlignment(MaybeAlign(16));
         globals[srcFnGlobal.getName().str()] = g;
       }
