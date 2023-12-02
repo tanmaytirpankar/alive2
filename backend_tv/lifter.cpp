@@ -564,6 +564,7 @@ class arm2llvm {
       AArch64::FMOVDr,
       AArch64::DUPv2i32gpr,
       AArch64::UMULLv2i32_v2i64,
+      AArch64::USHLLv8i8_shift,
       AArch64::UADDLv8i8_v8i16,
       AArch64::USUBLv8i8_v8i16,
       AArch64::XTNv2i32,
@@ -626,9 +627,11 @@ class arm2llvm {
       AArch64::EORv16i8,
       AArch64::UMOVvi32,
       AArch64::UMOVvi8,
+      AArch64::UMOVvi8_idx0,
       AArch64::MOVIv16b_ns,
       AArch64::UMOVvi64,
       AArch64::UMOVvi16,
+      AArch64::UMOVvi16_idx0,
       AArch64::SMOVvi16to32,
       AArch64::SMOVvi16to32_idx0,
       AArch64::INSvi64lane,
@@ -2293,13 +2296,16 @@ public:
     }
 
     case AArch64::UMOVvi8:
+    case AArch64::UMOVvi8_idx0:
     case AArch64::UMOVvi16:
+    case AArch64::UMOVvi16_idx0:
     case AArch64::UMOVvi32:
     case AArch64::UMOVvi64: {
       unsigned sz;
-      if (opcode == AArch64::UMOVvi8) {
+      if (opcode == AArch64::UMOVvi8 || opcode == AArch64::UMOVvi8_idx0) {
         sz = 8;
-      } else if (opcode == AArch64::UMOVvi16) {
+      } else if (opcode == AArch64::UMOVvi16 ||
+                 opcode == AArch64::UMOVvi16_idx0) {
         sz = 16;
       } else if (opcode == AArch64::UMOVvi32) {
         sz = 32;
@@ -2309,10 +2315,17 @@ public:
         assert(false);
       }
       auto val = readFromOperand(1);
-      auto imm = getImm(2);
-      auto shiftAmt = getIntConst(imm * sz, 128);
-      auto shifted = createRawLShr(val, shiftAmt);
-      auto masked = maskLower(shifted, sz);
+      unsigned idx;
+      if (opcode == AArch64::UMOVvi8_idx0 || opcode == AArch64::UMOVvi16_idx0) {
+        idx = 0;
+      } else {
+        idx = getImm(2);
+      }
+      if (idx != 0) {
+        auto shiftAmt = getIntConst(idx * sz, 128);
+        val = createRawLShr(val, shiftAmt);
+      }
+      auto masked = maskLower(val, sz);
       updateOutputReg(createTrunc(masked, i64));
       break;
     }
@@ -2544,6 +2557,7 @@ public:
     case AArch64::SSHLv4i32:
     case AArch64::SSHLv8i8:
     case AArch64::SSHLv2i64:
+    case AArch64::USHLLv8i8_shift:
     case AArch64::USHRv2i64_shift: {
       auto a = readFromOperand(1);
       auto b = readFromOperand(2);
@@ -2630,6 +2644,9 @@ public:
         break;
       case AArch64::UMULLv2i32_v2i64:
         op = [&](Value *a, Value *b) { return createMul(a, b); };
+        break;
+      case AArch64::USHLLv8i8_shift:
+        op = [&](Value *a, Value *b) { return createMaskedLShr(a, b); };
         break;
       case AArch64::USHRv2i64_shift:
         if (CurInst->getOperand(2).isImm()) {
@@ -2732,6 +2749,11 @@ public:
       case AArch64::UMULLv2i32_v2i64:
         numElements = 2;
         elementTypeInBits = 32;
+        zext = true;
+        break;
+      case AArch64::USHLLv8i8_shift:
+        numElements = 8;
+        elementTypeInBits = 8;
         zext = true;
         break;
       case AArch64::UADDLv8i8_v8i16:
