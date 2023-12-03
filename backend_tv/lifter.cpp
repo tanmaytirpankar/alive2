@@ -2735,7 +2735,6 @@ public:
         op = [&](Value *a, Value *b) { return createMaskedLShr(a, b); };
         break;
       case AArch64::USHRv2i64_shift:
-        zext = true;
         splatImm2 = true;
         op = [&](Value *a, Value *b) { return createRawLShr(a, b); };
         break;
