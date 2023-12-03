@@ -568,6 +568,8 @@ class arm2llvm {
       AArch64::DUPv2i32gpr,
       AArch64::UMULLv2i32_v2i64,
       AArch64::USHLLv8i8_shift,
+      AArch64::USHLLv2i32_shift,
+      AArch64::USHLLv4i16_shift,
       AArch64::UADDLv8i8_v8i16,
       AArch64::USUBLv8i8_v8i16,
       AArch64::XTNv2i32,
@@ -598,6 +600,9 @@ class arm2llvm {
   };
 
   const set<int> instrs_128 = {
+      AArch64::USHLLv8i16_shift,
+      AArch64::USHLLv16i8_shift,
+      AArch64::USHLLv4i32_shift,
       AArch64::DUPi16,
       AArch64::DUPi64,
       AArch64::DUPi32,
@@ -2598,12 +2603,18 @@ public:
     case AArch64::SSHLv8i8:
     case AArch64::SSHLv2i64:
     case AArch64::USHLLv8i8_shift:
+    case AArch64::USHLLv4i32_shift:
+    case AArch64::USHLLv8i16_shift:
+    case AArch64::USHLLv16i8_shift:
+    case AArch64::USHLLv4i16_shift:
+    case AArch64::USHLLv2i32_shift:
     case AArch64::USHRv2i64_shift: {
       auto a = readFromOperand(1);
       auto b = readFromOperand(2);
       bool elementWise = false;
       bool isICmp = false;
       bool splatImm2 = false;
+      bool zext = false;
 
       function<Value *(Value *, Value *)> op;
       switch (opcode) {
@@ -2685,12 +2696,21 @@ public:
         op = [&](Value *a, Value *b) { return createOr(a, b); };
         break;
       case AArch64::UMULLv2i32_v2i64:
+        zext = true;
         op = [&](Value *a, Value *b) { return createMul(a, b); };
         break;
+      case AArch64::USHLLv4i32_shift:
+      case AArch64::USHLLv8i16_shift:
+      case AArch64::USHLLv16i8_shift:
+      case AArch64::USHLLv4i16_shift:
+      case AArch64::USHLLv2i32_shift:
       case AArch64::USHLLv8i8_shift:
+        zext = true;
+        splatImm2 = true;
         op = [&](Value *a, Value *b) { return createMaskedLShr(a, b); };
         break;
       case AArch64::USHRv2i64_shift:
+        zext = true;
         splatImm2 = true;
         op = [&](Value *a, Value *b) { return createRawLShr(a, b); };
         break;
@@ -2700,7 +2720,6 @@ public:
 
       int eltSize;
       int numElts;
-      bool zext = false;
       switch (opcode) {
       case AArch64::CMHIv1i64:
       case AArch64::USHLv1i64:
@@ -2714,6 +2733,7 @@ public:
       case AArch64::CMHIv2i32:
       case AArch64::SSHLv2i32:
       case AArch64::BICv2i32:
+      case AArch64::USHLLv2i32_shift:
         numElts = 2;
         eltSize = 32;
         break;
@@ -2735,6 +2755,7 @@ public:
       case AArch64::CMHIv4i16:
       case AArch64::SSHLv4i16:
       case AArch64::BICv4i16:
+      case AArch64::USHLLv4i16_shift:
         numElts = 4;
         eltSize = 16;
         break;
@@ -2744,6 +2765,7 @@ public:
       case AArch64::CMHIv4i32:
       case AArch64::SSHLv4i32:
       case AArch64::BICv4i32:
+      case AArch64::USHLLv4i32_shift:
         numElts = 4;
         eltSize = 32;
         break;
@@ -2765,6 +2787,7 @@ public:
       case AArch64::CMHIv8i16:
       case AArch64::SSHLv8i16:
       case AArch64::BICv8i16:
+      case AArch64::USHLLv8i16_shift:
         numElts = 8;
         eltSize = 16;
         break;
@@ -2777,24 +2800,22 @@ public:
       case AArch64::CMHIv16i8:
       case AArch64::SSHLv16i8:
       case AArch64::BICv16i8:
+      case AArch64::USHLLv16i8_shift:
         numElts = 16;
         eltSize = 8;
         break;
       case AArch64::UMULLv2i32_v2i64:
         numElts = 2;
         eltSize = 32;
-        zext = true;
         break;
       case AArch64::USHLLv8i8_shift:
         numElts = 8;
         eltSize = 8;
-        zext = true;
         break;
       case AArch64::UADDLv8i8_v8i16:
       case AArch64::USUBLv8i8_v8i16:
         numElts = 8;
         eltSize = 8;
-        zext = true;
         break;
       default:
         assert(false && "missed case");
