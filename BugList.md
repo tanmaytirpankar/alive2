@@ -134,4 +134,7 @@ Please contact us or submit a PR if something is missing or inaccurate.
 20. AArch64 backend miscompile of some funnel shifts (https://github.com/llvm/llvm-project/issues/59898)
 21. Miscompile by AArch64 backend related to smax.i64 (https://github.com/llvm/llvm-project/issues/59902)
 22. miscompile from AArch64 global isel backend (https://github.com/llvm/llvm-project/issues/61008)
+23. AArch64 miscompile of i1 arithmetic with global isel (https://github.com/llvm/llvm-project/issues/72475)
+24. backends will turn OOB InsertElement into OOB store (https://github.com/llvm/llvm-project/issues/74248)
+
 =======
