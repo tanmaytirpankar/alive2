@@ -588,6 +588,8 @@ class arm2llvm {
       AArch64::UADDLPv4i16_v2i32,
       AArch64::UADDLPv2i32_v1i64,
       AArch64::UADDLPv8i8_v4i16,
+      AArch64::UADALPv8i8_v4i16,
+      AArch64::UADALPv4i16_v2i32,
       AArch64::CMHIv8i8,
       AArch64::CMHIv4i16,
       AArch64::CMHIv2i32,
@@ -678,6 +680,9 @@ class arm2llvm {
       AArch64::UADDLPv8i16_v4i32,
       AArch64::UADDLPv4i32_v2i64,
       AArch64::UADDLPv16i8_v8i16,
+      AArch64::UADALPv4i32_v2i64,
+      AArch64::UADALPv16i8_v8i16,
+      AArch64::UADALPv8i16_v4i32,
       AArch64::CMHIv16i8,
       AArch64::CMHIv8i16,
       AArch64::CMHIv4i32,
@@ -1034,6 +1039,21 @@ class arm2llvm {
         VectorType::get(getIntTy(eltSize), ElementCount::getFixed(eltCount));
     auto shiftVal = c->getUniqueInteger();
     return ConstantInt::get(vTy, shiftVal.getLimitedValue(), false);
+  }
+
+  Value *addPairs(Value *src, unsigned eltSize, unsigned numElts) {
+    auto bigEltTy = getIntTy(2 * eltSize);
+    Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts / 2),
+                                          UndefValue::get(bigEltTy));
+    for (unsigned i = 0; i < numElts; i += 2) {
+      auto elt1 = createExtractElement(src, getIntConst(i, 32));
+      auto elt2 = createExtractElement(src, getIntConst(i + 1, 32));
+      auto ext1 = createZExt(elt1, bigEltTy);
+      auto ext2 = createZExt(elt2, bigEltTy);
+      auto sum = createAdd(ext1, ext2);
+      res = createInsertElement(res, sum, getIntConst(i / 2, 32));
+    }
+    return res;
   }
 
   // Creates LLVM IR instructions which take two values with the same
@@ -4313,22 +4333,22 @@ public:
       assert(getBitWidth(src) == 128 &&
              "Source value is not a vector with 128 bits");
 
-      // elementSize is in bits
-      u_int64_t elementSize, numElements, part;
+      // eltSize is in bits
+      u_int64_t eltSize, numElts, part;
       switch (opcode) {
       case AArch64::XTNv8i8:
-        numElements = 8;
-        elementSize = 8;
+        numElts = 8;
+        eltSize = 8;
         part = 0;
         break;
       case AArch64::XTNv4i16:
-        numElements = 4;
-        elementSize = 16;
+        numElts = 4;
+        eltSize = 16;
         part = 0;
         break;
       case AArch64::XTNv2i32:
-        numElements = 2;
-        elementSize = 32;
+        numElts = 2;
+        eltSize = 32;
         part = 0;
         break;
       default:
@@ -4337,15 +4357,14 @@ public:
         break;
       }
 
-      // BitCast src to a vector of numElements x (2*elementSize)
-      assert(numElements * (2 * elementSize) == 128 &&
-             "BitCasting to wrong type");
-      Value *src_vector = createBitCast(
-          src, VectorType::get(getIntTy(2 * elementSize),
-                               ElementCount::getFixed(numElements)));
+      // BitCast src to a vector of numElts x (2*eltSize)
+      assert(numElts * (2 * eltSize) == 128 && "BitCasting to wrong type");
+      Value *src_vector =
+          createBitCast(src, VectorType::get(getIntTy(2 * eltSize),
+                                             ElementCount::getFixed(numElts)));
       Value *new_dest_vector = createTrunc(
-          src_vector, VectorType::get(getIntTy(elementSize),
-                                      ElementCount::getFixed(numElements)));
+          src_vector,
+          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts)));
 
       if (part == 1) {
         // Have to preserve the lower 64 bits so, read from register and insert
@@ -4364,6 +4383,11 @@ public:
       break;
     }
 
+    case AArch64::UADALPv8i8_v4i16:
+    case AArch64::UADALPv4i16_v2i32:
+    case AArch64::UADALPv4i32_v2i64:
+    case AArch64::UADALPv16i8_v8i16:
+    case AArch64::UADALPv8i16_v4i32:
     case AArch64::UADDLPv4i16_v2i32:
     case AArch64::UADDLPv2i32_v1i64:
     case AArch64::UADDLPv8i8_v4i16:
@@ -4388,55 +4412,61 @@ public:
     case AArch64::CNTv8i8:
     case AArch64::CNTv16i8: {
       auto src = readFromOperand(1);
-      u_int64_t elementSize, numElements;
+      u_int64_t eltSize, numElts;
 
       switch (opcode) {
       case AArch64::NEGv1i64:
-        elementSize = 64;
-        numElements = 1;
+        eltSize = 64;
+        numElts = 1;
         break;
       case AArch64::NEGv4i16:
       case AArch64::UADDLVv4i16v:
       case AArch64::UADDLPv4i16_v2i32:
-        elementSize = 16;
-        numElements = 4;
+      case AArch64::UADALPv4i16_v2i32:
+        eltSize = 16;
+        numElts = 4;
         break;
       case AArch64::NEGv2i32:
       case AArch64::UADDLPv2i32_v1i64:
-        elementSize = 32;
-        numElements = 2;
+      case AArch64::UADALPv2i32_v1i64:
+        eltSize = 32;
+        numElts = 2;
         break;
       case AArch64::NEGv8i16:
       case AArch64::UADDLVv8i16v:
       case AArch64::UADDLPv8i16_v4i32:
-        elementSize = 16;
-        numElements = 8;
+      case AArch64::UADALPv8i16_v4i32:
+        eltSize = 16;
+        numElts = 8;
         break;
       case AArch64::NEGv2i64:
-        elementSize = 64;
-        numElements = 2;
+        eltSize = 64;
+        numElts = 2;
         break;
       case AArch64::NEGv4i32:
       case AArch64::UADDLVv4i32v:
       case AArch64::UADDLPv4i32_v2i64:
-        elementSize = 32;
-        numElements = 4;
+      case AArch64::UADALPv4i32_v2i64:
+        eltSize = 32;
+        numElts = 4;
         break;
       case AArch64::UADDLVv8i8v:
       case AArch64::UADDLPv8i8_v4i16:
+      case AArch64::UADALPv8i8_v4i16:
       case AArch64::NEGv8i8:
       case AArch64::NOTv8i8:
       case AArch64::CNTv8i8:
-        elementSize = 8;
-        numElements = 8;
+        eltSize = 8;
+        numElts = 8;
         break;
       case AArch64::NEGv16i8:
       case AArch64::UADDLVv16i8v:
       case AArch64::UADDLPv16i8_v8i16:
+      case AArch64::UADALPv16i8_v8i16:
       case AArch64::NOTv16i8:
       case AArch64::CNTv16i8:
-        elementSize = 8;
-        numElements = 16;
+        eltSize = 8;
+        numElts = 16;
         break;
       default:
         *out << "\nError Unknown opcode\n";
@@ -4444,9 +4474,8 @@ public:
         break;
       }
 
-      auto *vTy = VectorType::get(getIntTy(elementSize),
-                                  ElementCount::getFixed(numElements));
-      auto src_vector = createBitCast(src, vTy);
+      auto *vTy =
+          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
 
       // Perform the operation
       switch (opcode) {
@@ -4457,18 +4486,39 @@ public:
       case AArch64::UADDLPv8i16_v4i32:
       case AArch64::UADDLPv4i32_v2i64:
       case AArch64::UADDLPv16i8_v8i16: {
-        auto bigEltTy = getIntTy(2 * elementSize);
-        Value *res = ConstantVector::getSplat(
-            ElementCount::getFixed(numElements / 2), UndefValue::get(bigEltTy));
-        for (unsigned i = 0; i < numElements; i += 2) {
-          auto elt1 = createExtractElement(src_vector, getIntConst(i, 32));
-          auto elt2 = createExtractElement(src_vector, getIntConst(i + 1, 32));
-          auto ext1 = createZExt(elt1, bigEltTy);
-          auto ext2 = createZExt(elt2, bigEltTy);
-          auto sum = createAdd(ext1, ext2);
-          res = createInsertElement(res, sum, getIntConst(i / 2, 32));
-        }
+	auto src_vector = createBitCast(src,vTy);
+        auto res = addPairs(src_vector, eltSize, numElts);
         updateOutputReg(res);
+        break;
+      }
+
+      case AArch64::UADALPv4i16_v2i32:
+      case AArch64::UADALPv2i32_v1i64:
+      case AArch64::UADALPv8i8_v4i16:
+      case AArch64::UADALPv8i16_v4i32:
+      case AArch64::UADALPv4i32_v2i64:
+      case AArch64::UADALPv16i8_v8i16: {
+	auto src2 = readFromOperand(2);
+	auto src2_vector = createBitCast(src2, vTy);
+        auto sum = addPairs(src2_vector, eltSize, numElts);
+	
+	auto bigEltTy = getIntTy(2 * eltSize);
+	auto *bigTy =
+          VectorType::get(bigEltTy, ElementCount::getFixed(numElts / 2));
+	
+
+      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts / 2),
+					      UndefValue::get(bigEltTy));
+	
+	auto src_vector = createBitCast(src, bigTy);
+	for (unsigned i = 0; i < numElts / 2; ++i) {
+	  auto elt1 = createExtractElement(src_vector, getIntConst(i, 32));
+	  auto elt2 = createExtractElement(sum, getIntConst(i, 32));
+	  auto add = createAdd(elt1, elt2);
+	  res = createInsertElement(res, add, getIntConst(i, 32));
+	}
+
+	updateOutputReg(res);
         break;
       }
 
@@ -4477,9 +4527,10 @@ public:
       case AArch64::UADDLVv8i8v:
       case AArch64::UADDLVv4i16v:
       case AArch64::UADDLVv16i8v: {
-        auto bigTy = getIntTy(2 * elementSize);
-        Value *sum = getIntConst(0, 2 * elementSize);
-        for (unsigned i = 0; i < numElements; ++i) {
+	auto src_vector = createBitCast(src, vTy);
+        auto bigTy = getIntTy(2 * eltSize);
+        Value *sum = getIntConst(0, 2 * eltSize);
+        for (unsigned i = 0; i < numElts; ++i) {
           auto elt = createExtractElement(src_vector, getIntConst(i, 32));
           auto ext = createZExt(elt, bigTy);
           sum = createAdd(sum, ext);
@@ -4490,15 +4541,15 @@ public:
 
       case AArch64::NOTv8i8:
       case AArch64::NOTv16i8: {
-        auto neg_one = ConstantInt::get(vTy, APInt::getAllOnes(elementSize));
-        // Perform bitwise NOT operation by XORing it with -1
+	auto src_vector = createBitCast(src, vTy);
+        auto neg_one = ConstantInt::get(vTy, APInt::getAllOnes(eltSize));
         updateOutputReg(createXor(src_vector, neg_one));
         break;
       }
 
       case AArch64::CNTv8i8:
       case AArch64::CNTv16i8: {
-        // Create an intrinsic for CTPOP
+	auto src_vector = createBitCast(src, vTy);
         updateOutputReg(createCtPop(src_vector));
         break;
       }
@@ -4511,7 +4562,8 @@ public:
       case AArch64::NEGv8i16:
       case AArch64::NEGv2i64:
       case AArch64::NEGv4i32: {
-        auto zeroes = ConstantInt::get(vTy, APInt::getZero(elementSize));
+	auto src_vector = createBitCast(src, vTy);
+        auto zeroes = ConstantInt::get(vTy, APInt::getZero(eltSize));
         updateOutputReg(createSub(zeroes, src_vector));
         break;
       }
