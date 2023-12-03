@@ -1017,20 +1017,35 @@ class arm2llvm {
     return CastInst::Create(op, v, t, nextName(), LLVMBB);
   }
 
-  // Creates LLVM IR instructions which takes two values with the same
-  // number of bits, bit casting them to vectors of numElements
-  // elements of size elementTypeInBits and doing an operation on
-  // them. In cases where LLVM does not have an appropriate vector
-  // instruction, we perform the operation element-wise.
+  Value *splatImm(Value *v, int eltCount, int eltSize) {
+    assert(CurInst->getOperand(2).isImm());
+    // get the constant
+    auto c = dyn_cast<Constant>(v);
+    assert(c);
+    // make a splat of it
+    auto *vTy =
+        VectorType::get(getIntTy(eltSize), ElementCount::getFixed(eltCount));
+    auto shiftVal = c->getUniqueInteger();
+    return ConstantInt::get(vTy, shiftVal.getLimitedValue(), false);
+  }
+
+  // Creates LLVM IR instructions which take two values with the same
+  // number of bits, bit casting them to vectors of numElts elements
+  // of size eltSize and doing an operation on them. In cases where
+  // LLVM does not have an appropriate vector instruction, we perform
+  // the operation element-wise.
   Value *createVectorOp(function<Value *(Value *, Value *)> op, Value *a,
-                        Value *b, unsigned elementTypeInBits,
-                        unsigned numElements, bool elementWise, bool zext,
-                        bool isICmp) {
+                        Value *b, unsigned eltSize, unsigned numElts,
+                        bool elementWise, bool zext, bool isICmp,
+                        bool splatImm2) {
     assert(getBitWidth(a) == getBitWidth(b) &&
            "Expected values of same bit width");
 
-    auto ec = ElementCount::getFixed(numElements);
-    auto eTy = getIntTy(elementTypeInBits);
+    if (splatImm2)
+      b = splatImm(b, numElts, eltSize);
+
+    auto ec = ElementCount::getFixed(numElts);
+    auto eTy = getIntTy(eltSize);
     auto vTy = VectorType::get(eTy, ec);
 
     a = createBitCast(a, vTy);
@@ -1038,7 +1053,7 @@ class arm2llvm {
 
     // some instructions double element widths
     if (zext) {
-      eTy = getIntTy(2 * elementTypeInBits);
+      eTy = getIntTy(2 * eltSize);
       a = createZExt(a, VectorType::get(eTy, ec));
       b = createZExt(b, VectorType::get(eTy, ec));
     }
@@ -1046,7 +1061,7 @@ class arm2llvm {
     Value *res = nullptr;
     if (elementWise) {
       res = ConstantVector::getSplat(ec, UndefValue::get(eTy));
-      for (unsigned i = 0; i < numElements; ++i) {
+      for (unsigned i = 0; i < numElts; ++i) {
         auto aa = createExtractElement(a, getIntConst(i, 32));
         auto bb = createExtractElement(b, getIntConst(i, 32));
         auto cc = op(aa, bb);
@@ -2610,6 +2625,7 @@ public:
       auto b = readFromOperand(2);
       bool elementWise = false;
       bool isICmp = false;
+      bool splatImm2 = false;
 
       function<Value *(Value *, Value *)> op;
       switch (opcode) {
@@ -2619,8 +2635,9 @@ public:
       case AArch64::BICv8i16:
       case AArch64::BICv4i32:
       case AArch64::BICv16i8:
+        if (CurInst->getOperand(2).isImm())
+          splatImm2 = true;
         op = [&](Value *a, Value *b) { return createAnd(a, createNot(b)); };
-        elementWise = true;
         break;
       case AArch64::CMHIv8i8:
       case AArch64::CMHIv4i16:
@@ -2696,30 +2713,22 @@ public:
         op = [&](Value *a, Value *b) { return createMaskedLShr(a, b); };
         break;
       case AArch64::USHRv2i64_shift:
-        if (CurInst->getOperand(2).isImm()) {
-          // get the constant
-          auto c = dyn_cast<Constant>(b);
-          assert(c);
-          // make a splat of it
-          auto *vTy = VectorType::get(i64, ElementCount::getFixed(2));
-          auto shiftVal = c->getUniqueInteger();
-          b = ConstantInt::get(vTy, shiftVal.getLimitedValue(), false);
-        }
+        splatImm2 = true;
         op = [&](Value *a, Value *b) { return createRawLShr(a, b); };
         break;
       default:
         assert(false && "missed a case");
       }
 
-      int elementTypeInBits;
-      int numElements;
+      int eltSize;
+      int numElts;
       bool zext = false;
       switch (opcode) {
       case AArch64::CMHIv1i64:
       case AArch64::USHLv1i64:
       case AArch64::SSHLv1i64:
-        numElements = 1;
-        elementTypeInBits = 64;
+        numElts = 1;
+        eltSize = 64;
         break;
       case AArch64::SUBv2i32:
       case AArch64::ADDv2i32:
@@ -2727,20 +2736,20 @@ public:
       case AArch64::CMHIv2i32:
       case AArch64::SSHLv2i32:
       case AArch64::BICv2i32:
-        numElements = 2;
-        elementTypeInBits = 32;
+        numElts = 2;
+        eltSize = 32;
         break;
       case AArch64::ADDv2i64:
       case AArch64::SUBv2i64:
       case AArch64::USHLv2i64:
       case AArch64::CMHIv2i64:
       case AArch64::SSHLv2i64:
-        numElements = 2;
-        elementTypeInBits = 64;
+        numElts = 2;
+        eltSize = 64;
         break;
       case AArch64::USHRv2i64_shift:
-        numElements = 2;
-        elementTypeInBits = 64;
+        numElts = 2;
+        eltSize = 64;
         break;
       case AArch64::ADDv4i16:
       case AArch64::SUBv4i16:
@@ -2748,8 +2757,8 @@ public:
       case AArch64::CMHIv4i16:
       case AArch64::SSHLv4i16:
       case AArch64::BICv4i16:
-        numElements = 4;
-        elementTypeInBits = 16;
+        numElts = 4;
+        eltSize = 16;
         break;
       case AArch64::ADDv4i32:
       case AArch64::SUBv4i32:
@@ -2757,8 +2766,8 @@ public:
       case AArch64::CMHIv4i32:
       case AArch64::SSHLv4i32:
       case AArch64::BICv4i32:
-        numElements = 4;
-        elementTypeInBits = 32;
+        numElts = 4;
+        eltSize = 32;
         break;
       case AArch64::ADDv8i8:
       case AArch64::SUBv8i8:
@@ -2769,8 +2778,8 @@ public:
       case AArch64::CMHIv8i8:
       case AArch64::SSHLv8i8:
       case AArch64::BICv8i8:
-        numElements = 8;
-        elementTypeInBits = 8;
+        numElts = 8;
+        eltSize = 8;
         break;
       case AArch64::ADDv8i16:
       case AArch64::SUBv8i16:
@@ -2778,8 +2787,8 @@ public:
       case AArch64::CMHIv8i16:
       case AArch64::SSHLv8i16:
       case AArch64::BICv8i16:
-        numElements = 8;
-        elementTypeInBits = 16;
+        numElts = 8;
+        eltSize = 16;
         break;
       case AArch64::ADDv16i8:
       case AArch64::SUBv16i8:
@@ -2790,23 +2799,23 @@ public:
       case AArch64::CMHIv16i8:
       case AArch64::SSHLv16i8:
       case AArch64::BICv16i8:
-        numElements = 16;
-        elementTypeInBits = 8;
+        numElts = 16;
+        eltSize = 8;
         break;
       case AArch64::UMULLv2i32_v2i64:
-        numElements = 2;
-        elementTypeInBits = 32;
+        numElts = 2;
+        eltSize = 32;
         zext = true;
         break;
       case AArch64::USHLLv8i8_shift:
-        numElements = 8;
-        elementTypeInBits = 8;
+        numElts = 8;
+        eltSize = 8;
         zext = true;
         break;
       case AArch64::UADDLv8i8_v8i16:
       case AArch64::USUBLv8i8_v8i16:
-        numElements = 8;
-        elementTypeInBits = 8;
+        numElts = 8;
+        eltSize = 8;
         zext = true;
         break;
       default:
@@ -2814,8 +2823,8 @@ public:
         break;
       }
 
-      auto res = createVectorOp(op, a, b, elementTypeInBits, numElements,
-                                elementWise, zext, isICmp);
+      auto res = createVectorOp(op, a, b, eltSize, numElts, elementWise, zext,
+                                isICmp, splatImm2);
       updateOutputReg(res);
       break;
     }
@@ -2826,10 +2835,12 @@ public:
       auto b = readFromOperand(3);
       auto v1 = createVectorOp(
           [&](Value *a, Value *b) { return createMul(a, b); }, a, b, 32, 2,
-          /*cast=*/false, /*zext=*/false, /*isICmp=*/false);
+          /*cast=*/false, /*zext=*/false, /*isICmp=*/false,
+          /*splatImm2=*/false);
       auto v2 = createVectorOp(
           [&](Value *a, Value *b) { return createSub(a, b); }, accum, v1, 32, 2,
-          /*cast=*/false, /*zext=*/false, /*isICmp=*/false);
+          /*cast=*/false, /*zext=*/false, /*isICmp=*/false,
+          /*splatImm2=*/false);
       updateOutputReg(v2);
       break;
     }
