@@ -498,9 +498,16 @@ class arm2llvm {
       AArch64::BICv2i32,
       AArch64::ADDVv8i8v,
       AArch64::ADDVv4i16v,
+      AArch64::SHLv8i8_shift,
+      AArch64::SHLv4i16_shift,
+      AArch64::SHLv2i32_shift,
   };
 
   const set<int> instrs_128 = {
+      AArch64::SHLv16i8_shift,
+      AArch64::SHLv8i16_shift,
+      AArch64::SHLv4i32_shift,
+      AArch64::SHLv2i64_shift,
       AArch64::USHLLv8i16_shift,
       AArch64::USHLLv16i8_shift,
       AArch64::USHLLv4i32_shift,
@@ -2472,6 +2479,13 @@ public:
       break;
     }
 
+    case AArch64::SHLv16i8_shift:
+    case AArch64::SHLv8i16_shift:
+    case AArch64::SHLv4i32_shift:
+    case AArch64::SHLv2i64_shift:
+    case AArch64::SHLv8i8_shift:
+    case AArch64::SHLv4i16_shift:
+    case AArch64::SHLv2i32_shift:
     case AArch64::BICv4i16:
     case AArch64::BICv8i8:
     case AArch64::BICv2i32:
@@ -2539,9 +2553,18 @@ public:
       bool splatImm2 = false;
       bool zext = false;
       bool immShift = false;
-
       function<Value *(Value *, Value *)> op;
       switch (opcode) {
+      case AArch64::SHLv16i8_shift:
+      case AArch64::SHLv8i16_shift:
+      case AArch64::SHLv4i32_shift:
+      case AArch64::SHLv2i64_shift:
+      case AArch64::SHLv8i8_shift:
+      case AArch64::SHLv4i16_shift:
+      case AArch64::SHLv2i32_shift:
+	splatImm2 = true;
+        op = [&](Value *a, Value *b) { return createMaskedShl(a, b); };
+        break;
       case AArch64::BICv4i16:
       case AArch64::BICv8i8:
       case AArch64::BICv2i32:
@@ -2596,7 +2619,10 @@ public:
       case AArch64::ADDv8i8:
       case AArch64::ADDv8i16:
       case AArch64::ADDv16i8:
+        op = [&](Value *a, Value *b) { return createAdd(a, b); };
+        break;
       case AArch64::UADDLv8i8_v8i16:
+	zext = true;
         op = [&](Value *a, Value *b) { return createAdd(a, b); };
         break;
       case AArch64::SUBv2i32:
@@ -2633,7 +2659,7 @@ public:
       case AArch64::USHLLv8i8_shift:
         zext = true;
         splatImm2 = true;
-        op = [&](Value *a, Value *b) { return createMaskedLShr(a, b); };
+        op = [&](Value *a, Value *b) { return createRawShl(a, b); };
         break;
       case AArch64::USHRv2i64_shift:
         splatImm2 = true;
@@ -2652,6 +2678,7 @@ public:
         numElts = 1;
         eltSize = 64;
         break;
+      case AArch64::SHLv2i32_shift:
       case AArch64::SUBv2i32:
       case AArch64::ADDv2i32:
       case AArch64::USHLv2i32:
@@ -2662,6 +2689,7 @@ public:
         numElts = 2;
         eltSize = 32;
         break;
+      case AArch64::SHLv2i64_shift:
       case AArch64::ADDv2i64:
       case AArch64::SUBv2i64:
       case AArch64::USHLv2i64:
@@ -2681,9 +2709,11 @@ public:
       case AArch64::SSHLv4i16:
       case AArch64::BICv4i16:
       case AArch64::USHLLv4i16_shift:
+      case AArch64::SHLv4i16_shift:
         numElts = 4;
         eltSize = 16;
         break;
+      case AArch64::SHLv4i32_shift:
       case AArch64::ADDv4i32:
       case AArch64::SUBv4i32:
       case AArch64::USHLv4i32:
@@ -2694,6 +2724,7 @@ public:
         numElts = 4;
         eltSize = 32;
         break;
+      case AArch64::SHLv8i8_shift:
       case AArch64::ADDv8i8:
       case AArch64::SUBv8i8:
       case AArch64::EORv8i8:
@@ -2713,6 +2744,7 @@ public:
       case AArch64::SSHLv8i16:
       case AArch64::BICv8i16:
       case AArch64::USHLLv8i16_shift:
+      case AArch64::SHLv8i16_shift:
         numElts = 8;
         eltSize = 16;
         break;
@@ -2726,6 +2758,7 @@ public:
       case AArch64::SSHLv16i8:
       case AArch64::BICv16i8:
       case AArch64::USHLLv16i8_shift:
+      case AArch64::SHLv16i8_shift:
         numElts = 16;
         eltSize = 8;
         break;
