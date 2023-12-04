@@ -2686,6 +2686,11 @@ public:
       case AArch64::USHLLv4i32_shift:
       case AArch64::USHLLv8i16_shift:
       case AArch64::USHLLv16i8_shift:
+	// OK this is a little weird. at this level, the distinction
+	// between ushll and ushll2 is that the former specifies a
+	// 64-bit operand and the latter specifies a 128-bit operand
+	// and then the shift is implied.
+	a = createRawLShr(a, getIntConst(64, 128));
       case AArch64::USHLLv4i16_shift:
       case AArch64::USHLLv2i32_shift:
       case AArch64::USHLLv8i8_shift:
