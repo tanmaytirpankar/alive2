@@ -745,9 +745,7 @@ class arm2llvm {
 
   // from getShiftType/getShiftValue:
   // https://github.com/llvm/llvm-project/blob/93d1a623cecb6f732db7900baf230a13e6ac6c6a/llvm/lib/Target/AArch64/MCTargetDesc/AArch64AddressingModes.h#L74
-  // LLVM encodes its shifts into immediates (ARM doesn't, it has a shift
-  // field in the instruction)
-  Value *reg_shift(Value *value, int encodedShift) {
+  Value *regShift(Value *value, int encodedShift) {
     if (encodedShift == 0)
       return value;
 
@@ -1034,10 +1032,12 @@ class arm2llvm {
     return CastInst::Create(op, v, t, nextName(), LLVMBB);
   }
 
-  Value *splatImm(Value *v, int eltCount, int eltSize) {
+  Value *splatImm(Value *v, int eltCount, int eltSize, bool shift) {
     assert(CurInst->getOperand(2).isImm());
-    *out << "eltSize = " << eltSize << "\n";
-    *out << "width(v) = " << getBitWidth(v) << "\n";
+    if (shift) {
+      assert(CurInst->getOperand(3).isImm());
+      v = regShift(v, getImm(3));
+    }
     if (getBitWidth(v) > eltSize)
       v = createTrunc(v, getIntTy(eltSize));
     Value *res = ConstantVector::getSplat(ElementCount::getFixed(eltCount),
@@ -1070,12 +1070,12 @@ class arm2llvm {
   Value *createVectorOp(function<Value *(Value *, Value *)> op, Value *a,
                         Value *b, unsigned eltSize, unsigned numElts,
                         bool elementWise, bool zext, bool isICmp,
-                        bool splatImm2) {
+                        bool splatImm2, bool immShift) {
     assert(getBitWidth(a) == getBitWidth(b) &&
            "Expected values of same bit width");
 
     if (splatImm2)
-      b = splatImm(b, numElts, eltSize);
+      b = splatImm(b, numElts, eltSize, immShift);
 
     auto ec = ElementCount::getFixed(numElts);
     auto eTy = getIntTy(eltSize);
@@ -2136,7 +2136,7 @@ public:
       }
       default:
         b = readFromOperand(2);
-        b = reg_shift(b, getImm(3));
+        b = regShift(b, getImm(3));
         if (b->getType()->isPointerTy()) {
           // This control path is for PC-Relative addressing.
           auto reg = CurInst->getOperand(0).getReg();
@@ -2641,6 +2641,7 @@ public:
       bool isICmp = false;
       bool splatImm2 = false;
       bool zext = false;
+      bool immShift = false;
 
       function<Value *(Value *, Value *)> op;
       switch (opcode) {
@@ -2650,8 +2651,10 @@ public:
       case AArch64::BICv8i16:
       case AArch64::BICv4i32:
       case AArch64::BICv16i8:
-        if (CurInst->getOperand(2).isImm())
+        if (CurInst->getOperand(2).isImm()) {
           splatImm2 = true;
+          immShift = true;
+        }
         op = [&](Value *a, Value *b) { return createAnd(a, createNot(b)); };
         break;
       case AArch64::CMHIv8i8:
@@ -2848,7 +2851,7 @@ public:
       }
 
       auto res = createVectorOp(op, a, b, eltSize, numElts, elementWise, zext,
-                                isICmp, splatImm2);
+                                isICmp, splatImm2, immShift);
       updateOutputReg(res);
       break;
     }
@@ -2860,11 +2863,11 @@ public:
       auto v1 = createVectorOp(
           [&](Value *a, Value *b) { return createMul(a, b); }, a, b, 32, 2,
           /*cast=*/false, /*zext=*/false, /*isICmp=*/false,
-          /*splatImm2=*/false);
+          /*splatImm2=*/false, /*immShift=*/false);
       auto v2 = createVectorOp(
           [&](Value *a, Value *b) { return createSub(a, b); }, accum, v1, 32, 2,
           /*cast=*/false, /*zext=*/false, /*isICmp=*/false,
-          /*splatImm2=*/false);
+          /*splatImm2=*/false, /*immShift=*/false);
       updateOutputReg(v2);
       break;
     }
@@ -2937,7 +2940,7 @@ public:
       }
       default:
         b = readFromOperand(2);
-        b = reg_shift(b, getImm(3));
+        b = regShift(b, getImm(3));
       }
 
       // make sure that lhs and rhs conversion succeeded, type lookup succeeded
@@ -3007,7 +3010,7 @@ public:
       if (CurInst->getNumOperands() == 4) {
         // the 4th operand (if it exists) must be an immediate
         assert(CurInst->getOperand(3).isImm());
-        rhs = reg_shift(rhs, getImm(3));
+        rhs = regShift(rhs, getImm(3));
       }
 
       auto and_op = createAnd(readFromOperand(1), rhs);
@@ -3286,7 +3289,7 @@ public:
     case AArch64::EORXrs: {
       auto lhs = readFromOperand(1);
       auto rhs = readFromOperand(2);
-      rhs = reg_shift(rhs, getImm(3));
+      rhs = regShift(rhs, getImm(3));
       auto result = createXor(lhs, rhs);
       updateOutputReg(result);
       break;
@@ -3375,7 +3378,7 @@ public:
       assert(CurInst->getOperand(0).isReg());
       assert(CurInst->getOperand(1).isImm());
       auto lhs = readFromOperand(1);
-      lhs = reg_shift(lhs, getImm(2));
+      lhs = regShift(lhs, getImm(2));
       auto rhs = getIntConst(0, size);
       auto ident = createAdd(lhs, rhs);
       updateOutputReg(ident);
@@ -3390,7 +3393,7 @@ public:
       assert(CurInst->getOperand(2).isImm());
 
       auto lhs = readFromOperand(1);
-      lhs = reg_shift(lhs, getImm(2));
+      lhs = regShift(lhs, getImm(2));
       auto neg_one = getIntConst(-1, size);
       auto not_lhs = createXor(lhs, neg_one);
 
@@ -3421,7 +3424,7 @@ public:
       auto size = getInstSize(opcode);
       auto lhs = readFromOperand(1);
       auto rhs = readFromOperand(2);
-      rhs = reg_shift(rhs, getImm(3));
+      rhs = regShift(rhs, getImm(3));
 
       auto neg_one = getIntConst(-1, size);
       auto not_rhs = createXor(rhs, neg_one);
@@ -3435,7 +3438,7 @@ public:
       auto size = getInstSize(opcode);
       auto dest = readFromOperand(1);
       auto lhs = readFromOperand(2);
-      lhs = reg_shift(lhs, getImm(3));
+      lhs = regShift(lhs, getImm(3));
 
       uint64_t bitmask;
       auto shift_amt = getImm(3);
@@ -3588,7 +3591,7 @@ public:
     case AArch64::ORRXrs: {
       auto lhs = readFromOperand(1);
       auto rhs = readFromOperand(2);
-      rhs = reg_shift(rhs, getImm(3));
+      rhs = regShift(rhs, getImm(3));
       auto result = createOr(lhs, rhs);
       updateOutputReg(result);
       break;
@@ -3709,7 +3712,7 @@ public:
       if (CurInst->getNumOperands() == 4) {
         // the 4th operand (if it exists) must b an immediate
         assert(CurInst->getOperand(3).isImm());
-        op2 = reg_shift(op2, getImm(3));
+        op2 = regShift(op2, getImm(3));
       }
 
       // Perform NOT
