@@ -929,7 +929,7 @@ class arm2llvm {
     return CastInst::Create(op, v, t, nextName(), LLVMBB);
   }
 
-  Value *splatImm(Value *v, int eltCount, unsigned eltSize, bool shift) {
+  Value *splatImm(Value *v, unsigned eltCount, unsigned eltSize, bool shift) {
     assert(CurInst->getOperand(2).isImm());
     if (shift) {
       assert(CurInst->getOperand(3).isImm());
@@ -939,7 +939,7 @@ class arm2llvm {
       v = createTrunc(v, getIntTy(eltSize));
     Value *res = ConstantVector::getSplat(ElementCount::getFixed(eltCount),
                                           UndefValue::get(getIntTy(eltSize)));
-    for (int i = 0; i < eltCount; ++i)
+    for (unsigned i = 0; i < eltCount; ++i)
       res = createInsertElement(res, v, getIntConst(i, 32));
     return res;
   }
