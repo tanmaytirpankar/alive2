@@ -2656,7 +2656,10 @@ public:
       case AArch64::SUBv8i8:
       case AArch64::SUBv8i16:
       case AArch64::SUBv16i8:
+        op = [&](Value *a, Value *b) { return createSub(a, b); };
+        break;
       case AArch64::USUBLv8i8_v8i16:
+        zext = true;
         op = [&](Value *a, Value *b) { return createSub(a, b); };
         break;
       case AArch64::EORv8i8:
