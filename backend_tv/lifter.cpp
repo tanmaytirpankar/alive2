@@ -1036,14 +1036,15 @@ class arm2llvm {
 
   Value *splatImm(Value *v, int eltCount, int eltSize) {
     assert(CurInst->getOperand(2).isImm());
-    // get the constant
-    auto c = dyn_cast<Constant>(v);
-    assert(c);
-    // make a splat of it
-    auto *vTy =
-        VectorType::get(getIntTy(eltSize), ElementCount::getFixed(eltCount));
-    auto shiftVal = c->getUniqueInteger();
-    return ConstantInt::get(vTy, shiftVal.getLimitedValue(), false);
+    *out << "eltSize = " << eltSize << "\n";
+    *out << "width(v) = " << getBitWidth(v) << "\n";
+    if (getBitWidth(v) > eltSize)
+      v = createTrunc(v, getIntTy(eltSize));
+    Value *res = ConstantVector::getSplat(ElementCount::getFixed(eltCount),
+                                          UndefValue::get(getIntTy(eltSize)));
+    for (int i = 0; i < eltCount; ++i)
+      res = createInsertElement(res, v, getIntConst(i, 32));
+    return res;
   }
 
   Value *addPairs(Value *src, unsigned eltSize, unsigned numElts) {
