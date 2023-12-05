@@ -492,9 +492,17 @@ class arm2llvm {
       AArch64::SSHRv4i16_shift,
       AArch64::SSHRv8i8_shift,
       AArch64::SSHRv2i32_shift,
+      AArch64::ADDPv8i8,
+      AArch64::ADDPv4i16,
+      AArch64::ADDPv2i32,
   };
 
   const set<int> instrs_128 = {
+      AArch64::ADDPv16i8,
+      AArch64::ADDPv4i32,
+      AArch64::ADDPv8i16,
+      AArch64::ADDPv2i64,
+      AArch64::ADDPv2i64p,
       AArch64::SSHRv16i8_shift,
       AArch64::SSHRv2i64_shift,
       AArch64::SSHRv8i16_shift,
@@ -2815,6 +2823,66 @@ public:
 
       auto res = createVectorOp(op, a, b, eltSize, numElts, elementWise, zext,
                                 isICmp, splatImm2, immShift);
+      updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::ADDPv2i64p: {
+      auto vTy = VectorType::get(getIntTy(64), ElementCount::getFixed(2));
+      auto v = createBitCast(readFromOperand(1), vTy);
+      auto res = createAdd(createExtractElement(v, getIntConst(0, 32)),
+                           createExtractElement(v, getIntConst(1, 32)));
+      updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::ADDPv8i8:
+    case AArch64::ADDPv4i16:
+    case AArch64::ADDPv2i32:
+    case AArch64::ADDPv16i8:
+    case AArch64::ADDPv4i32:
+    case AArch64::ADDPv8i16:
+    case AArch64::ADDPv2i64: {
+      int numElts, eltSize;
+      if (opcode == AArch64::ADDPv8i8) {
+        numElts = 8;
+        eltSize = 8;
+      } else if (opcode == AArch64::ADDPv4i16) {
+        numElts = 4;
+        eltSize = 16;
+      } else if (opcode == AArch64::ADDPv2i32) {
+        numElts = 2;
+        eltSize = 32;
+      } else if (opcode == AArch64::ADDPv16i8) {
+        numElts = 16;
+        eltSize = 8;
+      } else if (opcode == AArch64::ADDPv4i32) {
+        numElts = 4;
+        eltSize = 32;
+      } else if (opcode == AArch64::ADDPv8i16) {
+        numElts = 8;
+        eltSize = 16;
+      } else if (opcode == AArch64::ADDPv2i64) {
+        numElts = 2;
+        eltSize = 64;
+      } else {
+        assert(false);
+      }
+      auto x = readFromOperand(1);
+      auto y = readFromOperand(2);
+      auto conc = concat(y, x);
+      auto concTy = VectorType::get(getIntTy(eltSize),
+                                    ElementCount::getFixed(numElts * 2));
+      auto concV = createBitCast(conc, concTy);
+      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
+                                            UndefValue::get(getIntTy(eltSize)));
+      for (int e = 0; e < numElts; ++e) {
+        *out << "e = " << e << "\n";
+        auto elt1 = createExtractElement(concV, getIntConst(2 * e, 32));
+        auto elt2 = createExtractElement(concV, getIntConst((2 * e) + 1, 32));
+        auto sum = createAdd(elt1, elt2);
+        res = createInsertElement(res, sum, getIntConst(e, 32));
+      }
       updateOutputReg(res);
       break;
     }
