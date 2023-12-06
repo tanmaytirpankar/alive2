@@ -475,10 +475,6 @@ class arm2llvm {
       AArch64::UADDLPv8i8_v4i16,
       AArch64::UADALPv8i8_v4i16,
       AArch64::UADALPv4i16_v2i32,
-      AArch64::CMHIv8i8,
-      AArch64::CMHIv4i16,
-      AArch64::CMHIv2i32,
-      AArch64::CMHIv1i64,
       AArch64::BIFv8i8,
       AArch64::BSLv8i8,
       AArch64::BICv4i16,
@@ -495,6 +491,33 @@ class arm2llvm {
       AArch64::ADDPv8i8,
       AArch64::ADDPv4i16,
       AArch64::ADDPv2i32,
+      AArch64::CMEQv2i32,
+      AArch64::CMHIv8i8,
+      AArch64::CMHIv4i16,
+      AArch64::CMHIv2i32,
+      AArch64::CMHIv1i64,
+      AArch64::CMEQv2i32rz,
+      AArch64::CMEQv4i16,
+      AArch64::CMEQv4i16rz,
+      AArch64::CMEQv8i8,
+      AArch64::CMEQv8i8rz,
+      AArch64::CMGEv2i32,
+      AArch64::CMGEv4i16,
+      AArch64::CMGEv8i8,
+      AArch64::CMGTv2i32,
+      AArch64::CMGTv4i16,
+      AArch64::CMGTv8i8,
+      AArch64::CMHSv2i32,
+      AArch64::CMHSv4i16,
+      AArch64::CMHSv8i8,
+      AArch64::CMLTv2i32rz,
+      AArch64::CMLTv4i16rz,
+      AArch64::CMLTv8i8rz,
+      AArch64::CMTSTv8i8,
+      AArch64::CMHIv8i8,
+      AArch64::CMHIv4i16,
+      AArch64::CMHIv2i32,
+      AArch64::CMHIv1i64,
   };
 
   const set<int> instrs_128 = {
@@ -593,10 +616,6 @@ class arm2llvm {
       AArch64::UADALPv4i32_v2i64,
       AArch64::UADALPv16i8_v8i16,
       AArch64::UADALPv8i16_v4i32,
-      AArch64::CMHIv16i8,
-      AArch64::CMHIv8i16,
-      AArch64::CMHIv4i32,
-      AArch64::CMHIv2i64,
       AArch64::BIFv16i8,
       AArch64::BSLv16i8,
       AArch64::BICv8i16,
@@ -605,6 +624,43 @@ class arm2llvm {
       AArch64::ADDVv16i8v,
       AArch64::ADDVv8i16v,
       AArch64::ADDVv4i32v,
+      AArch64::CMHIv16i8,
+      AArch64::CMHIv8i16,
+      AArch64::CMHIv4i32,
+      AArch64::CMHIv2i64,
+      AArch64::CMEQv16i8,
+      AArch64::CMEQv16i8rz,
+      AArch64::CMEQv2i64,
+      AArch64::CMEQv2i64rz,
+      AArch64::CMEQv4i32,
+      AArch64::CMEQv4i32rz,
+      AArch64::CMEQv8i16,
+      AArch64::CMEQv8i16rz,
+      AArch64::CMGEv16i8,
+      AArch64::CMGEv2i64,
+      AArch64::CMGEv4i32,
+      AArch64::CMGEv8i16,
+      AArch64::CMGTv16i8,
+      AArch64::CMGTv2i64,
+      AArch64::CMGTv4i32,
+      AArch64::CMGTv4i32rz,
+      AArch64::CMGTv8i16,
+      AArch64::CMHSv16i8,
+      AArch64::CMHSv2i64,
+      AArch64::CMHSv4i32,
+      AArch64::CMHSv8i16,
+      AArch64::CMLTv16i8rz,
+      AArch64::CMLTv2i64rz,
+      AArch64::CMLTv4i32rz,
+      AArch64::CMLTv8i16rz,
+      AArch64::CMTSTv16i8,
+      AArch64::CMTSTv2i64,
+      AArch64::CMTSTv4i32,
+      AArch64::CMTSTv8i16,
+      AArch64::CMHIv16i8,
+      AArch64::CMHIv8i16,
+      AArch64::CMHIv4i32,
+      AArch64::CMHIv2i64,
   };
 
   bool has_s(int instr) {
@@ -981,8 +1037,8 @@ class arm2llvm {
   // the operation element-wise.
   Value *createVectorOp(function<Value *(Value *, Value *)> op, Value *a,
                         Value *b, unsigned eltSize, unsigned numElts,
-                        bool elementWise, bool zext, bool isICmp,
-                        bool splatImm2, bool immShift) {
+                        bool elementWise, bool zext, bool splatImm2,
+                        bool immShift) {
     assert(getBitWidth(a) == getBitWidth(b) &&
            "Expected values of same bit width");
 
@@ -1015,8 +1071,6 @@ class arm2llvm {
     } else {
       res = op(a, b);
     }
-    if (isICmp)
-      res = createSExt(res, vTy);
     return res;
   }
 
@@ -3967,6 +4021,304 @@ public:
       break;
     }
 
+    case AArch64::CMEQv16i8:
+    case AArch64::CMEQv16i8rz:
+    case AArch64::CMEQv2i32:
+    case AArch64::CMEQv2i32rz:
+    case AArch64::CMEQv2i64:
+    case AArch64::CMEQv2i64rz:
+    case AArch64::CMEQv4i16:
+    case AArch64::CMEQv4i16rz:
+    case AArch64::CMEQv4i32:
+    case AArch64::CMEQv4i32rz:
+    case AArch64::CMEQv8i16:
+    case AArch64::CMEQv8i16rz:
+    case AArch64::CMEQv8i8:
+    case AArch64::CMEQv8i8rz:
+    case AArch64::CMGEv16i8:
+    case AArch64::CMGEv2i32:
+    case AArch64::CMGEv2i64:
+    case AArch64::CMGEv4i16:
+    case AArch64::CMGEv4i32:
+    case AArch64::CMGEv8i16:
+    case AArch64::CMGEv8i8:
+    case AArch64::CMGTv16i8:
+    case AArch64::CMGTv2i32:
+    case AArch64::CMGTv2i64:
+    case AArch64::CMGTv4i16:
+    case AArch64::CMGTv4i32:
+    case AArch64::CMGTv4i32rz:
+    case AArch64::CMGTv8i16:
+    case AArch64::CMGTv8i8:
+    case AArch64::CMHIv16i8:
+    case AArch64::CMHIv1i64:
+    case AArch64::CMHIv2i32:
+    case AArch64::CMHIv2i64:
+    case AArch64::CMHIv4i16:
+    case AArch64::CMHIv4i32:
+    case AArch64::CMHIv8i16:
+    case AArch64::CMHIv8i8:
+    case AArch64::CMHSv16i8:
+    case AArch64::CMHSv2i32:
+    case AArch64::CMHSv2i64:
+    case AArch64::CMHSv4i16:
+    case AArch64::CMHSv4i32:
+    case AArch64::CMHSv8i16:
+    case AArch64::CMHSv8i8:
+    case AArch64::CMLTv16i8rz:
+    case AArch64::CMLTv2i32rz:
+    case AArch64::CMLTv2i64rz:
+    case AArch64::CMLTv4i16rz:
+    case AArch64::CMLTv4i32rz:
+    case AArch64::CMLTv8i16rz:
+    case AArch64::CMLTv8i8rz:
+    case AArch64::CMTSTv16i8:
+    case AArch64::CMTSTv2i64:
+    case AArch64::CMTSTv4i32:
+    case AArch64::CMTSTv8i16:
+    case AArch64::CMTSTv8i8: {
+      auto a = readFromOperand(1);
+      Value *b;
+      switch (opcode) {
+      case AArch64::CMEQv16i8rz:
+      case AArch64::CMEQv2i32rz:
+      case AArch64::CMEQv2i64rz:
+      case AArch64::CMEQv4i16rz:
+      case AArch64::CMEQv4i32rz:
+      case AArch64::CMEQv8i16rz:
+      case AArch64::CMEQv8i8rz:
+      case AArch64::CMGTv4i32rz:
+      case AArch64::CMLTv16i8rz:
+      case AArch64::CMLTv2i32rz:
+      case AArch64::CMLTv2i64rz:
+      case AArch64::CMLTv4i16rz:
+      case AArch64::CMLTv4i32rz:
+      case AArch64::CMLTv8i16rz:
+      case AArch64::CMLTv8i8rz:
+        b = getIntConst(0, getInstSize(opcode));
+        break;
+      case AArch64::CMEQv16i8:
+      case AArch64::CMEQv2i32:
+      case AArch64::CMEQv2i64:
+      case AArch64::CMEQv4i16:
+      case AArch64::CMEQv4i32:
+      case AArch64::CMEQv8i16:
+      case AArch64::CMEQv8i8:
+      case AArch64::CMGEv16i8:
+      case AArch64::CMGEv2i32:
+      case AArch64::CMGEv2i64:
+      case AArch64::CMGEv4i16:
+      case AArch64::CMGEv4i32:
+      case AArch64::CMGEv8i16:
+      case AArch64::CMGEv8i8:
+      case AArch64::CMGTv16i8:
+      case AArch64::CMGTv2i32:
+      case AArch64::CMGTv2i64:
+      case AArch64::CMGTv4i16:
+      case AArch64::CMGTv4i32:
+      case AArch64::CMGTv8i16:
+      case AArch64::CMGTv8i8:
+      case AArch64::CMHIv16i8:
+      case AArch64::CMHIv1i64:
+      case AArch64::CMHIv2i32:
+      case AArch64::CMHIv2i64:
+      case AArch64::CMHIv4i16:
+      case AArch64::CMHIv4i32:
+      case AArch64::CMHIv8i16:
+      case AArch64::CMHIv8i8:
+      case AArch64::CMHSv16i8:
+      case AArch64::CMHSv2i32:
+      case AArch64::CMHSv2i64:
+      case AArch64::CMHSv4i16:
+      case AArch64::CMHSv4i32:
+      case AArch64::CMHSv8i16:
+      case AArch64::CMHSv8i8:
+      case AArch64::CMTSTv16i8:
+      case AArch64::CMTSTv2i64:
+      case AArch64::CMTSTv4i32:
+      case AArch64::CMTSTv8i16:
+      case AArch64::CMTSTv8i8:
+        b = readFromOperand(2);
+        break;
+      default:
+        assert(false);
+      }
+
+      int numElts, eltSize;
+      switch (opcode) {
+      case AArch64::CMHIv1i64:
+        numElts = 1;
+        eltSize = 64;
+        break;
+      case AArch64::CMEQv16i8:
+      case AArch64::CMEQv16i8rz:
+      case AArch64::CMGEv16i8:
+      case AArch64::CMGTv16i8:
+      case AArch64::CMHIv16i8:
+      case AArch64::CMHSv16i8:
+      case AArch64::CMLTv16i8rz:
+      case AArch64::CMTSTv16i8:
+        numElts = 16;
+        eltSize = 8;
+        break;
+      case AArch64::CMEQv2i32:
+      case AArch64::CMEQv2i32rz:
+      case AArch64::CMGEv2i32:
+      case AArch64::CMGTv2i32:
+      case AArch64::CMHIv2i32:
+      case AArch64::CMHSv2i32:
+      case AArch64::CMLTv2i32rz:
+        numElts = 2;
+        eltSize = 32;
+        break;
+      case AArch64::CMEQv2i64:
+      case AArch64::CMEQv2i64rz:
+      case AArch64::CMGEv2i64:
+      case AArch64::CMGTv2i64:
+      case AArch64::CMHIv2i64:
+      case AArch64::CMHSv2i64:
+      case AArch64::CMLTv2i64rz:
+      case AArch64::CMTSTv2i64:
+        numElts = 2;
+        eltSize = 64;
+        break;
+      case AArch64::CMEQv4i16:
+      case AArch64::CMEQv4i16rz:
+      case AArch64::CMGEv4i16:
+      case AArch64::CMGTv4i16:
+      case AArch64::CMHIv4i16:
+      case AArch64::CMHSv4i16:
+      case AArch64::CMLTv4i16rz:
+        numElts = 4;
+        eltSize = 16;
+        break;
+      case AArch64::CMEQv4i32:
+      case AArch64::CMEQv4i32rz:
+      case AArch64::CMGEv4i32:
+      case AArch64::CMGTv4i32:
+      case AArch64::CMGTv4i32rz:
+      case AArch64::CMHIv4i32:
+      case AArch64::CMHSv4i32:
+      case AArch64::CMLTv4i32rz:
+      case AArch64::CMTSTv4i32:
+        numElts = 4;
+        eltSize = 32;
+        break;
+      case AArch64::CMEQv8i16:
+      case AArch64::CMEQv8i16rz:
+      case AArch64::CMGEv8i16:
+      case AArch64::CMGTv8i16:
+      case AArch64::CMHIv8i16:
+      case AArch64::CMHSv8i16:
+      case AArch64::CMLTv8i16rz:
+      case AArch64::CMTSTv8i16:
+        numElts = 8;
+        eltSize = 16;
+        break;
+      case AArch64::CMEQv8i8:
+      case AArch64::CMEQv8i8rz:
+      case AArch64::CMGEv8i8:
+      case AArch64::CMGTv8i8:
+      case AArch64::CMHIv8i8:
+      case AArch64::CMHSv8i8:
+      case AArch64::CMLTv8i8rz:
+      case AArch64::CMTSTv8i8:
+        numElts = 8;
+        eltSize = 8;
+        break;
+      default:
+        assert(false);
+      }
+
+      auto ec = ElementCount::getFixed(numElts);
+      auto eTy = getIntTy(eltSize);
+      auto vTy = VectorType::get(eTy, ec);
+      a = createBitCast(a, vTy);
+      b = createBitCast(b, vTy);
+      Value *res;
+
+      switch (opcode) {
+      case AArch64::CMEQv16i8:
+      case AArch64::CMEQv16i8rz:
+      case AArch64::CMEQv2i32:
+      case AArch64::CMEQv2i32rz:
+      case AArch64::CMEQv2i64:
+      case AArch64::CMEQv2i64rz:
+      case AArch64::CMEQv4i16:
+      case AArch64::CMEQv4i16rz:
+      case AArch64::CMEQv4i32:
+      case AArch64::CMEQv4i32rz:
+      case AArch64::CMEQv8i16:
+      case AArch64::CMEQv8i16rz:
+      case AArch64::CMEQv8i8:
+      case AArch64::CMEQv8i8rz:
+        res = createICmp(ICmpInst::Predicate::ICMP_EQ, a, b);
+        break;
+      case AArch64::CMGEv16i8:
+      case AArch64::CMGEv2i32:
+      case AArch64::CMGEv2i64:
+      case AArch64::CMGEv4i16:
+      case AArch64::CMGEv4i32:
+      case AArch64::CMGEv8i16:
+      case AArch64::CMGEv8i8:
+        res = createICmp(ICmpInst::Predicate::ICMP_SGE, a, b);
+        break;
+      case AArch64::CMGTv16i8:
+      case AArch64::CMGTv2i32:
+      case AArch64::CMGTv2i64:
+      case AArch64::CMGTv4i16:
+      case AArch64::CMGTv4i32:
+      case AArch64::CMGTv4i32rz:
+      case AArch64::CMGTv8i16:
+      case AArch64::CMGTv8i8:
+        res = createICmp(ICmpInst::Predicate::ICMP_SGT, a, b);
+        break;
+      case AArch64::CMHIv16i8:
+      case AArch64::CMHIv1i64:
+      case AArch64::CMHIv2i32:
+      case AArch64::CMHIv2i64:
+      case AArch64::CMHIv4i16:
+      case AArch64::CMHIv4i32:
+      case AArch64::CMHIv8i16:
+      case AArch64::CMHIv8i8:
+        res = createICmp(ICmpInst::Predicate::ICMP_UGT, a, b);
+        break;
+      case AArch64::CMHSv16i8:
+      case AArch64::CMHSv2i32:
+      case AArch64::CMHSv2i64:
+      case AArch64::CMHSv4i16:
+      case AArch64::CMHSv4i32:
+      case AArch64::CMHSv8i16:
+      case AArch64::CMHSv8i8:
+        res = createICmp(ICmpInst::Predicate::ICMP_UGE, a, b);
+        break;
+      case AArch64::CMLTv16i8rz:
+      case AArch64::CMLTv2i32rz:
+      case AArch64::CMLTv2i64rz:
+      case AArch64::CMLTv4i16rz:
+      case AArch64::CMLTv4i32rz:
+      case AArch64::CMLTv8i16rz:
+      case AArch64::CMLTv8i8rz:
+        res = createICmp(ICmpInst::Predicate::ICMP_SLT, a, b);
+        break;
+      case AArch64::CMTSTv16i8:
+      case AArch64::CMTSTv2i64:
+      case AArch64::CMTSTv4i32:
+      case AArch64::CMTSTv8i16:
+      case AArch64::CMTSTv8i8: {
+        auto *tmp = createAnd(a, b);
+        auto *zero = createBitCast(getIntConst(0, getInstSize(opcode)), vTy);
+        res = createICmp(ICmpInst::Predicate::ICMP_NE, tmp, zero);
+        break;
+      }
+      default:
+        assert(false);
+      }
+
+      updateOutputReg(createSExt(res, vTy));
+      break;
+    }
+
     case AArch64::SSHRv4i16_shift:
     case AArch64::SSHRv8i8_shift:
     case AArch64::SSHRv2i32_shift:
@@ -3987,14 +4339,6 @@ public:
     case AArch64::BICv8i16:
     case AArch64::BICv4i32:
     case AArch64::BICv16i8:
-    case AArch64::CMHIv8i8:
-    case AArch64::CMHIv4i16:
-    case AArch64::CMHIv2i32:
-    case AArch64::CMHIv1i64:
-    case AArch64::CMHIv16i8:
-    case AArch64::CMHIv8i16:
-    case AArch64::CMHIv4i32:
-    case AArch64::CMHIv2i64:
     case AArch64::ADDv2i32:
     case AArch64::ADDv2i64:
     case AArch64::ADDv4i16:
@@ -4044,7 +4388,6 @@ public:
       auto a = readFromOperand(1);
       auto b = readFromOperand(2);
       bool elementWise = false;
-      bool isICmp = false;
       bool splatImm2 = false;
       bool zext = false;
       bool immShift = false;
@@ -4081,19 +4424,6 @@ public:
           immShift = true;
         }
         op = [&](Value *a, Value *b) { return createAnd(a, createNot(b)); };
-        break;
-      case AArch64::CMHIv8i8:
-      case AArch64::CMHIv4i16:
-      case AArch64::CMHIv2i32:
-      case AArch64::CMHIv1i64:
-      case AArch64::CMHIv16i8:
-      case AArch64::CMHIv8i16:
-      case AArch64::CMHIv4i32:
-      case AArch64::CMHIv2i64:
-        op = [&](Value *a, Value *b) {
-          return createICmp(ICmpInst::Predicate::ICMP_UGT, a, b);
-        };
-        isICmp = true;
         break;
       case AArch64::USHLv1i64:
       case AArch64::USHLv4i16:
@@ -4185,7 +4515,6 @@ public:
       int eltSize;
       int numElts;
       switch (opcode) {
-      case AArch64::CMHIv1i64:
       case AArch64::USHLv1i64:
       case AArch64::SSHLv1i64:
         numElts = 1;
@@ -4196,7 +4525,6 @@ public:
       case AArch64::SUBv2i32:
       case AArch64::ADDv2i32:
       case AArch64::USHLv2i32:
-      case AArch64::CMHIv2i32:
       case AArch64::SSHLv2i32:
       case AArch64::BICv2i32:
       case AArch64::USHLLv2i32_shift:
@@ -4208,7 +4536,6 @@ public:
       case AArch64::ADDv2i64:
       case AArch64::SUBv2i64:
       case AArch64::USHLv2i64:
-      case AArch64::CMHIv2i64:
       case AArch64::SSHLv2i64:
         numElts = 2;
         eltSize = 64;
@@ -4221,7 +4548,6 @@ public:
       case AArch64::ADDv4i16:
       case AArch64::SUBv4i16:
       case AArch64::USHLv4i16:
-      case AArch64::CMHIv4i16:
       case AArch64::SSHLv4i16:
       case AArch64::BICv4i16:
       case AArch64::USHLLv4i16_shift:
@@ -4234,7 +4560,6 @@ public:
       case AArch64::ADDv4i32:
       case AArch64::SUBv4i32:
       case AArch64::USHLv4i32:
-      case AArch64::CMHIv4i32:
       case AArch64::SSHLv4i32:
       case AArch64::BICv4i32:
       case AArch64::USHLLv4i32_shift:
@@ -4249,7 +4574,6 @@ public:
       case AArch64::ANDv8i8:
       case AArch64::ORRv8i8:
       case AArch64::USHLv8i8:
-      case AArch64::CMHIv8i8:
       case AArch64::SSHLv8i8:
       case AArch64::BICv8i8:
         numElts = 8;
@@ -4258,7 +4582,6 @@ public:
       case AArch64::ADDv8i16:
       case AArch64::SUBv8i16:
       case AArch64::USHLv8i16:
-      case AArch64::CMHIv8i16:
       case AArch64::SSHLv8i16:
       case AArch64::BICv8i16:
       case AArch64::USHLLv8i16_shift:
@@ -4273,7 +4596,6 @@ public:
       case AArch64::ANDv16i8:
       case AArch64::ORRv16i8:
       case AArch64::USHLv16i8:
-      case AArch64::CMHIv16i8:
       case AArch64::SSHLv16i8:
       case AArch64::BICv16i8:
       case AArch64::USHLLv16i8_shift:
@@ -4301,7 +4623,7 @@ public:
       }
 
       auto res = createVectorOp(op, a, b, eltSize, numElts, elementWise, zext,
-                                isICmp, splatImm2, immShift);
+                                splatImm2, immShift);
       updateOutputReg(res);
       break;
     }
@@ -4372,11 +4694,11 @@ public:
       auto b = readFromOperand(3);
       auto v1 = createVectorOp(
           [&](Value *a, Value *b) { return createMul(a, b); }, a, b, 32, 2,
-          /*cast=*/false, /*zext=*/false, /*isICmp=*/false,
+          /*cast=*/false, /*zext=*/false,
           /*splatImm2=*/false, /*immShift=*/false);
       auto v2 = createVectorOp(
           [&](Value *a, Value *b) { return createSub(a, b); }, accum, v1, 32, 2,
-          /*cast=*/false, /*zext=*/false, /*isICmp=*/false,
+          /*cast=*/false, /*zext=*/false,
           /*splatImm2=*/false, /*immShift=*/false);
       updateOutputReg(v2);
       break;
