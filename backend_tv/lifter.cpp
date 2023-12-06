@@ -133,7 +133,7 @@ public:
 
   MCFunction() {}
 
-  void setName(string _name) {
+  void setName(const string &_name) {
     name = _name;
   }
 
@@ -149,7 +149,7 @@ public:
     return name + to_string(++label_cnt);
   }
 
-  MCBasicBlock *findBlockByName(string b_name) {
+  MCBasicBlock *findBlockByName(const string &b_name) {
     for (auto &bb : BBs)
       if (bb.getName() == b_name)
         return &bb;
@@ -2120,789 +2120,6 @@ public:
       break;
     }
 
-    case AArch64::INSvi8lane:
-    case AArch64::INSvi16lane:
-    case AArch64::INSvi32lane:
-    case AArch64::INSvi64lane: {
-      unsigned w;
-      if (opcode == AArch64::INSvi8lane) {
-        w = 8;
-      } else if (opcode == AArch64::INSvi16lane) {
-        w = 16;
-      } else if (opcode == AArch64::INSvi32lane) {
-        w = 32;
-      } else if (opcode == AArch64::INSvi64lane) {
-        w = 64;
-      } else {
-        assert(false);
-      }
-      auto ext = extractFromVector(readFromOperand(3), w, getImm(4));
-      auto ins = insertIntoVector(readFromOperand(1), ext, w, getImm(2));
-      updateOutputReg(ins);
-      break;
-    }
-
-    case AArch64::INSvi8gpr:
-    case AArch64::INSvi16gpr:
-    case AArch64::INSvi32gpr:
-    case AArch64::INSvi64gpr: {
-      unsigned w;
-      if (opcode == AArch64::INSvi8gpr) {
-        w = 8;
-      } else if (opcode == AArch64::INSvi16gpr) {
-        w = 16;
-      } else if (opcode == AArch64::INSvi32gpr) {
-        w = 32;
-      } else if (opcode == AArch64::INSvi64gpr) {
-        w = 64;
-      } else {
-        assert(false);
-      }
-      auto val = readFromOperand(3);
-      // need to clear extraneous bits
-      if (w < 32)
-        val = createTrunc(val, getIntTy(w));
-      auto lane = getImm(2);
-      auto orig = readFromReg(CurInst->getOperand(1).getReg());
-      auto inserted = insertIntoVector(orig, val, w, lane);
-      updateOutputReg(inserted);
-      break;
-    }
-
-    case AArch64::FMOVSWr:
-    case AArch64::FMOVDXr:
-    case AArch64::FMOVWSr:
-    case AArch64::FMOVXDr:
-    case AArch64::FMOVDr: {
-      auto v = readFromOperand(1);
-      updateOutputReg(v);
-      break;
-    }
-
-    case AArch64::FMOVSi:
-    case AArch64::FMOVDi: {
-      auto imm = getImm(1);
-      assert(imm <= 256);
-      int w = (opcode == AArch64::FMOVSi) ? 32 : 64;
-      auto floatVal = getIntConst(VFPExpandImm(imm, w), 64);
-      updateOutputReg(floatVal);
-      break;
-    }
-
-    case AArch64::FABSSr:
-    case AArch64::FABSDr: {
-      auto fTy = getFPOperandType(opcode);
-      auto a = createBitCast(readFromOperand(1), fTy);
-      auto sizeTy = getIntTy(getInstSize(opcode));
-      auto res = createBitCast(createFAbs(a), sizeTy);
-      updateOutputReg(res);
-      break;
-    }
-
-    case AArch64::FMULSrr:
-    case AArch64::FMULDrr:
-    case AArch64::FADDSrr:
-    case AArch64::FADDDrr:
-    case AArch64::FSUBSrr:
-    case AArch64::FSUBDrr: {
-      Instruction::BinaryOps op;
-      if (opcode == AArch64::FADDSrr || opcode == AArch64::FADDDrr) {
-        op = Instruction::FAdd;
-      } else if (opcode == AArch64::FMULSrr || opcode == AArch64::FMULDrr) {
-        op = Instruction::FMul;
-      } else if (opcode == AArch64::FSUBSrr || opcode == AArch64::FSUBDrr) {
-        op = Instruction::FSub;
-      } else {
-        assert(false && "missed a case");
-      }
-
-      auto fTy = getFPOperandType(opcode);
-      auto a = createBitCast(readFromOperand(1), fTy);
-      auto b = createBitCast(readFromOperand(2), fTy);
-
-      auto sizeTy = getIntTy(getInstSize(opcode));
-      auto res = createBitCast(createBinop(a, b, op), sizeTy);
-      updateOutputReg(res);
-      break;
-    }
-
-    case AArch64::FCVTZSUWDr: {
-      auto val1 = createBitCast(readFromOperand(1), Type::getDoubleTy(Ctx));
-      auto val2 = createConvertFPToSI(val1, getIntTy(32));
-      updateOutputReg(val2);
-      break;
-    }
-
-    case AArch64::FCVTZSUWSr: {
-      auto val1 = createBitCast(readFromOperand(1), Type::getFloatTy(Ctx));
-      auto val2 = createConvertFPToSI(val1, getIntTy(32));
-      updateOutputReg(val2);
-      break;
-    }
-
-    case AArch64::FCVTSHr: {
-      auto val1 = createTrunc(readFromOperand(1), i16);
-      auto val3 = createConvertFromFP16(val1, Type::getFloatTy(Ctx));
-      auto val4 = createBitCast(val3, i32);
-      updateOutputReg(val4);
-      break;
-    }
-
-    case AArch64::FCMPSri:
-    case AArch64::FCMPDri:
-    case AArch64::FCMPSrr:
-    case AArch64::FCMPDrr: {
-      auto fTy = getFPOperandType(opcode);
-      auto a = createBitCast(readFromOperand(0), fTy);
-      Value *b;
-      if (opcode == AArch64::FCMPSri || opcode == AArch64::FCMPDri) {
-        b = ConstantFP::get(fTy, 0.0);
-      } else {
-        b = createBitCast(readFromOperand(1), fTy);
-      }
-      setN(createFCmp(FCmpInst::Predicate::FCMP_OLT, a, b));
-      setZ(createFCmp(FCmpInst::Predicate::FCMP_OEQ, a, b));
-      setC(createFCmp(FCmpInst::Predicate::FCMP_UGT, a, b));
-      setV(createFCmp(FCmpInst::Predicate::FCMP_UNO, a, b));
-      break;
-    }
-
-    case AArch64::SMOVvi16to32:
-    case AArch64::SMOVvi16to32_idx0: {
-      auto val = readFromOperand(1);
-      auto imm = getImm(2);
-      auto shiftAmt = getIntConst(imm * 16, 128);
-      auto shifted = createRawLShr(val, shiftAmt);
-      auto trunced = createTrunc(shifted, i16);
-      auto sexted = createSExt(trunced, i32);
-      updateOutputReg(sexted);
-      break;
-    }
-
-    case AArch64::UMOVvi8:
-    case AArch64::UMOVvi8_idx0:
-    case AArch64::UMOVvi16:
-    case AArch64::UMOVvi16_idx0:
-    case AArch64::UMOVvi32:
-    case AArch64::UMOVvi64: {
-      unsigned sz;
-      if (opcode == AArch64::UMOVvi8 || opcode == AArch64::UMOVvi8_idx0) {
-        sz = 8;
-      } else if (opcode == AArch64::UMOVvi16 ||
-                 opcode == AArch64::UMOVvi16_idx0) {
-        sz = 16;
-      } else if (opcode == AArch64::UMOVvi32) {
-        sz = 32;
-      } else if (opcode == AArch64::UMOVvi64) {
-        sz = 64;
-      } else {
-        assert(false);
-      }
-      auto val = readFromOperand(1);
-      unsigned idx;
-      if (opcode == AArch64::UMOVvi8_idx0 || opcode == AArch64::UMOVvi16_idx0) {
-        idx = 0;
-      } else {
-        idx = getImm(2);
-      }
-      if (idx != 0) {
-        auto shiftAmt = getIntConst(idx * sz, 128);
-        val = createRawLShr(val, shiftAmt);
-      }
-      auto masked = maskLower(val, sz);
-      updateOutputReg(createTrunc(masked, i64));
-      break;
-    }
-
-    case AArch64::MOVIv16b_ns: {
-      auto v = getIntConst(getImm(1), 8);
-      updateOutputReg(dupElts(v, 16, 8));
-      break;
-    }
-
-    case AArch64::MOVID:
-    case AArch64::MOVIv2d_ns: {
-      auto imm = getIntConst(replicate8to64(getImm(1)), 64);
-      updateOutputReg(dupElts(imm, 2, 64));
-      break;
-    }
-
-    case AArch64::MOVIv8i16: {
-      auto imm1 = getImm(1);
-      auto imm2 = getImm(2);
-      auto val = getIntConst(imm1 << imm2, 16);
-      updateOutputReg(dupElts(val, 8, 16));
-      break;
-    }
-
-    case AArch64::MOVIv2i32: {
-      auto imm1 = getImm(1);
-      auto imm2 = getImm(2);
-      auto val = getIntConst(imm1 << imm2, 32);
-      updateOutputReg(dupElts(val, 2, 32));
-      break;
-    }
-
-    case AArch64::MOVIv4i32: {
-      auto imm1 = getImm(1);
-      auto imm2 = getImm(2);
-      auto val = getIntConst(imm1 << imm2, 32);
-      updateOutputReg(dupElts(val, 4, 32));
-      break;
-    }
-
-    case AArch64::EXTv16i8: {
-      auto a = readFromOperand(1);
-      auto b = readFromOperand(2);
-      auto imm = getImm(3);
-      auto both = concat(b, a);
-      auto shifted = createRawLShr(both, getIntConst(8 * imm, 256));
-      updateOutputReg(createTrunc(shifted, i128));
-      break;
-    }
-
-    case AArch64::REV64v4i32: {
-      auto v = rev64(readFromOperand(1), 32);
-      updateOutputReg(v);
-      break;
-    }
-
-    case AArch64::DUPi16: {
-      auto ext = extractFromVector(readFromOperand(1), 16, getImm(2));
-      updateOutputReg(ext);
-      break;
-    }
-
-    case AArch64::DUPi32: {
-      auto ext = extractFromVector(readFromOperand(1), 32, getImm(2));
-      updateOutputReg(ext);
-      break;
-    }
-
-    case AArch64::DUPi64: {
-      auto ext = extractFromVector(readFromOperand(1), 64, getImm(2));
-      updateOutputReg(ext);
-      break;
-    }
-
-    case AArch64::DUPv8i8gpr: {
-      auto t = createTrunc(readFromOperand(1), i8);
-      updateOutputReg(dupElts(t, 8, 8));
-      break;
-    }
-
-    case AArch64::DUPv16i8gpr: {
-      auto t = createTrunc(readFromOperand(1), i8);
-      updateOutputReg(dupElts(t, 16, 8));
-      break;
-    }
-
-    case AArch64::DUPv8i16gpr: {
-      auto t = createTrunc(readFromOperand(1), i16);
-      updateOutputReg(dupElts(t, 8, 16));
-      break;
-    }
-
-    case AArch64::DUPv4i16gpr: {
-      auto t = createTrunc(readFromOperand(1), i16);
-      updateOutputReg(dupElts(t, 4, 16));
-      break;
-    }
-
-    case AArch64::DUPv4i32gpr: {
-      auto t = createTrunc(readFromOperand(1), i32);
-      updateOutputReg(dupElts(t, 4, 32));
-      break;
-    }
-
-    case AArch64::DUPv2i32gpr: {
-      auto t = createTrunc(readFromOperand(1), i32);
-      updateOutputReg(dupElts(t, 2, 32));
-      break;
-    }
-
-    case AArch64::DUPv2i64gpr: {
-      updateOutputReg(dupElts(readFromOperand(1), 2, 64));
-      break;
-    }
-
-    case AArch64::DUPv2i32lane: {
-      auto ext = extractFromVector(readFromOperand(1), 32, getImm(2));
-      updateOutputReg(dupElts(ext, 2, 32));
-      break;
-    }
-
-    case AArch64::DUPv2i64lane: {
-      auto ext = extractFromVector(readFromOperand(1), 64, getImm(2));
-      updateOutputReg(dupElts(ext, 2, 64));
-      break;
-    }
-
-    case AArch64::DUPv4i16lane: {
-      auto ext = extractFromVector(readFromOperand(1), 16, getImm(2));
-      updateOutputReg(dupElts(ext, 4, 16));
-      break;
-    }
-
-    case AArch64::DUPv4i32lane: {
-      auto ext = extractFromVector(readFromOperand(1), 32, getImm(2));
-      updateOutputReg(dupElts(ext, 4, 32));
-      break;
-    }
-
-    case AArch64::DUPv8i8lane: {
-      auto ext = extractFromVector(readFromOperand(1), 8, getImm(2));
-      updateOutputReg(dupElts(ext, 8, 8));
-      break;
-    }
-
-    case AArch64::DUPv8i16lane: {
-      auto ext = extractFromVector(readFromOperand(1), 16, getImm(2));
-      updateOutputReg(dupElts(ext, 8, 16));
-      break;
-    }
-
-    case AArch64::DUPv16i8lane: {
-      auto ext = extractFromVector(readFromOperand(1), 8, getImm(2));
-      updateOutputReg(dupElts(ext, 16, 8));
-      break;
-    }
-
-    case AArch64::BIFv8i8:
-    case AArch64::BIFv16i8: {
-      auto op1 = readFromOperand(1);
-      auto op4 = readFromOperand(2);
-      auto op3 = createNot(readFromOperand(3));
-      auto res = createXor(op1, createAnd(createXor(op1, op4), op3));
-      updateOutputReg(res);
-      break;
-    }
-
-    case AArch64::BSLv8i8:
-    case AArch64::BSLv16i8: {
-      auto op1 = readFromOperand(3);
-      auto op4 = readFromOperand(2);
-      auto op3 = readFromOperand(1);
-      auto res = createXor(op1, createAnd(createXor(op1, op4), op3));
-      updateOutputReg(res);
-      break;
-    }
-
-    case AArch64::SSHRv4i16_shift:
-    case AArch64::SSHRv8i8_shift:
-    case AArch64::SSHRv2i32_shift:
-    case AArch64::SSHRv16i8_shift:
-    case AArch64::SSHRv2i64_shift:
-    case AArch64::SSHRv8i16_shift:
-    case AArch64::SSHRv4i32_shift:
-    case AArch64::SHLv16i8_shift:
-    case AArch64::SHLv8i16_shift:
-    case AArch64::SHLv4i32_shift:
-    case AArch64::SHLv2i64_shift:
-    case AArch64::SHLv8i8_shift:
-    case AArch64::SHLv4i16_shift:
-    case AArch64::SHLv2i32_shift:
-    case AArch64::BICv4i16:
-    case AArch64::BICv8i8:
-    case AArch64::BICv2i32:
-    case AArch64::BICv8i16:
-    case AArch64::BICv4i32:
-    case AArch64::BICv16i8:
-    case AArch64::CMHIv8i8:
-    case AArch64::CMHIv4i16:
-    case AArch64::CMHIv2i32:
-    case AArch64::CMHIv1i64:
-    case AArch64::CMHIv16i8:
-    case AArch64::CMHIv8i16:
-    case AArch64::CMHIv4i32:
-    case AArch64::CMHIv2i64:
-    case AArch64::ADDv2i32:
-    case AArch64::ADDv2i64:
-    case AArch64::ADDv4i16:
-    case AArch64::ADDv4i32:
-    case AArch64::ADDv8i8:
-    case AArch64::ADDv8i16:
-    case AArch64::ADDv16i8:
-    case AArch64::UADDLv8i8_v8i16:
-    case AArch64::SUBv2i32:
-    case AArch64::SUBv2i64:
-    case AArch64::SUBv4i16:
-    case AArch64::SUBv4i32:
-    case AArch64::SUBv8i8:
-    case AArch64::SUBv8i16:
-    case AArch64::SUBv16i8:
-    case AArch64::USUBLv8i8_v8i16:
-    case AArch64::EORv8i8:
-    case AArch64::EORv16i8:
-    case AArch64::ANDv8i8:
-    case AArch64::ANDv16i8:
-    case AArch64::ORRv8i8:
-    case AArch64::ORRv16i8:
-    case AArch64::UMULLv2i32_v2i64:
-    case AArch64::USHLv1i64:
-    case AArch64::USHLv4i16:
-    case AArch64::USHLv16i8:
-    case AArch64::USHLv8i16:
-    case AArch64::USHLv2i32:
-    case AArch64::USHLv4i32:
-    case AArch64::USHLv8i8:
-    case AArch64::USHLv2i64:
-    case AArch64::SSHLv1i64:
-    case AArch64::SSHLv4i16:
-    case AArch64::SSHLv16i8:
-    case AArch64::SSHLv8i16:
-    case AArch64::SSHLv2i32:
-    case AArch64::SSHLv4i32:
-    case AArch64::SSHLv8i8:
-    case AArch64::SSHLv2i64:
-    case AArch64::USHLLv8i8_shift:
-    case AArch64::USHLLv4i32_shift:
-    case AArch64::USHLLv8i16_shift:
-    case AArch64::USHLLv16i8_shift:
-    case AArch64::USHLLv4i16_shift:
-    case AArch64::USHLLv2i32_shift:
-    case AArch64::USHRv2i64_shift: {
-      auto a = readFromOperand(1);
-      auto b = readFromOperand(2);
-      bool elementWise = false;
-      bool isICmp = false;
-      bool splatImm2 = false;
-      bool zext = false;
-      bool immShift = false;
-      function<Value *(Value *, Value *)> op;
-      switch (opcode) {
-      case AArch64::SSHRv4i16_shift:
-      case AArch64::SSHRv8i8_shift:
-      case AArch64::SSHRv2i32_shift:
-      case AArch64::SSHRv16i8_shift:
-      case AArch64::SSHRv2i64_shift:
-      case AArch64::SSHRv8i16_shift:
-      case AArch64::SSHRv4i32_shift:
-        splatImm2 = true;
-        op = [&](Value *a, Value *b) { return createMaskedAShr(a, b); };
-        break;
-      case AArch64::SHLv16i8_shift:
-      case AArch64::SHLv8i16_shift:
-      case AArch64::SHLv4i32_shift:
-      case AArch64::SHLv2i64_shift:
-      case AArch64::SHLv8i8_shift:
-      case AArch64::SHLv4i16_shift:
-      case AArch64::SHLv2i32_shift:
-        splatImm2 = true;
-        op = [&](Value *a, Value *b) { return createMaskedShl(a, b); };
-        break;
-      case AArch64::BICv4i16:
-      case AArch64::BICv8i8:
-      case AArch64::BICv2i32:
-      case AArch64::BICv8i16:
-      case AArch64::BICv4i32:
-      case AArch64::BICv16i8:
-        if (CurInst->getOperand(2).isImm()) {
-          splatImm2 = true;
-          immShift = true;
-        }
-        op = [&](Value *a, Value *b) { return createAnd(a, createNot(b)); };
-        break;
-      case AArch64::CMHIv8i8:
-      case AArch64::CMHIv4i16:
-      case AArch64::CMHIv2i32:
-      case AArch64::CMHIv1i64:
-      case AArch64::CMHIv16i8:
-      case AArch64::CMHIv8i16:
-      case AArch64::CMHIv4i32:
-      case AArch64::CMHIv2i64:
-        op = [&](Value *a, Value *b) {
-          return createICmp(ICmpInst::Predicate::ICMP_UGT, a, b);
-        };
-        isICmp = true;
-        break;
-      case AArch64::USHLv1i64:
-      case AArch64::USHLv4i16:
-      case AArch64::USHLv16i8:
-      case AArch64::USHLv8i16:
-      case AArch64::USHLv2i32:
-      case AArch64::USHLv4i32:
-      case AArch64::USHLv8i8:
-      case AArch64::USHLv2i64:
-        op = [&](Value *a, Value *b) { return createUSHL(a, b); };
-        elementWise = true;
-        break;
-      case AArch64::SSHLv1i64:
-      case AArch64::SSHLv4i16:
-      case AArch64::SSHLv16i8:
-      case AArch64::SSHLv8i16:
-      case AArch64::SSHLv2i32:
-      case AArch64::SSHLv4i32:
-      case AArch64::SSHLv8i8:
-      case AArch64::SSHLv2i64:
-        op = [&](Value *a, Value *b) { return createSSHL(a, b); };
-        elementWise = true;
-        break;
-      case AArch64::ADDv2i32:
-      case AArch64::ADDv2i64:
-      case AArch64::ADDv4i16:
-      case AArch64::ADDv4i32:
-      case AArch64::ADDv8i8:
-      case AArch64::ADDv8i16:
-      case AArch64::ADDv16i8:
-        op = [&](Value *a, Value *b) { return createAdd(a, b); };
-        break;
-      case AArch64::UADDLv8i8_v8i16:
-        zext = true;
-        op = [&](Value *a, Value *b) { return createAdd(a, b); };
-        break;
-      case AArch64::SUBv2i32:
-      case AArch64::SUBv2i64:
-      case AArch64::SUBv4i16:
-      case AArch64::SUBv4i32:
-      case AArch64::SUBv8i8:
-      case AArch64::SUBv8i16:
-      case AArch64::SUBv16i8:
-        op = [&](Value *a, Value *b) { return createSub(a, b); };
-        break;
-      case AArch64::USUBLv8i8_v8i16:
-        zext = true;
-        op = [&](Value *a, Value *b) { return createSub(a, b); };
-        break;
-      case AArch64::EORv8i8:
-      case AArch64::EORv16i8:
-        op = [&](Value *a, Value *b) { return createXor(a, b); };
-        break;
-      case AArch64::ANDv8i8:
-      case AArch64::ANDv16i8:
-        op = [&](Value *a, Value *b) { return createAnd(a, b); };
-        break;
-      case AArch64::ORRv8i8:
-      case AArch64::ORRv16i8:
-        op = [&](Value *a, Value *b) { return createOr(a, b); };
-        break;
-      case AArch64::UMULLv2i32_v2i64:
-        zext = true;
-        op = [&](Value *a, Value *b) { return createMul(a, b); };
-        break;
-      case AArch64::USHLLv4i32_shift:
-      case AArch64::USHLLv8i16_shift:
-      case AArch64::USHLLv16i8_shift:
-        // OK this is a little weird. at this level, the distinction
-        // between ushll and ushll2 is that the former specifies a
-        // 64-bit operand and the latter specifies a 128-bit operand
-        // and then the shift is implied.
-        a = createRawLShr(a, getIntConst(64, 128));
-      case AArch64::USHLLv4i16_shift:
-      case AArch64::USHLLv2i32_shift:
-      case AArch64::USHLLv8i8_shift:
-        zext = true;
-        splatImm2 = true;
-        op = [&](Value *a, Value *b) { return createRawShl(a, b); };
-        break;
-      case AArch64::USHRv2i64_shift:
-        splatImm2 = true;
-        op = [&](Value *a, Value *b) { return createRawLShr(a, b); };
-        break;
-      default:
-        assert(false && "missed a case");
-      }
-
-      int eltSize;
-      int numElts;
-      switch (opcode) {
-      case AArch64::CMHIv1i64:
-      case AArch64::USHLv1i64:
-      case AArch64::SSHLv1i64:
-        numElts = 1;
-        eltSize = 64;
-        break;
-      case AArch64::SSHRv2i32_shift:
-      case AArch64::SHLv2i32_shift:
-      case AArch64::SUBv2i32:
-      case AArch64::ADDv2i32:
-      case AArch64::USHLv2i32:
-      case AArch64::CMHIv2i32:
-      case AArch64::SSHLv2i32:
-      case AArch64::BICv2i32:
-      case AArch64::USHLLv2i32_shift:
-        numElts = 2;
-        eltSize = 32;
-        break;
-      case AArch64::SSHRv2i64_shift:
-      case AArch64::SHLv2i64_shift:
-      case AArch64::ADDv2i64:
-      case AArch64::SUBv2i64:
-      case AArch64::USHLv2i64:
-      case AArch64::CMHIv2i64:
-      case AArch64::SSHLv2i64:
-        numElts = 2;
-        eltSize = 64;
-        break;
-      case AArch64::USHRv2i64_shift:
-        numElts = 2;
-        eltSize = 64;
-        break;
-      case AArch64::SSHRv4i16_shift:
-      case AArch64::ADDv4i16:
-      case AArch64::SUBv4i16:
-      case AArch64::USHLv4i16:
-      case AArch64::CMHIv4i16:
-      case AArch64::SSHLv4i16:
-      case AArch64::BICv4i16:
-      case AArch64::USHLLv4i16_shift:
-      case AArch64::SHLv4i16_shift:
-        numElts = 4;
-        eltSize = 16;
-        break;
-      case AArch64::SSHRv4i32_shift:
-      case AArch64::SHLv4i32_shift:
-      case AArch64::ADDv4i32:
-      case AArch64::SUBv4i32:
-      case AArch64::USHLv4i32:
-      case AArch64::CMHIv4i32:
-      case AArch64::SSHLv4i32:
-      case AArch64::BICv4i32:
-      case AArch64::USHLLv4i32_shift:
-        numElts = 4;
-        eltSize = 32;
-        break;
-      case AArch64::SSHRv8i8_shift:
-      case AArch64::SHLv8i8_shift:
-      case AArch64::ADDv8i8:
-      case AArch64::SUBv8i8:
-      case AArch64::EORv8i8:
-      case AArch64::ANDv8i8:
-      case AArch64::ORRv8i8:
-      case AArch64::USHLv8i8:
-      case AArch64::CMHIv8i8:
-      case AArch64::SSHLv8i8:
-      case AArch64::BICv8i8:
-        numElts = 8;
-        eltSize = 8;
-        break;
-      case AArch64::ADDv8i16:
-      case AArch64::SUBv8i16:
-      case AArch64::USHLv8i16:
-      case AArch64::CMHIv8i16:
-      case AArch64::SSHLv8i16:
-      case AArch64::BICv8i16:
-      case AArch64::USHLLv8i16_shift:
-      case AArch64::SHLv8i16_shift:
-      case AArch64::SSHRv8i16_shift:
-        numElts = 8;
-        eltSize = 16;
-        break;
-      case AArch64::ADDv16i8:
-      case AArch64::SUBv16i8:
-      case AArch64::EORv16i8:
-      case AArch64::ANDv16i8:
-      case AArch64::ORRv16i8:
-      case AArch64::USHLv16i8:
-      case AArch64::CMHIv16i8:
-      case AArch64::SSHLv16i8:
-      case AArch64::BICv16i8:
-      case AArch64::USHLLv16i8_shift:
-      case AArch64::SHLv16i8_shift:
-      case AArch64::SSHRv16i8_shift:
-        numElts = 16;
-        eltSize = 8;
-        break;
-      case AArch64::UMULLv2i32_v2i64:
-        numElts = 2;
-        eltSize = 32;
-        break;
-      case AArch64::USHLLv8i8_shift:
-        numElts = 8;
-        eltSize = 8;
-        break;
-      case AArch64::UADDLv8i8_v8i16:
-      case AArch64::USUBLv8i8_v8i16:
-        numElts = 8;
-        eltSize = 8;
-        break;
-      default:
-        assert(false && "missed case");
-        break;
-      }
-
-      auto res = createVectorOp(op, a, b, eltSize, numElts, elementWise, zext,
-                                isICmp, splatImm2, immShift);
-      updateOutputReg(res);
-      break;
-    }
-
-    case AArch64::ADDPv2i64p: {
-      auto vTy = VectorType::get(getIntTy(64), ElementCount::getFixed(2));
-      auto v = createBitCast(readFromOperand(1), vTy);
-      auto res = createAdd(createExtractElement(v, getIntConst(0, 32)),
-                           createExtractElement(v, getIntConst(1, 32)));
-      updateOutputReg(res);
-      break;
-    }
-
-    case AArch64::ADDPv8i8:
-    case AArch64::ADDPv4i16:
-    case AArch64::ADDPv2i32:
-    case AArch64::ADDPv16i8:
-    case AArch64::ADDPv4i32:
-    case AArch64::ADDPv8i16:
-    case AArch64::ADDPv2i64: {
-      int numElts, eltSize;
-      if (opcode == AArch64::ADDPv8i8) {
-        numElts = 8;
-        eltSize = 8;
-      } else if (opcode == AArch64::ADDPv4i16) {
-        numElts = 4;
-        eltSize = 16;
-      } else if (opcode == AArch64::ADDPv2i32) {
-        numElts = 2;
-        eltSize = 32;
-      } else if (opcode == AArch64::ADDPv16i8) {
-        numElts = 16;
-        eltSize = 8;
-      } else if (opcode == AArch64::ADDPv4i32) {
-        numElts = 4;
-        eltSize = 32;
-      } else if (opcode == AArch64::ADDPv8i16) {
-        numElts = 8;
-        eltSize = 16;
-      } else if (opcode == AArch64::ADDPv2i64) {
-        numElts = 2;
-        eltSize = 64;
-      } else {
-        assert(false);
-      }
-      auto x = readFromOperand(1);
-      auto y = readFromOperand(2);
-      auto conc = concat(y, x);
-      auto concTy = VectorType::get(getIntTy(eltSize),
-                                    ElementCount::getFixed(numElts * 2));
-      auto concV = createBitCast(conc, concTy);
-      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
-                                            UndefValue::get(getIntTy(eltSize)));
-      for (int e = 0; e < numElts; ++e) {
-        *out << "e = " << e << "\n";
-        auto elt1 = createExtractElement(concV, getIntConst(2 * e, 32));
-        auto elt2 = createExtractElement(concV, getIntConst((2 * e) + 1, 32));
-        auto sum = createAdd(elt1, elt2);
-        res = createInsertElement(res, sum, getIntConst(e, 32));
-      }
-      updateOutputReg(res);
-      break;
-    }
-
-    case AArch64::MLSv2i32: {
-      auto accum = readFromOperand(1);
-      auto a = readFromOperand(2);
-      auto b = readFromOperand(3);
-      auto v1 = createVectorOp(
-          [&](Value *a, Value *b) { return createMul(a, b); }, a, b, 32, 2,
-          /*cast=*/false, /*zext=*/false, /*isICmp=*/false,
-          /*splatImm2=*/false, /*immShift=*/false);
-      auto v2 = createVectorOp(
-          [&](Value *a, Value *b) { return createSub(a, b); }, accum, v1, 32, 2,
-          /*cast=*/false, /*zext=*/false, /*isICmp=*/false,
-          /*splatImm2=*/false, /*immShift=*/false);
-      updateOutputReg(v2);
-      break;
-    }
-
       // SUBrx is a subtract instruction with an extended register.
       // ARM has 8 types of extensions:
       // 000 -> uxtb
@@ -4379,6 +3596,789 @@ public:
         createBranch(cond_val, dst_false, dst_true);
       else
         createBranch(cond_val, dst_true, dst_false);
+      break;
+    }
+
+    case AArch64::INSvi8lane:
+    case AArch64::INSvi16lane:
+    case AArch64::INSvi32lane:
+    case AArch64::INSvi64lane: {
+      unsigned w;
+      if (opcode == AArch64::INSvi8lane) {
+        w = 8;
+      } else if (opcode == AArch64::INSvi16lane) {
+        w = 16;
+      } else if (opcode == AArch64::INSvi32lane) {
+        w = 32;
+      } else if (opcode == AArch64::INSvi64lane) {
+        w = 64;
+      } else {
+        assert(false);
+      }
+      auto ext = extractFromVector(readFromOperand(3), w, getImm(4));
+      auto ins = insertIntoVector(readFromOperand(1), ext, w, getImm(2));
+      updateOutputReg(ins);
+      break;
+    }
+
+    case AArch64::INSvi8gpr:
+    case AArch64::INSvi16gpr:
+    case AArch64::INSvi32gpr:
+    case AArch64::INSvi64gpr: {
+      unsigned w;
+      if (opcode == AArch64::INSvi8gpr) {
+        w = 8;
+      } else if (opcode == AArch64::INSvi16gpr) {
+        w = 16;
+      } else if (opcode == AArch64::INSvi32gpr) {
+        w = 32;
+      } else if (opcode == AArch64::INSvi64gpr) {
+        w = 64;
+      } else {
+        assert(false);
+      }
+      auto val = readFromOperand(3);
+      // need to clear extraneous bits
+      if (w < 32)
+        val = createTrunc(val, getIntTy(w));
+      auto lane = getImm(2);
+      auto orig = readFromReg(CurInst->getOperand(1).getReg());
+      auto inserted = insertIntoVector(orig, val, w, lane);
+      updateOutputReg(inserted);
+      break;
+    }
+
+    case AArch64::FMOVSWr:
+    case AArch64::FMOVDXr:
+    case AArch64::FMOVWSr:
+    case AArch64::FMOVXDr:
+    case AArch64::FMOVDr: {
+      auto v = readFromOperand(1);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::FMOVSi:
+    case AArch64::FMOVDi: {
+      auto imm = getImm(1);
+      assert(imm <= 256);
+      int w = (opcode == AArch64::FMOVSi) ? 32 : 64;
+      auto floatVal = getIntConst(VFPExpandImm(imm, w), 64);
+      updateOutputReg(floatVal);
+      break;
+    }
+
+    case AArch64::FABSSr:
+    case AArch64::FABSDr: {
+      auto fTy = getFPOperandType(opcode);
+      auto a = createBitCast(readFromOperand(1), fTy);
+      auto sizeTy = getIntTy(getInstSize(opcode));
+      auto res = createBitCast(createFAbs(a), sizeTy);
+      updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::FMULSrr:
+    case AArch64::FMULDrr:
+    case AArch64::FADDSrr:
+    case AArch64::FADDDrr:
+    case AArch64::FSUBSrr:
+    case AArch64::FSUBDrr: {
+      Instruction::BinaryOps op;
+      if (opcode == AArch64::FADDSrr || opcode == AArch64::FADDDrr) {
+        op = Instruction::FAdd;
+      } else if (opcode == AArch64::FMULSrr || opcode == AArch64::FMULDrr) {
+        op = Instruction::FMul;
+      } else if (opcode == AArch64::FSUBSrr || opcode == AArch64::FSUBDrr) {
+        op = Instruction::FSub;
+      } else {
+        assert(false && "missed a case");
+      }
+
+      auto fTy = getFPOperandType(opcode);
+      auto a = createBitCast(readFromOperand(1), fTy);
+      auto b = createBitCast(readFromOperand(2), fTy);
+
+      auto sizeTy = getIntTy(getInstSize(opcode));
+      auto res = createBitCast(createBinop(a, b, op), sizeTy);
+      updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::FCVTZSUWDr: {
+      auto val1 = createBitCast(readFromOperand(1), Type::getDoubleTy(Ctx));
+      auto val2 = createConvertFPToSI(val1, getIntTy(32));
+      updateOutputReg(val2);
+      break;
+    }
+
+    case AArch64::FCVTZSUWSr: {
+      auto val1 = createBitCast(readFromOperand(1), Type::getFloatTy(Ctx));
+      auto val2 = createConvertFPToSI(val1, getIntTy(32));
+      updateOutputReg(val2);
+      break;
+    }
+
+    case AArch64::FCVTSHr: {
+      auto val1 = createTrunc(readFromOperand(1), i16);
+      auto val3 = createConvertFromFP16(val1, Type::getFloatTy(Ctx));
+      auto val4 = createBitCast(val3, i32);
+      updateOutputReg(val4);
+      break;
+    }
+
+    case AArch64::FCMPSri:
+    case AArch64::FCMPDri:
+    case AArch64::FCMPSrr:
+    case AArch64::FCMPDrr: {
+      auto fTy = getFPOperandType(opcode);
+      auto a = createBitCast(readFromOperand(0), fTy);
+      Value *b;
+      if (opcode == AArch64::FCMPSri || opcode == AArch64::FCMPDri) {
+        b = ConstantFP::get(fTy, 0.0);
+      } else {
+        b = createBitCast(readFromOperand(1), fTy);
+      }
+      setN(createFCmp(FCmpInst::Predicate::FCMP_OLT, a, b));
+      setZ(createFCmp(FCmpInst::Predicate::FCMP_OEQ, a, b));
+      setC(createFCmp(FCmpInst::Predicate::FCMP_UGT, a, b));
+      setV(createFCmp(FCmpInst::Predicate::FCMP_UNO, a, b));
+      break;
+    }
+
+    case AArch64::SMOVvi16to32:
+    case AArch64::SMOVvi16to32_idx0: {
+      auto val = readFromOperand(1);
+      auto imm = getImm(2);
+      auto shiftAmt = getIntConst(imm * 16, 128);
+      auto shifted = createRawLShr(val, shiftAmt);
+      auto trunced = createTrunc(shifted, i16);
+      auto sexted = createSExt(trunced, i32);
+      updateOutputReg(sexted);
+      break;
+    }
+
+    case AArch64::UMOVvi8:
+    case AArch64::UMOVvi8_idx0:
+    case AArch64::UMOVvi16:
+    case AArch64::UMOVvi16_idx0:
+    case AArch64::UMOVvi32:
+    case AArch64::UMOVvi64: {
+      unsigned sz;
+      if (opcode == AArch64::UMOVvi8 || opcode == AArch64::UMOVvi8_idx0) {
+        sz = 8;
+      } else if (opcode == AArch64::UMOVvi16 ||
+                 opcode == AArch64::UMOVvi16_idx0) {
+        sz = 16;
+      } else if (opcode == AArch64::UMOVvi32) {
+        sz = 32;
+      } else if (opcode == AArch64::UMOVvi64) {
+        sz = 64;
+      } else {
+        assert(false);
+      }
+      auto val = readFromOperand(1);
+      unsigned idx;
+      if (opcode == AArch64::UMOVvi8_idx0 || opcode == AArch64::UMOVvi16_idx0) {
+        idx = 0;
+      } else {
+        idx = getImm(2);
+      }
+      if (idx != 0) {
+        auto shiftAmt = getIntConst(idx * sz, 128);
+        val = createRawLShr(val, shiftAmt);
+      }
+      auto masked = maskLower(val, sz);
+      updateOutputReg(createTrunc(masked, i64));
+      break;
+    }
+
+    case AArch64::MOVIv16b_ns: {
+      auto v = getIntConst(getImm(1), 8);
+      updateOutputReg(dupElts(v, 16, 8));
+      break;
+    }
+
+    case AArch64::MOVID:
+    case AArch64::MOVIv2d_ns: {
+      auto imm = getIntConst(replicate8to64(getImm(1)), 64);
+      updateOutputReg(dupElts(imm, 2, 64));
+      break;
+    }
+
+    case AArch64::MOVIv8i16: {
+      auto imm1 = getImm(1);
+      auto imm2 = getImm(2);
+      auto val = getIntConst(imm1 << imm2, 16);
+      updateOutputReg(dupElts(val, 8, 16));
+      break;
+    }
+
+    case AArch64::MOVIv2i32: {
+      auto imm1 = getImm(1);
+      auto imm2 = getImm(2);
+      auto val = getIntConst(imm1 << imm2, 32);
+      updateOutputReg(dupElts(val, 2, 32));
+      break;
+    }
+
+    case AArch64::MOVIv4i32: {
+      auto imm1 = getImm(1);
+      auto imm2 = getImm(2);
+      auto val = getIntConst(imm1 << imm2, 32);
+      updateOutputReg(dupElts(val, 4, 32));
+      break;
+    }
+
+    case AArch64::EXTv16i8: {
+      auto a = readFromOperand(1);
+      auto b = readFromOperand(2);
+      auto imm = getImm(3);
+      auto both = concat(b, a);
+      auto shifted = createRawLShr(both, getIntConst(8 * imm, 256));
+      updateOutputReg(createTrunc(shifted, i128));
+      break;
+    }
+
+    case AArch64::REV64v4i32: {
+      auto v = rev64(readFromOperand(1), 32);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::DUPi16: {
+      auto ext = extractFromVector(readFromOperand(1), 16, getImm(2));
+      updateOutputReg(ext);
+      break;
+    }
+
+    case AArch64::DUPi32: {
+      auto ext = extractFromVector(readFromOperand(1), 32, getImm(2));
+      updateOutputReg(ext);
+      break;
+    }
+
+    case AArch64::DUPi64: {
+      auto ext = extractFromVector(readFromOperand(1), 64, getImm(2));
+      updateOutputReg(ext);
+      break;
+    }
+
+    case AArch64::DUPv8i8gpr: {
+      auto t = createTrunc(readFromOperand(1), i8);
+      updateOutputReg(dupElts(t, 8, 8));
+      break;
+    }
+
+    case AArch64::DUPv16i8gpr: {
+      auto t = createTrunc(readFromOperand(1), i8);
+      updateOutputReg(dupElts(t, 16, 8));
+      break;
+    }
+
+    case AArch64::DUPv8i16gpr: {
+      auto t = createTrunc(readFromOperand(1), i16);
+      updateOutputReg(dupElts(t, 8, 16));
+      break;
+    }
+
+    case AArch64::DUPv4i16gpr: {
+      auto t = createTrunc(readFromOperand(1), i16);
+      updateOutputReg(dupElts(t, 4, 16));
+      break;
+    }
+
+    case AArch64::DUPv4i32gpr: {
+      auto t = createTrunc(readFromOperand(1), i32);
+      updateOutputReg(dupElts(t, 4, 32));
+      break;
+    }
+
+    case AArch64::DUPv2i32gpr: {
+      auto t = createTrunc(readFromOperand(1), i32);
+      updateOutputReg(dupElts(t, 2, 32));
+      break;
+    }
+
+    case AArch64::DUPv2i64gpr: {
+      updateOutputReg(dupElts(readFromOperand(1), 2, 64));
+      break;
+    }
+
+    case AArch64::DUPv2i32lane: {
+      auto ext = extractFromVector(readFromOperand(1), 32, getImm(2));
+      updateOutputReg(dupElts(ext, 2, 32));
+      break;
+    }
+
+    case AArch64::DUPv2i64lane: {
+      auto ext = extractFromVector(readFromOperand(1), 64, getImm(2));
+      updateOutputReg(dupElts(ext, 2, 64));
+      break;
+    }
+
+    case AArch64::DUPv4i16lane: {
+      auto ext = extractFromVector(readFromOperand(1), 16, getImm(2));
+      updateOutputReg(dupElts(ext, 4, 16));
+      break;
+    }
+
+    case AArch64::DUPv4i32lane: {
+      auto ext = extractFromVector(readFromOperand(1), 32, getImm(2));
+      updateOutputReg(dupElts(ext, 4, 32));
+      break;
+    }
+
+    case AArch64::DUPv8i8lane: {
+      auto ext = extractFromVector(readFromOperand(1), 8, getImm(2));
+      updateOutputReg(dupElts(ext, 8, 8));
+      break;
+    }
+
+    case AArch64::DUPv8i16lane: {
+      auto ext = extractFromVector(readFromOperand(1), 16, getImm(2));
+      updateOutputReg(dupElts(ext, 8, 16));
+      break;
+    }
+
+    case AArch64::DUPv16i8lane: {
+      auto ext = extractFromVector(readFromOperand(1), 8, getImm(2));
+      updateOutputReg(dupElts(ext, 16, 8));
+      break;
+    }
+
+    case AArch64::BIFv8i8:
+    case AArch64::BIFv16i8: {
+      auto op1 = readFromOperand(1);
+      auto op4 = readFromOperand(2);
+      auto op3 = createNot(readFromOperand(3));
+      auto res = createXor(op1, createAnd(createXor(op1, op4), op3));
+      updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::BSLv8i8:
+    case AArch64::BSLv16i8: {
+      auto op1 = readFromOperand(3);
+      auto op4 = readFromOperand(2);
+      auto op3 = readFromOperand(1);
+      auto res = createXor(op1, createAnd(createXor(op1, op4), op3));
+      updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::SSHRv4i16_shift:
+    case AArch64::SSHRv8i8_shift:
+    case AArch64::SSHRv2i32_shift:
+    case AArch64::SSHRv16i8_shift:
+    case AArch64::SSHRv2i64_shift:
+    case AArch64::SSHRv8i16_shift:
+    case AArch64::SSHRv4i32_shift:
+    case AArch64::SHLv16i8_shift:
+    case AArch64::SHLv8i16_shift:
+    case AArch64::SHLv4i32_shift:
+    case AArch64::SHLv2i64_shift:
+    case AArch64::SHLv8i8_shift:
+    case AArch64::SHLv4i16_shift:
+    case AArch64::SHLv2i32_shift:
+    case AArch64::BICv4i16:
+    case AArch64::BICv8i8:
+    case AArch64::BICv2i32:
+    case AArch64::BICv8i16:
+    case AArch64::BICv4i32:
+    case AArch64::BICv16i8:
+    case AArch64::CMHIv8i8:
+    case AArch64::CMHIv4i16:
+    case AArch64::CMHIv2i32:
+    case AArch64::CMHIv1i64:
+    case AArch64::CMHIv16i8:
+    case AArch64::CMHIv8i16:
+    case AArch64::CMHIv4i32:
+    case AArch64::CMHIv2i64:
+    case AArch64::ADDv2i32:
+    case AArch64::ADDv2i64:
+    case AArch64::ADDv4i16:
+    case AArch64::ADDv4i32:
+    case AArch64::ADDv8i8:
+    case AArch64::ADDv8i16:
+    case AArch64::ADDv16i8:
+    case AArch64::UADDLv8i8_v8i16:
+    case AArch64::SUBv2i32:
+    case AArch64::SUBv2i64:
+    case AArch64::SUBv4i16:
+    case AArch64::SUBv4i32:
+    case AArch64::SUBv8i8:
+    case AArch64::SUBv8i16:
+    case AArch64::SUBv16i8:
+    case AArch64::USUBLv8i8_v8i16:
+    case AArch64::EORv8i8:
+    case AArch64::EORv16i8:
+    case AArch64::ANDv8i8:
+    case AArch64::ANDv16i8:
+    case AArch64::ORRv8i8:
+    case AArch64::ORRv16i8:
+    case AArch64::UMULLv2i32_v2i64:
+    case AArch64::USHLv1i64:
+    case AArch64::USHLv4i16:
+    case AArch64::USHLv16i8:
+    case AArch64::USHLv8i16:
+    case AArch64::USHLv2i32:
+    case AArch64::USHLv4i32:
+    case AArch64::USHLv8i8:
+    case AArch64::USHLv2i64:
+    case AArch64::SSHLv1i64:
+    case AArch64::SSHLv4i16:
+    case AArch64::SSHLv16i8:
+    case AArch64::SSHLv8i16:
+    case AArch64::SSHLv2i32:
+    case AArch64::SSHLv4i32:
+    case AArch64::SSHLv8i8:
+    case AArch64::SSHLv2i64:
+    case AArch64::USHLLv8i8_shift:
+    case AArch64::USHLLv4i32_shift:
+    case AArch64::USHLLv8i16_shift:
+    case AArch64::USHLLv16i8_shift:
+    case AArch64::USHLLv4i16_shift:
+    case AArch64::USHLLv2i32_shift:
+    case AArch64::USHRv2i64_shift: {
+      auto a = readFromOperand(1);
+      auto b = readFromOperand(2);
+      bool elementWise = false;
+      bool isICmp = false;
+      bool splatImm2 = false;
+      bool zext = false;
+      bool immShift = false;
+      function<Value *(Value *, Value *)> op;
+      switch (opcode) {
+      case AArch64::SSHRv4i16_shift:
+      case AArch64::SSHRv8i8_shift:
+      case AArch64::SSHRv2i32_shift:
+      case AArch64::SSHRv16i8_shift:
+      case AArch64::SSHRv2i64_shift:
+      case AArch64::SSHRv8i16_shift:
+      case AArch64::SSHRv4i32_shift:
+        splatImm2 = true;
+        op = [&](Value *a, Value *b) { return createMaskedAShr(a, b); };
+        break;
+      case AArch64::SHLv16i8_shift:
+      case AArch64::SHLv8i16_shift:
+      case AArch64::SHLv4i32_shift:
+      case AArch64::SHLv2i64_shift:
+      case AArch64::SHLv8i8_shift:
+      case AArch64::SHLv4i16_shift:
+      case AArch64::SHLv2i32_shift:
+        splatImm2 = true;
+        op = [&](Value *a, Value *b) { return createMaskedShl(a, b); };
+        break;
+      case AArch64::BICv4i16:
+      case AArch64::BICv8i8:
+      case AArch64::BICv2i32:
+      case AArch64::BICv8i16:
+      case AArch64::BICv4i32:
+      case AArch64::BICv16i8:
+        if (CurInst->getOperand(2).isImm()) {
+          splatImm2 = true;
+          immShift = true;
+        }
+        op = [&](Value *a, Value *b) { return createAnd(a, createNot(b)); };
+        break;
+      case AArch64::CMHIv8i8:
+      case AArch64::CMHIv4i16:
+      case AArch64::CMHIv2i32:
+      case AArch64::CMHIv1i64:
+      case AArch64::CMHIv16i8:
+      case AArch64::CMHIv8i16:
+      case AArch64::CMHIv4i32:
+      case AArch64::CMHIv2i64:
+        op = [&](Value *a, Value *b) {
+          return createICmp(ICmpInst::Predicate::ICMP_UGT, a, b);
+        };
+        isICmp = true;
+        break;
+      case AArch64::USHLv1i64:
+      case AArch64::USHLv4i16:
+      case AArch64::USHLv16i8:
+      case AArch64::USHLv8i16:
+      case AArch64::USHLv2i32:
+      case AArch64::USHLv4i32:
+      case AArch64::USHLv8i8:
+      case AArch64::USHLv2i64:
+        op = [&](Value *a, Value *b) { return createUSHL(a, b); };
+        elementWise = true;
+        break;
+      case AArch64::SSHLv1i64:
+      case AArch64::SSHLv4i16:
+      case AArch64::SSHLv16i8:
+      case AArch64::SSHLv8i16:
+      case AArch64::SSHLv2i32:
+      case AArch64::SSHLv4i32:
+      case AArch64::SSHLv8i8:
+      case AArch64::SSHLv2i64:
+        op = [&](Value *a, Value *b) { return createSSHL(a, b); };
+        elementWise = true;
+        break;
+      case AArch64::ADDv2i32:
+      case AArch64::ADDv2i64:
+      case AArch64::ADDv4i16:
+      case AArch64::ADDv4i32:
+      case AArch64::ADDv8i8:
+      case AArch64::ADDv8i16:
+      case AArch64::ADDv16i8:
+        op = [&](Value *a, Value *b) { return createAdd(a, b); };
+        break;
+      case AArch64::UADDLv8i8_v8i16:
+        zext = true;
+        op = [&](Value *a, Value *b) { return createAdd(a, b); };
+        break;
+      case AArch64::SUBv2i32:
+      case AArch64::SUBv2i64:
+      case AArch64::SUBv4i16:
+      case AArch64::SUBv4i32:
+      case AArch64::SUBv8i8:
+      case AArch64::SUBv8i16:
+      case AArch64::SUBv16i8:
+        op = [&](Value *a, Value *b) { return createSub(a, b); };
+        break;
+      case AArch64::USUBLv8i8_v8i16:
+        zext = true;
+        op = [&](Value *a, Value *b) { return createSub(a, b); };
+        break;
+      case AArch64::EORv8i8:
+      case AArch64::EORv16i8:
+        op = [&](Value *a, Value *b) { return createXor(a, b); };
+        break;
+      case AArch64::ANDv8i8:
+      case AArch64::ANDv16i8:
+        op = [&](Value *a, Value *b) { return createAnd(a, b); };
+        break;
+      case AArch64::ORRv8i8:
+      case AArch64::ORRv16i8:
+        op = [&](Value *a, Value *b) { return createOr(a, b); };
+        break;
+      case AArch64::UMULLv2i32_v2i64:
+        zext = true;
+        op = [&](Value *a, Value *b) { return createMul(a, b); };
+        break;
+      case AArch64::USHLLv4i32_shift:
+      case AArch64::USHLLv8i16_shift:
+      case AArch64::USHLLv16i8_shift:
+        // OK this is a little weird. at this level, the distinction
+        // between ushll and ushll2 is that the former specifies a
+        // 64-bit operand and the latter specifies a 128-bit operand
+        // and then the shift is implied.
+        a = createRawLShr(a, getIntConst(64, 128));
+      case AArch64::USHLLv4i16_shift:
+      case AArch64::USHLLv2i32_shift:
+      case AArch64::USHLLv8i8_shift:
+        zext = true;
+        splatImm2 = true;
+        op = [&](Value *a, Value *b) { return createRawShl(a, b); };
+        break;
+      case AArch64::USHRv2i64_shift:
+        splatImm2 = true;
+        op = [&](Value *a, Value *b) { return createRawLShr(a, b); };
+        break;
+      default:
+        assert(false && "missed a case");
+      }
+
+      int eltSize;
+      int numElts;
+      switch (opcode) {
+      case AArch64::CMHIv1i64:
+      case AArch64::USHLv1i64:
+      case AArch64::SSHLv1i64:
+        numElts = 1;
+        eltSize = 64;
+        break;
+      case AArch64::SSHRv2i32_shift:
+      case AArch64::SHLv2i32_shift:
+      case AArch64::SUBv2i32:
+      case AArch64::ADDv2i32:
+      case AArch64::USHLv2i32:
+      case AArch64::CMHIv2i32:
+      case AArch64::SSHLv2i32:
+      case AArch64::BICv2i32:
+      case AArch64::USHLLv2i32_shift:
+        numElts = 2;
+        eltSize = 32;
+        break;
+      case AArch64::SSHRv2i64_shift:
+      case AArch64::SHLv2i64_shift:
+      case AArch64::ADDv2i64:
+      case AArch64::SUBv2i64:
+      case AArch64::USHLv2i64:
+      case AArch64::CMHIv2i64:
+      case AArch64::SSHLv2i64:
+        numElts = 2;
+        eltSize = 64;
+        break;
+      case AArch64::USHRv2i64_shift:
+        numElts = 2;
+        eltSize = 64;
+        break;
+      case AArch64::SSHRv4i16_shift:
+      case AArch64::ADDv4i16:
+      case AArch64::SUBv4i16:
+      case AArch64::USHLv4i16:
+      case AArch64::CMHIv4i16:
+      case AArch64::SSHLv4i16:
+      case AArch64::BICv4i16:
+      case AArch64::USHLLv4i16_shift:
+      case AArch64::SHLv4i16_shift:
+        numElts = 4;
+        eltSize = 16;
+        break;
+      case AArch64::SSHRv4i32_shift:
+      case AArch64::SHLv4i32_shift:
+      case AArch64::ADDv4i32:
+      case AArch64::SUBv4i32:
+      case AArch64::USHLv4i32:
+      case AArch64::CMHIv4i32:
+      case AArch64::SSHLv4i32:
+      case AArch64::BICv4i32:
+      case AArch64::USHLLv4i32_shift:
+        numElts = 4;
+        eltSize = 32;
+        break;
+      case AArch64::SSHRv8i8_shift:
+      case AArch64::SHLv8i8_shift:
+      case AArch64::ADDv8i8:
+      case AArch64::SUBv8i8:
+      case AArch64::EORv8i8:
+      case AArch64::ANDv8i8:
+      case AArch64::ORRv8i8:
+      case AArch64::USHLv8i8:
+      case AArch64::CMHIv8i8:
+      case AArch64::SSHLv8i8:
+      case AArch64::BICv8i8:
+        numElts = 8;
+        eltSize = 8;
+        break;
+      case AArch64::ADDv8i16:
+      case AArch64::SUBv8i16:
+      case AArch64::USHLv8i16:
+      case AArch64::CMHIv8i16:
+      case AArch64::SSHLv8i16:
+      case AArch64::BICv8i16:
+      case AArch64::USHLLv8i16_shift:
+      case AArch64::SHLv8i16_shift:
+      case AArch64::SSHRv8i16_shift:
+        numElts = 8;
+        eltSize = 16;
+        break;
+      case AArch64::ADDv16i8:
+      case AArch64::SUBv16i8:
+      case AArch64::EORv16i8:
+      case AArch64::ANDv16i8:
+      case AArch64::ORRv16i8:
+      case AArch64::USHLv16i8:
+      case AArch64::CMHIv16i8:
+      case AArch64::SSHLv16i8:
+      case AArch64::BICv16i8:
+      case AArch64::USHLLv16i8_shift:
+      case AArch64::SHLv16i8_shift:
+      case AArch64::SSHRv16i8_shift:
+        numElts = 16;
+        eltSize = 8;
+        break;
+      case AArch64::UMULLv2i32_v2i64:
+        numElts = 2;
+        eltSize = 32;
+        break;
+      case AArch64::USHLLv8i8_shift:
+        numElts = 8;
+        eltSize = 8;
+        break;
+      case AArch64::UADDLv8i8_v8i16:
+      case AArch64::USUBLv8i8_v8i16:
+        numElts = 8;
+        eltSize = 8;
+        break;
+      default:
+        assert(false && "missed case");
+        break;
+      }
+
+      auto res = createVectorOp(op, a, b, eltSize, numElts, elementWise, zext,
+                                isICmp, splatImm2, immShift);
+      updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::ADDPv2i64p: {
+      auto vTy = VectorType::get(getIntTy(64), ElementCount::getFixed(2));
+      auto v = createBitCast(readFromOperand(1), vTy);
+      auto res = createAdd(createExtractElement(v, getIntConst(0, 32)),
+                           createExtractElement(v, getIntConst(1, 32)));
+      updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::ADDPv8i8:
+    case AArch64::ADDPv4i16:
+    case AArch64::ADDPv2i32:
+    case AArch64::ADDPv16i8:
+    case AArch64::ADDPv4i32:
+    case AArch64::ADDPv8i16:
+    case AArch64::ADDPv2i64: {
+      int numElts, eltSize;
+      if (opcode == AArch64::ADDPv8i8) {
+        numElts = 8;
+        eltSize = 8;
+      } else if (opcode == AArch64::ADDPv4i16) {
+        numElts = 4;
+        eltSize = 16;
+      } else if (opcode == AArch64::ADDPv2i32) {
+        numElts = 2;
+        eltSize = 32;
+      } else if (opcode == AArch64::ADDPv16i8) {
+        numElts = 16;
+        eltSize = 8;
+      } else if (opcode == AArch64::ADDPv4i32) {
+        numElts = 4;
+        eltSize = 32;
+      } else if (opcode == AArch64::ADDPv8i16) {
+        numElts = 8;
+        eltSize = 16;
+      } else if (opcode == AArch64::ADDPv2i64) {
+        numElts = 2;
+        eltSize = 64;
+      } else {
+        assert(false);
+      }
+      auto x = readFromOperand(1);
+      auto y = readFromOperand(2);
+      auto conc = concat(y, x);
+      auto concTy = VectorType::get(getIntTy(eltSize),
+                                    ElementCount::getFixed(numElts * 2));
+      auto concV = createBitCast(conc, concTy);
+      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
+                                            UndefValue::get(getIntTy(eltSize)));
+      for (int e = 0; e < numElts; ++e) {
+        *out << "e = " << e << "\n";
+        auto elt1 = createExtractElement(concV, getIntConst(2 * e, 32));
+        auto elt2 = createExtractElement(concV, getIntConst((2 * e) + 1, 32));
+        auto sum = createAdd(elt1, elt2);
+        res = createInsertElement(res, sum, getIntConst(e, 32));
+      }
+      updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::MLSv2i32: {
+      auto accum = readFromOperand(1);
+      auto a = readFromOperand(2);
+      auto b = readFromOperand(3);
+      auto v1 = createVectorOp(
+          [&](Value *a, Value *b) { return createMul(a, b); }, a, b, 32, 2,
+          /*cast=*/false, /*zext=*/false, /*isICmp=*/false,
+          /*splatImm2=*/false, /*immShift=*/false);
+      auto v2 = createVectorOp(
+          [&](Value *a, Value *b) { return createSub(a, b); }, accum, v1, 32, 2,
+          /*cast=*/false, /*zext=*/false, /*isICmp=*/false,
+          /*splatImm2=*/false, /*immShift=*/false);
+      updateOutputReg(v2);
       break;
     }
 
