@@ -518,9 +518,23 @@ class arm2llvm {
       AArch64::SSHLLv8i8_shift,
       AArch64::SSHLLv4i16_shift,
       AArch64::SSHLLv2i32_shift,
+      AArch64::ZIP2v4i16,
+      AArch64::ZIP2v2i32,
+      AArch64::ZIP2v8i8,
+      AArch64::ZIP1v4i16,
+      AArch64::ZIP1v2i32,
+      AArch64::ZIP1v8i8,
   };
 
   const set<int> instrs_128 = {
+      AArch64::ZIP2v8i16,
+      AArch64::ZIP2v2i64,
+      AArch64::ZIP2v16i8,
+      AArch64::ZIP2v4i32,
+      AArch64::ZIP1v8i16,
+      AArch64::ZIP1v16i8,
+      AArch64::ZIP1v2i64,
+      AArch64::ZIP1v4i32,
       AArch64::SSHLLv4i32_shift,
       AArch64::SSHLLv8i16_shift,
       AArch64::SSHLLv16i8_shift,
@@ -4672,6 +4686,81 @@ public:
       break;
     }
 
+#define GET_SIZES(INSN)                                                        \
+  int numElts, eltSize;                                                        \
+  if (opcode == AArch64::INSN##v8i8) {                                         \
+    numElts = 8;                                                               \
+    eltSize = 8;                                                               \
+  } else if (opcode == AArch64::INSN##v4i16) {                                 \
+    numElts = 4;                                                               \
+    eltSize = 16;                                                              \
+  } else if (opcode == AArch64::INSN##v2i32) {                                 \
+    numElts = 2;                                                               \
+    eltSize = 32;                                                              \
+  } else if (opcode == AArch64::INSN##v16i8) {                                 \
+    numElts = 16;                                                              \
+    eltSize = 8;                                                               \
+  } else if (opcode == AArch64::INSN##v4i32) {                                 \
+    numElts = 4;                                                               \
+    eltSize = 32;                                                              \
+  } else if (opcode == AArch64::INSN##v8i16) {                                 \
+    numElts = 8;                                                               \
+    eltSize = 16;                                                              \
+  } else if (opcode == AArch64::INSN##v2i64) {                                 \
+    numElts = 2;                                                               \
+    eltSize = 64;                                                              \
+  } else {                                                                     \
+    assert(false);                                                             \
+  }
+
+    case AArch64::ZIP1v4i16:
+    case AArch64::ZIP1v2i32:
+    case AArch64::ZIP1v8i8:
+    case AArch64::ZIP1v8i16:
+    case AArch64::ZIP1v16i8:
+    case AArch64::ZIP1v2i64:
+    case AArch64::ZIP1v4i32: {
+      GET_SIZES(ZIP1);
+      auto vTy =
+          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
+      auto a = createBitCast(readFromOperand(1), vTy);
+      auto b = createBitCast(readFromOperand(2), vTy);
+      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
+                                            UndefValue::get(getIntTy(eltSize)));
+      for (int i = 0; i < numElts / 2; ++i) {
+        auto e1 = createExtractElement(a, getIntConst(i, 32));
+        auto e2 = createExtractElement(b, getIntConst(i, 32));
+        res = createInsertElement(res, e1, getIntConst(2 * i, 32));
+        res = createInsertElement(res, e2, getIntConst((2 * i) + 1, 32));
+      }
+      updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::ZIP2v4i16:
+    case AArch64::ZIP2v2i32:
+    case AArch64::ZIP2v8i8:
+    case AArch64::ZIP2v8i16:
+    case AArch64::ZIP2v2i64:
+    case AArch64::ZIP2v16i8:
+    case AArch64::ZIP2v4i32: {
+      GET_SIZES(ZIP2)
+      auto vTy =
+          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
+      auto a = createBitCast(readFromOperand(1), vTy);
+      auto b = createBitCast(readFromOperand(2), vTy);
+      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
+                                            UndefValue::get(getIntTy(eltSize)));
+      for (int i = 0; i < numElts / 2; ++i) {
+        auto e1 = createExtractElement(a, getIntConst((numElts / 2) + i, 32));
+        auto e2 = createExtractElement(b, getIntConst((numElts / 2) + i, 32));
+        res = createInsertElement(res, e1, getIntConst(2 * i, 32));
+        res = createInsertElement(res, e2, getIntConst((2 * i) + 1, 32));
+      }
+      updateOutputReg(res);
+      break;
+    }
+
     case AArch64::ADDPv8i8:
     case AArch64::ADDPv4i16:
     case AArch64::ADDPv2i32:
@@ -4679,31 +4768,7 @@ public:
     case AArch64::ADDPv4i32:
     case AArch64::ADDPv8i16:
     case AArch64::ADDPv2i64: {
-      int numElts, eltSize;
-      if (opcode == AArch64::ADDPv8i8) {
-        numElts = 8;
-        eltSize = 8;
-      } else if (opcode == AArch64::ADDPv4i16) {
-        numElts = 4;
-        eltSize = 16;
-      } else if (opcode == AArch64::ADDPv2i32) {
-        numElts = 2;
-        eltSize = 32;
-      } else if (opcode == AArch64::ADDPv16i8) {
-        numElts = 16;
-        eltSize = 8;
-      } else if (opcode == AArch64::ADDPv4i32) {
-        numElts = 4;
-        eltSize = 32;
-      } else if (opcode == AArch64::ADDPv8i16) {
-        numElts = 8;
-        eltSize = 16;
-      } else if (opcode == AArch64::ADDPv2i64) {
-        numElts = 2;
-        eltSize = 64;
-      } else {
-        assert(false);
-      }
+      GET_SIZES(ADDP);
       auto x = readFromOperand(1);
       auto y = readFromOperand(2);
       auto conc = concat(y, x);
