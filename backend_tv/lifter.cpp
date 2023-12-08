@@ -515,9 +515,15 @@ class arm2llvm {
       AArch64::CMLTv4i16rz,
       AArch64::CMLTv8i8rz,
       AArch64::CMTSTv8i8,
+      AArch64::SSHLLv8i8_shift,
+      AArch64::SSHLLv4i16_shift,
+      AArch64::SSHLLv2i32_shift,
   };
 
   const set<int> instrs_128 = {
+      AArch64::SSHLLv4i32_shift,
+      AArch64::SSHLLv8i16_shift,
+      AArch64::SSHLLv16i8_shift,
       AArch64::ADDPv16i8,
       AArch64::ADDPv4i32,
       AArch64::ADDPv8i16,
@@ -1027,6 +1033,8 @@ class arm2llvm {
     return res;
   }
 
+  enum class extKind { SExt, ZExt, None };
+
   // Creates LLVM IR instructions which take two values with the same
   // number of bits, bit casting them to vectors of numElts elements
   // of size eltSize and doing an operation on them. In cases where
@@ -1034,7 +1042,7 @@ class arm2llvm {
   // the operation element-wise.
   Value *createVectorOp(function<Value *(Value *, Value *)> op, Value *a,
                         Value *b, unsigned eltSize, unsigned numElts,
-                        bool elementWise, bool zext, bool splatImm2,
+                        bool elementWise, extKind ext, bool splatImm2,
                         bool immShift) {
     assert(getBitWidth(a) == getBitWidth(b) &&
            "Expected values of same bit width");
@@ -1050,10 +1058,15 @@ class arm2llvm {
     b = createBitCast(b, vTy);
 
     // some instructions double element widths
-    if (zext) {
+    if (ext == extKind::ZExt) {
       eTy = getIntTy(2 * eltSize);
       a = createZExt(a, VectorType::get(eTy, ec));
       b = createZExt(b, VectorType::get(eTy, ec));
+    }
+    if (ext == extKind::SExt) {
+      eTy = getIntTy(2 * eltSize);
+      a = createSExt(a, VectorType::get(eTy, ec));
+      b = createSExt(b, VectorType::get(eTy, ec));
     }
 
     Value *res = nullptr;
@@ -4379,6 +4392,12 @@ public:
     case AArch64::SSHLv4i32:
     case AArch64::SSHLv8i8:
     case AArch64::SSHLv2i64:
+    case AArch64::SSHLLv8i8_shift:
+    case AArch64::SSHLLv4i16_shift:
+    case AArch64::SSHLLv2i32_shift:
+    case AArch64::SSHLLv4i32_shift:
+    case AArch64::SSHLLv8i16_shift:
+    case AArch64::SSHLLv16i8_shift:
     case AArch64::USHLLv8i8_shift:
     case AArch64::USHLLv4i32_shift:
     case AArch64::USHLLv8i16_shift:
@@ -4390,7 +4409,7 @@ public:
       auto b = readFromOperand(2);
       bool elementWise = false;
       bool splatImm2 = false;
-      bool zext = false;
+      extKind ext = extKind::None;
       bool immShift = false;
       function<Value *(Value *, Value *)> op;
       switch (opcode) {
@@ -4458,7 +4477,7 @@ public:
         op = [&](Value *a, Value *b) { return createAdd(a, b); };
         break;
       case AArch64::UADDLv8i8_v8i16:
-        zext = true;
+        ext = extKind::ZExt;
         op = [&](Value *a, Value *b) { return createAdd(a, b); };
         break;
       case AArch64::SUBv2i32:
@@ -4471,7 +4490,7 @@ public:
         op = [&](Value *a, Value *b) { return createSub(a, b); };
         break;
       case AArch64::USUBLv8i8_v8i16:
-        zext = true;
+        ext = extKind::ZExt;
         op = [&](Value *a, Value *b) { return createSub(a, b); };
         break;
       case AArch64::EORv8i8:
@@ -4487,21 +4506,30 @@ public:
         op = [&](Value *a, Value *b) { return createOr(a, b); };
         break;
       case AArch64::UMULLv2i32_v2i64:
-        zext = true;
+        ext = extKind::ZExt;
         op = [&](Value *a, Value *b) { return createMul(a, b); };
+        break;
+      case AArch64::SSHLLv4i32_shift:
+      case AArch64::SSHLLv8i16_shift:
+      case AArch64::SSHLLv16i8_shift:
+        // the three cases above SSHLL2
+        a = createRawLShr(a, getIntConst(64, 128));
+      case AArch64::SSHLLv8i8_shift:
+      case AArch64::SSHLLv4i16_shift:
+      case AArch64::SSHLLv2i32_shift:
+        ext = extKind::SExt;
+        splatImm2 = true;
+        op = [&](Value *a, Value *b) { return createRawShl(a, b); };
         break;
       case AArch64::USHLLv4i32_shift:
       case AArch64::USHLLv8i16_shift:
       case AArch64::USHLLv16i8_shift:
-        // OK this is a little weird. at this level, the distinction
-        // between ushll and ushll2 is that the former specifies a
-        // 64-bit operand and the latter specifies a 128-bit operand
-        // and then the shift is implied.
+        // the three cases above USHLL2
         a = createRawLShr(a, getIntConst(64, 128));
       case AArch64::USHLLv4i16_shift:
       case AArch64::USHLLv2i32_shift:
       case AArch64::USHLLv8i8_shift:
-        zext = true;
+        ext = extKind::ZExt;
         splatImm2 = true;
         op = [&](Value *a, Value *b) { return createRawShl(a, b); };
         break;
@@ -4521,6 +4549,7 @@ public:
         numElts = 1;
         eltSize = 64;
         break;
+      case AArch64::SSHLLv2i32_shift:
       case AArch64::SSHRv2i32_shift:
       case AArch64::SHLv2i32_shift:
       case AArch64::SUBv2i32:
@@ -4545,6 +4574,7 @@ public:
         numElts = 2;
         eltSize = 64;
         break;
+      case AArch64::SSHLLv4i16_shift:
       case AArch64::SSHRv4i16_shift:
       case AArch64::ADDv4i16:
       case AArch64::SUBv4i16:
@@ -4556,6 +4586,7 @@ public:
         numElts = 4;
         eltSize = 16;
         break;
+      case AArch64::SSHLLv4i32_shift:
       case AArch64::SSHRv4i32_shift:
       case AArch64::SHLv4i32_shift:
       case AArch64::ADDv4i32:
@@ -4567,6 +4598,7 @@ public:
         numElts = 4;
         eltSize = 32;
         break;
+      case AArch64::SSHLLv8i8_shift:
       case AArch64::SSHRv8i8_shift:
       case AArch64::SHLv8i8_shift:
       case AArch64::ADDv8i8:
@@ -4580,6 +4612,7 @@ public:
         numElts = 8;
         eltSize = 8;
         break;
+      case AArch64::SSHLLv8i16_shift:
       case AArch64::ADDv8i16:
       case AArch64::SUBv8i16:
       case AArch64::USHLv8i16:
@@ -4591,6 +4624,7 @@ public:
         numElts = 8;
         eltSize = 16;
         break;
+      case AArch64::SSHLLv16i8_shift:
       case AArch64::ADDv16i8:
       case AArch64::SUBv16i8:
       case AArch64::EORv16i8:
@@ -4623,7 +4657,7 @@ public:
         break;
       }
 
-      auto res = createVectorOp(op, a, b, eltSize, numElts, elementWise, zext,
+      auto res = createVectorOp(op, a, b, eltSize, numElts, elementWise, ext,
                                 splatImm2, immShift);
       updateOutputReg(res);
       break;
@@ -4695,11 +4729,11 @@ public:
       auto b = readFromOperand(3);
       auto v1 = createVectorOp(
           [&](Value *a, Value *b) { return createMul(a, b); }, a, b, 32, 2,
-          /*cast=*/false, /*zext=*/false,
+          /*cast=*/false, extKind::None,
           /*splatImm2=*/false, /*immShift=*/false);
       auto v2 = createVectorOp(
           [&](Value *a, Value *b) { return createSub(a, b); }, accum, v1, 32, 2,
-          /*cast=*/false, /*zext=*/false,
+          /*cast=*/false, extKind::None,
           /*splatImm2=*/false, /*immShift=*/false);
       updateOutputReg(v2);
       break;
