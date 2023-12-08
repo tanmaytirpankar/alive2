@@ -524,9 +524,13 @@ class arm2llvm {
       AArch64::ZIP1v4i16,
       AArch64::ZIP1v2i32,
       AArch64::ZIP1v8i8,
+      AArch64::RBITv8i8,
+      AArch64::BITv8i8,
   };
 
   const set<int> instrs_128 = {
+      AArch64::RBITv16i8,
+      AArch64::BITv16i8,
       AArch64::ZIP2v8i16,
       AArch64::ZIP2v2i64,
       AArch64::ZIP2v16i8,
@@ -4035,6 +4039,16 @@ public:
       break;
     }
 
+    case AArch64::BITv16i8:
+    case AArch64::BITv8i8: {
+      auto op4 = readFromOperand(2);
+      auto op1 = readFromOperand(1);
+      auto op3 = readFromOperand(3);
+      auto res = createXor(op1, createAnd(createXor(op1, op4), op3));
+      updateOutputReg(res);
+      break;
+    }
+
     case AArch64::BSLv8i8:
     case AArch64::BSLv16i8: {
       auto op1 = readFromOperand(3);
@@ -4347,6 +4361,7 @@ public:
       break;
     }
 
+    // lane-wise binary vector instructions
     case AArch64::SSHRv4i16_shift:
     case AArch64::SSHRv8i8_shift:
     case AArch64::SSHRv2i32_shift:
@@ -4526,7 +4541,7 @@ public:
       case AArch64::SSHLLv4i32_shift:
       case AArch64::SSHLLv8i16_shift:
       case AArch64::SSHLLv16i8_shift:
-        // the three cases above SSHLL2
+        // these three cases are SSHLL2
         a = createRawLShr(a, getIntConst(64, 128));
       case AArch64::SSHLLv8i8_shift:
       case AArch64::SSHLLv4i16_shift:
@@ -4538,7 +4553,7 @@ public:
       case AArch64::USHLLv4i32_shift:
       case AArch64::USHLLv8i16_shift:
       case AArch64::USHLLv16i8_shift:
-        // the three cases above USHLL2
+        // these three cases are USHLL2
         a = createRawLShr(a, getIntConst(64, 128));
       case AArch64::USHLLv4i16_shift:
       case AArch64::USHLLv2i32_shift:
@@ -4869,6 +4884,7 @@ public:
       break;
     }
 
+      // unary vector instructions
     case AArch64::UADALPv8i8_v4i16:
     case AArch64::UADALPv4i16_v2i32:
     case AArch64::UADALPv4i32_v2i64:
@@ -4901,7 +4917,9 @@ public:
     case AArch64::ADDVv8i16v:
     case AArch64::ADDVv4i32v:
     case AArch64::ADDVv8i8v:
-    case AArch64::ADDVv4i16v: {
+    case AArch64::ADDVv4i16v:
+    case AArch64::RBITv8i8:
+    case AArch64::RBITv16i8: {
       auto src = readFromOperand(1);
       u_int64_t eltSize, numElts;
 
@@ -4951,9 +4969,11 @@ public:
       case AArch64::NOTv8i8:
       case AArch64::CNTv8i8:
       case AArch64::ADDVv8i8v:
+      case AArch64::RBITv8i8:
         eltSize = 8;
         numElts = 8;
         break;
+      case AArch64::RBITv16i8:
       case AArch64::ADDVv16i8v:
       case AArch64::NEGv16i8:
       case AArch64::UADDLVv16i8v:
@@ -4965,9 +4985,7 @@ public:
         numElts = 16;
         break;
       default:
-        *out << "\nError Unknown opcode\n";
-        visitError();
-        break;
+        assert(false);
       }
 
       auto *vTy =
@@ -4975,7 +4993,6 @@ public:
 
       // Perform the operation
       switch (opcode) {
-
       case AArch64::ADDVv16i8v:
       case AArch64::ADDVv8i16v:
       case AArch64::ADDVv4i32v:
@@ -4994,7 +5011,6 @@ public:
         updateOutputReg(res);
         break;
       }
-
       case AArch64::UADDLPv4i16_v2i32:
       case AArch64::UADDLPv2i32_v1i64:
       case AArch64::UADDLPv8i8_v4i16:
@@ -5006,7 +5022,6 @@ public:
         updateOutputReg(res);
         break;
       }
-
       case AArch64::UADALPv4i16_v2i32:
       case AArch64::UADALPv2i32_v1i64:
       case AArch64::UADALPv8i8_v4i16:
@@ -5028,11 +5043,9 @@ public:
           auto add = createAdd(elt1, elt2);
           res = createInsertElement(res, add, getIntConst(i, 32));
         }
-
         updateOutputReg(res);
         break;
       }
-
       case AArch64::UADDLVv8i16v:
       case AArch64::UADDLVv4i32v:
       case AArch64::UADDLVv8i8v:
@@ -5049,7 +5062,6 @@ public:
         updateOutputReg(sum);
         break;
       }
-
       case AArch64::NOTv8i8:
       case AArch64::NOTv16i8: {
         auto src_vector = createBitCast(src, vTy);
@@ -5057,14 +5069,19 @@ public:
         updateOutputReg(createXor(src_vector, neg_one));
         break;
       }
-
+      case AArch64::RBITv8i8:
+      case AArch64::RBITv16i8: {
+        auto src_vector = createBitCast(src, vTy);
+        auto result = createBitReverse(src_vector);
+        updateOutputReg(result);
+        break;
+      }
       case AArch64::CNTv8i8:
       case AArch64::CNTv16i8: {
         auto src_vector = createBitCast(src, vTy);
         updateOutputReg(createCtPop(src_vector));
         break;
       }
-
       case AArch64::NEGv1i64:
       case AArch64::NEGv4i16:
       case AArch64::NEGv8i8:
@@ -5078,14 +5095,9 @@ public:
         updateOutputReg(createSub(zeroes, src_vector));
         break;
       }
-
-      default: {
-        *out << "\nError Unknown opcode\n";
-        visitError();
-        break;
+      default:
+        assert(false);
       }
-      }
-
       break;
     }
     default:
