@@ -2883,6 +2883,8 @@ public:
       auto imms = getImm(4);
 
       if (imms >= immr) {
+        // BFXIL
+
         auto bits = (imms - immr + 1);
         auto pos = immr;
 
@@ -2894,30 +2896,29 @@ public:
             createAnd(dst, getIntConst((uint64_t)(-1) << bits, size));
         auto res = createOr(cleared, shifted);
         updateOutputReg(res);
-        break;
+      } else {
+        auto bits = imms + 1;
+        auto pos = size - immr;
+
+        // This mask deletes `bits` number of bits starting at `pos`.
+        // If the mask is for a 32 bit value, it will chop off the top 32 bits
+        // of the 64 bit mask to keep the mask to a size of 32 bits
+        auto mask = ~((((uint64_t)1 << bits) - 1) << pos) &
+                    ((uint64_t)-1 >> (64 - size));
+
+        // get `bits` number of bits from the least significant bits
+        auto bitfield =
+            createAnd(src, getIntConst(~((uint64_t)-1 << bits), size));
+
+        // move the bitfield into position
+        auto moved = createMaskedShl(bitfield, getIntConst(pos, size));
+
+        // carve out a place for the bitfield
+        auto masked = createAnd(dst, getIntConst(mask, size));
+        // place the bitfield
+        auto res = createOr(masked, moved);
+        updateOutputReg(res);
       }
-
-      auto bits = imms + 1;
-      auto pos = size - immr;
-
-      // This mask deletes `bits` number of bits starting at `pos`.
-      // If the mask is for a 32 bit value, it will chop off the top 32 bits of
-      // the 64 bit mask to keep the mask to a size of 32 bits
-      auto mask =
-          ~((((uint64_t)1 << bits) - 1) << pos) & ((uint64_t)-1 >> (64 - size));
-
-      // get `bits` number of bits from the least significant bits
-      auto bitfield =
-          createAnd(src, getIntConst(~((uint64_t)-1 << bits), size));
-
-      // move the bitfield into position
-      auto moved = createMaskedShl(bitfield, getIntConst(pos, size));
-
-      // carve out a place for the bitfield
-      auto masked = createAnd(dst, getIntConst(mask, size));
-      // place the bitfield
-      auto res = createOr(masked, moved);
-      updateOutputReg(res);
       break;
     }
 
