@@ -5471,7 +5471,8 @@ public:
     // amount of stack available for use by the lifted function, in bytes
     const int localFrame = 1024;
 
-    auto *allocTy = FunctionType::get(PointerType::get(Ctx, 0), {i32}, false);
+    auto *allocTy =
+        FunctionType::get(PointerType::get(Ctx, 0), {i32, i32}, false);
     auto *myAlloc = Function::Create(allocTy, GlobalValue::ExternalLinkage, 0,
                                      "myalloc", LiftedModule);
     myAlloc->addRetAttr(Attribute::NonNull);
@@ -5479,9 +5480,11 @@ public:
     B.addAllocKindAttr(AllocFnKind::Alloc);
     B.addAllocSizeAttr(0, {});
     myAlloc->addFnAttrs(B);
+    myAlloc->addParamAttr(1, Attribute::AllocAlign);
     stackMem = CallInst::Create(
-        myAlloc, {getIntConst(localFrame + (8 * stackSlots), 32)}, "stack",
-        LLVMBB);
+        myAlloc,
+        {getIntConst(localFrame + (8 * stackSlots), 32), getIntConst(16, 32)},
+        "stack", LLVMBB);
 
     // allocate storage for the main register file
     for (unsigned Reg = AArch64::X0; Reg <= AArch64::X28; ++Reg) {
