@@ -704,10 +704,12 @@ class arm2llvm {
     return s_flag.contains(instr);
   }
 
-  /// decodeBitMasks - Decode a logical immediate value in the form
-  /// "N:immr:imms" (where the immr and imms fields are each 6 bits) into the
-  /// integer value it represents with regSize bits. Implementation of the
-  /// DecodeBitMasks function from the ARMv8 manual.
+  // decodeBitMasks - Decode a logical immediate value in the form
+  // "N:immr:imms" (where the immr and imms fields are each 6 bits) into the
+  // integer value it represents with regSize bits. Implementation of the
+  // DecodeBitMasks function from the ARMv8 manual.
+  //
+  // WARNING: tmask is untested
   pair<uint64_t, uint64_t> decodeBitMasks(uint64_t val, unsigned regSize) {
     // Extract the N, imms, and immr fields.
     unsigned N = (val >> 12) & 1;
@@ -2353,8 +2355,8 @@ public:
       auto size = getInstSize(opcode);
       Value *rhs = nullptr;
       if (CurInst->getOperand(2).isImm()) {
-        auto mask_pair = decodeBitMasks(getImm(2), size);
-        rhs = getIntConst(mask_pair.first, size);
+        auto [wmask, _] = decodeBitMasks(getImm(2), size);
+        rhs = getIntConst(wmask, size);
       } else {
         rhs = readFromOperand(2);
       }
@@ -2628,8 +2630,8 @@ public:
       assert(CurInst->getOperand(1).isReg() && CurInst->getOperand(2).isImm());
 
       auto a = readFromOperand(1);
-      auto mask_pair = decodeBitMasks(getImm(2), size);
-      auto imm_val = getIntConst(mask_pair.first,
+      auto [wmask, _] = decodeBitMasks(getImm(2), size);
+      auto imm_val = getIntConst(wmask,
                                  size); // FIXME, need to decode immediate val
       if (!a || !imm_val)
         visitError();
@@ -2890,6 +2892,9 @@ public:
       auto immr = getImm(3);
       auto imms = getImm(4);
 
+      // FIXME -- would be better to use decodeBitMasks() here, as
+      // shown in the ARM docs
+
       if (imms >= immr) {
         // BFXIL
 
@@ -2935,8 +2940,8 @@ public:
       auto size = getInstSize(opcode);
       auto lhs = readFromOperand(1);
       auto imm = getImm(2);
-      auto mask_pair = decodeBitMasks(imm, size);
-      auto result = createOr(lhs, getIntConst(mask_pair.first, size));
+      auto [wmask, _] = decodeBitMasks(imm, size);
+      auto result = createOr(lhs, getIntConst(wmask, size));
       updateOutputReg(result);
       break;
     }
