@@ -1257,7 +1257,7 @@ class arm2llvm {
         V = createTrunc(V, getIntTy(64));
       }
     } else {
-      auto [val, storePtr] = getExprVar(op.getExpr());
+      auto [val, _] = getExprVar(op.getExpr());
       V = val;
     }
     return V;
@@ -1995,19 +1995,23 @@ public:
     createStore(val, ptr);
   }
 
-  tuple<Value *, int, Value *> getParamsStoreImmed() {
+  tuple<Value *, int, Value *> getStoreParams() {
     auto &op0 = CurInst->getOperand(0);
     auto &op1 = CurInst->getOperand(1);
     auto &op2 = CurInst->getOperand(2);
     assert(op0.isReg() && op1.isReg());
-    assert(op2.isImm());
 
-    auto baseReg = op1.getReg();
-    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
-           (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
-           (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
-    auto baseAddr = readPtrFromReg(baseReg);
-    return make_tuple(baseAddr, op2.getImm(), readFromReg(op0.getReg()));
+    if (op2.isImm()) {
+      auto baseReg = op1.getReg();
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
+             (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
+             (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
+      auto baseAddr = readPtrFromReg(baseReg);
+      return make_tuple(baseAddr, op2.getImm(), readFromReg(op0.getReg()));
+    } else {
+      // FIXME ADRP stuff
+      assert(false);
+    }
   }
 
   // Creates instructions to store val in memory pointed by base + offset
@@ -3234,6 +3238,7 @@ public:
       updateOutputReg(loaded);
       break;
     }
+
     case AArch64::LDRXpost: {
       unsigned size = 8;
       auto &op0 = CurInst->getOperand(0);
@@ -3443,51 +3448,51 @@ public:
     }
 
     case AArch64::STRBBui: {
-      auto [base, imm, val] = getParamsStoreImmed();
+      auto [base, imm, val] = getStoreParams();
       storeToMemoryImmOffset(base, imm * 1, 1, createTrunc(val, i8));
       break;
     }
 
     case AArch64::STRHHui:
     case AArch64::STRHui: {
-      auto [base, imm, val] = getParamsStoreImmed();
+      auto [base, imm, val] = getStoreParams();
       storeToMemoryImmOffset(base, imm * 2, 2, createTrunc(val, i16));
       break;
     }
 
     case AArch64::STURWi: {
-      auto [base, imm, val] = getParamsStoreImmed();
+      auto [base, imm, val] = getStoreParams();
       storeToMemoryImmOffset(base, imm * 1, 4, createTrunc(val, i32));
       break;
     }
 
     case AArch64::STURXi: {
-      auto [base, imm, val] = getParamsStoreImmed();
+      auto [base, imm, val] = getStoreParams();
       storeToMemoryImmOffset(base, imm * 1, 8, val);
       break;
     }
 
     case AArch64::STRWui:
     case AArch64::STRSui: {
-      auto [base, imm, val] = getParamsStoreImmed();
+      auto [base, imm, val] = getStoreParams();
       storeToMemoryImmOffset(base, imm * 4, 4, createTrunc(val, i32));
       break;
     }
 
     case AArch64::STRXui: {
-      auto [base, imm, val] = getParamsStoreImmed();
+      auto [base, imm, val] = getStoreParams();
       storeToMemoryImmOffset(base, imm * 8, 8, val);
       break;
     }
 
     case AArch64::STRDui: {
-      auto [base, imm, val] = getParamsStoreImmed();
+      auto [base, imm, val] = getStoreParams();
       storeToMemoryImmOffset(base, imm * 8, 8, createTrunc(val, i64));
       break;
     }
 
     case AArch64::STRQui: {
-      auto [base, imm, val] = getParamsStoreImmed();
+      auto [base, imm, val] = getStoreParams();
       storeToMemoryImmOffset(base, imm * 16, 16, val);
       break;
     }
