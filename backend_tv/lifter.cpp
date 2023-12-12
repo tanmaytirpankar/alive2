@@ -3205,6 +3205,7 @@ public:
       }
       break;
     }
+
     case AArch64::LDURBi:
     case AArch64::LDURBBi:
     case AArch64::LDURHi:
@@ -3259,6 +3260,7 @@ public:
       updateReg(added, ptrReg);
       break;
     }
+
     case AArch64::LDRBBroW:
     case AArch64::LDRBBroX:
     case AArch64::LDRHHroW:
@@ -3302,6 +3304,7 @@ public:
       updateOutputReg(loaded);
       break;
     }
+
     case AArch64::LD1i8:
     case AArch64::LD1i16:
     case AArch64::LD1i32:
@@ -3354,6 +3357,7 @@ public:
       updateOutputReg(updated);
       break;
     }
+
     case AArch64::LD1Rv8b:
     case AArch64::LD1Rv16b:
     case AArch64::LD1Rv4h:
@@ -3437,43 +3441,51 @@ public:
       updateOutputReg(updated_dst);
       break;
     }
+
     case AArch64::STRBBui: {
       auto [base, imm, val] = getParamsStoreImmed();
       storeToMemoryImmOffset(base, imm * 1, 1, createTrunc(val, i8));
       break;
     }
+
     case AArch64::STRHHui:
     case AArch64::STRHui: {
       auto [base, imm, val] = getParamsStoreImmed();
       storeToMemoryImmOffset(base, imm * 2, 2, createTrunc(val, i16));
       break;
     }
+
     case AArch64::STURWi: {
       auto [base, imm, val] = getParamsStoreImmed();
       storeToMemoryImmOffset(base, imm * 1, 4, createTrunc(val, i32));
       break;
     }
+
     case AArch64::STURXi: {
       auto [base, imm, val] = getParamsStoreImmed();
       storeToMemoryImmOffset(base, imm * 1, 8, val);
       break;
     }
+
     case AArch64::STRWui:
     case AArch64::STRSui: {
       auto [base, imm, val] = getParamsStoreImmed();
       storeToMemoryImmOffset(base, imm * 4, 4, createTrunc(val, i32));
       break;
     }
+
     case AArch64::STRXui: {
       auto [base, imm, val] = getParamsStoreImmed();
       storeToMemoryImmOffset(base, imm * 8, 8, val);
       break;
     }
+
     case AArch64::STRDui: {
       auto [base, imm, val] = getParamsStoreImmed();
       storeToMemoryImmOffset(base, imm * 8, 8, createTrunc(val, i64));
       break;
     }
+
     case AArch64::STRQui: {
       auto [base, imm, val] = getParamsStoreImmed();
       storeToMemoryImmOffset(base, imm * 16, 16, val);
@@ -3508,6 +3520,7 @@ public:
       storeToMemoryImmOffset(shiftedPtr, 0, 8, valToStore);
       break;
     }
+
     case AArch64::STRBBroW:
     case AArch64::STRBBroX:
     case AArch64::STRHHroW:
@@ -3546,6 +3559,7 @@ public:
       }
       break;
     }
+
     case AArch64::ST1i8:
     case AArch64::ST1i16:
     case AArch64::ST1i32:
