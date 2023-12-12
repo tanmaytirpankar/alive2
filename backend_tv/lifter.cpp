@@ -2019,7 +2019,7 @@ public:
 
     // Create a GEP instruction based on a byte addressing basis (8 bits)
     // returning pointer to base + offset
-    auto ptr = createGEP(getIntTy(8), base, {offsetVal}, "");
+    auto ptr = createGEP(getIntTy(8), base, {offsetVal}, nextName());
 
     // Store Value val in the pointer returned by the GEP instruction
     createStore(val, ptr);
@@ -3721,7 +3721,7 @@ public:
       updateReg(loaded1, r1);
       updateReg(loaded2, r2);
 
-      auto offsetVal = getIntConst(op4.getImm(), 64);
+      auto offsetVal = getIntConst(size * op4.getImm(), 64);
       auto basePtrInt = readFromReg(baseReg);
       auto newPtrAddr = createAdd(basePtrInt, offsetVal);
       updateReg(newPtrAddr, baseReg);
@@ -3746,13 +3746,14 @@ public:
       auto val1 = readFromReg(op1.getReg());
       auto val2 = readFromReg(op2.getReg());
 
-      auto offsetVal = getIntConst(op4.getImm(), 64);
+      unsigned size = 8;
+
+      auto offsetVal = getIntConst(size * op4.getImm(), 64);
       auto basePtrInt = readFromReg(baseReg);
       auto newPtrAddr = createAdd(basePtrInt, offsetVal);
       updateReg(newPtrAddr, baseReg);
 
       auto imm = op4.getImm();
-      unsigned size = 8;
       storeToMemoryImmOffset(baseAddr, imm * size, size, val1);
       storeToMemoryImmOffset(baseAddr, (imm + 1) * size, size, val2);
       break;
