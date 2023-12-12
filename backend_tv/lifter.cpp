@@ -288,42 +288,42 @@ class arm2llvm {
   };
 
   const set<int> instrs_32 = {
-      AArch64::ADDWrx,     AArch64::ADDSWrs,    AArch64::ADDSWri,
-      AArch64::ADDWrs,     AArch64::ADDWri,     AArch64::ADDSWrx,
-      AArch64::ADCWr,      AArch64::ADCSWr,     AArch64::ASRVWr,
-      AArch64::SUBWri,     AArch64::SUBWrs,     AArch64::SUBWrx,
-      AArch64::SUBSWrs,    AArch64::SUBSWri,    AArch64::SUBSWrx,
-      AArch64::SBFMWri,    AArch64::CSELWr,     AArch64::ANDWri,
-      AArch64::ANDWrr,     AArch64::ANDWrs,     AArch64::ANDSWri,
-      AArch64::ANDSWrr,    AArch64::ANDSWrs,    AArch64::MADDWrrr,
-      AArch64::MSUBWrrr,   AArch64::EORWri,     AArch64::CSINVWr,
-      AArch64::CSINCWr,    AArch64::MOVZWi,     AArch64::MOVNWi,
-      AArch64::MOVKWi,     AArch64::LSLVWr,     AArch64::LSRVWr,
-      AArch64::ORNWrs,     AArch64::UBFMWri,    AArch64::BFMWri,
-      AArch64::ORRWrs,     AArch64::ORRWri,     AArch64::SDIVWr,
-      AArch64::UDIVWr,     AArch64::EXTRWrri,   AArch64::EORWrs,
-      AArch64::RORVWr,     AArch64::RBITWr,     AArch64::CLZWr,
-      AArch64::REVWr,      AArch64::CSNEGWr,    AArch64::BICWrs,
-      AArch64::BICSWrs,    AArch64::EONWrs,     AArch64::REV16Wr,
-      AArch64::Bcc,        AArch64::CCMPWr,     AArch64::CCMPWi,
-      AArch64::LDRWui,     AArch64::LDRBBroW,   AArch64::LDRBBroX,
-      AArch64::LDRHHroW,   AArch64::LDRHHroX,   AArch64::LDRWroW,
-      AArch64::LDRWroX,    AArch64::LDRSui,     AArch64::LDRBBui,
-      AArch64::LDRBui,     AArch64::LDRSBWui,   AArch64::LDRSWui,
-      AArch64::LDRSHWui,   AArch64::LDRSBWui,   AArch64::LDRHHui,
-      AArch64::LDRHui,     AArch64::LDURBi,     AArch64::LDURBBi,
-      AArch64::LDURHi,     AArch64::LDURHHi,    AArch64::LDURSi,
-      AArch64::LDURWi,     AArch64::STRWui,     AArch64::STRBBroW,
-      AArch64::STRBBroX,   AArch64::STRHHroW,   AArch64::STRHHroX,
-      AArch64::STRWroW,    AArch64::STRWroX,    AArch64::CCMNWi,
-      AArch64::CCMNWr,     AArch64::STRBBui,    AArch64::STRBui,
-      AArch64::STPWi,      AArch64::STRHHui,    AArch64::STRHui,
-      AArch64::STURWi,     AArch64::STRSui,     AArch64::LDPWi,
-      AArch64::STRWpre,    AArch64::FADDSrr,    AArch64::FSUBSrr,
-      AArch64::FCMPSrr,    AArch64::FCMPSri,    AArch64::FMOVSWr,
-      AArch64::INSvi32gpr, AArch64::INSvi16gpr, AArch64::INSvi8gpr,
-      AArch64::FCVTSHr,    AArch64::FCVTZSUWSr, AArch64::FCSELSrrr,
-      AArch64::FMULSrr,    AArch64::FABSSr,
+      AArch64::ADDWrx,     AArch64::ADDSWrs,   AArch64::ADDSWri,
+      AArch64::ADDWrs,     AArch64::ADDWri,    AArch64::ADDSWrx,
+      AArch64::ADCWr,      AArch64::ADCSWr,    AArch64::ASRVWr,
+      AArch64::SUBWri,     AArch64::SUBWrs,    AArch64::SUBWrx,
+      AArch64::SUBSWrs,    AArch64::SUBSWri,   AArch64::SUBSWrx,
+      AArch64::SBFMWri,    AArch64::CSELWr,    AArch64::ANDWri,
+      AArch64::ANDWrr,     AArch64::ANDWrs,    AArch64::ANDSWri,
+      AArch64::ANDSWrr,    AArch64::ANDSWrs,   AArch64::MADDWrrr,
+      AArch64::MSUBWrrr,   AArch64::EORWri,    AArch64::CSINVWr,
+      AArch64::CSINCWr,    AArch64::MOVZWi,    AArch64::MOVNWi,
+      AArch64::MOVKWi,     AArch64::LSLVWr,    AArch64::LSRVWr,
+      AArch64::ORNWrs,     AArch64::UBFMWri,   AArch64::BFMWri,
+      AArch64::ORRWrs,     AArch64::ORRWri,    AArch64::SDIVWr,
+      AArch64::UDIVWr,     AArch64::EXTRWrri,  AArch64::EORWrs,
+      AArch64::RORVWr,     AArch64::RBITWr,    AArch64::CLZWr,
+      AArch64::REVWr,      AArch64::CSNEGWr,   AArch64::BICWrs,
+      AArch64::BICSWrs,    AArch64::EONWrs,    AArch64::REV16Wr,
+      AArch64::Bcc,        AArch64::CCMPWr,    AArch64::CCMPWi,
+      AArch64::LDRWui,     AArch64::LDRBBroW,  AArch64::LDRBBroX,
+      AArch64::LDRHHroW,   AArch64::LDRHHroX,  AArch64::LDRWroW,
+      AArch64::LDRWroX,    AArch64::LDRSui,    AArch64::LDRBBui,
+      AArch64::LDRBui,     AArch64::LDRSBWui,  AArch64::LDRSWui,
+      AArch64::LDRSHWui,   AArch64::LDRHHui,   AArch64::LDRHui,
+      AArch64::LDURBi,     AArch64::LDURBBi,   AArch64::LDURHi,
+      AArch64::LDURHHi,    AArch64::LDURSi,    AArch64::LDURWi,
+      AArch64::STRWui,     AArch64::STRBBroW,  AArch64::STRBBroX,
+      AArch64::STRHHroW,   AArch64::STRHHroX,  AArch64::STRWroW,
+      AArch64::STRWroX,    AArch64::CCMNWi,    AArch64::CCMNWr,
+      AArch64::STRBBui,    AArch64::STRBui,    AArch64::STPWi,
+      AArch64::STRHHui,    AArch64::STRHui,    AArch64::STURWi,
+      AArch64::STRSui,     AArch64::LDPWi,     AArch64::STRWpre,
+      AArch64::FADDSrr,    AArch64::FSUBSrr,   AArch64::FCMPSrr,
+      AArch64::FCMPSri,    AArch64::FMOVSWr,   AArch64::INSvi32gpr,
+      AArch64::INSvi16gpr, AArch64::INSvi8gpr, AArch64::FCVTSHr,
+      AArch64::FCVTZSUWSr, AArch64::FCSELSrrr, AArch64::FMULSrr,
+      AArch64::FABSSr,
   };
 
   const set<int> instrs_64 = {
@@ -3140,33 +3140,11 @@ public:
       break;
     }
 
-      /*
-       * TODO: there's a lot of redundancy across memory operations
-       * here, some serious refactoring is needed
-       */
-
     case AArch64::LDRSBXui:
     case AArch64::LDRSBWui:
     case AArch64::LDRSHXui:
     case AArch64::LDRSHWui:
-    case AArch64::LDRSWui: {
-      auto [base, imm] = getParamsLoadImmed();
-
-      unsigned size;
-      if (opcode == AArch64::LDRSBXui || opcode == AArch64::LDRSBWui)
-        size = 1;
-      else if (opcode == AArch64::LDRSHXui || opcode == AArch64::LDRSHWui)
-        size = 2;
-      else if (opcode == AArch64::LDRSWui)
-        size = 4;
-      else
-        assert(false);
-
-      auto loaded = makeLoadWithOffset(base, imm * size, size);
-      updateOutputReg(loaded, /*SExt=*/true);
-      break;
-    }
-
+    case AArch64::LDRSWui:
     case AArch64::LDRBBui:
     case AArch64::LDRBui:
     case AArch64::LDRHHui:
@@ -3177,33 +3155,53 @@ public:
     case AArch64::LDRDui:
     case AArch64::LDRQui: {
       unsigned size;
-      if (opcode == AArch64::LDRBBui || opcode == AArch64::LDRBui)
+      switch (opcode) {
+      case AArch64::LDRBBui:
+      case AArch64::LDRBui:
+      case AArch64::LDRSBXui:
+      case AArch64::LDRSBWui:
         size = 1;
-      else if (opcode == AArch64::LDRHHui || opcode == AArch64::LDRHui)
+        break;
+      case AArch64::LDRHHui:
+      case AArch64::LDRHui:
+      case AArch64::LDRSHXui:
+      case AArch64::LDRSHWui:
         size = 2;
-      else if (opcode == AArch64::LDRWui || opcode == AArch64::LDRSui)
+        break;
+      case AArch64::LDRWui:
+      case AArch64::LDRSui:
+      case AArch64::LDRSWui:
         size = 4;
-      else if (opcode == AArch64::LDRXui || opcode == AArch64::LDRDui)
+        break;
+      case AArch64::LDRXui:
+      case AArch64::LDRDui:
         size = 8;
-      else if (opcode == AArch64::LDRQui)
+        break;
+      case AArch64::LDRQui:
         size = 16;
-      else
+        break;
+      default:
         assert(false);
+      }
+
+      bool sExt = opcode == AArch64::LDRSBXui || opcode == AArch64::LDRSBWui ||
+                  opcode == AArch64::LDRSHXui || opcode == AArch64::LDRSHWui ||
+                  opcode == AArch64::LDRSWui;
 
       MCOperand &op2 = CurInst->getOperand(2);
       if (op2.isExpr()) {
         auto [globalVar, storePtr] = getExprVar(op2.getExpr());
         if (!storePtr) {
           auto loaded = makeLoadWithOffset(globalVar, 0, size);
-          updateOutputReg(loaded);
+          updateOutputReg(loaded, sExt);
         } else {
           Value *ptrToInt = createPtrToInt(globalVar, getIntTy(size * 8));
-          updateOutputReg(ptrToInt);
+          updateOutputReg(ptrToInt, sExt);
         }
       } else {
         auto [base, imm] = getParamsLoadImmed();
         auto loaded = makeLoadWithOffset(base, imm * size, size);
-        updateOutputReg(loaded);
+        updateOutputReg(loaded, sExt);
       }
       break;
     }
