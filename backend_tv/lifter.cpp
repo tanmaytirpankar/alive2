@@ -2009,8 +2009,9 @@ public:
       auto baseAddr = readPtrFromReg(baseReg);
       return make_tuple(baseAddr, op2.getImm(), readFromReg(op0.getReg()));
     } else {
-      // FIXME ADRP stuff
-      assert(false);
+      assert(op2.isExpr());
+      auto [globalVar, storePtr] = getExprVar(op2.getExpr());
+      return make_tuple(globalVar, 0, readFromReg(op0.getReg()));
     }
   }
 
@@ -3195,12 +3196,12 @@ public:
       MCOperand &op2 = CurInst->getOperand(2);
       if (op2.isExpr()) {
         auto [globalVar, storePtr] = getExprVar(op2.getExpr());
-        if (!storePtr) {
-          auto loaded = makeLoadWithOffset(globalVar, 0, size);
-          updateOutputReg(loaded, sExt);
-        } else {
+        if (storePtr) {
           Value *ptrToInt = createPtrToInt(globalVar, getIntTy(size * 8));
           updateOutputReg(ptrToInt, sExt);
+        } else {
+          auto loaded = makeLoadWithOffset(globalVar, 0, size);
+          updateOutputReg(loaded, sExt);
         }
       } else {
         auto [base, imm] = getParamsLoadImmed();
