@@ -5391,6 +5391,17 @@ public:
       V = createZExt(V, getIntTy(targetWidth));
     }
 
+    // finally, pad out any remaining bits with junk (frozen poisons)
+    auto junkBits = targetWidth - getBitWidth(V);
+    if (junkBits > 0) {
+      auto junk = createFreeze(PoisonValue::get(getIntTy(junkBits)));
+      auto ext1 = createZExt(junk, getIntTy(targetWidth));
+      auto shifted =
+          createRawShl(ext1, getIntConst(getBitWidth(V), targetWidth));
+      auto ext2 = createZExt(V, getIntTy(targetWidth));
+      V = createOr(shifted, ext2);
+    }
+
     return V;
   }
 
