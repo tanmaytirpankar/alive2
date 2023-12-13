@@ -507,7 +507,6 @@ check_refinement(Errors &errs, const Transform &t, State &src_state,
     return;
   }
 
-  bool eq_sink_src_tgt;
   {
     auto sink_src = src_state.sinkDomain(false);
     if (!sink_src.isTrue() && check_expr(axioms_expr && !sink_src).isUnsat()) {
@@ -517,7 +516,7 @@ check_refinement(Errors &errs, const Transform &t, State &src_state,
     }
 
     auto sink_tgt = tgt_state.sinkDomain(false);
-    eq_sink_src_tgt = sink_src.eq(sink_tgt);
+    bool eq_sink_src_tgt = sink_src.eq(sink_tgt);
     sink_src = {};
 
     if (!eq_sink_src_tgt &&
@@ -613,8 +612,7 @@ check_refinement(Errors &errs, const Transform &t, State &src_state,
   {
     // avoid false-positives in refinement query 1 due to bounded unrolling
     expr pre_old = pre;
-    if (!eq_sink_src_tgt)
-      pre &= !tgt_state.sinkDomain(true);
+    pre &= !tgt_state.sinkDomain(true);
 
     // 1. Check UB
     CHECK(fndom_a.notImplies(fndom_b),
@@ -1620,8 +1618,32 @@ static void optimize_ptrcmp(Function &f) {
 }
 
 void Transform::preprocess() {
-  if (config::tgt_is_asm)
+  if (config::tgt_is_asm) {
     tgt.getFnAttrs().set(FnAttrs::Asm);
+
+    // all memory blocks are considered to have a size multiple of alignment
+    // since asm memory accesses won't trap as it won't cross the page boundary
+    vector<pair<const Instr*, unique_ptr<Instr>>> to_add;
+    for (auto &bb : src.getBBs()) {
+      for (auto &i : bb->instrs()) {
+        if (auto *load = dynamic_cast<const Load*>(&i)) {
+          auto align = load->getAlign();
+          if (align != 1) {
+            static IntType i64("i64", 64);
+            auto bytes = make_unique<IntConst>(i64, align);
+            to_add.emplace_back(load, make_unique<Assume>(
+              vector<Value*>{&load->getPtr(), bytes.get()},
+              Assume::Dereferenceable));
+            src.addConstant(std::move(bytes));
+          }
+        }
+      }
+      for (auto &[i, assume] : to_add) {
+        bb->addInstrAt(std::move(assume), i, false);
+      }
+      to_add.clear();
+    }
+  }
 
   remove_unreachable_bbs(src);
   remove_unreachable_bbs(tgt);
