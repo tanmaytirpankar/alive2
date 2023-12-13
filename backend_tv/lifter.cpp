@@ -539,9 +539,15 @@ class arm2llvm {
       AArch64::UZP2v4i16,
       AArch64::UZP1v8i8,
       AArch64::UZP1v4i16,
+      AArch64::USHRv8i8_shift,
+      AArch64::USHRv4i16_shift,
+      AArch64::USHRv2i32_shift,
   };
 
   const set<int> instrs_128 = {
+      AArch64::USHRv16i8_shift,
+      AArch64::USHRv8i16_shift,
+      AArch64::USHRv4i32_shift,
       AArch64::UZP2v8i16,
       AArch64::UZP2v16i8,
       AArch64::UZP1v16i8,
@@ -4614,7 +4620,13 @@ public:
       break;
     }
 
-    // lane-wise binary vector instructions
+      // lane-wise binary vector instructions
+    case AArch64::USHRv8i8_shift:
+    case AArch64::USHRv4i16_shift:
+    case AArch64::USHRv2i32_shift:
+    case AArch64::USHRv16i8_shift:
+    case AArch64::USHRv8i16_shift:
+    case AArch64::USHRv4i32_shift:
     case AArch64::MULv2i32:
     case AArch64::MULv8i8:
     case AArch64::MULv4i16:
@@ -4701,6 +4713,15 @@ public:
       bool immShift = false;
       function<Value *(Value *, Value *)> op;
       switch (opcode) {
+      case AArch64::USHRv8i8_shift:
+      case AArch64::USHRv4i16_shift:
+      case AArch64::USHRv2i32_shift:
+      case AArch64::USHRv16i8_shift:
+      case AArch64::USHRv8i16_shift:
+      case AArch64::USHRv4i32_shift:
+        splatImm2 = true;
+        op = [&](Value *a, Value *b) { return createMaskedLShr(a, b); };
+        break;
       case AArch64::MULv2i32:
       case AArch64::MULv8i8:
       case AArch64::MULv4i16:
@@ -4845,6 +4866,7 @@ public:
         numElts = 1;
         eltSize = 64;
         break;
+      case AArch64::USHRv2i32_shift:
       case AArch64::MULv2i32:
       case AArch64::SSHLLv2i32_shift:
       case AArch64::SSHRv2i32_shift:
@@ -4871,6 +4893,7 @@ public:
         numElts = 2;
         eltSize = 64;
         break;
+      case AArch64::USHRv4i16_shift:
       case AArch64::SSHLLv4i16_shift:
       case AArch64::SSHRv4i16_shift:
       case AArch64::ADDv4i16:
@@ -4884,6 +4907,7 @@ public:
         numElts = 4;
         eltSize = 16;
         break;
+      case AArch64::USHRv4i32_shift:
       case AArch64::MULv4i32:
       case AArch64::SSHLLv4i32_shift:
       case AArch64::SSHRv4i32_shift:
@@ -4909,9 +4933,11 @@ public:
       case AArch64::USHLv8i8:
       case AArch64::SSHLv8i8:
       case AArch64::BICv8i8:
+      case AArch64::USHRv8i8_shift:
         numElts = 8;
         eltSize = 8;
         break;
+      case AArch64::USHRv8i16_shift:
       case AArch64::MULv8i16:
       case AArch64::SSHLLv8i16_shift:
       case AArch64::ADDv8i16:
@@ -4925,6 +4951,7 @@ public:
         numElts = 8;
         eltSize = 16;
         break;
+      case AArch64::USHRv16i8_shift:
       case AArch64::MULv16i8:
       case AArch64::SSHLLv16i8_shift:
       case AArch64::ADDv16i8:
