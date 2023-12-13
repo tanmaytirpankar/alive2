@@ -530,9 +530,19 @@ class arm2llvm {
       AArch64::ZIP1v8i8,
       AArch64::RBITv8i8,
       AArch64::BITv8i8,
+      AArch64::MULv2i32_indexed,
+      AArch64::MULv4i16_indexed,
+      AArch64::MULv2i32,
+      AArch64::MULv8i8,
+      AArch64::MULv4i16,
   };
 
   const set<int> instrs_128 = {
+      AArch64::MULv8i16_indexed,
+      AArch64::MULv4i32_indexed,
+      AArch64::MULv16i8,
+      AArch64::MULv8i16,
+      AArch64::MULv4i32,
       AArch64::RBITv16i8,
       AArch64::BITv16i8,
       AArch64::ZIP2v8i16,
@@ -4595,6 +4605,12 @@ public:
     }
 
     // lane-wise binary vector instructions
+    case AArch64::MULv2i32:
+    case AArch64::MULv8i8:
+    case AArch64::MULv4i16:
+    case AArch64::MULv16i8:
+    case AArch64::MULv8i16:
+    case AArch64::MULv4i32:
     case AArch64::SSHRv4i16_shift:
     case AArch64::SSHRv8i8_shift:
     case AArch64::SSHRv2i32_shift:
@@ -4675,6 +4691,14 @@ public:
       bool immShift = false;
       function<Value *(Value *, Value *)> op;
       switch (opcode) {
+      case AArch64::MULv2i32:
+      case AArch64::MULv8i8:
+      case AArch64::MULv4i16:
+      case AArch64::MULv16i8:
+      case AArch64::MULv8i16:
+      case AArch64::MULv4i32:
+        op = [&](Value *a, Value *b) { return createMul(a, b); };
+        break;
       case AArch64::SSHRv4i16_shift:
       case AArch64::SSHRv8i8_shift:
       case AArch64::SSHRv2i32_shift:
@@ -4811,6 +4835,7 @@ public:
         numElts = 1;
         eltSize = 64;
         break;
+      case AArch64::MULv2i32:
       case AArch64::SSHLLv2i32_shift:
       case AArch64::SSHRv2i32_shift:
       case AArch64::SHLv2i32_shift:
@@ -4845,9 +4870,11 @@ public:
       case AArch64::BICv4i16:
       case AArch64::USHLLv4i16_shift:
       case AArch64::SHLv4i16_shift:
+      case AArch64::MULv4i16:
         numElts = 4;
         eltSize = 16;
         break;
+      case AArch64::MULv4i32:
       case AArch64::SSHLLv4i32_shift:
       case AArch64::SSHRv4i32_shift:
       case AArch64::SHLv4i32_shift:
@@ -4860,6 +4887,7 @@ public:
         numElts = 4;
         eltSize = 32;
         break;
+      case AArch64::MULv8i8:
       case AArch64::SSHLLv8i8_shift:
       case AArch64::SSHRv8i8_shift:
       case AArch64::SHLv8i8_shift:
@@ -4874,6 +4902,7 @@ public:
         numElts = 8;
         eltSize = 8;
         break;
+      case AArch64::MULv8i16:
       case AArch64::SSHLLv8i16_shift:
       case AArch64::ADDv8i16:
       case AArch64::SUBv8i16:
@@ -4886,6 +4915,7 @@ public:
         numElts = 8;
         eltSize = 16;
         break;
+      case AArch64::MULv16i8:
       case AArch64::SSHLLv16i8_shift:
       case AArch64::ADDv16i8:
       case AArch64::SUBv16i8:
@@ -5049,6 +5079,43 @@ public:
           /*cast=*/false, extKind::None,
           /*splatImm2=*/false, /*immShift=*/false);
       updateOutputReg(v2);
+      break;
+    }
+
+    case AArch64::MULv8i16_indexed:
+    case AArch64::MULv4i32_indexed:
+    case AArch64::MULv2i32_indexed:
+    case AArch64::MULv4i16_indexed: {
+      int eltSize, numElts;
+      if (opcode == AArch64::MULv8i16_indexed) {
+        numElts = 8;
+        eltSize = 16;
+      } else if (opcode == AArch64::MULv4i32_indexed) {
+        numElts = 4;
+        eltSize = 32;
+      } else if (opcode == AArch64::MULv2i32_indexed) {
+        numElts = 2;
+        eltSize = 32;
+      } else if (opcode == AArch64::MULv4i16_indexed) {
+        numElts = 4;
+        eltSize = 16;
+      } else {
+        assert(false);
+      }
+
+      auto vTy =
+          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
+      auto a = createBitCast(readFromOperand(1), vTy);
+      auto b = createBitCast(readFromOperand(2), vTy);
+      auto idx = getImm(3);
+      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
+                                            UndefValue::get(getIntTy(eltSize)));
+      for (int i = 0; i < numElts; ++i) {
+        auto e1 = createExtractElement(a, getIntConst(i, 32));
+        auto e2 = createExtractElement(b, getIntConst(idx, 32));
+        res = createInsertElement(res, createMul(e1, e2), getIntConst(i, 32));
+      }
+      updateOutputReg(res);
       break;
     }
 
