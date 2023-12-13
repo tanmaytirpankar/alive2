@@ -535,9 +535,19 @@ class arm2llvm {
       AArch64::MULv2i32,
       AArch64::MULv8i8,
       AArch64::MULv4i16,
+      AArch64::UZP2v8i8,
+      AArch64::UZP2v4i16,
+      AArch64::UZP1v8i8,
+      AArch64::UZP1v4i16,
   };
 
   const set<int> instrs_128 = {
+      AArch64::UZP2v8i16,
+      AArch64::UZP2v16i8,
+      AArch64::UZP1v16i8,
+      AArch64::UZP2v4i32,
+      AArch64::UZP1v8i16,
+      AArch64::UZP1v4i32,
       AArch64::MULv8i16_indexed,
       AArch64::MULv4i32_indexed,
       AArch64::MULv16i8,
@@ -4964,6 +4974,70 @@ public:
       break;
     }
 
+    case AArch64::UZP1v8i8:
+    case AArch64::UZP1v4i16:
+    case AArch64::UZP1v16i8:
+    case AArch64::UZP1v8i16:
+    case AArch64::UZP1v4i32:
+    case AArch64::UZP2v8i8:
+    case AArch64::UZP2v4i16:
+    case AArch64::UZP2v8i16:
+    case AArch64::UZP2v16i8:
+    case AArch64::UZP2v4i32: {
+      int which;
+      switch (opcode) {
+      case AArch64::UZP1v8i8:
+      case AArch64::UZP1v4i16:
+      case AArch64::UZP1v16i8:
+      case AArch64::UZP1v8i16:
+      case AArch64::UZP1v4i32:
+        which = 0;
+        break;
+      case AArch64::UZP2v8i8:
+      case AArch64::UZP2v4i16:
+      case AArch64::UZP2v8i16:
+      case AArch64::UZP2v16i8:
+      case AArch64::UZP2v4i32:
+        which = 1;
+        break;
+      default:
+        assert(false);
+      }
+      int numElts, eltSize;
+      if (opcode == AArch64::UZP1v8i8 || opcode == AArch64::UZP2v8i8) {
+        numElts = 8;
+        eltSize = 8;
+      } else if (opcode == AArch64::UZP1v4i16 || opcode == AArch64::UZP2v4i16) {
+        numElts = 4;
+        eltSize = 16;
+      } else if (opcode == AArch64::UZP1v16i8 || opcode == AArch64::UZP2v16i8) {
+        numElts = 16;
+        eltSize = 8;
+      } else if (opcode == AArch64::UZP1v8i16 || opcode == AArch64::UZP2v8i16) {
+        numElts = 8;
+        eltSize = 16;
+      } else if (opcode == AArch64::UZP1v4i32 || opcode == AArch64::UZP2v4i32) {
+        numElts = 4;
+        eltSize = 32;
+      } else {
+        assert(false);
+      }
+      auto vTy =
+          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
+      auto a = createBitCast(readFromOperand(1), vTy);
+      auto b = createBitCast(readFromOperand(2), vTy);
+      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
+                                            UndefValue::get(getIntTy(eltSize)));
+      for (int i = 0; i < numElts / 2; ++i) {
+        auto e1 = createExtractElement(a, getIntConst((i * 2) + which, 32));
+        auto e2 = createExtractElement(b, getIntConst((i * 2) + which, 32));
+        res = createInsertElement(res, e1, getIntConst(i, 32));
+        res = createInsertElement(res, e2, getIntConst(i + (numElts / 2), 32));
+      }
+      updateOutputReg(res);
+      break;
+    }
+
 #define GET_SIZES(INSN)                                                        \
   int numElts, eltSize;                                                        \
   if (opcode == AArch64::INSN##v8i8) {                                         \
@@ -5102,7 +5176,6 @@ public:
       } else {
         assert(false);
       }
-
       auto vTy =
           VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
       auto a = createBitCast(readFromOperand(1), vTy);
