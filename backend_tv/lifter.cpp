@@ -4730,12 +4730,15 @@ public:
       bool immShift = false;
       function<Value *(Value *, Value *)> op;
       switch (opcode) {
+      case AArch64::SMULLv16i8_v8i16:
+      case AArch64::SMULLv4i32_v2i64:
+      case AArch64::SMULLv8i16_v4i32:
+        // these three cases are SMULL2
+        a = createRawLShr(a, getIntConst(64, 128));
+        b = createRawLShr(b, getIntConst(64, 128));
       case AArch64::SMULLv8i8_v8i16:
       case AArch64::SMULLv2i32_v2i64:
       case AArch64::SMULLv4i16_v4i32:
-      case AArch64::SMULLv8i16_v4i32:
-      case AArch64::SMULLv16i8_v8i16:
-      case AArch64::SMULLv4i32_v2i64:
         ext = extKind::SExt;
         op = [&](Value *a, Value *b) { return createMul(a, b); };
         break;
