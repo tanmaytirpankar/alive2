@@ -509,18 +509,16 @@ check_refinement(Errors &errs, const Transform &t, State &src_state,
 
   {
     auto sink_src = src_state.sinkDomain(false);
-    if (!sink_src.isTrue() && check_expr(axioms_expr && !sink_src).isUnsat()) {
+    if (!sink_src.isFalse() && check_expr(axioms_expr && !sink_src).isUnsat()) {
       errs.add("The source program doesn't reach a return instruction.\n"
                "Consider increasing the unroll factor if it has loops", false);
       return;
     }
 
-    auto sink_tgt = tgt_state.sinkDomain(false);
-    bool eq_sink_src_tgt = sink_src.eq(sink_tgt);
-    sink_src = {};
-
-    if (!eq_sink_src_tgt &&
-        !sink_tgt.isTrue() && check_expr(axioms_expr && !sink_tgt).isUnsat()) {
+    if (auto sink_tgt = tgt_state.sinkDomain(false);
+        !sink_src.eq(sink_tgt) &&
+        !sink_tgt.isFalse() &&
+        check_expr(axioms_expr && (!sink_tgt || sink_src)).isUnsat()) {
       errs.add("The target program doesn't reach a return instruction.\n"
                "Consider increasing the unroll factor if it has loops", false);
       return;
@@ -1624,6 +1622,7 @@ void Transform::preprocess() {
     // all memory blocks are considered to have a size multiple of alignment
     // since asm memory accesses won't trap as it won't cross the page boundary
     vector<pair<const Instr*, unique_ptr<Instr>>> to_add;
+    vector<Instr*> to_remove;
     for (auto &bb : src.getBBs()) {
       for (auto &i : bb->instrs()) {
         if (auto *load = dynamic_cast<const Load*>(&i)) {
@@ -1636,12 +1635,20 @@ void Transform::preprocess() {
               Assume::Dereferenceable));
             src.addConstant(std::move(bytes));
           }
+        } else if (auto *call = dynamic_cast<const FnCall*>(&i)) {
+          if (call->getFnName() == "#sideeffect") {
+            to_remove.emplace_back(const_cast<Instr*>(&i));
+          }
         }
       }
       for (auto &[i, assume] : to_add) {
         bb->addInstrAt(std::move(assume), i, false);
       }
+      for (auto &i : to_remove) {
+        bb->delInstr(i);
+      }
       to_add.clear();
+      to_remove.clear();
     }
   }
 
