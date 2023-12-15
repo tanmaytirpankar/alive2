@@ -2101,7 +2101,7 @@ public:
       return make_tuple(baseAddr, op2.getImm(), readFromReg(op0.getReg()));
     } else {
       assert(op2.isExpr());
-      auto [globalVar, storePtr] = getExprVar(op2.getExpr());
+      auto [globalVar, _] = getExprVar(op2.getExpr());
       return make_tuple(globalVar, 0, readFromReg(op0.getReg()));
     }
   }
