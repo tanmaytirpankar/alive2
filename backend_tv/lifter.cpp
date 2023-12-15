@@ -547,10 +547,40 @@ class arm2llvm {
       AArch64::SMULLv4i16_v4i32,
       AArch64::SMULLv4i16_indexed,
       AArch64::SMULLv2i32_indexed,
-
+      AArch64::USRAv8i8_shift,
+      AArch64::USRAv4i16_shift,
+      AArch64::USRAv2i32_shift,
+      AArch64::SMINv8i8,
+      AArch64::SMINv4i16,
+      AArch64::SMINv2i32,
+      AArch64::SMAXv8i8,
+      AArch64::SMAXv4i16,
+      AArch64::SMAXv2i32,
+      AArch64::UMINv8i8,
+      AArch64::UMINv4i16,
+      AArch64::UMINv2i32,
+      AArch64::UMAXv8i8,
+      AArch64::UMAXv4i16,
+      AArch64::UMAXv2i32,
   };
 
   const set<int> instrs_128 = {
+      AArch64::SMINv16i8,
+      AArch64::SMINv8i16,
+      AArch64::SMINv4i32,
+      AArch64::SMAXv16i8,
+      AArch64::SMAXv8i16,
+      AArch64::SMAXv4i32,
+      AArch64::UMINv16i8,
+      AArch64::UMINv8i16,
+      AArch64::UMINv4i32,
+      AArch64::UMAXv16i8,
+      AArch64::UMAXv8i16,
+      AArch64::UMAXv4i32,
+      AArch64::USRAv16i8_shift,
+      AArch64::USRAv8i16_shift,
+      AArch64::USRAv2i64_shift,
+      AArch64::USRAv4i32_shift,
       AArch64::SMULLv8i16_v4i32,
       AArch64::SMULLv16i8_v8i16,
       AArch64::SMULLv4i32_v2i64,
@@ -848,6 +878,30 @@ class arm2llvm {
 
   void createStore(Value *v, Value *ptr) {
     new StoreInst(v, ptr, false, Align(1), LLVMBB);
+  }
+
+  Value *createSMin(Value *a, Value *b) {
+    auto decl =
+        Intrinsic::getDeclaration(LiftedModule, Intrinsic::smin, a->getType());
+    return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  Value *createSMax(Value *a, Value *b) {
+    auto decl =
+        Intrinsic::getDeclaration(LiftedModule, Intrinsic::smax, a->getType());
+    return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  Value *createUMin(Value *a, Value *b) {
+    auto decl =
+        Intrinsic::getDeclaration(LiftedModule, Intrinsic::umin, a->getType());
+    return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  Value *createUMax(Value *a, Value *b) {
+    auto decl =
+        Intrinsic::getDeclaration(LiftedModule, Intrinsic::umax, a->getType());
+    return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
   }
 
   Value *createFAbs(Value *v) {
@@ -4632,6 +4686,30 @@ public:
     }
 
       // lane-wise binary vector instructions
+    case AArch64::SMINv8i8:
+    case AArch64::SMINv4i16:
+    case AArch64::SMINv2i32:
+    case AArch64::SMINv16i8:
+    case AArch64::SMINv8i16:
+    case AArch64::SMINv4i32:
+    case AArch64::SMAXv8i8:
+    case AArch64::SMAXv4i16:
+    case AArch64::SMAXv2i32:
+    case AArch64::SMAXv16i8:
+    case AArch64::SMAXv8i16:
+    case AArch64::SMAXv4i32:
+    case AArch64::UMINv8i8:
+    case AArch64::UMINv4i16:
+    case AArch64::UMINv2i32:
+    case AArch64::UMINv16i8:
+    case AArch64::UMINv8i16:
+    case AArch64::UMINv4i32:
+    case AArch64::UMAXv8i8:
+    case AArch64::UMAXv4i16:
+    case AArch64::UMAXv2i32:
+    case AArch64::UMAXv16i8:
+    case AArch64::UMAXv8i16:
+    case AArch64::UMAXv4i32:
     case AArch64::SMULLv8i8_v8i16:
     case AArch64::SMULLv2i32_v2i64:
     case AArch64::SMULLv4i16_v4i32:
@@ -4730,6 +4808,38 @@ public:
       bool immShift = false;
       function<Value *(Value *, Value *)> op;
       switch (opcode) {
+      case AArch64::SMINv8i8:
+      case AArch64::SMINv4i16:
+      case AArch64::SMINv2i32:
+      case AArch64::SMINv16i8:
+      case AArch64::SMINv8i16:
+      case AArch64::SMINv4i32:
+        op = [&](Value *a, Value *b) { return createSMin(a, b); };
+        break;
+      case AArch64::SMAXv8i8:
+      case AArch64::SMAXv4i16:
+      case AArch64::SMAXv2i32:
+      case AArch64::SMAXv16i8:
+      case AArch64::SMAXv8i16:
+      case AArch64::SMAXv4i32:
+        op = [&](Value *a, Value *b) { return createSMax(a, b); };
+        break;
+      case AArch64::UMINv8i8:
+      case AArch64::UMINv4i16:
+      case AArch64::UMINv2i32:
+      case AArch64::UMINv16i8:
+      case AArch64::UMINv8i16:
+      case AArch64::UMINv4i32:
+        op = [&](Value *a, Value *b) { return createUMin(a, b); };
+        break;
+      case AArch64::UMAXv8i8:
+      case AArch64::UMAXv4i16:
+      case AArch64::UMAXv2i32:
+      case AArch64::UMAXv16i8:
+      case AArch64::UMAXv8i16:
+      case AArch64::UMAXv4i32:
+        op = [&](Value *a, Value *b) { return createUMax(a, b); };
+        break;
       case AArch64::SMULLv16i8_v8i16:
       case AArch64::SMULLv4i32_v2i64:
       case AArch64::SMULLv8i16_v4i32:
@@ -4895,6 +5005,10 @@ public:
         numElts = 1;
         eltSize = 64;
         break;
+      case AArch64::SMINv2i32:
+      case AArch64::SMAXv2i32:
+      case AArch64::UMINv2i32:
+      case AArch64::UMAXv2i32:
       case AArch64::SMULLv2i32_v2i64:
       case AArch64::USHRv2i32_shift:
       case AArch64::MULv2i32:
@@ -4923,6 +5037,10 @@ public:
         numElts = 2;
         eltSize = 64;
         break;
+      case AArch64::SMINv4i16:
+      case AArch64::SMAXv4i16:
+      case AArch64::UMINv4i16:
+      case AArch64::UMAXv4i16:
       case AArch64::SMULLv4i16_v4i32:
       case AArch64::USHRv4i16_shift:
       case AArch64::SSHLLv4i16_shift:
@@ -4938,6 +5056,10 @@ public:
         numElts = 4;
         eltSize = 16;
         break;
+      case AArch64::SMINv4i32:
+      case AArch64::SMAXv4i32:
+      case AArch64::UMINv4i32:
+      case AArch64::UMAXv4i32:
       case AArch64::SMULLv4i32_v2i64:
       case AArch64::USHRv4i32_shift:
       case AArch64::MULv4i32:
@@ -4953,6 +5075,10 @@ public:
         numElts = 4;
         eltSize = 32;
         break;
+      case AArch64::SMINv8i8:
+      case AArch64::SMAXv8i8:
+      case AArch64::UMINv8i8:
+      case AArch64::UMAXv8i8:
       case AArch64::SMULLv8i8_v8i16:
       case AArch64::MULv8i8:
       case AArch64::SSHLLv8i8_shift:
@@ -4982,9 +5108,17 @@ public:
       case AArch64::USHLLv8i16_shift:
       case AArch64::SHLv8i16_shift:
       case AArch64::SSHRv8i16_shift:
+      case AArch64::SMINv8i16:
+      case AArch64::SMAXv8i16:
+      case AArch64::UMINv8i16:
+      case AArch64::UMAXv8i16:
         numElts = 8;
         eltSize = 16;
         break;
+      case AArch64::SMINv16i8:
+      case AArch64::SMAXv16i8:
+      case AArch64::UMINv16i8:
+      case AArch64::UMAXv16i8:
       case AArch64::SMULLv16i8_v8i16:
       case AArch64::USHRv16i8_shift:
       case AArch64::MULv16i8:
@@ -5100,32 +5234,58 @@ public:
       break;
     }
 
-#define GET_SIZES(INSN)                                                        \
+#define GET_SIZES(INSN, SUFF)                                                  \
   int numElts, eltSize;                                                        \
-  if (opcode == AArch64::INSN##v8i8) {                                         \
+  if (opcode == AArch64::INSN##v8i8##SUFF) {                                   \
     numElts = 8;                                                               \
     eltSize = 8;                                                               \
-  } else if (opcode == AArch64::INSN##v4i16) {                                 \
+  } else if (opcode == AArch64::INSN##v4i16##SUFF) {                           \
     numElts = 4;                                                               \
     eltSize = 16;                                                              \
-  } else if (opcode == AArch64::INSN##v2i32) {                                 \
+  } else if (opcode == AArch64::INSN##v2i32##SUFF) {                           \
     numElts = 2;                                                               \
     eltSize = 32;                                                              \
-  } else if (opcode == AArch64::INSN##v16i8) {                                 \
+  } else if (opcode == AArch64::INSN##v16i8##SUFF) {                           \
     numElts = 16;                                                              \
     eltSize = 8;                                                               \
-  } else if (opcode == AArch64::INSN##v4i32) {                                 \
+  } else if (opcode == AArch64::INSN##v4i32##SUFF) {                           \
     numElts = 4;                                                               \
     eltSize = 32;                                                              \
-  } else if (opcode == AArch64::INSN##v8i16) {                                 \
+  } else if (opcode == AArch64::INSN##v8i16##SUFF) {                           \
     numElts = 8;                                                               \
     eltSize = 16;                                                              \
-  } else if (opcode == AArch64::INSN##v2i64) {                                 \
+  } else if (opcode == AArch64::INSN##v2i64##SUFF) {                           \
     numElts = 2;                                                               \
     eltSize = 64;                                                              \
   } else {                                                                     \
     assert(false);                                                             \
   }
+
+    case AArch64::USRAv8i8_shift:
+    case AArch64::USRAv4i16_shift:
+    case AArch64::USRAv2i32_shift:
+    case AArch64::USRAv16i8_shift:
+    case AArch64::USRAv8i16_shift:
+    case AArch64::USRAv2i64_shift:
+    case AArch64::USRAv4i32_shift: {
+      GET_SIZES(USRA, _shift);
+      auto vTy =
+          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
+      auto a = createBitCast(readFromOperand(1), vTy);
+      auto b = createBitCast(readFromOperand(2), vTy);
+      auto exp = getImm(3);
+      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
+                                            UndefValue::get(getIntTy(eltSize)));
+      for (int i = 0; i < numElts; ++i) {
+        auto e1 = createExtractElement(a, getIntConst(i, 32));
+        auto e2 = createExtractElement(b, getIntConst(i, 32));
+        auto shift = createMaskedLShr(e2, getIntConst(exp, eltSize));
+        auto sum = createAdd(e1, shift);
+        res = createInsertElement(res, sum, getIntConst(i, 32));
+      }
+      updateOutputReg(res);
+      break;
+    }
 
     case AArch64::ZIP1v4i16:
     case AArch64::ZIP1v2i32:
@@ -5134,7 +5294,7 @@ public:
     case AArch64::ZIP1v16i8:
     case AArch64::ZIP1v2i64:
     case AArch64::ZIP1v4i32: {
-      GET_SIZES(ZIP1);
+      GET_SIZES(ZIP1, );
       auto vTy =
           VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
       auto a = createBitCast(readFromOperand(1), vTy);
@@ -5158,7 +5318,7 @@ public:
     case AArch64::ZIP2v2i64:
     case AArch64::ZIP2v16i8:
     case AArch64::ZIP2v4i32: {
-      GET_SIZES(ZIP2)
+      GET_SIZES(ZIP2, )
       auto vTy =
           VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
       auto a = createBitCast(readFromOperand(1), vTy);
@@ -5182,7 +5342,7 @@ public:
     case AArch64::ADDPv4i32:
     case AArch64::ADDPv8i16:
     case AArch64::ADDPv2i64: {
-      GET_SIZES(ADDP);
+      GET_SIZES(ADDP, );
       auto x = readFromOperand(1);
       auto y = readFromOperand(2);
       auto conc = concat(y, x);

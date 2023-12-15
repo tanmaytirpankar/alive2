@@ -138,5 +138,6 @@ Please contact us or submit a PR if something is missing or inaccurate.
 22. miscompile from AArch64 global isel backend (https://github.com/llvm/llvm-project/issues/61008)
 23. AArch64 miscompile of i1 arithmetic with global isel (https://github.com/llvm/llvm-project/issues/72475)
 24. backends will turn OOB InsertElement into OOB store (https://github.com/llvm/llvm-project/issues/74248)
+25. another OOB InsertElement -> OOB store (https://github.com/llvm/llvm-project/issues/75557)
 
 =======
