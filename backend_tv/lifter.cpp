@@ -5383,10 +5383,10 @@ public:
       break;
     }
 
-    case AArch64::SMULLv4i16_indexed:
-    case AArch64::SMULLv2i32_indexed:
     case AArch64::SMULLv4i32_indexed:
-    case AArch64::SMULLv8i16_indexed: {
+    case AArch64::SMULLv8i16_indexed:
+    case AArch64::SMULLv4i16_indexed:
+    case AArch64::SMULLv2i32_indexed: {
       int eltSize, numElts;
       if (opcode == AArch64::SMULLv8i16_indexed) {
         numElts = 8;
@@ -5413,8 +5413,13 @@ public:
       Value *res =
           ConstantVector::getSplat(ElementCount::getFixed(numElts),
                                    UndefValue::get(getIntTy(2 * eltSize)));
+      // offset is nonzero when we're dealing with SMULL2
+      int offset = (opcode == AArch64::SMULLv4i32_indexed ||
+                    opcode == AArch64::SMULLv8i16_indexed)
+                       ? (numElts / 2)
+                       : 0;
       for (int i = 0; i < numElts; ++i) {
-        auto e1 = createExtractElement(a, getIntConst(i, 32));
+        auto e1 = createExtractElement(a, getIntConst(i + offset, 32));
         auto e2 = createExtractElement(b, getIntConst(idx, 32));
         res = createInsertElement(res, createMul(e1, e2), getIntConst(i, 32));
       }
