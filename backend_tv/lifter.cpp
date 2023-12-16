@@ -327,6 +327,7 @@ class arm2llvm {
   };
 
   const set<int> instrs_64 = {
+      AArch64::BL,
       AArch64::ADDXrx,
       AArch64::ADDSXrs,
       AArch64::ADDSXri,
@@ -2141,6 +2142,10 @@ public:
     // real
     case AArch64::SEH_Nop:
       break;
+
+    case AArch64::BL:
+      *out << "\nERROR: not lifting calls yet\n\n";
+      exit(-1);
 
     case AArch64::MRS: {
       // https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/NZCV--Condition-Flags
@@ -5898,7 +5903,7 @@ public:
             *LiftedModule, srcFnGlobal.getValueType(), false,
             GlobalValue::LinkageTypes::ExternalLinkage, nullptr, name);
         g->setAlignment(MaybeAlign(srcFnGlobal.getAlign()));
-	g->setConstant(srcFnGlobal.isConstant());
+        g->setConstant(srcFnGlobal.isConstant());
         globals[srcFnGlobal.getName().str()] = g;
       }
     }
