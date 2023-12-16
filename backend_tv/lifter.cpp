@@ -567,9 +567,15 @@ class arm2llvm {
       AArch64::UMULLv2i32_indexed,
       AArch64::UMULLv8i8_v8i16,
       AArch64::UMULLv4i16_v4i32,
+      AArch64::CLZv2i32,
+      AArch64::CLZv4i16,
+      AArch64::CLZv8i8,
   };
 
   const set<int> instrs_128 = {
+      AArch64::CLZv16i8,
+      AArch64::CLZv8i16,
+      AArch64::CLZv4i32,
       AArch64::UMULLv16i8_v8i16,
       AArch64::UMULLv8i16_v4i32,
       AArch64::UMULLv4i32_v2i64,
@@ -945,9 +951,9 @@ class arm2llvm {
   }
 
   CallInst *createCtPop(Value *v) {
-    auto ctpop_decl =
+    auto decl =
         Intrinsic::getDeclaration(LiftedModule, Intrinsic::ctpop, v->getType());
-    return CallInst::Create(ctpop_decl, {v}, nextName(), LLVMBB);
+    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
   }
 
   // first argument is an i16
@@ -5573,7 +5579,13 @@ public:
       break;
     }
 
-      // unary vector instructions
+    // unary vector instructions
+    case AArch64::CLZv2i32:
+    case AArch64::CLZv4i16:
+    case AArch64::CLZv8i8:
+    case AArch64::CLZv16i8:
+    case AArch64::CLZv8i16:
+    case AArch64::CLZv4i32:
     case AArch64::UADALPv8i8_v4i16:
     case AArch64::UADALPv4i16_v2i32:
     case AArch64::UADALPv4i32_v2i64:
@@ -5617,6 +5629,7 @@ public:
         eltSize = 64;
         numElts = 1;
         break;
+      case AArch64::CLZv4i16:
       case AArch64::NEGv4i16:
       case AArch64::UADDLVv4i16v:
       case AArch64::UADDLPv4i16_v2i32:
@@ -5625,12 +5638,14 @@ public:
         eltSize = 16;
         numElts = 4;
         break;
+      case AArch64::CLZv2i32:
       case AArch64::NEGv2i32:
       case AArch64::UADDLPv2i32_v1i64:
       case AArch64::UADALPv2i32_v1i64:
         eltSize = 32;
         numElts = 2;
         break;
+      case AArch64::CLZv8i16:
       case AArch64::NEGv8i16:
       case AArch64::UADDLVv8i16v:
       case AArch64::UADDLPv8i16_v4i32:
@@ -5643,6 +5658,7 @@ public:
         eltSize = 64;
         numElts = 2;
         break;
+      case AArch64::CLZv4i32:
       case AArch64::NEGv4i32:
       case AArch64::UADDLVv4i32v:
       case AArch64::UADDLPv4i32_v2i64:
@@ -5651,6 +5667,7 @@ public:
         eltSize = 32;
         numElts = 4;
         break;
+      case AArch64::CLZv8i8:
       case AArch64::UADDLVv8i8v:
       case AArch64::UADDLPv8i8_v4i16:
       case AArch64::UADALPv8i8_v4i16:
@@ -5662,6 +5679,7 @@ public:
         eltSize = 8;
         numElts = 8;
         break;
+      case AArch64::CLZv16i8:
       case AArch64::RBITv16i8:
       case AArch64::ADDVv16i8v:
       case AArch64::NEGv16i8:
@@ -5682,6 +5700,17 @@ public:
 
       // Perform the operation
       switch (opcode) {
+      case AArch64::CLZv2i32:
+      case AArch64::CLZv4i16:
+      case AArch64::CLZv8i8:
+      case AArch64::CLZv16i8:
+      case AArch64::CLZv8i16:
+      case AArch64::CLZv4i32: {
+        auto src_vector = createBitCast(src, vTy);
+        auto res = createCtlz(src_vector);
+        updateOutputReg(res);
+        break;
+      }
       case AArch64::ADDVv16i8v:
       case AArch64::ADDVv8i16v:
       case AArch64::ADDVv4i32v:
