@@ -563,9 +563,18 @@ class arm2llvm {
       AArch64::UMAXv8i8,
       AArch64::UMAXv4i16,
       AArch64::UMAXv2i32,
+      AArch64::UMULLv4i16_indexed,
+      AArch64::UMULLv2i32_indexed,
+      AArch64::UMULLv8i8_v8i16,
+      AArch64::UMULLv4i16_v4i32,
   };
 
   const set<int> instrs_128 = {
+      AArch64::UMULLv16i8_v8i16,
+      AArch64::UMULLv8i16_v4i32,
+      AArch64::UMULLv4i32_v2i64,
+      AArch64::UMULLv8i16_indexed,
+      AArch64::UMULLv4i32_indexed,
       AArch64::SMINv16i8,
       AArch64::SMINv8i16,
       AArch64::SMINv4i32,
@@ -4776,6 +4785,11 @@ public:
     case AArch64::ORRv8i8:
     case AArch64::ORRv16i8:
     case AArch64::UMULLv2i32_v2i64:
+    case AArch64::UMULLv8i8_v8i16:
+    case AArch64::UMULLv4i16_v4i32:
+    case AArch64::UMULLv16i8_v8i16:
+    case AArch64::UMULLv8i16_v4i32:
+    case AArch64::UMULLv4i32_v2i64:
     case AArch64::USHLv1i64:
     case AArch64::USHLv4i16:
     case AArch64::USHLv16i8:
@@ -4844,6 +4858,18 @@ public:
       case AArch64::UMAXv8i16:
       case AArch64::UMAXv4i32:
         op = [&](Value *a, Value *b) { return createUMax(a, b); };
+        break;
+      case AArch64::UMULLv16i8_v8i16:
+      case AArch64::UMULLv8i16_v4i32:
+      case AArch64::UMULLv4i32_v2i64:
+        // these three cases are UMULL2
+        a = createRawLShr(a, getIntConst(64, 128));
+        b = createRawLShr(b, getIntConst(64, 128));
+      case AArch64::UMULLv2i32_v2i64:
+      case AArch64::UMULLv8i8_v8i16:
+      case AArch64::UMULLv4i16_v4i32:
+        ext = extKind::ZExt;
+        op = [&](Value *a, Value *b) { return createMul(a, b); };
         break;
       case AArch64::SMULLv16i8_v8i16:
       case AArch64::SMULLv4i32_v2i64:
@@ -4966,10 +4992,6 @@ public:
       case AArch64::ORRv16i8:
         op = [&](Value *a, Value *b) { return createOr(a, b); };
         break;
-      case AArch64::UMULLv2i32_v2i64:
-        ext = extKind::ZExt;
-        op = [&](Value *a, Value *b) { return createMul(a, b); };
-        break;
       case AArch64::SSHLLv4i32_shift:
       case AArch64::SSHLLv8i16_shift:
       case AArch64::SSHLLv16i8_shift:
@@ -5010,6 +5032,7 @@ public:
         numElts = 1;
         eltSize = 64;
         break;
+      case AArch64::UMULLv2i32_v2i64:
       case AArch64::SMINv2i32:
       case AArch64::SMAXv2i32:
       case AArch64::UMINv2i32:
@@ -5042,6 +5065,7 @@ public:
         numElts = 2;
         eltSize = 64;
         break;
+      case AArch64::UMULLv4i16_v4i32:
       case AArch64::SMINv4i16:
       case AArch64::SMAXv4i16:
       case AArch64::UMINv4i16:
@@ -5061,6 +5085,7 @@ public:
         numElts = 4;
         eltSize = 16;
         break;
+      case AArch64::UMULLv4i32_v2i64:
       case AArch64::SMINv4i32:
       case AArch64::SMAXv4i32:
       case AArch64::UMINv4i32:
@@ -5080,6 +5105,7 @@ public:
         numElts = 4;
         eltSize = 32;
         break;
+      case AArch64::UMULLv8i8_v8i16:
       case AArch64::SMINv8i8:
       case AArch64::SMAXv8i8:
       case AArch64::UMINv8i8:
@@ -5098,9 +5124,13 @@ public:
       case AArch64::SSHLv8i8:
       case AArch64::BICv8i8:
       case AArch64::USHRv8i8_shift:
+      case AArch64::USHLLv8i8_shift:
+      case AArch64::UADDLv8i8_v8i16:
+      case AArch64::USUBLv8i8_v8i16:
         numElts = 8;
         eltSize = 8;
         break;
+      case AArch64::UMULLv8i16_v4i32:
       case AArch64::SMULLv8i16_v4i32:
       case AArch64::USHRv8i16_shift:
       case AArch64::MULv8i16:
@@ -5120,6 +5150,7 @@ public:
         numElts = 8;
         eltSize = 16;
         break;
+      case AArch64::UMULLv16i8_v8i16:
       case AArch64::SMINv16i8:
       case AArch64::SMAXv16i8:
       case AArch64::UMINv16i8:
@@ -5140,19 +5171,6 @@ public:
       case AArch64::SHLv16i8_shift:
       case AArch64::SSHRv16i8_shift:
         numElts = 16;
-        eltSize = 8;
-        break;
-      case AArch64::UMULLv2i32_v2i64:
-        numElts = 2;
-        eltSize = 32;
-        break;
-      case AArch64::USHLLv8i8_shift:
-        numElts = 8;
-        eltSize = 8;
-        break;
-      case AArch64::UADDLv8i8_v8i16:
-      case AArch64::USUBLv8i8_v8i16:
-        numElts = 8;
         eltSize = 8;
         break;
       default:
@@ -5383,21 +5401,29 @@ public:
       break;
     }
 
+    case AArch64::UMULLv4i16_indexed:
+    case AArch64::UMULLv2i32_indexed:
+    case AArch64::UMULLv8i16_indexed:
+    case AArch64::UMULLv4i32_indexed:
     case AArch64::SMULLv4i32_indexed:
     case AArch64::SMULLv8i16_indexed:
     case AArch64::SMULLv4i16_indexed:
     case AArch64::SMULLv2i32_indexed: {
       int eltSize, numElts;
-      if (opcode == AArch64::SMULLv8i16_indexed) {
+      if (opcode == AArch64::SMULLv8i16_indexed ||
+          opcode == AArch64::UMULLv8i16_indexed) {
         numElts = 8;
         eltSize = 16;
-      } else if (opcode == AArch64::SMULLv4i32_indexed) {
+      } else if (opcode == AArch64::SMULLv4i32_indexed ||
+                 opcode == AArch64::UMULLv4i32_indexed) {
         numElts = 4;
         eltSize = 32;
-      } else if (opcode == AArch64::SMULLv2i32_indexed) {
+      } else if (opcode == AArch64::SMULLv2i32_indexed ||
+                 opcode == AArch64::UMULLv2i32_indexed) {
         numElts = 2;
         eltSize = 32;
-      } else if (opcode == AArch64::SMULLv4i16_indexed) {
+      } else if (opcode == AArch64::SMULLv4i16_indexed ||
+                 opcode == AArch64::UMULLv4i16_indexed) {
         numElts = 4;
         eltSize = 16;
       } else {
@@ -5407,15 +5433,34 @@ public:
           VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
       auto vBigTy = VectorType::get(getIntTy(2 * eltSize),
                                     ElementCount::getFixed(numElts));
-      auto a = createSExt(createBitCast(readFromOperand(1), vTy), vBigTy);
-      auto b = createSExt(createBitCast(readFromOperand(2), vTy), vBigTy);
+      Value *a, *b;
+      switch (opcode) {
+      case AArch64::UMULLv4i16_indexed:
+      case AArch64::UMULLv2i32_indexed:
+      case AArch64::UMULLv8i16_indexed:
+      case AArch64::UMULLv4i32_indexed:
+        a = createZExt(createBitCast(readFromOperand(1), vTy), vBigTy);
+        b = createZExt(createBitCast(readFromOperand(2), vTy), vBigTy);
+        break;
+      case AArch64::SMULLv4i32_indexed:
+      case AArch64::SMULLv8i16_indexed:
+      case AArch64::SMULLv4i16_indexed:
+      case AArch64::SMULLv2i32_indexed:
+        a = createSExt(createBitCast(readFromOperand(1), vTy), vBigTy);
+        b = createSExt(createBitCast(readFromOperand(2), vTy), vBigTy);
+        break;
+      default:
+        assert(false);
+      }
       auto idx = getImm(3);
       Value *res =
           ConstantVector::getSplat(ElementCount::getFixed(numElts),
                                    UndefValue::get(getIntTy(2 * eltSize)));
-      // offset is nonzero when we're dealing with SMULL2
+      // offset is nonzero when we're dealing with SMULL2/UMULL2
       int offset = (opcode == AArch64::SMULLv4i32_indexed ||
-                    opcode == AArch64::SMULLv8i16_indexed)
+                    opcode == AArch64::SMULLv8i16_indexed ||
+                    opcode == AArch64::UMULLv4i32_indexed ||
+                    opcode == AArch64::UMULLv8i16_indexed)
                        ? (numElts / 2)
                        : 0;
       for (int i = 0; i < numElts; ++i) {
