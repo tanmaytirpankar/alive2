@@ -5898,7 +5898,7 @@ public:
             *LiftedModule, srcFnGlobal.getValueType(), false,
             GlobalValue::LinkageTypes::ExternalLinkage, nullptr, name);
         g->setAlignment(MaybeAlign(srcFnGlobal.getAlign()));
-	g->setConstant(srcFnGlobal.isConstant());
+        g->setConstant(srcFnGlobal.isConstant());
         globals[srcFnGlobal.getName().str()] = g;
       }
     }
