@@ -570,9 +570,23 @@ class arm2llvm {
       AArch64::CLZv2i32,
       AArch64::CLZv4i16,
       AArch64::CLZv8i8,
+      AArch64::ABSv1i64,
+      AArch64::ABSv8i8,
+      AArch64::ABSv4i16,
+      AArch64::ABSv2i32,
+      AArch64::MVNIv2s_msl,
+      AArch64::MVNIv2i32,
+      AArch64::MVNIv4i16,
   };
 
   const set<int> instrs_128 = {
+      AArch64::MVNIv4s_msl,
+      AArch64::MVNIv8i16,
+      AArch64::MVNIv4i32,
+      AArch64::ABSv2i64,
+      AArch64::ABSv16i8,
+      AArch64::ABSv8i16,
+      AArch64::ABSv4i32,
       AArch64::CLZv16i8,
       AArch64::CLZv8i16,
       AArch64::CLZv4i32,
@@ -1001,6 +1015,12 @@ class arm2llvm {
     return CallInst::Create(decl, {v}, nextName(), LLVMBB);
   }
 
+  CallInst *createAbs(Value *v) {
+    auto *decl =
+        Intrinsic::getDeclaration(LiftedModule, Intrinsic::abs, v->getType());
+    return CallInst::Create(decl, {v, getIntConst(0, 1)}, nextName(), LLVMBB);
+  }
+
   CallInst *createCtlz(Value *v) {
     auto *decl =
         Intrinsic::getDeclaration(LiftedModule, Intrinsic::ctlz, v->getType());
@@ -1101,6 +1121,21 @@ class arm2llvm {
         BinaryOperator::Create(Instruction::And, mask, b, nextName(), LLVMBB);
     return BinaryOperator::Create(Instruction::Shl, a, masked, nextName(),
                                   LLVMBB);
+  }
+
+  Value *getLowOnes(int ones, int w) {
+    auto zero = getIntConst(0, ones);
+    auto one = getIntConst(1, ones);
+    auto minusOne = createSub(zero, one);
+    return createZExt(minusOne, getIntTy(w));
+  }
+
+  Value *createMSL(Value *a, int b) {
+    auto v = BinaryOperator::Create(Instruction::Shl, a,
+                                    getIntConst(b, getBitWidth(a)), nextName(),
+                                    LLVMBB);
+    auto ones = getLowOnes(b, getBitWidth(a));
+    return createOr(v, ones);
   }
 
   BinaryOperator *createAnd(Value *a, Value *b) {
@@ -1541,13 +1576,6 @@ class arm2llvm {
       v <<= 1;
     }
     return ret;
-  }
-
-  Value *getLowOnes(int ones, int w) {
-    auto zero = getIntConst(0, ones);
-    auto one = getIntConst(1, ones);
-    auto minusOne = createSub(zero, one);
-    return createZExt(minusOne, getIntTy(w));
   }
 
   Value *maskLower(Value *v, unsigned b) {
@@ -4219,6 +4247,48 @@ public:
       break;
     }
 
+    case AArch64::MVNIv8i16:
+    case AArch64::MVNIv4i32:
+    case AArch64::MVNIv4i16:
+    case AArch64::MVNIv2i32: {
+      int numElts, eltSize;
+      switch (opcode) {
+      case AArch64::MVNIv8i16:
+        numElts = 8;
+        eltSize = 16;
+        break;
+      case AArch64::MVNIv4i32:
+        numElts = 4;
+        eltSize = 32;
+        break;
+      case AArch64::MVNIv4i16:
+        numElts = 4;
+        eltSize = 16;
+        break;
+      case AArch64::MVNIv2i32:
+        numElts = 2;
+        eltSize = 32;
+        break;
+      default:
+        assert(false);
+      }
+      auto imm1 = getIntConst(getImm(1), eltSize);
+      auto imm2 = getIntConst(getImm(2), eltSize);
+      auto v = createNot(createRawShl(imm1, imm2));
+      updateOutputReg(dupElts(v, numElts, eltSize));
+      break;
+    }
+
+    case AArch64::MVNIv2s_msl:
+    case AArch64::MVNIv4s_msl: {
+      auto imm1 = getIntConst(getImm(1), 32);
+      auto imm2 = getImm(2) & ~0x100;
+      auto v = createNot(createMSL(imm1, imm2));
+      int numElts = (opcode == AArch64::MVNIv2s_msl) ? 2 : 4;
+      updateOutputReg(dupElts(v, numElts, 32));
+      break;
+    }
+
     case AArch64::MOVIv16b_ns: {
       auto v = getIntConst(getImm(1), 8);
       updateOutputReg(dupElts(v, 16, 8));
@@ -5579,7 +5649,15 @@ public:
       break;
     }
 
-    // unary vector instructions
+      // unary vector instructions
+    case AArch64::ABSv1i64:
+    case AArch64::ABSv8i8:
+    case AArch64::ABSv4i16:
+    case AArch64::ABSv2i32:
+    case AArch64::ABSv2i64:
+    case AArch64::ABSv16i8:
+    case AArch64::ABSv8i16:
+    case AArch64::ABSv4i32:
     case AArch64::CLZv2i32:
     case AArch64::CLZv4i16:
     case AArch64::CLZv8i8:
@@ -5625,10 +5703,12 @@ public:
       u_int64_t eltSize, numElts;
 
       switch (opcode) {
+      case AArch64::ABSv1i64:
       case AArch64::NEGv1i64:
         eltSize = 64;
         numElts = 1;
         break;
+      case AArch64::ABSv4i16:
       case AArch64::CLZv4i16:
       case AArch64::NEGv4i16:
       case AArch64::UADDLVv4i16v:
@@ -5638,6 +5718,7 @@ public:
         eltSize = 16;
         numElts = 4;
         break;
+      case AArch64::ABSv2i32:
       case AArch64::CLZv2i32:
       case AArch64::NEGv2i32:
       case AArch64::UADDLPv2i32_v1i64:
@@ -5645,6 +5726,7 @@ public:
         eltSize = 32;
         numElts = 2;
         break;
+      case AArch64::ABSv8i16:
       case AArch64::CLZv8i16:
       case AArch64::NEGv8i16:
       case AArch64::UADDLVv8i16v:
@@ -5654,10 +5736,12 @@ public:
         eltSize = 16;
         numElts = 8;
         break;
+      case AArch64::ABSv2i64:
       case AArch64::NEGv2i64:
         eltSize = 64;
         numElts = 2;
         break;
+      case AArch64::ABSv4i32:
       case AArch64::CLZv4i32:
       case AArch64::NEGv4i32:
       case AArch64::UADDLVv4i32v:
@@ -5667,6 +5751,7 @@ public:
         eltSize = 32;
         numElts = 4;
         break;
+      case AArch64::ABSv8i8:
       case AArch64::CLZv8i8:
       case AArch64::UADDLVv8i8v:
       case AArch64::UADDLPv8i8_v4i16:
@@ -5679,6 +5764,7 @@ public:
         eltSize = 8;
         numElts = 8;
         break;
+      case AArch64::ABSv16i8:
       case AArch64::CLZv16i8:
       case AArch64::RBITv16i8:
       case AArch64::ADDVv16i8v:
@@ -5700,6 +5786,19 @@ public:
 
       // Perform the operation
       switch (opcode) {
+      case AArch64::ABSv1i64:
+      case AArch64::ABSv8i8:
+      case AArch64::ABSv4i16:
+      case AArch64::ABSv2i32:
+      case AArch64::ABSv2i64:
+      case AArch64::ABSv16i8:
+      case AArch64::ABSv8i16:
+      case AArch64::ABSv4i32: {
+        auto src_vector = createBitCast(src, vTy);
+        auto res = createAbs(src_vector);
+        updateOutputReg(res);
+        break;
+      }
       case AArch64::CLZv2i32:
       case AArch64::CLZv4i16:
       case AArch64::CLZv8i8:
