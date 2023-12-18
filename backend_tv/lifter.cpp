@@ -579,6 +579,29 @@ class arm2llvm {
       AArch64::MVNIv4i16,
   };
 
+  /*
+SMINVv8i8v
+SMINVv4i16v
+SMINVv16i8v
+UMINVv8i16v
+SMINVv8i16v
+UMINVv4i16v
+UMINVv8i8v
+SMINVv4i32v
+UMINVv4i32v
+UMINVv16i8v
+SMAXVv8i8v
+SMAXVv4i16v
+SMAXVv16i8v
+UMAXVv8i16v
+SMAXVv8i16v
+UMAXVv4i16v
+UMAXVv16i8v
+UMAXVv8i8v
+SMAXVv4i32v
+UMAXVv4i32v
+  */
+
   const set<int> instrs_128 = {
       AArch64::MVNIv4s_msl,
       AArch64::MVNIv8i16,

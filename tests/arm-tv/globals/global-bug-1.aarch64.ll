@@ -3,11 +3,11 @@ source_filename = "/home/regehr/arm-tests/test-777947606.ll"
 @bytes2 = external hidden global i32
 
 ; Function Attrs: nofree
-define i64 @cast_and_load_2() #0 {
-  %1 = load i64, ptr @bytes2, align 4
+define i32 @cast_and_load_2() #0 {
+  %1 = load i32, ptr @bytes2, align 4
   %2 = urem i32 66690555, 1283691433
   store i32 %2, ptr @bytes2, align 4
-  ret i64 %1
+  ret i32 %1
 }
 
 attributes #0 = { nofree }
