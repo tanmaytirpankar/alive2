@@ -577,32 +577,29 @@ class arm2llvm {
       AArch64::MVNIv2s_msl,
       AArch64::MVNIv2i32,
       AArch64::MVNIv4i16,
+      AArch64::SMINVv8i8v,
+      AArch64::UMINVv8i8v,
+      AArch64::SMAXVv8i8v,
+      AArch64::UMAXVv8i8v,
+      AArch64::SMINVv4i16v,
+      AArch64::UMINVv4i16v,
+      AArch64::SMAXVv4i16v,
+      AArch64::UMAXVv4i16v,
   };
 
-  /*
-SMINVv8i8v
-SMINVv4i16v
-SMINVv16i8v
-UMINVv8i16v
-SMINVv8i16v
-UMINVv4i16v
-UMINVv8i8v
-SMINVv4i32v
-UMINVv4i32v
-UMINVv16i8v
-SMAXVv8i8v
-SMAXVv4i16v
-SMAXVv16i8v
-UMAXVv8i16v
-SMAXVv8i16v
-UMAXVv4i16v
-UMAXVv16i8v
-UMAXVv8i8v
-SMAXVv4i32v
-UMAXVv4i32v
-  */
-
   const set<int> instrs_128 = {
+      AArch64::SMAXVv4i32v,
+      AArch64::UMAXVv4i32v,
+      AArch64::SMINVv4i32v,
+      AArch64::UMINVv4i32v,
+      AArch64::UMINVv8i16v,
+      AArch64::SMINVv8i16v,
+      AArch64::UMAXVv8i16v,
+      AArch64::SMAXVv8i16v,
+      AArch64::SMINVv16i8v,
+      AArch64::UMINVv16i8v,
+      AArch64::SMAXVv16i8v,
+      AArch64::UMAXVv16i8v,
       AArch64::MVNIv4s_msl,
       AArch64::MVNIv8i16,
       AArch64::MVNIv4i32,
@@ -5356,7 +5353,97 @@ public:
       break;
     }
 
-#define GET_SIZES(INSN, SUFF)                                                  \
+#define GET_SIZES5(INSN, SUFF)                                                 \
+  if (opcode == AArch64::INSN##v8i8##SUFF) {                                   \
+    numElts = 8;                                                               \
+    eltSize = 8;                                                               \
+  } else if (opcode == AArch64::INSN##v4i16##SUFF) {                           \
+    numElts = 4;                                                               \
+    eltSize = 16;                                                              \
+  } else if (opcode == AArch64::INSN##v16i8##SUFF) {                           \
+    numElts = 16;                                                              \
+    eltSize = 8;                                                               \
+  } else if (opcode == AArch64::INSN##v4i32##SUFF) {                           \
+    numElts = 4;                                                               \
+    eltSize = 32;                                                              \
+  } else if (opcode == AArch64::INSN##v8i16##SUFF) {                           \
+    numElts = 8;                                                               \
+    eltSize = 16;                                                              \
+  }
+
+    case AArch64::SMINVv8i8v:
+    case AArch64::UMINVv8i8v:
+    case AArch64::SMAXVv8i8v:
+    case AArch64::UMAXVv8i8v:
+    case AArch64::SMINVv4i16v:
+    case AArch64::UMINVv4i16v:
+    case AArch64::SMAXVv4i16v:
+    case AArch64::UMAXVv4i16v:
+    case AArch64::SMAXVv4i32v:
+    case AArch64::UMAXVv4i32v:
+    case AArch64::SMINVv4i32v:
+    case AArch64::UMINVv4i32v:
+    case AArch64::UMINVv8i16v:
+    case AArch64::SMINVv8i16v:
+    case AArch64::UMAXVv8i16v:
+    case AArch64::SMAXVv8i16v:
+    case AArch64::SMINVv16i8v:
+    case AArch64::UMINVv16i8v:
+    case AArch64::SMAXVv16i8v:
+    case AArch64::UMAXVv16i8v: {
+      int numElts = -1, eltSize = -1;
+      GET_SIZES5(SMINV, v);
+      GET_SIZES5(SMAXV, v);
+      GET_SIZES5(UMINV, v);
+      GET_SIZES5(UMAXV, v);
+      assert(numElts != -1 && eltSize != -1);
+      auto vTy =
+          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
+      auto v = createBitCast(readFromOperand(1), vTy);
+      Value *min = createExtractElement(v, getIntConst(0, 32));
+      for (int i = 1; i < numElts; ++i) {
+        auto e = createExtractElement(v, getIntConst(i, 32));
+        auto p{ICmpInst::Predicate::BAD_ICMP_PREDICATE};
+        switch (opcode) {
+        case AArch64::SMINVv8i8v:
+        case AArch64::SMINVv4i16v:
+        case AArch64::SMINVv8i16v:
+        case AArch64::SMINVv16i8v:
+        case AArch64::SMINVv4i32v:
+          p = ICmpInst::Predicate::ICMP_SLT;
+          break;
+        case AArch64::UMINVv8i8v:
+        case AArch64::UMINVv4i16v:
+        case AArch64::UMINVv4i32v:
+        case AArch64::UMINVv8i16v:
+        case AArch64::UMINVv16i8v:
+          p = ICmpInst::Predicate::ICMP_ULT;
+          break;
+        case AArch64::SMAXVv8i8v:
+        case AArch64::SMAXVv4i16v:
+        case AArch64::SMAXVv8i16v:
+        case AArch64::SMAXVv16i8v:
+        case AArch64::SMAXVv4i32v:
+          p = ICmpInst::Predicate::ICMP_SGT;
+          break;
+        case AArch64::UMAXVv4i16v:
+        case AArch64::UMAXVv4i32v:
+        case AArch64::UMAXVv8i16v:
+        case AArch64::UMAXVv8i8v:
+        case AArch64::UMAXVv16i8v:
+          p = ICmpInst::Predicate::ICMP_UGT;
+          break;
+        default:
+          assert(false);
+        }
+        auto c = createICmp(p, min, e);
+        min = createSelect(c, min, e);
+      }
+      updateOutputReg(min);
+      break;
+    }
+
+#define GET_SIZES7(INSN, SUFF)                                                 \
   int numElts, eltSize;                                                        \
   if (opcode == AArch64::INSN##v8i8##SUFF) {                                   \
     numElts = 8;                                                               \
@@ -5390,7 +5477,7 @@ public:
     case AArch64::USRAv8i16_shift:
     case AArch64::USRAv2i64_shift:
     case AArch64::USRAv4i32_shift: {
-      GET_SIZES(USRA, _shift);
+      GET_SIZES7(USRA, _shift);
       auto vTy =
           VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
       auto a = createBitCast(readFromOperand(1), vTy);
@@ -5416,7 +5503,7 @@ public:
     case AArch64::ZIP1v16i8:
     case AArch64::ZIP1v2i64:
     case AArch64::ZIP1v4i32: {
-      GET_SIZES(ZIP1, );
+      GET_SIZES7(ZIP1, );
       auto vTy =
           VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
       auto a = createBitCast(readFromOperand(1), vTy);
@@ -5440,7 +5527,7 @@ public:
     case AArch64::ZIP2v2i64:
     case AArch64::ZIP2v16i8:
     case AArch64::ZIP2v4i32: {
-      GET_SIZES(ZIP2, )
+      GET_SIZES7(ZIP2, )
       auto vTy =
           VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
       auto a = createBitCast(readFromOperand(1), vTy);
@@ -5464,7 +5551,7 @@ public:
     case AArch64::ADDPv4i32:
     case AArch64::ADDPv8i16:
     case AArch64::ADDPv2i64: {
-      GET_SIZES(ADDP, );
+      GET_SIZES7(ADDP, );
       auto x = readFromOperand(1);
       auto y = readFromOperand(2);
       auto conc = concat(y, x);
