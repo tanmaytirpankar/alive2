@@ -3788,7 +3788,7 @@ public:
       auto baseReg = op2.getReg();
       assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
              (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
-             (baseReg == AArch64::XZR));
+             (baseReg == AArch64::XZR) || (baseReg == AArch64::FP));
       auto baseAddr = readPtrFromReg(baseReg);
 
       int size = 0;
@@ -3996,17 +3996,22 @@ public:
       auto cond_val = createICmp(ICmpInst::Predicate::ICMP_EQ, operand,
                                  getIntConst(0, getBitWidth(operand)));
       auto dst_true = getBB(Fn, CurInst->getOperand(1));
-      assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
+      assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
 
-      const string *dst_false_name = nullptr;
-      for (auto &succ : MCBB->getSuccs()) {
-        if (succ->getName() != dst_true->getName()) {
-          dst_false_name = &succ->getName();
-          break;
+      BasicBlock *dst_false {nullptr};
+      if (MCBB->getSuccs().size() == 1) {
+        dst_false = dst_true;
+      } else {
+        const string *dst_false_name = nullptr;
+        for (auto &succ : MCBB->getSuccs()) {
+          if (succ->getName() != dst_true->getName()) {
+            dst_false_name = &succ->getName();
+            break;
+          }
         }
+        assert(dst_false_name != nullptr);
+        dst_false = getBBByName(Fn, *dst_false_name);
       }
-      assert(dst_false_name != nullptr);
-      auto *dst_false = getBBByName(Fn, *dst_false_name);
       createBranch(cond_val, dst_true, dst_false);
       break;
     }
