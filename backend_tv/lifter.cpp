@@ -587,9 +587,14 @@ class arm2llvm {
       AArch64::ORRv8i8,
       AArch64::ORRv2i32,
       AArch64::ORRv4i16,
+      AArch64::REV64v2i32,
+      AArch64::REV64v4i16,
+      AArch64::REV64v8i8,
   };
-  
+
   const set<int> instrs_128 = {
+      AArch64::REV64v8i16,
+      AArch64::REV64v16i8,
       AArch64::ORRv16i8,
       AArch64::ORRv8i16,
       AArch64::ORRv4i32,
@@ -1660,7 +1665,9 @@ class arm2llvm {
 
   Value *rev64(Value *in, unsigned eltsize) {
     assert(eltsize == 8 || eltsize == 16 || eltsize == 32);
-    assert(getBitWidth(in) == 128);
+    assert(getBitWidth(in) == 64 || getBitWidth(in) == 128);
+    if (getBitWidth(in) == 64)
+      in = createZExt(in, getIntTy(128));
     Value *rev = getIntConst(0, 128);
     for (unsigned i = 0; i < 2; ++i) {
       auto innerCount = 64 / eltsize;
@@ -4002,7 +4009,7 @@ public:
       auto dst_true = getBB(Fn, CurInst->getOperand(1));
       assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
 
-      BasicBlock *dst_false {nullptr};
+      BasicBlock *dst_false{nullptr};
       if (MCBB->getSuccs().size() == 1) {
         dst_false = dst_true;
       } else {
@@ -4367,6 +4374,36 @@ public:
 
     case AArch64::REV64v4i32: {
       auto v = rev64(readFromOperand(1), 32);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV64v2i32: {
+      auto v = rev64(readFromOperand(1), 32);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV64v4i16: {
+      auto v = rev64(readFromOperand(1), 16);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV64v8i8: {
+      auto v = rev64(readFromOperand(1), 8);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV64v8i16: {
+      auto v = rev64(readFromOperand(1), 16);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV64v16i8: {
+      auto v = rev64(readFromOperand(1), 8);
       updateOutputReg(v);
       break;
     }
@@ -5136,7 +5173,7 @@ public:
       default:
         assert(false && "missed a case");
       }
-        
+
       int eltSize;
       int numElts;
       switch (opcode) {
