@@ -448,7 +448,6 @@ class arm2llvm {
       AArch64::NOTv8i8,
       AArch64::CNTv8i8,
       AArch64::ANDv8i8,
-      AArch64::ORRv8i8,
       AArch64::EORv8i8,
       AArch64::FMOVDXr,
       AArch64::INSvi64gpr,
@@ -585,9 +584,15 @@ class arm2llvm {
       AArch64::UMINVv4i16v,
       AArch64::SMAXVv4i16v,
       AArch64::UMAXVv4i16v,
+      AArch64::ORRv8i8,
+      AArch64::ORRv2i32,
+      AArch64::ORRv4i16,
   };
-
+  
   const set<int> instrs_128 = {
+      AArch64::ORRv16i8,
+      AArch64::ORRv8i16,
+      AArch64::ORRv4i32,
       AArch64::SMAXVv4i32v,
       AArch64::UMAXVv4i32v,
       AArch64::SMINVv4i32v,
@@ -722,7 +727,6 @@ class arm2llvm {
       AArch64::EXTv16i8,
       AArch64::MOVIv2i32,
       AArch64::ANDv16i8,
-      AArch64::ORRv16i8,
       AArch64::EORv16i8,
       AArch64::UMOVvi32,
       AArch64::UMOVvi8,
@@ -4885,6 +4889,10 @@ public:
     case AArch64::ANDv16i8:
     case AArch64::ORRv8i8:
     case AArch64::ORRv16i8:
+    case AArch64::ORRv2i32:
+    case AArch64::ORRv4i16:
+    case AArch64::ORRv8i16:
+    case AArch64::ORRv4i32:
     case AArch64::UMULLv2i32_v2i64:
     case AArch64::UMULLv8i8_v8i16:
     case AArch64::UMULLv4i16_v4i32:
@@ -5091,6 +5099,10 @@ public:
         break;
       case AArch64::ORRv8i8:
       case AArch64::ORRv16i8:
+      case AArch64::ORRv2i32:
+      case AArch64::ORRv4i16:
+      case AArch64::ORRv8i16:
+      case AArch64::ORRv4i32:
         op = [&](Value *a, Value *b) { return createOr(a, b); };
         break;
       case AArch64::SSHLLv4i32_shift:
@@ -5124,7 +5136,7 @@ public:
       default:
         assert(false && "missed a case");
       }
-
+        
       int eltSize;
       int numElts;
       switch (opcode) {
@@ -5133,6 +5145,7 @@ public:
         numElts = 1;
         eltSize = 64;
         break;
+      case AArch64::ORRv2i32:
       case AArch64::UMULLv2i32_v2i64:
       case AArch64::SMINv2i32:
       case AArch64::SMAXv2i32:
@@ -5166,6 +5179,7 @@ public:
         numElts = 2;
         eltSize = 64;
         break;
+      case AArch64::ORRv4i16:
       case AArch64::UMULLv4i16_v4i32:
       case AArch64::SMINv4i16:
       case AArch64::SMAXv4i16:
@@ -5203,6 +5217,7 @@ public:
       case AArch64::SSHLv4i32:
       case AArch64::BICv4i32:
       case AArch64::USHLLv4i32_shift:
+      case AArch64::ORRv4i32:
         numElts = 4;
         eltSize = 32;
         break;
@@ -5231,6 +5246,7 @@ public:
         numElts = 8;
         eltSize = 8;
         break;
+      case AArch64::ORRv8i16:
       case AArch64::UMULLv8i16_v4i32:
       case AArch64::SMULLv8i16_v4i32:
       case AArch64::USHRv8i16_shift:
