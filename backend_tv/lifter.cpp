@@ -590,9 +590,19 @@ class arm2llvm {
       AArch64::REV64v2i32,
       AArch64::REV64v4i16,
       AArch64::REV64v8i8,
+      AArch64::TRN1v4i16,
+      AArch64::TRN1v8i8,
+      AArch64::TRN2v8i8,
+      AArch64::TRN2v4i16,
   };
 
   const set<int> instrs_128 = {
+      AArch64::TRN1v16i8,
+      AArch64::TRN1v8i16,
+      AArch64::TRN1v4i32,
+      AArch64::TRN2v16i8,
+      AArch64::TRN2v8i16,
+      AArch64::TRN2v4i32,
       AArch64::REV64v8i16,
       AArch64::REV64v16i8,
       AArch64::ORRv16i8,
@@ -5428,6 +5438,55 @@ public:
     numElts = 8;                                                               \
     eltSize = 16;                                                              \
   }
+
+    case AArch64::TRN1v16i8:
+    case AArch64::TRN1v8i16:
+    case AArch64::TRN1v4i32:
+    case AArch64::TRN1v4i16:
+    case AArch64::TRN1v8i8:
+    case AArch64::TRN2v8i8:
+    case AArch64::TRN2v4i16:
+    case AArch64::TRN2v16i8:
+    case AArch64::TRN2v8i16:
+    case AArch64::TRN2v4i32: {
+      int numElts = -1, eltSize = -1;
+      GET_SIZES5(TRN1, );
+      GET_SIZES5(TRN2, );
+      assert(numElts != -1 && eltSize != -1);
+      int part;
+      switch (opcode) {
+      case AArch64::TRN1v16i8:
+      case AArch64::TRN1v8i16:
+      case AArch64::TRN1v4i32:
+      case AArch64::TRN1v4i16:
+      case AArch64::TRN1v8i8:
+        part = 0;
+        break;
+      case AArch64::TRN2v8i8:
+      case AArch64::TRN2v4i16:
+      case AArch64::TRN2v16i8:
+      case AArch64::TRN2v8i16:
+      case AArch64::TRN2v4i32:
+        part = 1;
+        break;
+      default:
+        assert(false);
+      }
+      auto vTy =
+          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
+      auto a = createBitCast(readFromOperand(1), vTy);
+      auto b = createBitCast(readFromOperand(2), vTy);
+      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
+                                            UndefValue::get(getIntTy(eltSize)));
+      for (int p = 0; p < numElts / 2; ++p) {
+        auto *e1 = createExtractElement(a, getIntConst((2 * p) + part, 32));
+        auto *e2 = createExtractElement(b, getIntConst((2 * p) + part, 32));
+        res = createInsertElement(res, e1, getIntConst(2 * p, 32));
+        res = createInsertElement(res, e2, getIntConst((2 * p) + 1, 32));
+      }
+      updateOutputReg(res);
+      break;
+    }
 
     case AArch64::SMINVv8i8v:
     case AArch64::UMINVv8i8v:
