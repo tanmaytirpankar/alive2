@@ -1228,7 +1228,6 @@ class arm2llvm {
   }
 
   Value *splatImm(Value *v, unsigned eltCount, unsigned eltSize, bool shift) {
-    assert(CurInst->getOperand(2).isImm());
     if (shift) {
       assert(CurInst->getOperand(3).isImm());
       v = regShift(v, getImm(3));
@@ -5150,6 +5149,10 @@ public:
       case AArch64::ORRv4i16:
       case AArch64::ORRv8i16:
       case AArch64::ORRv4i32:
+        if (CurInst->getOperand(2).isImm()) {
+          splatImm2 = true;
+          immShift = true;
+        }
         op = [&](Value *a, Value *b) { return createOr(a, b); };
         break;
       case AArch64::SSHLLv4i32_shift:
