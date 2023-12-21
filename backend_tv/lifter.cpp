@@ -6613,6 +6613,10 @@ public:
          << "size = " << Size << " Align = " << ByteAlignment.value() << "\n\n";
   }
 
+  virtual void emitBytes(StringRef Data) override {
+    *out << "[emitBytes]\n";
+  }
+
   virtual void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
                             uint64_t Size = 0, Align ByteAlignment = Align(1),
                             SMLoc Loc = SMLoc()) override {
@@ -6658,8 +6662,11 @@ public:
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
     curLabel = Symbol;
 
+    [[maybe_unused]] auto sp = getCurrentSection();
+
     string Lab = Symbol->getName().str();
-    *out << "[[emitLabel " << Lab << "]]\n";
+    *out << "[[emitLabel " << Lab << " in section "
+         << (string)(sp.first->getName()) << "]]\n";
 
     if (Lab == ".Lfunc_end0")
       FunctionEnded = true;
