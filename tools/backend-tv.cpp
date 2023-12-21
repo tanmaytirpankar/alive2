@@ -184,7 +184,7 @@ version )EOF";
   // if src is always UB we end up with weird effects such as targets
   // that never reach a return instruction. let's just weed these out
   // here.
-  config::check_if_src_is_ub = true;
+  config::fail_if_src_is_ub = true;
   
   // turn on Alive2's asm-level memory model for the target; this
   // helps Alive2 deal more gracefully with the fact that integers and
