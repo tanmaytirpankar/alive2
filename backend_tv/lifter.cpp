@@ -129,7 +129,7 @@ public:
   MCInstPrinter *IP;
   MCRegisterInfo *MRI;
   vector<MCBasicBlock> BBs;
-  unordered_map<string, pair<uint64_t, uint64_t>> globals;
+  unordered_map<string, pair<uint64_t, uint64_t>> MCglobals;
 
   MCFunction() {}
 
@@ -182,7 +182,7 @@ class arm2llvm {
   unsigned armInstNum{0}, llvmInstNum{0};
   map<unsigned, Value *> RegFile;
   Value *stackMem{nullptr};
-  unordered_map<string, GlobalVariable *> globals;
+  unordered_map<string, GlobalVariable *> LLVMglobals;
   Value *initialSP, *initialReg[32];
 
   // Map of ADRP MCInsts to the string representations of the operand variable
@@ -1499,14 +1499,14 @@ class arm2llvm {
       auto stringVar = sm.suffix();
       //      for (auto x:sm) { *out << x << " "; }
       //      *out << stringVar << "\n";
-      if (!globals.contains(stringVar)) {
+      if (!LLVMglobals.contains(stringVar)) {
         *out << "\nERROR: ADRP mentions unknown global variable\n";
         *out << "'" << stringVar
              << "'  is not a global variable we know about\n";
         exit(-1);
       }
       instExprVarMap[CurInst] = stringVar;
-    } else if (globals.contains(sss)) {
+    } else if (LLVMglobals.contains(sss)) {
       instExprVarMap[CurInst] = sss;
     } else {
       *out << "\n";
@@ -1547,7 +1547,7 @@ class arm2llvm {
       }
       //  for (auto x:sm) { *out << x << " "; }
       //  *out << stringVar << "\n";
-      if (!globals.contains(stringVar)) {
+      if (!LLVMglobals.contains(stringVar)) {
         *out << "\nERROR: instruction mentions '" << stringVar << "'\n";
         *out << "which is not a global variable we know about\n\n";
         exit(-1);
@@ -1570,15 +1570,15 @@ class arm2llvm {
         exit(-1);
       }
 
-      auto glob = globals.find(stringVar);
-      if (glob == globals.end()) {
+      auto glob = LLVMglobals.find(stringVar);
+      if (glob == LLVMglobals.end()) {
         *out << "\nERROR: global not found\n\n";
         exit(-1);
       }
       globalVar = glob->second;
     } else {
-      auto glob = globals.find(sss);
-      if (glob == globals.end()) {
+      auto glob = LLVMglobals.find(sss);
+      if (glob == LLVMglobals.end()) {
         *out << "\nERROR: global not found\n\n";
         exit(-1);
       }
@@ -6256,7 +6256,7 @@ public:
   }
 
   void printGlobals() {
-    for (auto &g : globals) {
+    for (auto &g : LLVMglobals) {
       *out << g.first << " = " << g.second << "\n";
     }
   }
@@ -6286,14 +6286,14 @@ public:
 
     // This loop looks through keys in MF.globals (which is populated using
     // emitCommonSymbol and emitELFSize) and creates a global value for each
-    for (const auto &[name, size_alignment_pair] : MF.globals) {
+    for (const auto &[name, size_alignment_pair] : MF.MCglobals) {
       // Gets 2nd argument to ArrayType::get from the size provided by assembly
       auto *AT = ArrayType::get(i8, size_alignment_pair.first);
       auto *g = new GlobalVariable(*LiftedModule, AT, false,
                                    GlobalValue::LinkageTypes::ExternalLinkage,
                                    nullptr, name);
       g->setAlignment(MaybeAlign(size_alignment_pair.second));
-      globals[name] = g;
+      LLVMglobals[name] = g;
     }
 
     // Create globals not found in the assembly
@@ -6306,13 +6306,13 @@ public:
     for (auto &srcFnGlobal : srcFn.getParent()->globals()) {
       // If the global has not been created yet, create it
       auto name = srcFnGlobal.getName();
-      if (globals[name.str()] == nullptr) {
+      if (LLVMglobals[name.str()] == nullptr) {
         auto *g = new GlobalVariable(
             *LiftedModule, srcFnGlobal.getValueType(), false,
             GlobalValue::LinkageTypes::ExternalLinkage, nullptr, name);
         g->setAlignment(MaybeAlign(srcFnGlobal.getAlign()));
         g->setConstant(srcFnGlobal.isConstant());
-        globals[srcFnGlobal.getName().str()] = g;
+        LLVMglobals[srcFnGlobal.getName().str()] = g;
       }
     }
 
@@ -6494,13 +6494,15 @@ private:
   // directive with if the directive does not have an MCSymbol field
   // eg: .*align directive which is parsed using the emitValueToAlignment
   // function.
-  MCSymbol *curLabel{nullptr};
-  MCBasicBlock *curBB{nullptr};
-  unsigned prev_line{0};
   MCInstrAnalysis *IA;
   MCInstPrinter *IP;
   MCRegisterInfo *MRI;
+  
+  MCBasicBlock *curBB{nullptr};
+  unsigned prev_line{0};
+  MCSymbol *curLabel{nullptr};
   bool FunctionEnded = false;
+  string curROData;
 
 public:
   MCFunction MF;
@@ -6587,7 +6589,7 @@ public:
   virtual bool emitSymbolAttribute(MCSymbol *Symbol,
                                    MCSymbolAttr Attribute) override {
     if (false) {
-      *out << "[[emitSymbolAttribute]]\n";
+      *out << "[emitSymbolAttribute]\n";
       std::string sss;
       llvm::raw_string_ostream ss(sss);
       Symbol->print(ss, nullptr);
@@ -6607,14 +6609,16 @@ public:
     llvm::raw_string_ostream ss(sss);
     *out << "  creating " << Size << " byte global ELF object " << name
          << " with " << ByteAlignment.value() << " byte alignment\n";
-    MF.globals[name] = make_pair(Size, ByteAlignment.value());
+    MF.MCglobals[name] = make_pair(Size, ByteAlignment.value());
     Symbol->print(ss, nullptr);
     *out << sss << " "
          << "size = " << Size << " Align = " << ByteAlignment.value() << "\n\n";
   }
 
   virtual void emitBytes(StringRef Data) override {
-    *out << "[emitBytes]\n";
+    auto len = Data.size();
+    *out << "[emitBytes " << len << " bytes]\n";
+    curROData += Data;
   }
 
   virtual void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
@@ -6633,7 +6637,7 @@ public:
     if (Value && Value->evaluateAsAbsolute(size)) {
       *out << "  creating " << size << " byte global ELF object " << name
            << "\n";
-      MF.globals[name] = make_pair(size, 16);
+      MF.MCglobals[name] = make_pair(size, 16);
     } else {
       *out << "  can't get ELF size of " << name << "\n";
     }
@@ -6645,10 +6649,10 @@ public:
     *out << "[emitValueToAlignment]\n";
 
     if (curLabel) {
-      if (MF.globals.contains((string)curLabel->getName())) {
+      if (MF.MCglobals.contains((string)curLabel->getName())) {
         *out << "  Associating " << Alignment.value() / 8
              << " byte alignment with " << (string)curLabel->getName() << "\n";
-        MF.globals[(string)curLabel->getName()].second = Alignment.value() / 8;
+        MF.MCglobals[(string)curLabel->getName()].second = Alignment.value() / 8;
       } else {
         *out << "  " << (string)curLabel->getName()
              << " not a part of globals\n";
@@ -6660,13 +6664,14 @@ public:
   }
 
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
+    if (!curROData.empty()) {
+    }
     curLabel = Symbol;
-
-    [[maybe_unused]] auto sp = getCurrentSection();
-
+    curROData = "";
+    auto sp = getCurrentSection();
     string Lab = Symbol->getName().str();
-    *out << "[[emitLabel " << Lab << " in section "
-         << (string)(sp.first->getName()) << "]]\n";
+    *out << "[emitLabel " << Lab << " in section "
+         << (string)(sp.first->getName()) << "]\n";
 
     if (Lab == ".Lfunc_end0")
       FunctionEnded = true;
