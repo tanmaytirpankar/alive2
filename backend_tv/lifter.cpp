@@ -129,7 +129,7 @@ public:
   MCInstPrinter *IP;
   MCRegisterInfo *MRI;
   vector<MCBasicBlock> BBs;
-  unordered_map<string, pair<uint64_t, uint64_t>> MCglobals;
+  unordered_map<string, pair<uint64_t, Align>> MCglobals;
 
   MCFunction() {}
 
@@ -6316,7 +6316,7 @@ public:
       auto *g = new GlobalVariable(*LiftedModule, AT, false,
                                    GlobalValue::LinkageTypes::ExternalLinkage,
                                    nullptr, name);
-      g->setAlignment(MaybeAlign(size_alignment_pair.second));
+      g->setAlignment(size_alignment_pair.second);
       LLVMglobals[name] = g;
     }
 
@@ -6632,7 +6632,7 @@ public:
     llvm::raw_string_ostream ss(sss);
     *out << "  creating " << Size << " byte global ELF object " << name
          << " with " << ByteAlignment.value() << " byte alignment\n";
-    MF.MCglobals[name] = make_pair(Size, ByteAlignment.value());
+    MF.MCglobals[name] = make_pair(Size, ByteAlignment);
     Symbol->print(ss, nullptr);
     *out << sss << " "
          << "size = " << Size << " Align = " << ByteAlignment.value() << "\n\n";
@@ -6660,7 +6660,8 @@ public:
     if (Value && Value->evaluateAsAbsolute(size)) {
       *out << "  creating " << size << " byte global ELF object " << name
            << "\n";
-      MF.MCglobals[name] = make_pair(size, curAlign.value() / 8);
+      MF.MCglobals[name] = make_pair(size, curAlign);
+      curAlign = Align(1);
     } else {
       *out << "  can't get ELF size of " << name << "\n";
     }
@@ -6669,7 +6670,7 @@ public:
   virtual void emitValueToAlignment(Align Alignment, int64_t Value = 0,
                                     unsigned int ValueSize = 1,
                                     unsigned int MaxBytesToEmit = 0) override {
-    *out << "[emitValueToAlignment= " << (Alignment.value() / 8) << "]\n";
+    *out << "[emitValueToAlignment= " << Alignment.value() << "]\n";
     curAlign = Alignment;
   }
 
