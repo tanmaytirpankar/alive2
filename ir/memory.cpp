@@ -838,7 +838,9 @@ bool Memory::mayalias(bool local, unsigned bid0, const expr &offset0,
 
   if (auto sz = (local ? local_blk_size : non_local_blk_size).lookup(bid)) {
     expr offset = offset0.sextOrTrunc(bits_size_t);
-    if (offset.uge(*sz).isTrue() || (*sz - offset).ult(bytes).isTrue())
+    if (offset.uge(*sz).isTrue() ||
+        sz->ult(bytes).isTrue() ||
+        (*sz - offset).ult(bytes).isTrue())
       return false;
   } else if (local) // allocated in another branch
     return false;
@@ -970,16 +972,26 @@ vector<Byte> Memory::load(const Pointer &ptr, unsigned bytes, set<expr> &undef,
   loaded.resize(loaded_bytes, poison);
 
   expr offset = ptr.getShortOffset();
-  unsigned off_bits = Pointer::bitsShortOffset();
 
   auto fn = [&](MemBlock &blk, unsigned bid, bool local, expr &&cond) {
     bool is_poison = (type & blk.type) == DATA_NONE;
-    for (unsigned i = 0; i < loaded_bytes; ++i) {
-      unsigned idx = left2right ? i : (loaded_bytes - i - 1);
-      expr off = offset + expr::mkUInt(idx, off_bits);
-      loaded[i].add(is_poison ? poison : blk.val.load(off), cond);
-      if (!is_poison)
-        undef.insert(blk.undef.begin(), blk.undef.end());
+    if (is_poison) {
+      for (unsigned i = 0; i < loaded_bytes; ++i) {
+        loaded[i].add(poison, cond);
+      }
+    } else {
+      uint64_t blk_size = UINT64_MAX;
+      Pointer(*this, bid, local).blockSize().isUInt(blk_size);
+      expr blk_offset = blk_size == bytes ? expr::mkUInt(0, offset) : offset;
+
+      for (unsigned i = 0; i < loaded_bytes; ++i) {
+        unsigned idx = left2right ? i : (loaded_bytes - i - 1);
+        assert(idx < blk_size);
+        uint64_t max_idx = blk_size - bytes + idx;
+        expr off = blk_offset + expr::mkUInt(idx, offset);
+        loaded[i].add(blk.val.load(off, max_idx), cond);
+      }
+      undef.insert(blk.undef.begin(), blk.undef.end());
     }
   };
 
