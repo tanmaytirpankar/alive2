@@ -6512,18 +6512,13 @@ class MCStreamerWrapper final : public MCStreamer {
   enum ASMLine { none = 0, label = 1, non_term_instr = 2, terminator = 3 };
 
 private:
-  // curLabel which is set in emitLabel allows tracking the label being
-  // processed allowing the emit* functions to know which label to associate the
-  // directive with if the directive does not have an MCSymbol field
-  // eg: .*align directive which is parsed using the emitValueToAlignment
-  // function.
   MCInstrAnalysis *IA;
   MCInstPrinter *IP;
   MCRegisterInfo *MRI;
 
   MCBasicBlock *curBB{nullptr};
   unsigned prev_line{0};
-  MCSymbol *curLabel{nullptr};
+  Align curAlign;
   bool FunctionEnded = false;
   string curROData;
 
@@ -6665,7 +6660,7 @@ public:
     if (Value && Value->evaluateAsAbsolute(size)) {
       *out << "  creating " << size << " byte global ELF object " << name
            << "\n";
-      MF.MCglobals[name] = make_pair(size, 16);
+      MF.MCglobals[name] = make_pair(size, curAlign.value() / 8);
     } else {
       *out << "  can't get ELF size of " << name << "\n";
     }
@@ -6674,28 +6669,13 @@ public:
   virtual void emitValueToAlignment(Align Alignment, int64_t Value = 0,
                                     unsigned int ValueSize = 1,
                                     unsigned int MaxBytesToEmit = 0) override {
-    *out << "[emitValueToAlignment]\n";
-
-    if (curLabel) {
-      if (MF.MCglobals.contains((string)curLabel->getName())) {
-        *out << "  Associating " << Alignment.value() / 8
-             << " byte alignment with " << (string)curLabel->getName() << "\n";
-        MF.MCglobals[(string)curLabel->getName()].second =
-            Alignment.value() / 8;
-      } else {
-        *out << "  " << (string)curLabel->getName()
-             << " not a part of globals\n";
-      }
-    } else {
-      *out << "No label to associate with alignment"
-           << "\n";
-    }
+    *out << "[emitValueToAlignment= " << (Alignment.value() / 8) << "]\n";
+    curAlign = Alignment;
   }
 
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
     if (!curROData.empty()) {
     }
-    curLabel = Symbol;
     curROData = "";
     auto sp = getCurrentSection();
     string Lab = Symbol->getName().str();
