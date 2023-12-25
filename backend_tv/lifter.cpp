@@ -594,9 +594,16 @@ class arm2llvm {
       AArch64::TRN1v8i8,
       AArch64::TRN2v8i8,
       AArch64::TRN2v4i16,
+      AArch64::UQSUBv8i8,
+      AArch64::UQSUBv4i16,
+      AArch64::UQSUBv2i32,
   };
 
   const set<int> instrs_128 = {
+      AArch64::UQSUBv2i64,
+      AArch64::UQSUBv4i32,
+      AArch64::UQSUBv16i8,
+      AArch64::UQSUBv8i16,
       AArch64::TRN1v16i8,
       AArch64::TRN1v8i16,
       AArch64::TRN1v4i32,
@@ -1001,6 +1008,12 @@ class arm2llvm {
     auto uadd_decl = Intrinsic::getDeclaration(
         LiftedModule, Intrinsic::uadd_with_overflow, a->getType());
     return CallInst::Create(uadd_decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  CallInst *createUSubSat(Value *a, Value *b) {
+    auto usub_decl = Intrinsic::getDeclaration(
+        LiftedModule, Intrinsic::usub_sat, a->getType());
+    return CallInst::Create(usub_decl, {a, b}, nextName(), LLVMBB);
   }
 
   CallInst *createCtPop(Value *v) {
@@ -4851,6 +4864,13 @@ public:
     }
 
       // lane-wise binary vector instructions
+    case AArch64::UQSUBv8i8:
+    case AArch64::UQSUBv4i16:
+    case AArch64::UQSUBv2i32:
+    case AArch64::UQSUBv2i64:
+    case AArch64::UQSUBv4i32:
+    case AArch64::UQSUBv16i8:
+    case AArch64::UQSUBv8i16:
     case AArch64::SMINv8i8:
     case AArch64::SMINv4i16:
     case AArch64::SMINv2i32:
@@ -4982,6 +5002,15 @@ public:
       bool immShift = false;
       function<Value *(Value *, Value *)> op;
       switch (opcode) {
+      case AArch64::UQSUBv8i8:
+      case AArch64::UQSUBv4i16:
+      case AArch64::UQSUBv2i32:
+      case AArch64::UQSUBv2i64:
+      case AArch64::UQSUBv4i32:
+      case AArch64::UQSUBv16i8:
+      case AArch64::UQSUBv8i16:
+        op = [&](Value *a, Value *b) { return createUSubSat(a, b); };
+        break;
       case AArch64::SMINv8i8:
       case AArch64::SMINv4i16:
       case AArch64::SMINv2i32:
@@ -5195,6 +5224,7 @@ public:
         numElts = 1;
         eltSize = 64;
         break;
+      case AArch64::UQSUBv2i32:
       case AArch64::ORRv2i32:
       case AArch64::UMULLv2i32_v2i64:
       case AArch64::SMINv2i32:
@@ -5216,6 +5246,7 @@ public:
         numElts = 2;
         eltSize = 32;
         break;
+      case AArch64::UQSUBv2i64:
       case AArch64::SSHRv2i64_shift:
       case AArch64::SHLv2i64_shift:
       case AArch64::ADDv2i64:
@@ -5229,6 +5260,7 @@ public:
         numElts = 2;
         eltSize = 64;
         break;
+      case AArch64::UQSUBv4i16:
       case AArch64::ORRv4i16:
       case AArch64::UMULLv4i16_v4i32:
       case AArch64::SMINv4i16:
@@ -5250,6 +5282,7 @@ public:
         numElts = 4;
         eltSize = 16;
         break;
+      case AArch64::UQSUBv4i32:
       case AArch64::UMULLv4i32_v2i64:
       case AArch64::SMINv4i32:
       case AArch64::SMAXv4i32:
@@ -5271,6 +5304,7 @@ public:
         numElts = 4;
         eltSize = 32;
         break;
+      case AArch64::UQSUBv8i8:
       case AArch64::UMULLv8i8_v8i16:
       case AArch64::SMINv8i8:
       case AArch64::SMAXv8i8:
@@ -5296,6 +5330,7 @@ public:
         numElts = 8;
         eltSize = 8;
         break;
+      case AArch64::UQSUBv8i16:
       case AArch64::ORRv8i16:
       case AArch64::UMULLv8i16_v4i32:
       case AArch64::SMULLv8i16_v4i32:
@@ -5317,6 +5352,7 @@ public:
         numElts = 8;
         eltSize = 16;
         break;
+      case AArch64::UQSUBv16i8:
       case AArch64::UMULLv16i8_v8i16:
       case AArch64::SMINv16i8:
       case AArch64::SMAXv16i8:
@@ -6497,7 +6533,7 @@ private:
   MCInstrAnalysis *IA;
   MCInstPrinter *IP;
   MCRegisterInfo *MRI;
-  
+
   MCBasicBlock *curBB{nullptr};
   unsigned prev_line{0};
   MCSymbol *curLabel{nullptr};
@@ -6519,6 +6555,11 @@ public:
   // We only want to intercept the emission of new instructions.
   virtual void emitInstruction(const MCInst &Inst,
                                const MCSubtargetInfo & /* unused */) override {
+
+    if (Inst.getOpcode() == AArch64::BL) {
+      *out << "\nERROR: not lifting calls yet\n\n";
+      exit(-1);
+    }
 
     assert(prev_line != ASMLine::none);
 
@@ -6652,7 +6693,8 @@ public:
       if (MF.MCglobals.contains((string)curLabel->getName())) {
         *out << "  Associating " << Alignment.value() / 8
              << " byte alignment with " << (string)curLabel->getName() << "\n";
-        MF.MCglobals[(string)curLabel->getName()].second = Alignment.value() / 8;
+        MF.MCglobals[(string)curLabel->getName()].second =
+            Alignment.value() / 8;
       } else {
         *out << "  " << (string)curLabel->getName()
              << " not a part of globals\n";

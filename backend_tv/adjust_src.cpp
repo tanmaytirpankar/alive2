@@ -165,39 +165,14 @@ Function *adjustSrcReturn(Function *srcFn) {
   return NF;
 }
 
-#if 0
-void checkTy(Type *t, const DataLayout &DL) {
-  if (t->isVoidTy())
-    return;
-  if (t->isStructTy()) {
-    *out << "\nERROR: we don't support structures in arguments yet\n\n";
-    exit(-1);
-  }
-  if (DL.getTypeSizeInBits(t) > 64) {
-    *out << "\nERROR: integer arguments can't be more than 64 bits yet\n\n";
-    exit(-1);
-  }
-  if (auto pty = dyn_cast<PointerType>(t)) {
-    if (pty->getAddressSpace() != 0) {
-      *out << "\nERROR: Unsupported function argument: Only address space "
-              "0 is supported\n\n";
-      exit(-1);
-    }
-  } else if (t->isIntegerTy()) {
-  } else if (t->isVectorTy()) {
-  } else {
-    *out << "\nERROR: only integer, pointer, and vector arguments supported so "
-            "far\n\n";
-    exit(-1);
-  }
-}
-#endif
-
 void checkSupport(Instruction &i, const DataLayout &DL, set<Type *> &typeSet) {
   typeSet.insert(i.getType());
   for (auto &op : i.operands()) {
     auto *ty = op.get()->getType();
     typeSet.insert(ty);
+    if (auto *vty = dyn_cast<VectorType>(ty)) {
+      typeSet.insert(vty->getElementType());
+    }
     if (auto *pty = dyn_cast<PointerType>(ty)) {
       if (pty->getAddressSpace() != 0) {
         *out << "\nERROR: address spaces other than 0 are unsupported\n\n";
@@ -315,8 +290,8 @@ Function *adjustSrc(Function *srcFn) {
     auto &DL = srcFn->getParent()->getDataLayout();
     auto orig_width = DL.getTypeSizeInBits(ty);
     cout << "size of arg " << i << " = " << orig_width << endl;
-    if (ty->isVectorTy()) {
-      checkVectorTy(dyn_cast<VectorType>(ty));
+    if (auto vTy = dyn_cast<VectorType>(ty)) {
+      checkVectorTy(vTy);
       if (orig_width > 128) {
         *out << "\nERROR: Vector arguments >128 bits not supported\n\n";
         exit(-1);
