@@ -175,6 +175,7 @@ class arm2llvm {
   LLVMContext &Ctx = LiftedModule->getContext();
   MCFunction &MF;
   Function &srcFn;
+  Function *liftedFn{nullptr};
   MCBasicBlock *MCBB{nullptr};
   BasicBlock *LLVMBB{nullptr};
   MCInstPrinter *instrPrinter{nullptr};
@@ -188,26 +189,25 @@ class arm2llvm {
   // Map of ADRP MCInsts to the string representations of the operand variable
   // names
   unordered_map<MCInst *, string> instExprVarMap;
-  bool DebugRegs;
   const DataLayout &DL;
 
-  BasicBlock *getBB(Function &F, MCOperand &jmp_tgt) {
+  BasicBlock *getBB(MCOperand &jmp_tgt) {
     assert(jmp_tgt.isExpr() && "[getBB] expected expression operand");
     assert((jmp_tgt.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
            "[getBB] expected symbol ref as jump operand");
     const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt.getExpr());
     const MCSymbol &Sym = SRE.getSymbol();
     StringRef name = Sym.getName();
-    for (auto &bb : F) {
+    for (auto &bb : *liftedFn) {
       if (bb.getName() == name)
         return &bb;
     }
-    assert(false && "basic block not found in getBB()");
+    return nullptr;
   }
 
   // FIXME -- do this without the strings, just keep a map or something
-  BasicBlock *getBBByName(Function &F, StringRef name) {
-    for (auto &bb : F) {
+  BasicBlock *getBBByName(StringRef name) {
+    for (auto &bb : *liftedFn) {
       if (bb.getName() == name)
         return &bb;
     }
@@ -1958,10 +1958,9 @@ class arm2llvm {
 
 public:
   arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
-           MCInstPrinter *instrPrinter, bool DebugRegs)
+           MCInstPrinter *instrPrinter)
       : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
-        instrPrinter(instrPrinter), DebugRegs(DebugRegs),
-        DL(srcFn.getParent()->getDataLayout()) {}
+        instrPrinter(instrPrinter), DL(srcFn.getParent()->getDataLayout()) {}
 
   int64_t getImm(int idx) {
     return CurInst->getOperand(idx).getImm();
@@ -2220,7 +2219,7 @@ public:
 
   // Visit an MCInst and convert it to LLVM IR
   // See: https://documentation-service.arm.com/static/6245e8f0f7d10f7540e0c054
-  void mc_visit(MCInst &I, Function &Fn) {
+  void liftInst(MCInst &I) {
     auto opcode = I.getOpcode();
     PrevInst = CurInst;
     CurInst = &I;
@@ -3172,8 +3171,8 @@ public:
           createICmp(ICmpInst::Predicate::ICMP_EQ, RHS, AllOnes);
       auto IsOverflow = createAnd(LHSIsIntMin, RHSIsAllOnes);
       auto Cond = createOr(RHSIsZero, IsOverflow);
-      auto DivBB = BasicBlock::Create(Ctx, "", &Fn);
-      auto ContBB = BasicBlock::Create(Ctx, "", &Fn);
+      auto DivBB = BasicBlock::Create(Ctx, "", liftedFn);
+      auto ContBB = BasicBlock::Create(Ctx, "", liftedFn);
       createBranch(Cond, ContBB, DivBB);
       LLVMBB = DivBB;
       auto DivResult = createSDiv(LHS, RHS);
@@ -3196,8 +3195,8 @@ public:
       auto A = createAlloca(getIntTy(size), getIntConst(1, 64), "");
       createStore(zero, A);
       auto rhsIsZero = createICmp(ICmpInst::Predicate::ICMP_EQ, rhs, zero);
-      auto DivBB = BasicBlock::Create(Ctx, "", &Fn);
-      auto ContBB = BasicBlock::Create(Ctx, "", &Fn);
+      auto DivBB = BasicBlock::Create(Ctx, "", liftedFn);
+      auto ContBB = BasicBlock::Create(Ctx, "", liftedFn);
       createBranch(rhsIsZero, ContBB, DivBB);
       LLVMBB = DivBB;
       auto divResult = createUDiv(lhs, rhs);
@@ -3980,18 +3979,22 @@ public:
       break;
 
     case AArch64::B: {
-      const auto &op = CurInst->getOperand(0);
-      if (op.isImm()) {
+      if (CurInst->getOperand(0).isImm()) {
         // handles the case when we add an entry block with no predecessors
         auto &dst_name = MF.BBs[getImm(0)].getName();
-        auto BB = getBBByName(Fn, dst_name);
+        auto BB = getBBByName(dst_name);
         createBranch(BB);
         break;
+      } else {
+        auto dst = getBB(CurInst->getOperand(0));
+        if (!dst) {
+          *out << "ERROR: unconditional branch target not found, this might be "
+                  "a tail call\n\n";
+          exit(-1);
+        }
+        createBranch(dst);
+        break;
       }
-
-      auto dst_ptr = getBB(Fn, CurInst->getOperand(0));
-      createBranch(dst_ptr);
-      break;
     }
 
     case AArch64::Bcc: {
@@ -4005,7 +4008,7 @@ public:
       const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt_op.getExpr());
       const MCSymbol &Sym = SRE.getSymbol();
 
-      auto *dst_true = getBBByName(Fn, Sym.getName());
+      auto *dst_true = getBBByName(Sym.getName());
 
       assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
       const string *dst_false_name = nullptr;
@@ -4016,7 +4019,7 @@ public:
         }
       }
       auto *dst_false =
-          getBBByName(Fn, dst_false_name ? *dst_false_name : Sym.getName());
+          getBBByName(dst_false_name ? *dst_false_name : Sym.getName());
 
       createBranch(cond_val, dst_true, dst_false);
       break;
@@ -4028,7 +4031,8 @@ public:
       assert(operand != nullptr && "operand is null");
       auto cond_val = createICmp(ICmpInst::Predicate::ICMP_EQ, operand,
                                  getIntConst(0, getBitWidth(operand)));
-      auto dst_true = getBB(Fn, CurInst->getOperand(1));
+      auto dst_true = getBB(CurInst->getOperand(1));
+      assert(dst_true);
       assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
 
       BasicBlock *dst_false{nullptr};
@@ -4043,7 +4047,7 @@ public:
           }
         }
         assert(dst_false_name != nullptr);
-        dst_false = getBBByName(Fn, *dst_false_name);
+        dst_false = getBBByName(*dst_false_name);
       }
       createBranch(cond_val, dst_true, dst_false);
       break;
@@ -4056,7 +4060,8 @@ public:
       auto cond_val = createICmp(ICmpInst::Predicate::ICMP_NE, operand,
                                  getIntConst(0, getBitWidth(operand)));
 
-      auto dst_true = getBB(Fn, CurInst->getOperand(1));
+      auto dst_true = getBB(CurInst->getOperand(1));
+      assert(dst_true);
       assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
 
       const string *dst_false_name = nullptr;
@@ -4067,7 +4072,7 @@ public:
         }
       }
       assert(dst_false_name != nullptr);
-      auto *dst_false = getBBByName(Fn, *dst_false_name);
+      auto *dst_false = getBBByName(*dst_false_name);
       createBranch(cond_val, dst_true, dst_false);
       break;
     }
@@ -4090,7 +4095,7 @@ public:
       const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt_op.getExpr());
       const MCSymbol &Sym =
           SRE.getSymbol(); // FIXME refactor this into a function
-      auto *dst_false = getBBByName(Fn, Sym.getName());
+      auto *dst_false = getBBByName(Sym.getName());
 
       assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
 
@@ -4102,7 +4107,7 @@ public:
         }
       }
       auto *dst_true =
-          getBBByName(Fn, dst_true_name ? *dst_true_name : Sym.getName());
+          getBBByName(dst_true_name ? *dst_true_name : Sym.getName());
 
       if (opcode == AArch64::TBNZW || opcode == AArch64::TBNZX)
         createBranch(cond_val, dst_false, dst_true);
@@ -6184,7 +6189,7 @@ public:
       break;
     }
     default:
-      *out << funcToString(&Fn);
+      *out << funcToString(liftedFn);
       *out << "\nError "
               "detected----------partially-lifted-arm-target----------\n";
       visitError();
@@ -6274,23 +6279,6 @@ public:
     return V;
   }
 
-  void printRegs() {
-    const string funcName{"printRegs"};
-    auto i1 = getIntTy(1);
-    auto retTy = Type::getVoidTy(Ctx);
-    auto argTy = {i1, i1, i1, i1};
-    auto *fTy = FunctionType::get(retTy, argTy, false);
-    Function *F = LiftedModule->getFunction(funcName)
-                      ?: Function::createWithDefaultAttr(
-                             fTy, GlobalValue::LinkageTypes::ExternalLinkage, 0,
-                             funcName, LiftedModule);
-    auto N = getN();
-    auto Z = getZ();
-    auto C = getC();
-    auto V = getV();
-    CallInst::Create(fTy, F, {N, Z, C, V}, "", LLVMBB);
-  }
-
   void printGlobals() {
     for (auto &g : LLVMglobals) {
       *out << g.first << " = " << g.second << "\n";
@@ -6302,14 +6290,14 @@ public:
     auto i32 = getIntTy(32);
     auto i64 = getIntTy(64);
 
-    auto Fn =
+    liftedFn =
         Function::Create(srcFn.getFunctionType(), GlobalValue::ExternalLinkage,
                          0, srcFn.getName(), LiftedModule);
 
     // create LLVM-side basic blocks
     vector<pair<BasicBlock *, MCBasicBlock *>> BBs;
     for (auto &mbb : MF.BBs) {
-      auto bb = BasicBlock::Create(Ctx, mbb.getName(), Fn);
+      auto bb = BasicBlock::Create(Ctx, mbb.getName(), liftedFn);
       BBs.push_back(make_pair(bb, &mbb));
     }
 
@@ -6422,7 +6410,8 @@ public:
     unsigned scalarArgNum = 0;
     unsigned stackArgNum = 0;
 
-    for (Function::arg_iterator arg = Fn->arg_begin(), E = Fn->arg_end(),
+    for (Function::arg_iterator arg = liftedFn->arg_begin(),
+                                E = liftedFn->arg_end(),
                                 srcArg = srcFn.arg_begin();
          arg != E; ++arg, ++srcArg) {
       *out << "  processing arg wtih vecArgNum = " << vecArgNum
@@ -6491,10 +6480,8 @@ public:
       for (auto &inst : mc_instrs) {
         *out << "  ";
         inst.dump();
-        if (DebugRegs)
-          printRegs();
         llvmInstNum = 0;
-        mc_visit(inst, *Fn);
+        liftInst(inst);
         ++armInstNum;
       }
 
@@ -6508,12 +6495,12 @@ public:
           // like UNREACHABLE
           doReturn();
         } else if (succs == 1) {
-          auto *dst = getBBByName(*Fn, MCBB->getSuccs()[0]->getName());
+          auto *dst = getBBByName(MCBB->getSuccs()[0]->getName());
           createBranch(dst);
         }
       }
     }
-    return Fn;
+    return liftedFn;
   }
 };
 
@@ -6836,8 +6823,7 @@ void reset() {
 
 pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
                                       Function *srcFn,
-                                      unique_ptr<MemoryBuffer> MB,
-                                      bool DebugRegs) {
+                                      unique_ptr<MemoryBuffer> MB) {
   llvm::SourceMgr SrcMgr;
   SrcMgr.AddNewSourceBuffer(std::move(MB), llvm::SMLoc());
 
@@ -6889,8 +6875,7 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
   Str.checkEntryBlock();
   Str.generateSuccessors();
 
-  auto lifted =
-      arm2llvm(LiftedModule, Str.MF, *srcFn, IP.get(), DebugRegs).run();
+  auto liftedFn = arm2llvm(LiftedModule, Str.MF, *srcFn, IP.get()).run();
 
   std::string sss;
   llvm::raw_string_ostream ss(sss);
@@ -6901,7 +6886,7 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
     exit(-1);
   }
 
-  return make_pair(srcFn, lifted);
+  return make_pair(srcFn, liftedFn);
 }
 
 } // namespace lifter
