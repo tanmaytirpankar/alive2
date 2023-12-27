@@ -3979,22 +3979,22 @@ public:
       break;
 
     case AArch64::B: {
+      BasicBlock *dst{nullptr};
+      // JDR: I don't understand this
       if (CurInst->getOperand(0).isImm()) {
         // handles the case when we add an entry block with no predecessors
         auto &dst_name = MF.BBs[getImm(0)].getName();
-        auto BB = getBBByName(dst_name);
-        createBranch(BB);
-        break;
+        dst = getBBByName(dst_name);
       } else {
-        auto dst = getBB(CurInst->getOperand(0));
-        if (!dst) {
-          *out << "ERROR: unconditional branch target not found, this might be "
-                  "a tail call\n\n";
-          exit(-1);
-        }
-        createBranch(dst);
-        break;
+        dst = getBB(CurInst->getOperand(0));
       }
+      if (!dst) {
+        *out << "ERROR: unconditional branch target not found, this might be "
+          "a tail call\n\n";
+        exit(-1);
+      }
+      createBranch(dst);
+      break;
     }
 
     case AArch64::Bcc: {
