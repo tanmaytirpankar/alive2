@@ -1257,15 +1257,15 @@ class arm2llvm {
     return CastInst::Create(op, v, t, nextName(), LLVMBB);
   }
 
-  Value *splatImm(Value *v, unsigned eltCount, unsigned eltSize, bool shift) {
+  Value *splatImm(Value *v, unsigned numElts, unsigned eltSize, bool shift) {
     if (shift) {
       assert(CurInst->getOperand(3).isImm());
       v = regShift(v, getImm(3));
     }
     if (getBitWidth(v) > eltSize)
       v = createTrunc(v, getIntTy(eltSize));
-    Value *res = getBlankVec(eltCount, eltSize);
-    for (unsigned i = 0; i < eltCount; ++i)
+    Value *res = getBlankVec(numElts, eltSize);
+    for (unsigned i = 0; i < numElts; ++i)
       res = createInsertElement(res, v, getIntConst(i, 32));
     return res;
   }
@@ -1699,17 +1699,17 @@ class arm2llvm {
     return createSelect(c, posRes, negRes);
   }
 
-  Value *rev64(Value *in, unsigned eltsize) {
-    assert(eltsize == 8 || eltsize == 16 || eltsize == 32);
+  Value *rev64(Value *in, unsigned eltSize) {
+    assert(eltSize == 8 || eltSize == 16 || eltSize == 32);
     assert(getBitWidth(in) == 64 || getBitWidth(in) == 128);
     if (getBitWidth(in) == 64)
       in = createZExt(in, getIntTy(128));
     Value *rev = getIntConst(0, 128);
     for (unsigned i = 0; i < 2; ++i) {
-      auto innerCount = 64 / eltsize;
+      auto innerCount = 64 / eltSize;
       for (unsigned j = 0; j < innerCount; j++) {
-        auto elt = extractFromVector(in, eltsize, (i * innerCount) + j);
-        rev = insertIntoVector(rev, elt, eltsize,
+        auto elt = extractFromVector(in, eltSize, (i * innerCount) + j);
+        rev = insertIntoVector(rev, elt, eltSize,
                                (i * innerCount) + innerCount - j - 1);
       }
     }
