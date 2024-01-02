@@ -276,7 +276,6 @@ Function *adjustSrc(Function *srcFn) {
     exit(-1);
   }
 
-  int i = 0;
   for (auto &v : srcFn->args()) {
     auto *ty = v.getType();
     if (ty->isStructTy()) {
@@ -289,7 +288,6 @@ Function *adjustSrc(Function *srcFn) {
     }
     auto &DL = srcFn->getParent()->getDataLayout();
     auto orig_width = DL.getTypeSizeInBits(ty);
-    cout << "size of arg " << i << " = " << orig_width << endl;
     if (auto vTy = dyn_cast<VectorType>(ty)) {
       checkVectorTy(vTy);
       if (orig_width > 128) {
@@ -303,7 +301,6 @@ Function *adjustSrc(Function *srcFn) {
         exit(-1);
       }
     }
-    ++i;
   }
 
   auto RT = dyn_cast<VectorType>(srcFn->getReturnType());

@@ -6234,7 +6234,7 @@ public:
     if (argTy->isVectorTy() || argTy->isFloatingPointTy()) {
       argTy = getIntTy(getBitWidth(V));
       V = createBitCast(V, argTy);
-      targetWidth = 128;
+      targetWidth = 128; // FIXME
     } else {
       targetWidth = 64;
     }
@@ -6414,7 +6414,8 @@ public:
                                 E = liftedFn->arg_end(),
                                 srcArg = srcFn.arg_begin();
          arg != E; ++arg, ++srcArg) {
-      *out << "  processing arg wtih vecArgNum = " << vecArgNum
+      *out << "  processing " << getBitWidth(arg)
+	   << "-bit arg with vecArgNum = " << vecArgNum
            << ", scalarArgNum = " << scalarArgNum
            << ", stackArgNum = " << stackArgNum << "\n";
       auto *argTy = arg->getType();
