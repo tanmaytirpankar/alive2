@@ -222,6 +222,23 @@ class arm2llvm {
            (reg >= AArch64::S0 && reg <= AArch64::S31);
   }
 
+  VectorType *getVecTy(int eltSize, int numElts) {
+    auto eTy = getIntTy(eltSize);
+    auto ec = ElementCount::getFixed(numElts);
+    return VectorType::get(eTy, ec);
+  }
+
+  Constant *getBlankVec(int numElts, int eltSize) {
+    auto eTy = getIntTy(eltSize);
+    auto ec = ElementCount::getFixed(numElts);
+    return ConstantVector::getSplat(ec, UndefValue::get(eTy));
+  }
+
+  Constant *getZeroVec(int numElts, int eltSize) {
+    auto ec = ElementCount::getFixed(numElts);
+    return ConstantVector::getSplat(ec, getIntConst(0, eltSize));
+  }
+
   Type *getIntTy(unsigned int bits) {
     // just trying to catch silly errors, remove this sometime
     assert(bits > 0 && bits <= 256);
@@ -1247,8 +1264,7 @@ class arm2llvm {
     }
     if (getBitWidth(v) > eltSize)
       v = createTrunc(v, getIntTy(eltSize));
-    Value *res = ConstantVector::getSplat(ElementCount::getFixed(eltCount),
-                                          UndefValue::get(getIntTy(eltSize)));
+    Value *res = getBlankVec(eltCount, eltSize);
     for (unsigned i = 0; i < eltCount; ++i)
       res = createInsertElement(res, v, getIntConst(i, 32));
     return res;
@@ -1256,8 +1272,7 @@ class arm2llvm {
 
   Value *addPairs(Value *src, unsigned eltSize, unsigned numElts) {
     auto bigEltTy = getIntTy(2 * eltSize);
-    Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts / 2),
-                                          UndefValue::get(bigEltTy));
+    Value *res = getBlankVec(numElts / 2, 2 * eltSize);
     for (unsigned i = 0; i < numElts; i += 2) {
       auto elt1 = createExtractElement(src, getIntConst(i, 32));
       auto elt2 = createExtractElement(src, getIntConst(i + 1, 32));
@@ -1286,28 +1301,24 @@ class arm2llvm {
     if (splatImm2)
       b = splatImm(b, numElts, eltSize, immShift);
 
-    auto ec = ElementCount::getFixed(numElts);
-    auto eTy = getIntTy(eltSize);
-    auto vTy = VectorType::get(eTy, ec);
+    auto vTy = getVecTy(eltSize, numElts);
 
     a = createBitCast(a, vTy);
     b = createBitCast(b, vTy);
 
     // some instructions double element widths
     if (ext == extKind::ZExt) {
-      eTy = getIntTy(2 * eltSize);
-      a = createZExt(a, VectorType::get(eTy, ec));
-      b = createZExt(b, VectorType::get(eTy, ec));
+      a = createZExt(a, getVecTy(2 * eltSize, numElts));
+      b = createZExt(b, getVecTy(2 * eltSize, numElts));
     }
     if (ext == extKind::SExt) {
-      eTy = getIntTy(2 * eltSize);
-      a = createSExt(a, VectorType::get(eTy, ec));
-      b = createSExt(b, VectorType::get(eTy, ec));
+      a = createSExt(a, getVecTy(2 * eltSize, numElts));
+      b = createSExt(b, getVecTy(2 * eltSize, numElts));
     }
 
     Value *res = nullptr;
     if (elementWise) {
-      res = ConstantVector::getSplat(ec, UndefValue::get(eTy));
+      res = getBlankVec(numElts, eltSize);
       for (unsigned i = 0; i < numElts; ++i) {
         auto aa = createExtractElement(a, getIntConst(i, 32));
         auto bb = createExtractElement(b, getIntConst(i, 32));
@@ -1709,8 +1720,7 @@ class arm2llvm {
     unsigned w = numElts * eltSize;
     assert(w == 64 || w == 128);
     assert(getBitWidth(v) == eltSize);
-    Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
-                                          UndefValue::get(getIntTy(eltSize)));
+    Value *res = getBlankVec(numElts, eltSize);
     for (unsigned i = 0; i < numElts; i++)
       res = createInsertElement(res, v, getIntConst(i, 32));
     return res;
@@ -3546,9 +3556,7 @@ public:
       }
 
       auto loaded = makeLoadWithOffset(base, 0, eltSize / 8);
-      auto casted =
-          createBitCast(dst, VectorType::get(getIntTy(eltSize),
-                                             ElementCount::getFixed(numElts)));
+      auto casted = createBitCast(dst, getVecTy(eltSize, numElts));
       auto updated =
           createInsertElement(casted, loaded, getIntConst(index, 32));
       updateOutputReg(updated);
@@ -3621,9 +3629,7 @@ public:
       }
 
       auto loaded = makeLoadWithOffset(base, 0, eltSize / 8);
-      auto casted =
-          createBitCast(dst, VectorType::get(getIntTy(eltSize),
-                                             ElementCount::getFixed(numElts)));
+      auto casted = createBitCast(dst, getVecTy(eltSize, numElts));
 
       // FIXME: Alternative to creating many insertelement instructions, insert
       //  the element in the first lane and create a shufflevector to copy it to
@@ -3799,9 +3805,7 @@ public:
         break;
       }
 
-      auto casted =
-          createBitCast(src, VectorType::get(getIntTy(eltSize),
-                                             ElementCount::getFixed(numElts)));
+      auto casted = createBitCast(src, getVecTy(eltSize, numElts));
       auto loaded = createExtractElement(casted, getIntConst(index, 32));
       storeToMemoryImmOffset(base, 0, eltSize / 8, loaded);
       break;
@@ -4300,8 +4304,7 @@ public:
       } else {
         idx = getImm(2);
       }
-      auto vTy =
-          VectorType::get(getIntTy(sz), ElementCount::getFixed(128 / sz));
+      auto vTy = getVecTy(sz, 128 / sz);
       auto reg = createBitCast(readFromOperand(1), vTy);
       auto val = createExtractElement(reg, getIntConst(idx, 64));
       updateOutputReg(val);
@@ -4776,9 +4779,7 @@ public:
         assert(false);
       }
 
-      auto ec = ElementCount::getFixed(numElts);
-      auto eTy = getIntTy(eltSize);
-      auto vTy = VectorType::get(eTy, ec);
+      auto vTy = getVecTy(eltSize, numElts);
       a = createBitCast(a, vTy);
       b = createBitCast(b, vTy);
       Value *res;
@@ -5391,7 +5392,7 @@ public:
     }
 
     case AArch64::ADDPv2i64p: {
-      auto vTy = VectorType::get(getIntTy(64), ElementCount::getFixed(2));
+      auto vTy = getVecTy(64, 2);
       auto v = createBitCast(readFromOperand(1), vTy);
       auto res = createAdd(createExtractElement(v, getIntConst(0, 32)),
                            createExtractElement(v, getIntConst(1, 32)));
@@ -5447,12 +5448,10 @@ public:
       } else {
         assert(false);
       }
-      auto vTy =
-          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
+      auto vTy = getVecTy(eltSize, numElts);
       auto a = createBitCast(readFromOperand(1), vTy);
       auto b = createBitCast(readFromOperand(2), vTy);
-      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
-                                            UndefValue::get(getIntTy(eltSize)));
+      Value *res = getBlankVec(numElts, eltSize);
       for (int i = 0; i < numElts / 2; ++i) {
         auto e1 = createExtractElement(a, getIntConst((i * 2) + which, 32));
         auto e2 = createExtractElement(b, getIntConst((i * 2) + which, 32));
@@ -5514,12 +5513,10 @@ public:
       default:
         assert(false);
       }
-      auto vTy =
-          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
+      auto vTy = getVecTy(eltSize, numElts);
       auto a = createBitCast(readFromOperand(1), vTy);
       auto b = createBitCast(readFromOperand(2), vTy);
-      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
-                                            UndefValue::get(getIntTy(eltSize)));
+      Value *res = getBlankVec(numElts, eltSize);
       for (int p = 0; p < numElts / 2; ++p) {
         auto *e1 = createExtractElement(a, getIntConst((2 * p) + part, 32));
         auto *e2 = createExtractElement(b, getIntConst((2 * p) + part, 32));
@@ -5556,8 +5553,7 @@ public:
       GET_SIZES5(UMINV, v);
       GET_SIZES5(UMAXV, v);
       assert(numElts != -1 && eltSize != -1);
-      auto vTy =
-          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
+      auto vTy = getVecTy(eltSize, numElts);
       auto v = createBitCast(readFromOperand(1), vTy);
       Value *min = createExtractElement(v, getIntConst(0, 32));
       for (int i = 1; i < numElts; ++i) {
@@ -5637,13 +5633,11 @@ public:
     case AArch64::USRAv2i64_shift:
     case AArch64::USRAv4i32_shift: {
       GET_SIZES7(USRA, _shift);
-      auto vTy =
-          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
+      auto vTy = getVecTy(eltSize, numElts);
       auto a = createBitCast(readFromOperand(1), vTy);
       auto b = createBitCast(readFromOperand(2), vTy);
       auto exp = getImm(3);
-      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
-                                            UndefValue::get(getIntTy(eltSize)));
+      Value *res = getBlankVec(numElts, eltSize);
       for (int i = 0; i < numElts; ++i) {
         auto e1 = createExtractElement(a, getIntConst(i, 32));
         auto e2 = createExtractElement(b, getIntConst(i, 32));
@@ -5663,12 +5657,10 @@ public:
     case AArch64::ZIP1v2i64:
     case AArch64::ZIP1v4i32: {
       GET_SIZES7(ZIP1, );
-      auto vTy =
-          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
+      auto vTy = getVecTy(eltSize, numElts);
       auto a = createBitCast(readFromOperand(1), vTy);
       auto b = createBitCast(readFromOperand(2), vTy);
-      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
-                                            UndefValue::get(getIntTy(eltSize)));
+      Value *res = getBlankVec(numElts, eltSize);
       for (int i = 0; i < numElts / 2; ++i) {
         auto e1 = createExtractElement(a, getIntConst(i, 32));
         auto e2 = createExtractElement(b, getIntConst(i, 32));
@@ -5686,13 +5678,11 @@ public:
     case AArch64::ZIP2v2i64:
     case AArch64::ZIP2v16i8:
     case AArch64::ZIP2v4i32: {
-      GET_SIZES7(ZIP2, )
-      auto vTy =
-          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
+      GET_SIZES7(ZIP2, );
+      auto vTy = getVecTy(eltSize, numElts);
       auto a = createBitCast(readFromOperand(1), vTy);
       auto b = createBitCast(readFromOperand(2), vTy);
-      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
-                                            UndefValue::get(getIntTy(eltSize)));
+      Value *res = getBlankVec(numElts, eltSize);
       for (int i = 0; i < numElts / 2; ++i) {
         auto e1 = createExtractElement(a, getIntConst((numElts / 2) + i, 32));
         auto e2 = createExtractElement(b, getIntConst((numElts / 2) + i, 32));
@@ -5714,11 +5704,9 @@ public:
       auto x = readFromOperand(1);
       auto y = readFromOperand(2);
       auto conc = concat(y, x);
-      auto concTy = VectorType::get(getIntTy(eltSize),
-                                    ElementCount::getFixed(numElts * 2));
+      auto concTy = getVecTy(eltSize, numElts * 2);
       auto concV = createBitCast(conc, concTy);
-      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
-                                            UndefValue::get(getIntTy(eltSize)));
+      Value *res = getBlankVec(numElts, eltSize);
       for (int e = 0; e < numElts; ++e) {
         *out << "e = " << e << "\n";
         auto elt1 = createExtractElement(concV, getIntConst(2 * e, 32));
@@ -5774,10 +5762,8 @@ public:
       } else {
         assert(false);
       }
-      auto vTy =
-          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
-      auto vBigTy = VectorType::get(getIntTy(2 * eltSize),
-                                    ElementCount::getFixed(numElts));
+      auto vTy = getVecTy(eltSize, numElts);
+      auto vBigTy = getVecTy(2 * eltSize, numElts);
       Value *a, *b;
       switch (opcode) {
       case AArch64::UMULLv4i16_indexed:
@@ -5798,9 +5784,7 @@ public:
         assert(false);
       }
       auto idx = getImm(3);
-      Value *res =
-          ConstantVector::getSplat(ElementCount::getFixed(numElts),
-                                   UndefValue::get(getIntTy(2 * eltSize)));
+      Value *res = getBlankVec(numElts, 2 * eltSize);
       // offset is nonzero when we're dealing with SMULL2/UMULL2
       int offset = (opcode == AArch64::SMULLv4i32_indexed ||
                     opcode == AArch64::SMULLv8i16_indexed ||
@@ -5837,13 +5821,11 @@ public:
       } else {
         assert(false);
       }
-      auto vTy =
-          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
+      auto vTy = getVecTy(eltSize, numElts);
       auto a = createBitCast(readFromOperand(1), vTy);
       auto b = createBitCast(readFromOperand(2), vTy);
       auto idx = getImm(3);
-      Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
-                                            UndefValue::get(getIntTy(eltSize)));
+      Value *res = getBlankVec(numElts, eltSize);
       for (int i = 0; i < numElts; ++i) {
         auto e1 = createExtractElement(a, getIntConst(i, 32));
         auto e2 = createExtractElement(b, getIntConst(idx, 32));
@@ -5894,19 +5876,15 @@ public:
 
       // BitCast src to a vector of numElts x (2*eltSize)
       assert(numElts * (2 * eltSize) == 128 && "BitCasting to wrong type");
-      Value *src_vector =
-          createBitCast(src, VectorType::get(getIntTy(2 * eltSize),
-                                             ElementCount::getFixed(numElts)));
-      Value *new_dest_vector = createTrunc(
-          src_vector,
-          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts)));
+      Value *src_vector = createBitCast(src, getVecTy(2 * eltSize, numElts));
+      Value *new_dest_vector =
+          createTrunc(src_vector, getVecTy(eltSize, numElts));
 
       if (part == 1) {
         // Have to preserve the lower 64 bits so, read from register and insert
         // to the upper 64 bits
         Value *dest = readFromReg(op0.getReg());
-        Value *original_dest_vector = createBitCast(
-            dest, VectorType::get(getIntTy(64), ElementCount::getFixed(2)));
+        Value *original_dest_vector = createBitCast(dest, getVecTy(64, 2));
 
         new_dest_vector = createInsertElement(
             original_dest_vector, new_dest_vector, getIntConst(1, 32));
@@ -6050,8 +6028,7 @@ public:
         assert(false);
       }
 
-      auto *vTy =
-          VectorType::get(getIntTy(eltSize), ElementCount::getFixed(numElts));
+      auto *vTy = getVecTy(eltSize, numElts);
 
       // Perform the operation
       switch (opcode) {
@@ -6091,8 +6068,7 @@ public:
           sum = createAdd(sum, elt);
         }
         // sum goes into the bottom lane, all others are zeroed out
-        auto zero = ConstantVector::getSplat(ElementCount::getFixed(numElts),
-                                             getIntConst(0, eltSize));
+        auto zero = getZeroVec(numElts, eltSize);
         auto res = createInsertElement(zero, sum, getIntConst(0, 32));
         updateOutputReg(res);
         break;
@@ -6117,11 +6093,8 @@ public:
         auto src2 = readFromOperand(2);
         auto src2_vector = createBitCast(src2, vTy);
         auto sum = addPairs(src2_vector, eltSize, numElts);
-        auto bigEltTy = getIntTy(2 * eltSize);
-        auto *bigTy =
-            VectorType::get(bigEltTy, ElementCount::getFixed(numElts / 2));
-        Value *res = ConstantVector::getSplat(
-            ElementCount::getFixed(numElts / 2), UndefValue::get(bigEltTy));
+        auto *bigTy = getVecTy(2 * eltSize, numElts / 2);
+        Value *res = getBlankVec(numElts / 2, 2 * eltSize);
         auto src_vector = createBitCast(src, bigTy);
         for (unsigned i = 0; i < numElts / 2; ++i) {
           auto elt1 = createExtractElement(src_vector, getIntConst(i, 32));
