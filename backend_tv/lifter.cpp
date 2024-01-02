@@ -4164,7 +4164,8 @@ public:
         val = createTrunc(val, getIntTy(w));
       auto lane = getImm(2);
       auto orig = readFromReg(CurInst->getOperand(1).getReg());
-      auto inserted = insertIntoVector(orig, val, w, lane);
+      auto vec = createBitCast(orig, getVecTy(w, 128 / w));
+      auto inserted = createInsertElement(vec, val, getIntConst(lane, 32));
       updateOutputReg(inserted);
       break;
     }
