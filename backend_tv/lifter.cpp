@@ -1331,7 +1331,10 @@ class arm2llvm {
       return 32;
     } else if (ty->isDoubleTy()) {
       return 64;
+    } else if (ty->isPointerTy()) {
+      return 64;
     } else {
+      ty->dump();
       assert(false && "Unhandled type");
     }
   }
@@ -3990,7 +3993,7 @@ public:
       }
       if (!dst) {
         *out << "ERROR: unconditional branch target not found, this might be "
-          "a tail call\n\n";
+                "a tail call\n\n";
         exit(-1);
       }
       createBranch(dst);
@@ -6232,9 +6235,11 @@ public:
       return V;
 
     if (argTy->isVectorTy() || argTy->isFloatingPointTy()) {
-      argTy = getIntTy(getBitWidth(V));
+      auto W = getBitWidth(V);
+      argTy = getIntTy(W);
       V = createBitCast(V, argTy);
-      targetWidth = 128; // FIXME
+      assert(W == 64 || W == 128);
+      targetWidth = W;
     } else {
       targetWidth = 64;
     }
@@ -6261,9 +6266,8 @@ public:
         V = createSExt(V, getIntTy(targetWidth));
     }
 
-    if (isZExt && getBitWidth(V) < targetWidth) {
+    if (isZExt && getBitWidth(V) < targetWidth)
       V = createZExt(V, getIntTy(targetWidth));
-    }
 
     // finally, pad out any remaining bits with junk (frozen poisons)
     auto junkBits = targetWidth - getBitWidth(V);
@@ -6341,7 +6345,7 @@ public:
     }
 
     // number of 8-byte stack slots for paramters
-    const int stackSlots = 32;
+    const int numStackSlots = 32;
     // amount of stack available for use by the lifted function, in bytes
     const int localFrame = 1024;
 
@@ -6355,10 +6359,11 @@ public:
     B.addAllocSizeAttr(0, {});
     myAlloc->addFnAttrs(B);
     myAlloc->addParamAttr(1, Attribute::AllocAlign);
-    stackMem = CallInst::Create(
-        myAlloc,
-        {getIntConst(localFrame + (8 * stackSlots), 32), getIntConst(16, 32)},
-        "stack", LLVMBB);
+    stackMem =
+        CallInst::Create(myAlloc,
+                         {getIntConst(localFrame + (8 * numStackSlots), 32),
+                          getIntConst(16, 32)},
+                         "stack", LLVMBB);
 
     // allocate storage for the main register file
     for (unsigned Reg = AArch64::X0; Reg <= AArch64::X28; ++Reg) {
@@ -6408,16 +6413,16 @@ public:
     // significant generalization to handle large parameters
     unsigned vecArgNum = 0;
     unsigned scalarArgNum = 0;
-    unsigned stackArgNum = 0;
+    unsigned stackSlot = 0;
 
     for (Function::arg_iterator arg = liftedFn->arg_begin(),
                                 E = liftedFn->arg_end(),
                                 srcArg = srcFn.arg_begin();
          arg != E; ++arg, ++srcArg) {
       *out << "  processing " << getBitWidth(arg)
-	   << "-bit arg with vecArgNum = " << vecArgNum
+           << "-bit arg with vecArgNum = " << vecArgNum
            << ", scalarArgNum = " << scalarArgNum
-           << ", stackArgNum = " << stackArgNum << "\n";
+           << ", stackSlot = " << stackSlot;
       auto *argTy = arg->getType();
       auto *val =
           parameterABIRules(arg, srcArg->hasSExtAttr(), srcArg->hasZExtAttr());
@@ -6439,35 +6444,40 @@ public:
         goto end;
       }
 
+      // anything else goes onto the stack
       {
-        // anything else goes onto the stack!
-        if (stackArgNum >= stackSlots) {
+        // 128-bit alignment required for 128-bit arguments
+        if ((getBitWidth(val) == 128) && ((stackSlot % 2) != 0)) {
+          ++stackSlot;
+          *out << " (actual stack slot = " << stackSlot << ")";
+        }
+
+        if (stackSlot >= numStackSlots) {
           *out << "\nERROR: maximum stack slots for parameter values "
                   "exceeded\n\n";
           exit(-1);
         }
-        if (argTy->isPointerTy() || argTy->isIntegerTy()) {
-          auto addr =
-              createGEP(i64, paramBase, {getIntConst(stackArgNum, 64)}, "");
-          createStore(val, addr);
-          ++stackArgNum;
+
+        auto addr = createGEP(i64, paramBase, {getIntConst(stackSlot, 64)}, "");
+        createStore(val, addr);
+
+        if (getBitWidth(val) == 64) {
+          stackSlot += 1;
         } else if (getBitWidth(val) == 128) {
-          auto addr =
-              createGEP(i64, paramBase, {getIntConst(stackArgNum, 64)}, "");
-          createStore(val, addr);
-          stackArgNum += 2;
+          stackSlot += 2;
         } else {
           assert(false);
         }
       }
 
-    end:;
+    end:
+      *out << "\n";
     }
 
     *out << "done with callee-side ABI stuff\n";
 
     // initialize the frame pointer
-    auto initFP = createGEP(i64, paramBase, {getIntConst(stackArgNum, 64)}, "");
+    auto initFP = createGEP(i64, paramBase, {getIntConst(stackSlot, 64)}, "");
     createStore(initFP, RegFile[AArch64::FP]);
 
     *out << "about to lift the instructions\n";
