@@ -1640,7 +1640,7 @@ class arm2llvm {
     return createAnd(v, sub);
   }
 
-  // like LLVM's ExtractElement, but works on scalar values
+  // FIXME -- remove this and use ExtractElement
   Value *extractFromVector(Value *val, unsigned eltWidth, unsigned lane) {
     unsigned w = getBitWidth(val);
     assert(w == 64 || w == 128);
@@ -1652,7 +1652,7 @@ class arm2llvm {
     return createTrunc(val, getIntTy(eltWidth));
   }
 
-  // like LLVM's InsertElement, but works on scalar values
+  // FIXME -- remove this and use InsertElement
   Value *insertIntoVector(Value *orig, Value *elt, unsigned eltWidth,
                           unsigned lane) {
     unsigned w = getBitWidth(orig);
@@ -1705,18 +1705,15 @@ class arm2llvm {
     return rev;
   }
 
-  Value *dupElts(Value *v, unsigned elts, unsigned eltSize) {
-    unsigned w = elts * eltSize;
+  Value *dupElts(Value *v, unsigned numElts, unsigned eltSize) {
+    unsigned w = numElts * eltSize;
     assert(w == 64 || w == 128);
     assert(getBitWidth(v) == eltSize);
-    auto wTy = getIntTy(w);
-    auto vext = createZExt(v, wTy);
-    Value *ret = getIntConst(0, w);
-    for (unsigned i = 0; i < elts; i++) {
-      ret = createRawShl(ret, getIntConst(eltSize, w));
-      ret = createOr(ret, vext);
-    }
-    return ret;
+    Value *res = ConstantVector::getSplat(ElementCount::getFixed(numElts),
+                                          UndefValue::get(getIntTy(eltSize)));
+    for (unsigned i = 0; i < numElts; i++)
+      res = createInsertElement(res, v, getIntConst(i, 32));
+    return res;
   }
 
   Value *concat(Value *a, Value *b) {
@@ -4297,19 +4294,17 @@ public:
       } else {
         assert(false);
       }
-      auto val = readFromOperand(1);
       unsigned idx;
       if (opcode == AArch64::UMOVvi8_idx0 || opcode == AArch64::UMOVvi16_idx0) {
         idx = 0;
       } else {
         idx = getImm(2);
       }
-      if (idx != 0) {
-        auto shiftAmt = getIntConst(idx * sz, 128);
-        val = createRawLShr(val, shiftAmt);
-      }
-      auto masked = maskLower(val, sz);
-      updateOutputReg(createTrunc(masked, i64));
+      auto vTy =
+          VectorType::get(getIntTy(sz), ElementCount::getFixed(128 / sz));
+      auto reg = createBitCast(readFromOperand(1), vTy);
+      auto val = createExtractElement(reg, getIntConst(idx, 64));
+      updateOutputReg(val);
       break;
     }
 
