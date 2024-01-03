@@ -6264,6 +6264,7 @@ public:
     LLVMglobals[name.str()] = g;
   }
 
+  // FIXME -- split this into per-function code and whole-module code
   Function *run() {
     auto i8 = getIntTy(8);
     auto i32 = getIntTy(32);
@@ -6608,13 +6609,24 @@ public:
     curROData += Data;
   }
 
+  virtual void emitFill(const MCExpr &NumBytes, uint64_t FillValue,
+                        SMLoc Loc) override {
+    auto ce = dyn_cast<MCConstantExpr>(&NumBytes);
+    if (ce) {
+      auto bytes = ce->getValue();
+      *out << "[emitFill value = " << FillValue << ", size = " << bytes
+           << "]\n";
+      for (int i = 0; i < bytes; ++i)
+        curROData += '0';
+    } else {
+      *out << "[emitFill is unknown!]\n";
+    }
+  }
+
   virtual void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
                             uint64_t Size = 0, Align ByteAlignment = Align(1),
                             SMLoc Loc = SMLoc()) override {
-    if (false) {
-      *out << "[emitZerofill]\n";
-      *out << (string)Section->getName() << "\n\n";
-    }
+    *out << "[emitZerofill " << Size << " bytes]\n";
   }
 
   void emitConstant() {
