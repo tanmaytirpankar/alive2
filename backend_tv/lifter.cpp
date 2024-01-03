@@ -6257,6 +6257,16 @@ public:
     }
   }
 
+  void createLLVMGlobal(Type *ty, StringRef name, MaybeAlign al,
+                        bool constant) {
+    auto *g = new GlobalVariable(*LiftedModule, ty, false,
+                                 GlobalValue::LinkageTypes::ExternalLinkage,
+                                 nullptr, name);
+    g->setAlignment(al);
+    g->setConstant(constant);
+    LLVMglobals[name.str()] = g;
+  }
+
   Function *run() {
     auto i8 = getIntTy(8);
     auto i32 = getIntTy(32);
@@ -6284,12 +6294,9 @@ public:
     // emitCommonSymbol and emitELFSize) and creates a global value for each
     for (const auto &[name, size_alignment_pair] : MF.MCglobals) {
       // Gets 2nd argument to ArrayType::get from the size provided by assembly
-      auto *AT = ArrayType::get(i8, size_alignment_pair.first);
-      auto *g = new GlobalVariable(*LiftedModule, AT, false,
-                                   GlobalValue::LinkageTypes::ExternalLinkage,
-                                   nullptr, name);
-      g->setAlignment(size_alignment_pair.second);
-      LLVMglobals[name] = g;
+      auto *ty = ArrayType::get(i8, size_alignment_pair.first);
+      createLLVMGlobal(ty, name, size_alignment_pair.second,
+                       /*constant=*/false);
     }
 
     // Create globals not found in the assembly
@@ -6303,12 +6310,8 @@ public:
       // If the global has not been created yet, create it
       auto name = srcFnGlobal.getName();
       if (LLVMglobals[name.str()] == nullptr) {
-        auto *g = new GlobalVariable(
-            *LiftedModule, srcFnGlobal.getValueType(), false,
-            GlobalValue::LinkageTypes::ExternalLinkage, nullptr, name);
-        g->setAlignment(MaybeAlign(srcFnGlobal.getAlign()));
-        g->setConstant(srcFnGlobal.isConstant());
-        LLVMglobals[srcFnGlobal.getName().str()] = g;
+        createLLVMGlobal(srcFnGlobal.getValueType(), name,
+                         srcFnGlobal.getAlign(), srcFnGlobal.isConstant());
       }
     }
 
@@ -6640,6 +6643,8 @@ public:
       *out << "  creating " << size << " byte global ELF object " << name
            << "\n";
       MF.MCglobals[name] = make_pair(size, curAlign);
+      // FIXME -- need a real alignment model, keep track of offset
+      // since last align directive, etc.
       curAlign = Align(1);
     } else {
       *out << "  can't get ELF size of " << name << "\n";
