@@ -122,8 +122,8 @@ public:
 
 struct MCGlobal {
   string name;
-  uint64_t size;
-  Align al;
+  Align align;
+  string data;
 };
 
 class MCFunction {
@@ -6256,12 +6256,11 @@ public:
   }
 
   void createLLVMGlobal(Type *ty, StringRef name, MaybeAlign al,
-                        bool constant) {
-    auto *g = new GlobalVariable(*LiftedModule, ty, false,
+                        bool isConstant, Constant *init) {
+    auto *g = new GlobalVariable(*LiftedModule, ty, isConstant,
                                  GlobalValue::LinkageTypes::ExternalLinkage,
-                                 nullptr, name);
+                                 init, name);
     g->setAlignment(al);
-    g->setConstant(constant);
     LLVMglobals[name.str()] = g;
   }
 
@@ -6286,16 +6285,38 @@ public:
 
     // every global in the source module needs to get created in the
     // target module
+    set<string> LLVMglobals;
     for (auto &srcFnGlobal : srcFn.getParent()->globals()) {
+      auto name = srcFnGlobal.getName();
+      *out << "copying global variable " << name.str()
+           << " over from the source module\n";
       createLLVMGlobal(srcFnGlobal.getValueType(), srcFnGlobal.getName(),
-                       srcFnGlobal.getAlign(), srcFnGlobal.isConstant());
+                       srcFnGlobal.getAlign(), srcFnGlobal.isConstant(),
+                       /*initializer=*/nullptr);
+      LLVMglobals.insert(name.str());
     }
 
     // but we can't get everything by looking at the source module,
     // the target also contains new stuff not found in the source
     // module at all, such as the constant pool
-    // for (const auto &g : MF.MCglobals) {
-    //}
+    for (const auto &g : MF.MCglobals) {
+      auto name = g.name;
+      *out << "found a variable " << name << " in the assembly\n";
+      auto size = g.data.size();
+      *out << "  size = " << size << "\n";
+      if (LLVMglobals.find(g.name) == LLVMglobals.end()) {
+        auto ty = ArrayType::get(i8, size);
+        vector<Constant *> vals;
+        for (unsigned i = 0; i < size; ++i) {
+          vals.push_back(ConstantInt::get(i8, g.data[i]));
+        }
+        auto initializer = ConstantArray::get(ty, vals);
+        createLLVMGlobal(ty, name, g.align, /*isConstant=*/true, initializer);
+        *out << "  created\n";
+      } else {
+        *out << "  already exists -- not creating\n";
+      }
+    }
 
     // number of 8-byte stack slots for paramters
     const int numStackSlots = 32;
@@ -6483,6 +6504,7 @@ private:
   MCBasicBlock *curBB{nullptr};
   unsigned prev_line{0};
   Align curAlign;
+  string curSym;
   bool FunctionEnded = false;
   string curROData;
 
@@ -6595,8 +6617,21 @@ public:
     }
   }
 
+  void emitConstant() {
+    if (!curROData.empty()) {
+      MCGlobal g{
+          .name = curSym,
+          .align = curAlign,
+          .data = curROData,
+      };
+      MF.MCglobals.emplace_back(g);
+      curROData = "";
+    }
+  }
+
   virtual void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override {
     *out << "[emitELFSize]\n";
+    emitConstant();
   }
 
   virtual void emitValueToAlignment(Align Alignment, int64_t Value = 0,
@@ -6607,9 +6642,9 @@ public:
   }
 
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
-    if (!curROData.empty()) {
-    }
-    curROData = "";
+    emitConstant();
+    curSym = Symbol->getName().str();
+
     auto sp = getCurrentSection();
     string Lab = Symbol->getName().str();
     *out << "[emitLabel " << Lab << " in section "
