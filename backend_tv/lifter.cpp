@@ -120,6 +120,12 @@ public:
   }
 };
 
+struct MCGlobal {
+  string name;
+  uint64_t size;
+  Align al;
+};
+
 class MCFunction {
   string name;
   unsigned label_cnt{0};
@@ -129,7 +135,7 @@ public:
   MCInstPrinter *IP;
   MCRegisterInfo *MRI;
   vector<MCBasicBlock> BBs;
-  unordered_map<string, pair<uint64_t, Align>> MCglobals;
+  vector<MCGlobal> MCglobals;
 
   MCFunction() {}
 
@@ -1641,14 +1647,6 @@ class arm2llvm {
       v <<= 1;
     }
     return ret;
-  }
-
-  Value *maskLower(Value *v, unsigned b) {
-    auto w = getBitWidth(v);
-    auto one = getIntConst(1, w);
-    auto shifted = createRawShl(one, getIntConst(b, w));
-    auto sub = createSub(shifted, one);
-    return createAnd(v, sub);
   }
 
   // negative shift exponents go the other direction
@@ -6286,34 +6284,18 @@ public:
     // default to adding instructions to the entry block
     LLVMBB = BBs[0].first;
 
-    // Create globals found in assembly
-    // If you comment this loop out, global tests 0-100 crash since the size
-    // of the global cannot be determined...
-
-    // This loop looks through keys in MF.globals (which is populated using
-    // emitCommonSymbol and emitELFSize) and creates a global value for each
-    for (const auto &[name, size_alignment_pair] : MF.MCglobals) {
-      // Gets 2nd argument to ArrayType::get from the size provided by assembly
-      auto *ty = ArrayType::get(i8, size_alignment_pair.first);
-      createLLVMGlobal(ty, name, size_alignment_pair.second,
-                       /*constant=*/false);
-    }
-
-    // Create globals not found in the assembly
-    // If you comment this loop out, global tests 101 and above crash since the
-    // assembly does not have a global which is reference in the instructions...
-
-    // This loop looks through globals in the source LLVM IR and creates a
-    // global value for those that were not found in the assembly (If a global
-    // is in the assembly, it would have been created by the first loop)
+    // every global in the source module needs to get created in the
+    // target module
     for (auto &srcFnGlobal : srcFn.getParent()->globals()) {
-      // If the global has not been created yet, create it
-      auto name = srcFnGlobal.getName();
-      if (LLVMglobals[name.str()] == nullptr) {
-        createLLVMGlobal(srcFnGlobal.getValueType(), name,
-                         srcFnGlobal.getAlign(), srcFnGlobal.isConstant());
-      }
+      createLLVMGlobal(srcFnGlobal.getValueType(), srcFnGlobal.getName(),
+                       srcFnGlobal.getAlign(), srcFnGlobal.isConstant());
     }
+
+    // but we can't get everything by looking at the source module,
+    // the target also contains new stuff not found in the source
+    // module at all, such as the constant pool
+    // for (const auto &g : MF.MCglobals) {
+    //}
 
     // number of 8-byte stack slots for paramters
     const int numStackSlots = 32;
@@ -6578,19 +6560,6 @@ public:
     }
   }
 
-  void printMCExpr(const MCExpr *Expr) {
-    if (Expr) {
-      int64_t Res;
-      if (Expr->evaluateAsAbsolute(Res)) {
-        *out << "  expr = " << Res << "\n";
-      } else {
-        *out << "  can't evaluate expr as absolute\n";
-      }
-    } else {
-      *out << "  null expr\n";
-    }
-  }
-
   virtual bool emitSymbolAttribute(MCSymbol *Symbol,
                                    MCSymbolAttr Attribute) override {
     if (false) {
@@ -6608,16 +6577,7 @@ public:
 
   virtual void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                                 Align ByteAlignment) override {
-    auto name = (string)Symbol->getName();
     *out << "[emitCommonSymbol]\n";
-    std::string sss;
-    llvm::raw_string_ostream ss(sss);
-    *out << "  creating " << Size << " byte global ELF object " << name
-         << " with " << ByteAlignment.value() << " byte alignment\n";
-    MF.MCglobals[name] = make_pair(Size, ByteAlignment);
-    Symbol->print(ss, nullptr);
-    *out << sss << " "
-         << "size = " << Size << " Align = " << ByteAlignment.value() << "\n\n";
   }
 
   virtual void emitBytes(StringRef Data) override {
@@ -6637,18 +6597,6 @@ public:
 
   virtual void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override {
     *out << "[emitELFSize]\n";
-    auto name = (string)Symbol->getName();
-    int64_t size;
-    if (Value && Value->evaluateAsAbsolute(size)) {
-      *out << "  creating " << size << " byte global ELF object " << name
-           << "\n";
-      MF.MCglobals[name] = make_pair(size, curAlign);
-      // FIXME -- need a real alignment model, keep track of offset
-      // since last align directive, etc.
-      curAlign = Align(1);
-    } else {
-      *out << "  can't get ELF size of " << name << "\n";
-    }
   }
 
   virtual void emitValueToAlignment(Align Alignment, int64_t Value = 0,
