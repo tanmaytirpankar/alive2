@@ -228,7 +228,7 @@ class arm2llvm {
     return VectorType::get(eTy, ec);
   }
 
-  Constant *getBlankVec(int numElts, int eltSize) {
+  Constant *getUndefVec(int numElts, int eltSize) {
     auto eTy = getIntTy(eltSize);
     auto ec = ElementCount::getFixed(numElts);
     return ConstantVector::getSplat(ec, UndefValue::get(eTy));
@@ -1264,7 +1264,7 @@ class arm2llvm {
     }
     if (getBitWidth(v) > eltSize)
       v = createTrunc(v, getIntTy(eltSize));
-    Value *res = getBlankVec(numElts, eltSize);
+    Value *res = getUndefVec(numElts, eltSize);
     for (unsigned i = 0; i < numElts; ++i)
       res = createInsertElement(res, v, getIntConst(i, 32));
     return res;
@@ -1272,7 +1272,7 @@ class arm2llvm {
 
   Value *addPairs(Value *src, unsigned eltSize, unsigned numElts) {
     auto bigEltTy = getIntTy(2 * eltSize);
-    Value *res = getBlankVec(numElts / 2, 2 * eltSize);
+    Value *res = getUndefVec(numElts / 2, 2 * eltSize);
     for (unsigned i = 0; i < numElts; i += 2) {
       auto elt1 = createExtractElement(src, getIntConst(i, 32));
       auto elt2 = createExtractElement(src, getIntConst(i + 1, 32));
@@ -1318,7 +1318,7 @@ class arm2llvm {
 
     Value *res = nullptr;
     if (elementWise) {
-      res = getBlankVec(numElts, eltSize);
+      res = getUndefVec(numElts, eltSize);
       for (unsigned i = 0; i < numElts; ++i) {
         auto aa = createExtractElement(a, getIntConst(i, 32));
         auto bb = createExtractElement(b, getIntConst(i, 32));
@@ -1676,7 +1676,7 @@ class arm2llvm {
     assert(getBitWidth(in) == 64 || getBitWidth(in) == 128);
     if (getBitWidth(in) == 64)
       in = createZExt(in, getIntTy(128));
-    Value *rev = getBlankVec(128 / eltSize, eltSize);
+    Value *rev = getUndefVec(128 / eltSize, eltSize);
     in = createBitCast(in, getVecTy(eltSize, 128 / eltSize));
     for (unsigned i = 0; i < 2; ++i) {
       auto innerCount = 64 / eltSize;
@@ -1694,7 +1694,7 @@ class arm2llvm {
     unsigned w = numElts * eltSize;
     assert(w == 64 || w == 128);
     assert(getBitWidth(v) == eltSize);
-    Value *res = getBlankVec(numElts, eltSize);
+    Value *res = getUndefVec(numElts, eltSize);
     for (unsigned i = 0; i < numElts; i++)
       res = createInsertElement(res, v, getIntConst(i, 32));
     return res;
@@ -1944,7 +1944,20 @@ public:
   arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
            MCInstPrinter *instrPrinter)
       : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
-        instrPrinter(instrPrinter), DL(srcFn.getParent()->getDataLayout()) {}
+        instrPrinter(instrPrinter), DL(srcFn.getParent()->getDataLayout()) {
+    assert(disjoint(instrs_32, instrs_64));
+    assert(disjoint(instrs_32, instrs_128));
+    assert(disjoint(instrs_64, instrs_128));
+    *out << (instrs_32.size() + instrs_64.size() + instrs_128.size())
+         << " instructions supported\n";
+  }
+
+  bool disjoint(const set<int> &a, const set<int> &b) {
+    set<int> i;
+    std::set_intersection(a.begin(), a.end(), b.begin(), b.end(),
+                          std::inserter(i, i.begin()));
+    return i.empty();
+  }
 
   int64_t getImm(int idx) {
     return CurInst->getOperand(idx).getImm();
@@ -5438,7 +5451,7 @@ public:
       auto vTy = getVecTy(eltSize, numElts);
       auto a = createBitCast(readFromOperand(1), vTy);
       auto b = createBitCast(readFromOperand(2), vTy);
-      Value *res = getBlankVec(numElts, eltSize);
+      Value *res = getUndefVec(numElts, eltSize);
       for (int i = 0; i < numElts / 2; ++i) {
         auto e1 = createExtractElement(a, getIntConst((i * 2) + which, 32));
         auto e2 = createExtractElement(b, getIntConst((i * 2) + which, 32));
@@ -5503,7 +5516,7 @@ public:
       auto vTy = getVecTy(eltSize, numElts);
       auto a = createBitCast(readFromOperand(1), vTy);
       auto b = createBitCast(readFromOperand(2), vTy);
-      Value *res = getBlankVec(numElts, eltSize);
+      Value *res = getUndefVec(numElts, eltSize);
       for (int p = 0; p < numElts / 2; ++p) {
         auto *e1 = createExtractElement(a, getIntConst((2 * p) + part, 32));
         auto *e2 = createExtractElement(b, getIntConst((2 * p) + part, 32));
@@ -5624,7 +5637,7 @@ public:
       auto a = createBitCast(readFromOperand(1), vTy);
       auto b = createBitCast(readFromOperand(2), vTy);
       auto exp = getImm(3);
-      Value *res = getBlankVec(numElts, eltSize);
+      Value *res = getUndefVec(numElts, eltSize);
       for (int i = 0; i < numElts; ++i) {
         auto e1 = createExtractElement(a, getIntConst(i, 32));
         auto e2 = createExtractElement(b, getIntConst(i, 32));
@@ -5647,7 +5660,7 @@ public:
       auto vTy = getVecTy(eltSize, numElts);
       auto a = createBitCast(readFromOperand(1), vTy);
       auto b = createBitCast(readFromOperand(2), vTy);
-      Value *res = getBlankVec(numElts, eltSize);
+      Value *res = getUndefVec(numElts, eltSize);
       for (int i = 0; i < numElts / 2; ++i) {
         auto e1 = createExtractElement(a, getIntConst(i, 32));
         auto e2 = createExtractElement(b, getIntConst(i, 32));
@@ -5669,7 +5682,7 @@ public:
       auto vTy = getVecTy(eltSize, numElts);
       auto a = createBitCast(readFromOperand(1), vTy);
       auto b = createBitCast(readFromOperand(2), vTy);
-      Value *res = getBlankVec(numElts, eltSize);
+      Value *res = getUndefVec(numElts, eltSize);
       for (int i = 0; i < numElts / 2; ++i) {
         auto e1 = createExtractElement(a, getIntConst((numElts / 2) + i, 32));
         auto e2 = createExtractElement(b, getIntConst((numElts / 2) + i, 32));
@@ -5693,7 +5706,7 @@ public:
       auto conc = concat(y, x);
       auto concTy = getVecTy(eltSize, numElts * 2);
       auto concV = createBitCast(conc, concTy);
-      Value *res = getBlankVec(numElts, eltSize);
+      Value *res = getUndefVec(numElts, eltSize);
       for (int e = 0; e < numElts; ++e) {
         *out << "e = " << e << "\n";
         auto elt1 = createExtractElement(concV, getIntConst(2 * e, 32));
@@ -5771,7 +5784,7 @@ public:
         assert(false);
       }
       auto idx = getImm(3);
-      Value *res = getBlankVec(numElts, 2 * eltSize);
+      Value *res = getUndefVec(numElts, 2 * eltSize);
       // offset is nonzero when we're dealing with SMULL2/UMULL2
       int offset = (opcode == AArch64::SMULLv4i32_indexed ||
                     opcode == AArch64::SMULLv8i16_indexed ||
@@ -5812,7 +5825,7 @@ public:
       auto a = createBitCast(readFromOperand(1), vTy);
       auto b = createBitCast(readFromOperand(2), vTy);
       auto idx = getImm(3);
-      Value *res = getBlankVec(numElts, eltSize);
+      Value *res = getUndefVec(numElts, eltSize);
       for (int i = 0; i < numElts; ++i) {
         auto e1 = createExtractElement(a, getIntConst(i, 32));
         auto e2 = createExtractElement(b, getIntConst(idx, 32));
@@ -6081,7 +6094,7 @@ public:
         auto src2_vector = createBitCast(src2, vTy);
         auto sum = addPairs(src2_vector, eltSize, numElts);
         auto *bigTy = getVecTy(2 * eltSize, numElts / 2);
-        Value *res = getBlankVec(numElts / 2, 2 * eltSize);
+        Value *res = getUndefVec(numElts / 2, 2 * eltSize);
         auto src_vector = createBitCast(src, bigTy);
         for (unsigned i = 0; i < numElts / 2; ++i) {
           auto elt1 = createExtractElement(src_vector, getIntConst(i, 32));
