@@ -1663,22 +1663,6 @@ class arm2llvm {
     return createTrunc(val, getIntTy(eltWidth));
   }
 
-  // FIXME -- remove this and use InsertElement
-  Value *insertIntoVector(Value *orig, Value *elt, unsigned eltWidth,
-                          unsigned lane) {
-    unsigned w = getBitWidth(orig);
-    assert(w == 64 || w == 128);
-    assert(eltWidth == 8 || eltWidth == 16 || eltWidth == 32 || eltWidth == 64);
-    assert(getBitWidth(elt) == eltWidth);
-    auto wTy = getIntTy(w);
-    auto eltExt = createZExt(elt, wTy);
-    auto shiftAmt = getIntConst(lane * eltWidth, w);
-    auto shifted = createRawShl(eltExt, shiftAmt);
-    auto mask = createRawShl(getLowOnes(eltWidth, w), shiftAmt);
-    auto masked = createAnd(orig, createNot(mask));
-    return createOr(masked, shifted);
-  }
-
   // negative shift exponents go the other direction
   Value *createUSHL(Value *a, Value *b) {
     auto zero = getIntConst(0, getBitWidth(b));
@@ -1704,13 +1688,15 @@ class arm2llvm {
     assert(getBitWidth(in) == 64 || getBitWidth(in) == 128);
     if (getBitWidth(in) == 64)
       in = createZExt(in, getIntTy(128));
-    Value *rev = getIntConst(0, 128);
+    Value *rev = getBlankVec(128 / eltSize, eltSize);
+    in = createBitCast(in, getVecTy(eltSize, 128 / eltSize));
     for (unsigned i = 0; i < 2; ++i) {
       auto innerCount = 64 / eltSize;
       for (unsigned j = 0; j < innerCount; j++) {
-        auto elt = extractFromVector(in, eltSize, (i * innerCount) + j);
-        rev = insertIntoVector(rev, elt, eltSize,
-                               (i * innerCount) + innerCount - j - 1);
+        auto elt =
+            createExtractElement(in, getIntConst((i * innerCount) + j, 32));
+        rev = createInsertElement(
+            rev, elt, getIntConst((i * innerCount) + innerCount - j - 1, 32));
       }
     }
     return rev;
@@ -4136,8 +4122,10 @@ public:
       } else {
         assert(false);
       }
-      auto ext = extractFromVector(readFromOperand(3), w, getImm(4));
-      auto ins = insertIntoVector(readFromOperand(1), ext, w, getImm(2));
+      auto in = createBitCast(readFromOperand(3), getVecTy(w, 128 / w));
+      auto out = createBitCast(readFromOperand(1), getVecTy(w, 128 / w));
+      auto ext = createExtractElement(in, getIntConst(getImm(4), 32));
+      auto ins = createInsertElement(out, ext, getIntConst(getImm(2), 32));
       updateOutputReg(ins);
       break;
     }
