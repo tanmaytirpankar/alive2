@@ -344,6 +344,9 @@ class arm2llvm {
   };
 
   const set<int> instrs_64 = {
+      AArch64::DUPv8i8lane,
+      AArch64::DUPv4i16lane,
+      AArch64::DUPv2i32lane,
       AArch64::BL,
       AArch64::ADDXrx,
       AArch64::ADDSXrs,
@@ -727,9 +730,6 @@ class arm2llvm {
       AArch64::DUPi64,
       AArch64::DUPi32,
       AArch64::FMOVXDr,
-      AArch64::DUPv8i8lane,
-      AArch64::DUPv4i16lane,
-      AArch64::DUPv2i32lane,
       AArch64::LDPQi,
       AArch64::LDRQroX,
       AArch64::LDURQi,
@@ -1649,18 +1649,6 @@ class arm2llvm {
     auto shifted = createRawShl(one, getIntConst(b, w));
     auto sub = createSub(shifted, one);
     return createAnd(v, sub);
-  }
-
-  // FIXME -- remove this and use ExtractElement
-  Value *extractFromVector(Value *val, unsigned eltWidth, unsigned lane) {
-    unsigned w = getBitWidth(val);
-    assert(w == 64 || w == 128);
-    assert(lane >= 0);
-    if (lane != 0) {
-      auto shiftAmt = getIntConst(lane * eltWidth, w);
-      val = createRawLShr(val, shiftAmt);
-    }
-    return createTrunc(val, getIntTy(eltWidth));
   }
 
   // negative shift exponents go the other direction
@@ -4426,19 +4414,22 @@ public:
     }
 
     case AArch64::DUPi16: {
-      auto ext = extractFromVector(readFromOperand(1), 16, getImm(2));
+      auto in = createBitCast(readFromOperand(1), getVecTy(16, 8));
+      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
       updateOutputReg(ext);
       break;
     }
 
     case AArch64::DUPi32: {
-      auto ext = extractFromVector(readFromOperand(1), 32, getImm(2));
+      auto in = createBitCast(readFromOperand(1), getVecTy(32, 4));
+      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
       updateOutputReg(ext);
       break;
     }
 
     case AArch64::DUPi64: {
-      auto ext = extractFromVector(readFromOperand(1), 64, getImm(2));
+      auto in = createBitCast(readFromOperand(1), getVecTy(64, 2));
+      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
       updateOutputReg(ext);
       break;
     }
@@ -4485,43 +4476,50 @@ public:
     }
 
     case AArch64::DUPv2i32lane: {
-      auto ext = extractFromVector(readFromOperand(1), 32, getImm(2));
+      auto in = createBitCast(readFromOperand(1), getVecTy(32, 2));
+      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
       updateOutputReg(dupElts(ext, 2, 32));
       break;
     }
 
     case AArch64::DUPv2i64lane: {
-      auto ext = extractFromVector(readFromOperand(1), 64, getImm(2));
+      auto in = createBitCast(readFromOperand(1), getVecTy(64, 2));
+      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
       updateOutputReg(dupElts(ext, 2, 64));
       break;
     }
 
     case AArch64::DUPv4i16lane: {
-      auto ext = extractFromVector(readFromOperand(1), 16, getImm(2));
+      auto in = createBitCast(readFromOperand(1), getVecTy(16, 4));
+      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
       updateOutputReg(dupElts(ext, 4, 16));
       break;
     }
 
     case AArch64::DUPv4i32lane: {
-      auto ext = extractFromVector(readFromOperand(1), 32, getImm(2));
+      auto in = createBitCast(readFromOperand(1), getVecTy(32, 4));
+      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
       updateOutputReg(dupElts(ext, 4, 32));
       break;
     }
 
     case AArch64::DUPv8i8lane: {
-      auto ext = extractFromVector(readFromOperand(1), 8, getImm(2));
+      auto in = createBitCast(readFromOperand(1), getVecTy(8, 8));
+      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
       updateOutputReg(dupElts(ext, 8, 8));
       break;
     }
 
     case AArch64::DUPv8i16lane: {
-      auto ext = extractFromVector(readFromOperand(1), 16, getImm(2));
+      auto in = createBitCast(readFromOperand(1), getVecTy(16, 8));
+      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
       updateOutputReg(dupElts(ext, 8, 16));
       break;
     }
 
     case AArch64::DUPv16i8lane: {
-      auto ext = extractFromVector(readFromOperand(1), 8, getImm(2));
+      auto in = createBitCast(readFromOperand(1), getVecTy(16, 8));
+      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
       updateOutputReg(dupElts(ext, 16, 8));
       break;
     }
