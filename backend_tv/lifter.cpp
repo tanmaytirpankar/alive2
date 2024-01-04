@@ -2129,6 +2129,8 @@ public:
       return AArch64::Q6;
     case AArch64::Q7:
       return AArch64::Q7;
+    case AArch64::Q31_Q0:
+      return AArch64::Q31;
     default:
       assert(false && "missing case in decodeTblReg");
     }
@@ -5028,7 +5030,10 @@ public:
       auto baseReg = decodeTblReg(CurInst->getOperand(1).getReg());
       vector<Value *> regs;
       for (int i = 0; i < nregs; ++i) {
-        regs.push_back(createBitCast(readFromReg(baseReg + i), fullTy));
+        regs.push_back(createBitCast(readFromReg(baseReg), fullTy));
+        baseReg++;
+        if (baseReg > AArch64::Q31)
+          baseReg = AArch64::Q0;
       }
       auto src = createBitCast(readFromOperand(2), vTy);
       Value *res = getUndefVec(lanes, 8);
@@ -6380,8 +6385,10 @@ public:
       auto W = getBitWidth(V);
       argTy = getIntTy(W);
       V = createBitCast(V, argTy);
-      assert(W == 64 || W == 128);
-      targetWidth = W;
+      if (W <= 64)
+        targetWidth = 64;
+      else
+        targetWidth = 128;
     } else {
       targetWidth = 64;
     }
