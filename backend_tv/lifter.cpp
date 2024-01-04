@@ -4641,7 +4641,7 @@ public:
     }
 
     case AArch64::DUPv16i8lane: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(16, 8));
+      auto in = createBitCast(readFromOperand(1), getVecTy(8, 16));
       auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
       updateOutputReg(dupElts(ext, 16, 8));
       break;
