@@ -623,9 +623,17 @@ class arm2llvm {
       AArch64::UQSUBv8i8,
       AArch64::UQSUBv4i16,
       AArch64::UQSUBv2i32,
+      AArch64::TBLv8i8One,
+      AArch64::TBLv8i8Two,
+      AArch64::TBLv8i8Three,
+      AArch64::TBLv8i8Four,
   };
 
   const set<int> instrs_128 = {
+      AArch64::TBLv16i8One,
+      AArch64::TBLv16i8Two,
+      AArch64::TBLv16i8Three,
+      AArch64::TBLv16i8Four,
       AArch64::UQSUBv2i64,
       AArch64::UQSUBv4i32,
       AArch64::UQSUBv16i8,
@@ -1068,8 +1076,22 @@ class arm2llvm {
     return new PtrToIntInst(v, ty, nextName(), LLVMBB);
   }
 
+  InsertElementInst *createInsertElement(Value *vec, Value *val, Value *idx) {
+    return InsertElementInst::Create(vec, val, idx, nextName(), LLVMBB);
+  }
+
+  InsertElementInst *createInsertElement(Value *vec, Value *val, int idx) {
+    auto idxv = getIntConst(idx, 32);
+    return InsertElementInst::Create(vec, val, idxv, nextName(), LLVMBB);
+  }
+
   ExtractElementInst *createExtractElement(Value *v, Value *idx) {
     return ExtractElementInst::Create(v, idx, nextName(), LLVMBB);
+  }
+
+  ExtractElementInst *createExtractElement(Value *v, int idx) {
+    auto idxv = getIntConst(idx, 32);
+    return ExtractElementInst::Create(v, idxv, nextName(), LLVMBB);
   }
 
   ExtractValueInst *createExtractValue(Value *v, ArrayRef<unsigned> idxs) {
@@ -1255,10 +1277,6 @@ class arm2llvm {
     return CastInst::Create(Instruction::SExt, v, t, nextName(), LLVMBB);
   }
 
-  InsertElementInst *createInsertElement(Value *vec, Value *val, Value *index) {
-    return InsertElementInst::Create(vec, val, index, nextName(), LLVMBB);
-  }
-
   CastInst *createZExt(Value *v, Type *t) {
     return CastInst::Create(Instruction::ZExt, v, t, nextName(), LLVMBB);
   }
@@ -1364,7 +1382,7 @@ class arm2llvm {
     }
   }
 
-  // Returns bitWidth corresponding the registers.
+  // Returns bitWidth corresponding the registers
   unsigned getRegSize(unsigned Reg) {
     if (Reg >= AArch64::B0 && Reg <= AArch64::B31)
       return 8;
@@ -2079,6 +2097,56 @@ public:
 
     // Load Value val in the pointer returned by the GEP instruction
     return createLoad(getIntTy(8 * size), ptr);
+  }
+
+  unsigned decodeTblReg(unsigned r) {
+    switch (r) {
+    case AArch64::Q0:
+    case AArch64::Q0_Q1:
+    case AArch64::Q0_Q1_Q2_Q3:
+      return AArch64::Q0;
+    case AArch64::Q1:
+    case AArch64::Q1_Q2:
+    case AArch64::Q1_Q2_Q3_Q4:
+      return AArch64::Q1;
+    case AArch64::Q2:
+    case AArch64::Q2_Q3:
+    case AArch64::Q2_Q3_Q4_Q5:
+      return AArch64::Q2;
+    case AArch64::Q3:
+    case AArch64::Q3_Q4:
+    case AArch64::Q3_Q4_Q5_Q6:
+      return AArch64::Q3;
+    case AArch64::Q4:
+    case AArch64::Q4_Q5:
+    case AArch64::Q4_Q5_Q6_Q7:
+      return AArch64::Q4;
+    case AArch64::Q5:
+    case AArch64::Q5_Q6:
+      return AArch64::Q5;
+    case AArch64::Q6:
+    case AArch64::Q6_Q7:
+      return AArch64::Q6;
+    case AArch64::Q7:
+      return AArch64::Q7;
+    default:
+      assert(false && "missing case in decodeTblReg");
+    }
+  }
+
+  Value *tblHelper2(vector<Value *> &tbl, Value *idx, unsigned i) {
+    if (i == tbl.size())
+      return getIntConst(0, 8);
+    auto cond = createICmp(ICmpInst::Predicate::ICMP_ULT, idx,
+                           getIntConst((i + 1) * 16, 8));
+    auto t = createExtractElement(tbl.at(i), idx);
+    auto idx_sub = createSub(idx, getIntConst(16, 8));
+    auto f = tblHelper2(tbl, idx_sub, i + 1);
+    return createSelect(cond, t, f);
+  }
+
+  Value *tblHelper(vector<Value *> &tbl, Value *idx) {
+    return tblHelper2(tbl, idx, 0);
   }
 
   tuple<Value *, int> getParamsLoadImmed() {
@@ -4906,6 +4974,70 @@ public:
       }
 
       updateOutputReg(createSExt(res, vTy));
+      break;
+    }
+
+    case AArch64::TBLv8i8One:
+    case AArch64::TBLv8i8Two:
+    case AArch64::TBLv8i8Three:
+    case AArch64::TBLv8i8Four:
+    case AArch64::TBLv16i8One:
+    case AArch64::TBLv16i8Two:
+    case AArch64::TBLv16i8Three:
+    case AArch64::TBLv16i8Four: {
+      int lanes;
+      switch (opcode) {
+      case AArch64::TBLv8i8One:
+      case AArch64::TBLv8i8Two:
+      case AArch64::TBLv8i8Three:
+      case AArch64::TBLv8i8Four:
+        lanes = 8;
+        break;
+      case AArch64::TBLv16i8One:
+      case AArch64::TBLv16i8Two:
+      case AArch64::TBLv16i8Three:
+      case AArch64::TBLv16i8Four:
+        lanes = 16;
+        break;
+      default:
+        assert(false);
+      }
+      int nregs;
+      switch (opcode) {
+      case AArch64::TBLv8i8One:
+      case AArch64::TBLv16i8One:
+        nregs = 1;
+        break;
+      case AArch64::TBLv8i8Two:
+      case AArch64::TBLv16i8Two:
+        nregs = 2;
+        break;
+      case AArch64::TBLv8i8Three:
+      case AArch64::TBLv16i8Three:
+        nregs = 3;
+        break;
+      case AArch64::TBLv8i8Four:
+      case AArch64::TBLv16i8Four:
+        nregs = 4;
+        break;
+      default:
+        assert(false);
+      }
+      auto vTy = getVecTy(8, lanes);
+      auto fullTy = getVecTy(8, 16);
+      auto baseReg = decodeTblReg(CurInst->getOperand(1).getReg());
+      vector<Value *> regs;
+      for (int i = 0; i < nregs; ++i) {
+        regs.push_back(createBitCast(readFromReg(baseReg + i), fullTy));
+      }
+      auto src = createBitCast(readFromOperand(2), vTy);
+      Value *res = getUndefVec(lanes, 8);
+      for (int i = 0; i < lanes; ++i) {
+        auto idx = createExtractElement(src, i);
+        auto entry = tblHelper(regs, idx);
+        res = createInsertElement(res, entry, i);
+      }
+      updateOutputReg(res);
       break;
     }
 
