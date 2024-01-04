@@ -627,9 +627,13 @@ class arm2llvm {
       AArch64::TBLv8i8Two,
       AArch64::TBLv8i8Three,
       AArch64::TBLv8i8Four,
+      AArch64::MOVIv2s_msl,
+      AArch64::MOVIv8b_ns,
+      AArch64::MOVIv4i16,
   };
 
   const set<int> instrs_128 = {
+      AArch64::MOVIv4s_msl,
       AArch64::TBLv16i8One,
       AArch64::TBLv16i8Two,
       AArch64::TBLv16i8Three,
@@ -4553,9 +4557,13 @@ public:
       break;
     }
 
-    case AArch64::MOVIv16b_ns: {
-      auto v = getIntConst(getImm(1), 8);
-      updateOutputReg(dupElts(v, 16, 8));
+    case AArch64::MOVIv2s_msl:
+    case AArch64::MOVIv4s_msl: {
+      auto imm1 = getIntConst(getImm(1), 32);
+      auto imm2 = getImm(2) & ~0x100;
+      auto v = createMSL(imm1, imm2);
+      int numElts = (opcode == AArch64::MOVIv2s_msl) ? 2 : 4;
+      updateOutputReg(dupElts(v, numElts, 32));
       break;
     }
 
@@ -4563,6 +4571,26 @@ public:
     case AArch64::MOVIv2d_ns: {
       auto imm = getIntConst(replicate8to64(getImm(1)), 64);
       updateOutputReg(dupElts(imm, 2, 64));
+      break;
+    }
+
+    case AArch64::MOVIv8b_ns: {
+      auto v = getIntConst(getImm(1), 8);
+      updateOutputReg(dupElts(v, 8, 8));
+      break;
+    }
+
+    case AArch64::MOVIv16b_ns: {
+      auto v = getIntConst(getImm(1), 8);
+      updateOutputReg(dupElts(v, 16, 8));
+      break;
+    }
+
+    case AArch64::MOVIv4i16: {
+      auto imm1 = getImm(1);
+      auto imm2 = getImm(2);
+      auto val = getIntConst(imm1 << imm2, 16);
+      updateOutputReg(dupElts(val, 4, 16));
       break;
     }
 
