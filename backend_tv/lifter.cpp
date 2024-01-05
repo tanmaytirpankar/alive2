@@ -2107,130 +2107,162 @@ public:
     switch (r) {
     case AArch64::Q0:
     case AArch64::Q0_Q1:
+    case AArch64::Q0_Q1_Q2:
     case AArch64::Q0_Q1_Q2_Q3:
       return AArch64::Q0;
     case AArch64::Q1:
     case AArch64::Q1_Q2:
+    case AArch64::Q1_Q2_Q3:
     case AArch64::Q1_Q2_Q3_Q4:
       return AArch64::Q1;
     case AArch64::Q2:
     case AArch64::Q2_Q3:
+    case AArch64::Q2_Q3_Q4:
     case AArch64::Q2_Q3_Q4_Q5:
       return AArch64::Q2;
     case AArch64::Q3:
     case AArch64::Q3_Q4:
+    case AArch64::Q3_Q4_Q5:
     case AArch64::Q3_Q4_Q5_Q6:
       return AArch64::Q3;
     case AArch64::Q4:
     case AArch64::Q4_Q5:
+    case AArch64::Q4_Q5_Q6:
     case AArch64::Q4_Q5_Q6_Q7:
       return AArch64::Q4;
     case AArch64::Q5:
     case AArch64::Q5_Q6:
+    case AArch64::Q5_Q6_Q7:
     case AArch64::Q5_Q6_Q7_Q8:
       return AArch64::Q5;
     case AArch64::Q6:
     case AArch64::Q6_Q7:
+    case AArch64::Q6_Q7_Q8:
     case AArch64::Q6_Q7_Q8_Q9:
       return AArch64::Q6;
     case AArch64::Q7:
     case AArch64::Q7_Q8:
+    case AArch64::Q7_Q8_Q9:
     case AArch64::Q7_Q8_Q9_Q10:
       return AArch64::Q7;
     case AArch64::Q8:
     case AArch64::Q8_Q9:
+    case AArch64::Q8_Q9_Q10:
     case AArch64::Q8_Q9_Q10_Q11:
       return AArch64::Q8;
     case AArch64::Q9:
     case AArch64::Q9_Q10:
+    case AArch64::Q9_Q10_Q11:
     case AArch64::Q9_Q10_Q11_Q12:
       return AArch64::Q9;
     case AArch64::Q10:
     case AArch64::Q10_Q11:
+    case AArch64::Q10_Q11_Q12:
     case AArch64::Q10_Q11_Q12_Q13:
       return AArch64::Q10;
     case AArch64::Q11:
     case AArch64::Q11_Q12:
+    case AArch64::Q11_Q12_Q13:
     case AArch64::Q11_Q12_Q13_Q14:
       return AArch64::Q11;
     case AArch64::Q12:
     case AArch64::Q12_Q13:
+    case AArch64::Q12_Q13_Q14:
     case AArch64::Q12_Q13_Q14_Q15:
       return AArch64::Q12;
     case AArch64::Q13:
     case AArch64::Q13_Q14:
+    case AArch64::Q13_Q14_Q15:
     case AArch64::Q13_Q14_Q15_Q16:
       return AArch64::Q13;
     case AArch64::Q14:
     case AArch64::Q14_Q15:
+    case AArch64::Q14_Q15_Q16:
     case AArch64::Q14_Q15_Q16_Q17:
       return AArch64::Q14;
     case AArch64::Q15:
     case AArch64::Q15_Q16:
+    case AArch64::Q15_Q16_Q17:
     case AArch64::Q15_Q16_Q17_Q18:
       return AArch64::Q15;
     case AArch64::Q16:
     case AArch64::Q16_Q17:
+    case AArch64::Q16_Q17_Q18:
     case AArch64::Q16_Q17_Q18_Q19:
       return AArch64::Q16;
     case AArch64::Q17:
     case AArch64::Q17_Q18:
+    case AArch64::Q17_Q18_Q19:
     case AArch64::Q17_Q18_Q19_Q20:
       return AArch64::Q17;
     case AArch64::Q18:
     case AArch64::Q18_Q19:
+    case AArch64::Q18_Q19_Q20:
     case AArch64::Q18_Q19_Q20_Q21:
       return AArch64::Q18;
     case AArch64::Q19:
     case AArch64::Q19_Q20:
+    case AArch64::Q19_Q20_Q21:
     case AArch64::Q19_Q20_Q21_Q22:
       return AArch64::Q19;
     case AArch64::Q20:
     case AArch64::Q20_Q21:
+    case AArch64::Q20_Q21_Q22:
     case AArch64::Q20_Q21_Q22_Q23:
       return AArch64::Q20;
     case AArch64::Q21:
     case AArch64::Q21_Q22:
+    case AArch64::Q21_Q22_Q23:
     case AArch64::Q21_Q22_Q23_Q24:
       return AArch64::Q21;
     case AArch64::Q22:
     case AArch64::Q22_Q23:
+    case AArch64::Q22_Q23_Q24:
     case AArch64::Q22_Q23_Q24_Q25:
       return AArch64::Q22;
     case AArch64::Q23:
     case AArch64::Q23_Q24:
+    case AArch64::Q23_Q24_Q25:
     case AArch64::Q23_Q24_Q25_Q26:
       return AArch64::Q23;
     case AArch64::Q24:
     case AArch64::Q24_Q25:
+    case AArch64::Q24_Q25_Q26:
     case AArch64::Q24_Q25_Q26_Q27:
       return AArch64::Q24;
     case AArch64::Q25:
     case AArch64::Q25_Q26:
+    case AArch64::Q25_Q26_Q27:
     case AArch64::Q25_Q26_Q27_Q28:
       return AArch64::Q25;
     case AArch64::Q26:
     case AArch64::Q26_Q27:
+    case AArch64::Q26_Q27_Q28:
     case AArch64::Q26_Q27_Q28_Q29:
       return AArch64::Q26;
     case AArch64::Q27:
     case AArch64::Q27_Q28:
+    case AArch64::Q27_Q28_Q29:
     case AArch64::Q27_Q28_Q29_Q30:
       return AArch64::Q27;
     case AArch64::Q28:
     case AArch64::Q28_Q29:
+    case AArch64::Q28_Q29_Q30:
     case AArch64::Q28_Q29_Q30_Q31:
       return AArch64::Q28;
     case AArch64::Q29:
     case AArch64::Q29_Q30:
+    case AArch64::Q29_Q30_Q31:
     case AArch64::Q29_Q30_Q31_Q0:
       return AArch64::Q29;
     case AArch64::Q30:
     case AArch64::Q30_Q31:
+    case AArch64::Q30_Q31_Q0:
     case AArch64::Q30_Q31_Q0_Q1:
       return AArch64::Q30;
     case AArch64::Q31:
     case AArch64::Q31_Q0:
+    case AArch64::Q31_Q0_Q1:
     case AArch64::Q31_Q0_Q1_Q2:
       return AArch64::Q31;
     default:
