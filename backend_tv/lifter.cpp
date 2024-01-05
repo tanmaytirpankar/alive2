@@ -1555,7 +1555,7 @@ class arm2llvm {
     std::smatch sm1;
     std::regex reloc("^:[a-z0-9_]+:");
     if (std::regex_search(sss, sm1, reloc)) {
-      sss = sm.suffix();
+      sss = sm1.suffix();
     }
 
     std::smatch sm2;
@@ -1566,8 +1566,8 @@ class arm2llvm {
     }
 
     if (!LLVMglobals.contains(sss)) {
-      *out << "\n";
-      *out << "\nERROR: Unknown global in ADRP: '" << sss << "'\n\n";
+      *out << "\ncan't find global '" << sss << "\n";
+      *out << "ERROR: Unknown global in ADRP\n\n";
       exit(-1);
     }
 
