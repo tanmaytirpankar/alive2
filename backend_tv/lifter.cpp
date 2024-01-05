@@ -5901,7 +5901,13 @@ public:
       auto vTy = getVecTy(eltSize, numElts);
       auto a = createBitCast(readFromOperand(1), vTy);
       auto b = createBitCast(readFromOperand(2), vTy);
-      auto c = createBitCast(readFromOperand(3), vTy);
+      // this one is wide regardless of the others!
+      auto v2Ty = (opcode == AArch64::MLAv2i32_indexed ||
+                   opcode == AArch64::MLAv4i16_indexed)
+                      ? getVecTy(eltSize, numElts * 2)
+                      : vTy;
+      auto reg = CurInst->getOperand(3).getReg();
+      auto c = createBitCast(readFromReg(reg), v2Ty);
       auto idx = getImm(4);
       auto e = createExtractElement(c, idx);
       auto spl = splatImm(e, numElts, eltSize, false);
