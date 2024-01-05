@@ -637,6 +637,12 @@ class arm2llvm {
   };
 
   const set<int> instrs_128 = {
+      AArch64::SHRNv2i32_shift,
+      AArch64::SHRNv4i16_shift,
+      AArch64::SHRNv8i8_shift,
+      AArch64::SHRNv4i32_shift,
+      AArch64::SHRNv8i16_shift,
+      AArch64::SHRNv16i8_shift,
       AArch64::MOVIv4s_msl,
       AArch64::TBLv16i8One,
       AArch64::TBLv16i8Two,
@@ -5992,6 +5998,77 @@ public:
         min = createSelect(c, min, e);
       }
       updateOutputReg(min);
+      break;
+    }
+
+#define GET_SIZES6(INSN, SUFF)                                                 \
+  int numElts, eltSize;                                                        \
+  if (opcode == AArch64::INSN##v8i8##SUFF) {                                   \
+    numElts = 8;                                                               \
+    eltSize = 8;                                                               \
+  } else if (opcode == AArch64::INSN##v4i16##SUFF) {                           \
+    numElts = 4;                                                               \
+    eltSize = 16;                                                              \
+  } else if (opcode == AArch64::INSN##v2i32##SUFF) {                           \
+    numElts = 2;                                                               \
+    eltSize = 32;                                                              \
+  } else if (opcode == AArch64::INSN##v16i8##SUFF) {                           \
+    numElts = 16;                                                              \
+    eltSize = 8;                                                               \
+  } else if (opcode == AArch64::INSN##v4i32##SUFF) {                           \
+    numElts = 4;                                                               \
+    eltSize = 32;                                                              \
+  } else if (opcode == AArch64::INSN##v8i16##SUFF) {                           \
+    numElts = 8;                                                               \
+    eltSize = 16;                                                              \
+  } else {                                                                     \
+    assert(false);                                                             \
+  }
+
+    case AArch64::SHRNv2i32_shift:
+    case AArch64::SHRNv4i16_shift:
+    case AArch64::SHRNv8i8_shift:
+    case AArch64::SHRNv4i32_shift:
+    case AArch64::SHRNv8i16_shift:
+    case AArch64::SHRNv16i8_shift: {
+      GET_SIZES6(SHRN, _shift);
+      bool topHalf;
+      switch (opcode) {
+      case AArch64::SHRNv2i32_shift:
+      case AArch64::SHRNv4i16_shift:
+      case AArch64::SHRNv8i8_shift:
+        topHalf = false;
+        break;
+      case AArch64::SHRNv4i32_shift:
+      case AArch64::SHRNv8i16_shift:
+      case AArch64::SHRNv16i8_shift:
+        topHalf = true;
+        break;
+      default:
+        assert(false);
+      }
+      Value *op, *res;
+      int exp;
+      if (topHalf) {
+        res = createBitCast(readFromOperand(1), getVecTy(eltSize, numElts));
+        numElts /= 2;
+        op = readFromOperand(2);
+        exp = getImm(3);
+      } else {
+        op = readFromOperand(1);
+        exp = getImm(2);
+        res = getZeroVec(numElts, eltSize);
+      }
+      auto vTy = getVecTy(2 * eltSize, numElts);
+      auto a = createBitCast(op, vTy);
+      for (int i = 0; i < numElts; ++i) {
+        auto e = createExtractElement(a, getIntConst(i, 32));
+        auto shift = createMaskedLShr(e, getIntConst(exp, 2 * eltSize));
+        auto trunc = createTrunc(shift, getIntTy(eltSize));
+        int pos = topHalf ? (i + numElts) : i;
+        res = createInsertElement(res, trunc, getIntConst(pos, 32));
+      }
+      updateOutputReg(res);
       break;
     }
 
