@@ -1543,13 +1543,6 @@ class arm2llvm {
   // Reads an Expr and maps containing string variable to a global variable
   void mapExprVar(const MCExpr *expr) {
     std::string sss;
-
-    // Matched strings
-    std::smatch sm;
-
-    // Regex to match relocation specifiers
-    std::regex re(":[a-z0-9_]+:");
-
     llvm::raw_string_ostream ss(sss);
     expr->print(ss, nullptr);
 
@@ -1558,25 +1551,25 @@ class arm2llvm {
     // one relocation specifier, and it is at the beginning
     // (std::regex_constants::match_continuous).
     // eg: ":lo12:a" becomes  "a"
-    if (std::regex_search(sss, sm, re,
-                          std::regex_constants::match_continuous)) {
-      auto stringVar = sm.suffix();
-      //      for (auto x:sm) { *out << x << " "; }
-      //      *out << stringVar << "\n";
-      if (!LLVMglobals.contains(stringVar)) {
-        *out << "\nERROR: ADRP mentions unknown global variable\n";
-        *out << "'" << stringVar
-             << "'  is not a global variable we know about\n";
-        exit(-1);
-      }
-      instExprVarMap[CurInst] = stringVar;
-    } else if (LLVMglobals.contains(sss)) {
-      instExprVarMap[CurInst] = sss;
-    } else {
-      *out << "\n";
-      *out << "\nERROR: Unexpected MCExpr: '" << sss << "' \n";
+    std::smatch sm;
+    std::regex reloc("^:[a-z0-9_]+:");
+    if (std::regex_search(sss, sm, reloc)) {
+      sss = sm.suffix();
+    }
+
+    std::regex offset("\\+[0-9]+$");
+    if (std::regex_search(sss, sm, offset)) {
+      *out << "ERROR: Not yet supporting offsets from globals\n";
       exit(-1);
     }
+
+    if (!LLVMglobals.contains(sss)) {
+      *out << "\n";
+      *out << "\nERROR: Unexpected global in ADRP: '" << sss << "' \n";
+      exit(-1);
+    }
+
+    instExprVarMap[CurInst] = sss;
   }
 
   // Reads an Expr and gets the global variable corresponding the containing
