@@ -192,6 +192,7 @@ class arm2llvm {
   Value *stackMem{nullptr};
   unordered_map<string, GlobalVariable *> LLVMglobals;
   Value *initialSP, *initialReg[32];
+  Function *assertDecl;
 
   // Map of ADRP MCInsts to the string representations of the operand variable
   // names
@@ -1869,10 +1870,7 @@ class arm2llvm {
 
   void assertSame(Value *a, Value *b) {
     auto *c = createICmp(ICmpInst::Predicate::ICMP_EQ, a, b);
-    // FIXME -- use our llvm.assert() idea, not llvm.assume() which is fragile
-    auto *assert_decl =
-        Intrinsic::getDeclaration(LiftedModule, Intrinsic::assume);
-    CallInst::Create(assert_decl, {c}, "", LLVMBB);
+    CallInst::Create(assertDecl, {c}, "", LLVMBB);
   }
 
   Type *getFPOperandType(unsigned opcode) {
@@ -1915,16 +1913,16 @@ class arm2llvm {
     auto i32 = getIntTy(32);
     auto i64 = getIntTy(64);
 
-    if (false) {
+    if (true) {
       /*
        * ABI stuff: on all return paths, check that callee-saved +
        * other registers have been reset to their previous
        * values. these values were saved at the top of the function so
        * the trivially dominate all returns
        */
-      // TODO: make sure code doesn't touch 16, 17?
-      // check FP and LR?
-      // z8-z23 are callee-saved
+      // FIXME: check callee-saved vector registers
+      // FIXME: make sure code doesn't touch 16, 17?
+      // FIXME: check FP and LR?
       assertSame(initialSP, readFromReg(AArch64::SP));
       for (unsigned r = 19; r <= 28; ++r)
         assertSame(initialReg[r], readFromReg(AArch64::X0 + r));
@@ -1970,11 +1968,20 @@ public:
            MCInstPrinter *instrPrinter)
       : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
         instrPrinter(instrPrinter), DL(srcFn.getParent()->getDataLayout()) {
+
+    // sanity checking
     assert(disjoint(instrs_32, instrs_64));
     assert(disjoint(instrs_32, instrs_128));
     assert(disjoint(instrs_64, instrs_128));
     *out << (instrs_32.size() + instrs_64.size() + instrs_128.size())
          << " instructions supported\n";
+
+    // we'll want this later
+    vector<Type *> args{getIntTy(1)};
+    FunctionType *assertTy =
+        FunctionType::get(Type::getVoidTy(Ctx), args, false);
+    assertDecl = Function::Create(assertTy, Function::ExternalLinkage,
+                                  "llvm.assert", LiftedModule);
   }
 
   bool disjoint(const set<int> &a, const set<int> &b) {
