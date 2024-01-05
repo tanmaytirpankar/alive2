@@ -1552,21 +1552,22 @@ class arm2llvm {
     // one relocation specifier, and it is at the beginning
     // (std::regex_constants::match_continuous).
     // eg: ":lo12:a" becomes  "a"
-    std::smatch sm;
+    std::smatch sm1;
     std::regex reloc("^:[a-z0-9_]+:");
-    if (std::regex_search(sss, sm, reloc)) {
+    if (std::regex_search(sss, sm1, reloc)) {
       sss = sm.suffix();
     }
 
+    std::smatch sm2;
     std::regex offset("\\+[0-9]+$");
-    if (std::regex_search(sss, sm, offset)) {
-      *out << "ERROR: Not yet supporting offsets from globals\n";
+    if (std::regex_search(sss, sm2, offset)) {
+      *out << "\nERROR: Not yet supporting offsets from globals\n\n";
       exit(-1);
     }
 
     if (!LLVMglobals.contains(sss)) {
       *out << "\n";
-      *out << "\nERROR: Unexpected global in ADRP: '" << sss << "' \n";
+      *out << "\nERROR: Unknown global in ADRP: '" << sss << "'\n\n";
       exit(-1);
     }
 
