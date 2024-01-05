@@ -5927,8 +5927,6 @@ public:
   } else if (opcode == AArch64::INSN##v8i16##SUFF) {                           \
     numElts = 8;                                                               \
     eltSize = 16;                                                              \
-  } else {                                                                     \
-    assert(false);                                                             \
   }
 
     case AArch64::TRN1v16i8:
