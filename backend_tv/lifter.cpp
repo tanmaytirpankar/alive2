@@ -630,6 +630,7 @@ class arm2llvm {
       AArch64::MOVIv2s_msl,
       AArch64::MOVIv8b_ns,
       AArch64::MOVIv4i16,
+      AArch64::EXTv8i8,
   };
 
   const set<int> instrs_128 = {
@@ -4647,6 +4648,16 @@ public:
       auto imm2 = getImm(2);
       auto val = getIntConst(imm1 << imm2, 32);
       updateOutputReg(dupElts(val, 4, 32));
+      break;
+    }
+
+    case AArch64::EXTv8i8: {
+      auto a = readFromOperand(1);
+      auto b = readFromOperand(2);
+      auto imm = getImm(3);
+      auto both = concat(b, a);
+      auto shifted = createRawLShr(both, getIntConst(8 * imm, 128));
+      updateOutputReg(createTrunc(shifted, i64));
       break;
     }
 
