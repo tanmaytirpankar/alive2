@@ -159,8 +159,8 @@ public:
     for (auto &bb : BBs)
       if (bb.getName() == b_name)
         return &bb;
-    *out << "couldn't find block '" << b_name << "'\n";
-    assert(false && "block not found");
+    *out << "ERROR: jump target '" << b_name << "' not found, probably a tail call\n\n";
+    exit(-1);
   }
 
   void checkEntryBlock() {
