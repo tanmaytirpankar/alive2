@@ -634,9 +634,19 @@ class arm2llvm {
       AArch64::MOVIv8b_ns,
       AArch64::MOVIv4i16,
       AArch64::EXTv8i8,
+      AArch64::MLAv2i32_indexed,
+      AArch64::MLAv4i16_indexed,
+      AArch64::MLAv8i8,
+      AArch64::MLAv2i32,
+      AArch64::MLAv4i16,
   };
 
   const set<int> instrs_128 = {
+      AArch64::MLAv8i16_indexed,
+      AArch64::MLAv4i32_indexed,
+      AArch64::MLAv16i8,
+      AArch64::MLAv8i16,
+      AArch64::MLAv4i32,
       AArch64::SHRNv2i32_shift,
       AArch64::SHRNv4i16_shift,
       AArch64::SHRNv8i8_shift,
@@ -5865,6 +5875,42 @@ public:
       break;
     }
 
+#define GET_SIZES4(INSN, SUFF)                                                 \
+  if (opcode == AArch64::INSN##v2i32##SUFF) {                                  \
+    numElts = 2;                                                               \
+    eltSize = 32;                                                              \
+  } else if (opcode == AArch64::INSN##v4i16##SUFF) {                           \
+    numElts = 4;                                                               \
+    eltSize = 16;                                                              \
+  } else if (opcode == AArch64::INSN##v4i32##SUFF) {                           \
+    numElts = 4;                                                               \
+    eltSize = 32;                                                              \
+  } else if (opcode == AArch64::INSN##v8i16##SUFF) {                           \
+    numElts = 8;                                                               \
+    eltSize = 16;                                                              \
+  } else {                                                                     \
+    assert(false);                                                             \
+  }
+
+    case AArch64::MLAv2i32_indexed:
+    case AArch64::MLAv4i16_indexed:
+    case AArch64::MLAv8i16_indexed:
+    case AArch64::MLAv4i32_indexed: {
+      int numElts, eltSize;
+      GET_SIZES4(MLA, _indexed);
+      auto vTy = getVecTy(eltSize, numElts);
+      auto a = createBitCast(readFromOperand(1), vTy);
+      auto b = createBitCast(readFromOperand(2), vTy);
+      auto c = createBitCast(readFromOperand(3), vTy);
+      auto idx = getImm(4);
+      auto e = createExtractElement(c, idx);
+      auto spl = splatImm(e, numElts, eltSize, false);
+      auto mul = createMul(b, spl);
+      auto sum = createAdd(mul, a);
+      updateOutputReg(sum);
+      break;
+    }
+
 #define GET_SIZES5(INSN, SUFF)                                                 \
   if (opcode == AArch64::INSN##v8i8##SUFF) {                                   \
     numElts = 8;                                                               \
@@ -5881,6 +5927,8 @@ public:
   } else if (opcode == AArch64::INSN##v8i16##SUFF) {                           \
     numElts = 8;                                                               \
     eltSize = 16;                                                              \
+  } else {                                                                     \
+    assert(false);                                                             \
   }
 
     case AArch64::TRN1v16i8:
@@ -6025,6 +6073,23 @@ public:
     assert(false);                                                             \
   }
 
+    case AArch64::MLAv8i8:
+    case AArch64::MLAv2i32:
+    case AArch64::MLAv4i16:
+    case AArch64::MLAv16i8:
+    case AArch64::MLAv8i16:
+    case AArch64::MLAv4i32: {
+      GET_SIZES6(MLA, );
+      auto vTy = getVecTy(eltSize, numElts);
+      auto a = createBitCast(readFromOperand(1), vTy);
+      auto b = createBitCast(readFromOperand(2), vTy);
+      auto c = createBitCast(readFromOperand(3), vTy);
+      auto mul = createMul(b, c);
+      auto sum = createAdd(mul, a);
+      updateOutputReg(sum);
+      break;
+    }
+
     case AArch64::SHRNv2i32_shift:
     case AArch64::SHRNv4i16_shift:
     case AArch64::SHRNv8i8_shift:
@@ -6051,9 +6116,9 @@ public:
       int exp;
       if (topHalf) {
         res = createBitCast(readFromOperand(1), getVecTy(eltSize, numElts));
-        numElts /= 2;
         op = readFromOperand(2);
         exp = getImm(3);
+        numElts /= 2;
       } else {
         op = readFromOperand(1);
         exp = getImm(2);
