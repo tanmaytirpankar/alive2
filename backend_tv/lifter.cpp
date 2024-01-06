@@ -659,9 +659,15 @@ class arm2llvm {
       AArch64::UQADDv8i8,
       AArch64::UQADDv4i16,
       AArch64::UQADDv2i32,
+      AArch64::REV16v8i8,
+      AArch64::REV32v4i16,
+      AArch64::REV32v8i8,
   };
 
   const set<int> instrs_128 = {
+      AArch64::REV16v16i8,
+      AArch64::REV32v8i16,
+      AArch64::REV32v16i8,
       AArch64::UQADDv2i64,
       AArch64::UQADDv4i32,
       AArch64::UQADDv16i8,
@@ -1756,15 +1762,15 @@ class arm2llvm {
     return createSelect(c, posRes, negRes);
   }
 
-  Value *rev64(Value *in, unsigned eltSize) {
+  Value *rev(Value *in, unsigned eltSize, unsigned amt) {
     assert(eltSize == 8 || eltSize == 16 || eltSize == 32);
     assert(getBitWidth(in) == 64 || getBitWidth(in) == 128);
     if (getBitWidth(in) == 64)
       in = createZExt(in, getIntTy(128));
     Value *rev = getUndefVec(128 / eltSize, eltSize);
     in = createBitCast(in, getVecTy(eltSize, 128 / eltSize));
-    for (unsigned i = 0; i < 2; ++i) {
-      auto innerCount = 64 / eltSize;
+    for (unsigned i = 0; i < (128 / amt); ++i) {
+      auto innerCount = amt / eltSize;
       for (unsigned j = 0; j < innerCount; j++) {
         auto elt = createExtractElement(in, (i * innerCount) + j);
         rev = createInsertElement(rev, elt,
@@ -4777,37 +4783,73 @@ public:
     }
 
     case AArch64::REV64v4i32: {
-      auto v = rev64(readFromOperand(1), 32);
+      auto v = rev(readFromOperand(1), 32, 64);
       updateOutputReg(v);
       break;
     }
 
     case AArch64::REV64v2i32: {
-      auto v = rev64(readFromOperand(1), 32);
+      auto v = rev(readFromOperand(1), 32, 64);
       updateOutputReg(v);
       break;
     }
 
     case AArch64::REV64v4i16: {
-      auto v = rev64(readFromOperand(1), 16);
+      auto v = rev(readFromOperand(1), 16, 64);
       updateOutputReg(v);
       break;
     }
 
     case AArch64::REV64v8i8: {
-      auto v = rev64(readFromOperand(1), 8);
+      auto v = rev(readFromOperand(1), 8, 64);
       updateOutputReg(v);
       break;
     }
 
     case AArch64::REV64v8i16: {
-      auto v = rev64(readFromOperand(1), 16);
+      auto v = rev(readFromOperand(1), 16, 64);
       updateOutputReg(v);
       break;
     }
 
     case AArch64::REV64v16i8: {
-      auto v = rev64(readFromOperand(1), 8);
+      auto v = rev(readFromOperand(1), 8, 64);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV16v8i8: {
+      auto v = rev(readFromOperand(1), 8, 16);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV16v16i8: {
+      auto v = rev(readFromOperand(1), 8, 16);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV32v4i16: {
+      auto v = rev(readFromOperand(1), 16, 32);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV32v8i8: {
+      auto v = rev(readFromOperand(1), 8, 32);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV32v8i16: {
+      auto v = rev(readFromOperand(1), 16, 32);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV32v16i8: {
+      auto v = rev(readFromOperand(1), 8, 32);
       updateOutputReg(v);
       break;
     }
