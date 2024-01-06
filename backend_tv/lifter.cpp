@@ -639,9 +639,11 @@ class arm2llvm {
       AArch64::MLAv8i8,
       AArch64::MLAv2i32,
       AArch64::MLAv4i16,
+      AArch64::ORNv8i8,
   };
 
   const set<int> instrs_128 = {
+      AArch64::ORNv16i8,
       AArch64::MLAv8i16_indexed,
       AArch64::MLAv4i32_indexed,
       AArch64::MLAv16i8,
@@ -5281,6 +5283,8 @@ public:
     }
 
       // lane-wise binary vector instructions
+    case AArch64::ORNv8i8:
+    case AArch64::ORNv16i8:
     case AArch64::UQSUBv8i8:
     case AArch64::UQSUBv4i16:
     case AArch64::UQSUBv2i32:
@@ -5589,6 +5593,10 @@ public:
       case AArch64::ANDv16i8:
         op = [&](Value *a, Value *b) { return createAnd(a, b); };
         break;
+      case AArch64::ORNv8i8:
+      case AArch64::ORNv16i8:
+        op = [&](Value *a, Value *b) { return createOr(a, createNot(b)); };
+        break;
       case AArch64::ORRv8i8:
       case AArch64::ORRv16i8:
       case AArch64::ORRv2i32:
@@ -5721,6 +5729,7 @@ public:
         numElts = 4;
         eltSize = 32;
         break;
+      case AArch64::ORNv8i8:
       case AArch64::UQSUBv8i8:
       case AArch64::UMULLv8i8_v8i16:
       case AArch64::SMINv8i8:
@@ -5769,6 +5778,7 @@ public:
         numElts = 8;
         eltSize = 16;
         break;
+      case AArch64::ORNv16i8:
       case AArch64::UQSUBv16i8:
       case AArch64::UMULLv16i8_v8i16:
       case AArch64::SMINv16i8:
