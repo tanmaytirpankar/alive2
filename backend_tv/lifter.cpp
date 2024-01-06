@@ -4413,8 +4413,8 @@ public:
       } else {
         assert(false);
       }
-      auto in = createBitCast(readFromOperand(3), getVecTy(w, 128 / w));
-      auto out = createBitCast(readFromOperand(1), getVecTy(w, 128 / w));
+      auto in = readFromVecOperand(3, w, 128 / w);
+      auto out = readFromVecOperand(1, w, 128 / w);
       auto ext = createExtractElement(in, getImm(4));
       auto ins = createInsertElement(out, ext, getImm(2));
       updateOutputReg(ins);
@@ -4787,21 +4787,21 @@ public:
     }
 
     case AArch64::DUPi16: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(16, 8));
+      auto in = readFromVecOperand(1, 16, 8);
       auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(ext);
       break;
     }
 
     case AArch64::DUPi32: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(32, 4));
+      auto in = readFromVecOperand(1, 32, 4);
       auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(ext);
       break;
     }
 
     case AArch64::DUPi64: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(64, 2));
+      auto in = readFromVecOperand(1, 64, 2);
       auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(ext);
       break;
@@ -4849,49 +4849,49 @@ public:
     }
 
     case AArch64::DUPv2i32lane: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(32, 2));
+      auto in = readFromVecOperand(1, 32, 2);
       auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 2, 32));
       break;
     }
 
     case AArch64::DUPv2i64lane: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(64, 2));
+      auto in = readFromVecOperand(1, 64, 2);
       auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 2, 64));
       break;
     }
 
     case AArch64::DUPv4i16lane: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(16, 4));
+      auto in = readFromVecOperand(1, 16, 4);
       auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 4, 16));
       break;
     }
 
     case AArch64::DUPv4i32lane: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(32, 4));
+      auto in = readFromVecOperand(1, 32, 4);
       auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 4, 32));
       break;
     }
 
     case AArch64::DUPv8i8lane: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(8, 8));
+      auto in = readFromVecOperand(1, 8, 8);
       auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 8, 8));
       break;
     }
 
     case AArch64::DUPv8i16lane: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(16, 8));
+      auto in = readFromVecOperand(1, 16, 8);
       auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 8, 16));
       break;
     }
 
     case AArch64::DUPv16i8lane: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(8, 16));
+      auto in = readFromVecOperand(1, 8, 16);
       auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 16, 8));
       break;
@@ -5990,9 +5990,8 @@ public:
       default:
         assert(false);
       }
-      auto vTy = getVecTy(eltSize, numElts);
-      auto a = createBitCast(readFromOperand(1), vTy);
-      auto b = createBitCast(readFromOperand(2), vTy);
+      auto a = readFromVecOperand(1, eltSize, numElts);
+      auto b = readFromVecOperand(2, eltSize, numElts);
       Value *res = getUndefVec(numElts, eltSize);
       for (int p = 0; p < numElts / 2; ++p) {
         auto *e1 = createExtractElement(a, (2 * p) + part);
@@ -6030,8 +6029,7 @@ public:
       GET_SIZES5(UMINV, v);
       GET_SIZES5(UMAXV, v);
       assert(numElts != -1 && eltSize != -1);
-      auto vTy = getVecTy(eltSize, numElts);
-      auto v = createBitCast(readFromOperand(1), vTy);
+      auto v = readFromVecOperand(1, eltSize, numElts);
       Value *min = createExtractElement(v, 0);
       for (int i = 1; i < numElts; ++i) {
         auto e = createExtractElement(v, i);
@@ -6106,10 +6104,9 @@ public:
     case AArch64::MLAv8i16:
     case AArch64::MLAv4i32: {
       GET_SIZES6(MLA, );
-      auto vTy = getVecTy(eltSize, numElts);
-      auto a = createBitCast(readFromOperand(1), vTy);
-      auto b = createBitCast(readFromOperand(2), vTy);
-      auto c = createBitCast(readFromOperand(3), vTy);
+      auto a = readFromVecOperand(1, eltSize, numElts);
+      auto b = readFromVecOperand(2, eltSize, numElts);
+      auto c = readFromVecOperand(3, eltSize, numElts);
       auto mul = createMul(b, c);
       auto sum = createAdd(mul, a);
       updateOutputReg(sum);
@@ -6141,7 +6138,7 @@ public:
       Value *op, *res;
       int exp;
       if (topHalf) {
-        res = createBitCast(readFromOperand(1), getVecTy(eltSize, numElts));
+        res = readFromVecOperand(1, eltSize, numElts);
         op = readFromOperand(2);
         exp = getImm(3);
         numElts /= 2;
@@ -6198,9 +6195,8 @@ public:
     case AArch64::USRAv2i64_shift:
     case AArch64::USRAv4i32_shift: {
       GET_SIZES7(USRA, _shift);
-      auto vTy = getVecTy(eltSize, numElts);
-      auto a = createBitCast(readFromOperand(1), vTy);
-      auto b = createBitCast(readFromOperand(2), vTy);
+      auto a = readFromVecOperand(1, eltSize, numElts);
+      auto b = readFromVecOperand(2, eltSize, numElts);
       auto exp = getImm(3);
       Value *res = getUndefVec(numElts, eltSize);
       for (int i = 0; i < numElts; ++i) {
@@ -6222,9 +6218,8 @@ public:
     case AArch64::ZIP1v2i64:
     case AArch64::ZIP1v4i32: {
       GET_SIZES7(ZIP1, );
-      auto vTy = getVecTy(eltSize, numElts);
-      auto a = createBitCast(readFromOperand(1), vTy);
-      auto b = createBitCast(readFromOperand(2), vTy);
+      auto a = readFromVecOperand(1, eltSize, numElts);
+      auto b = readFromVecOperand(2, eltSize, numElts);
       Value *res = getUndefVec(numElts, eltSize);
       for (int i = 0; i < numElts / 2; ++i) {
         auto e1 = createExtractElement(a, i);
@@ -6244,9 +6239,8 @@ public:
     case AArch64::ZIP2v16i8:
     case AArch64::ZIP2v4i32: {
       GET_SIZES7(ZIP2, );
-      auto vTy = getVecTy(eltSize, numElts);
-      auto a = createBitCast(readFromOperand(1), vTy);
-      auto b = createBitCast(readFromOperand(2), vTy);
+      auto a = readFromVecOperand(1, eltSize, numElts);
+      auto b = readFromVecOperand(2, eltSize, numElts);
       Value *res = getUndefVec(numElts, eltSize);
       for (int i = 0; i < numElts / 2; ++i) {
         auto e1 = createExtractElement(a, (numElts / 2) + i);
