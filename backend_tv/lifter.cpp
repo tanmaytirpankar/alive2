@@ -640,6 +640,9 @@ class arm2llvm {
       AArch64::MLAv2i32,
       AArch64::MLAv4i16,
       AArch64::ORNv8i8,
+      AArch64::CMTSTv4i16,
+      AArch64::CMTSTv2i32,
+      AArch64::CMEQv1i64,
   };
 
   /*
@@ -654,6 +657,32 @@ UQADDv2i64
 UQADDv4i32
 UQADDv16i8
 UQADDv8i16
+  */
+
+  /*
+AArch64::CMGTv4i16rz
+AArch64::CMEQv1i64rz
+AArch64::CMGTv8i8rz
+AArch64::CMLEv4i16rz
+AArch64::CMGEv4i16rz
+AArch64::CMLEv8i8rz
+AArch64::CMLEv8i16rz
+AArch64::CMLTv1i64rz
+AArch64::CMGTv2i32rz
+AArch64::CMLEv16i8rz
+AArch64::CMGEv8i8rz
+AArch64::CMLEv2i32rz
+AArch64::CMGTv16i8rz
+AArch64::CMGTv8i16rz
+AArch64::CMGTv2i64rz
+AArch64::CMGEv8i16rz
+AArch64::CMLEv4i32rz
+AArch64::CMGEv2i64rz
+AArch64::CMLEv2i64rz
+AArch64::CMGEv16i8rz
+AArch64::CMGEv2i32rz
+AArch64::CMGEv4i32rz
+
   */
 
   const set<int> instrs_128 = {
@@ -4927,6 +4956,7 @@ public:
       break;
     }
 
+    case AArch64::CMEQv1i64:
     case AArch64::CMEQv16i8:
     case AArch64::CMEQv16i8rz:
     case AArch64::CMEQv2i32:
@@ -4979,6 +5009,8 @@ public:
     case AArch64::CMLTv4i32rz:
     case AArch64::CMLTv8i16rz:
     case AArch64::CMLTv8i8rz:
+    case AArch64::CMTSTv4i16:
+    case AArch64::CMTSTv2i32:
     case AArch64::CMTSTv16i8:
     case AArch64::CMTSTv2i64:
     case AArch64::CMTSTv4i32:
@@ -5004,6 +5036,7 @@ public:
       case AArch64::CMLTv8i8rz:
         b = getIntConst(0, getInstSize(opcode));
         break;
+      case AArch64::CMEQv1i64:
       case AArch64::CMEQv16i8:
       case AArch64::CMEQv2i32:
       case AArch64::CMEQv2i64:
@@ -5041,6 +5074,8 @@ public:
       case AArch64::CMHSv4i32:
       case AArch64::CMHSv8i16:
       case AArch64::CMHSv8i8:
+      case AArch64::CMTSTv4i16:
+      case AArch64::CMTSTv2i32:
       case AArch64::CMTSTv16i8:
       case AArch64::CMTSTv2i64:
       case AArch64::CMTSTv4i32:
@@ -5056,6 +5091,7 @@ public:
       switch (opcode) {
       case AArch64::CMHIv1i64:
       case AArch64::CMGTv1i64:
+      case AArch64::CMEQv1i64:
         numElts = 1;
         eltSize = 64;
         break;
@@ -5070,6 +5106,7 @@ public:
         numElts = 16;
         eltSize = 8;
         break;
+      case AArch64::CMTSTv2i32:
       case AArch64::CMEQv2i32:
       case AArch64::CMEQv2i32rz:
       case AArch64::CMGEv2i32:
@@ -5091,6 +5128,7 @@ public:
         numElts = 2;
         eltSize = 64;
         break;
+      case AArch64::CMTSTv4i16:
       case AArch64::CMEQv4i16:
       case AArch64::CMEQv4i16rz:
       case AArch64::CMGEv4i16:
@@ -5145,6 +5183,7 @@ public:
       Value *res;
 
       switch (opcode) {
+      case AArch64::CMEQv1i64:
       case AArch64::CMEQv16i8:
       case AArch64::CMEQv16i8rz:
       case AArch64::CMEQv2i32:
@@ -5209,6 +5248,8 @@ public:
       case AArch64::CMLTv8i8rz:
         res = createICmp(ICmpInst::Predicate::ICMP_SLT, a, b);
         break;
+      case AArch64::CMTSTv2i32:
+      case AArch64::CMTSTv4i16:
       case AArch64::CMTSTv16i8:
       case AArch64::CMTSTv2i64:
       case AArch64::CMTSTv4i32:
