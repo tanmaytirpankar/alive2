@@ -662,9 +662,18 @@ class arm2llvm {
       AArch64::REV16v8i8,
       AArch64::REV32v4i16,
       AArch64::REV32v8i8,
+      AArch64::MLSv2i32_indexed,
+      AArch64::MLSv4i16_indexed,
+      AArch64::MLSv8i8,
+      AArch64::MLSv4i16,
   };
 
   const set<int> instrs_128 = {
+      AArch64::MLSv16i8,
+      AArch64::MLSv8i16,
+      AArch64::MLSv4i32,
+      AArch64::MLSv4i32_indexed,
+      AArch64::MLSv8i16_indexed,
       AArch64::REV16v16i8,
       AArch64::REV32v8i16,
       AArch64::REV32v16i8,
@@ -6084,6 +6093,31 @@ public:
     assert(false);                                                             \
   }
 
+    case AArch64::MLSv2i32_indexed:
+    case AArch64::MLSv4i16_indexed:
+    case AArch64::MLSv8i16_indexed:
+    case AArch64::MLSv4i32_indexed: {
+      int numElts, eltSize;
+      GET_SIZES4(MLS, _indexed);
+      auto vTy = getVecTy(eltSize, numElts);
+      auto a = createBitCast(readFromOperand(1), vTy);
+      auto b = createBitCast(readFromOperand(2), vTy);
+      // this one is wide regardless of the others!
+      auto v2Ty = (opcode == AArch64::MLSv2i32_indexed ||
+                   opcode == AArch64::MLSv4i16_indexed)
+                      ? getVecTy(eltSize, numElts * 2)
+                      : vTy;
+      auto reg = CurInst->getOperand(3).getReg();
+      auto c = createBitCast(readFromReg(reg), v2Ty);
+      auto idx = getImm(4);
+      auto e = createExtractElement(c, idx);
+      auto spl = splatImm(e, numElts, eltSize, false);
+      auto mul = createMul(b, spl);
+      auto sum = createSub(a, mul);
+      updateOutputReg(sum);
+      break;
+    }
+
     case AArch64::MLAv2i32_indexed:
     case AArch64::MLAv4i16_indexed:
     case AArch64::MLAv8i16_indexed:
@@ -6266,6 +6300,22 @@ public:
   } else {                                                                     \
     assert(false);                                                             \
   }
+
+    case AArch64::MLSv8i8:
+    case AArch64::MLSv2i32:
+    case AArch64::MLSv4i16:
+    case AArch64::MLSv16i8:
+    case AArch64::MLSv8i16:
+    case AArch64::MLSv4i32: {
+      GET_SIZES6(MLS, );
+      auto a = readFromVecOperand(1, eltSize, numElts);
+      auto b = readFromVecOperand(2, eltSize, numElts);
+      auto c = readFromVecOperand(3, eltSize, numElts);
+      auto mul = createMul(b, c);
+      auto sum = createSub(a, mul);
+      updateOutputReg(sum);
+      break;
+    }
 
     case AArch64::MLAv8i8:
     case AArch64::MLAv2i32:
@@ -6497,22 +6547,6 @@ public:
       auto y = readFromVecOperand(2, eltSize, numElts);
       auto res = createUAddSat(x, y);
       updateOutputReg(res);
-      break;
-    }
-
-    case AArch64::MLSv2i32: {
-      auto accum = readFromOperand(1);
-      auto a = readFromOperand(2);
-      auto b = readFromOperand(3);
-      auto v1 = createVectorOp(
-          [&](Value *a, Value *b) { return createMul(a, b); }, a, b, 32, 2,
-          /*cast=*/false, extKind::None,
-          /*splatImm2=*/false, /*immShift=*/false);
-      auto v2 = createVectorOp(
-          [&](Value *a, Value *b) { return createSub(a, b); }, accum, v1, 32, 2,
-          /*cast=*/false, extKind::None,
-          /*splatImm2=*/false, /*immShift=*/false);
-      updateOutputReg(v2);
       break;
     }
 
