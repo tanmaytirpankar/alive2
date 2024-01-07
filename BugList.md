@@ -144,5 +144,4 @@ Please contact us or submit a PR if something is missing or inaccurate.
 24. backends will turn OOB InsertElement into OOB store (https://github.com/llvm/llvm-project/issues/74248)
 25. another OOB InsertElement -> OOB store (https://github.com/llvm/llvm-project/issues/75557)
 26. likely miscompile of vector code by AArch64 backend (https://github.com/llvm/llvm-project/issues/76769)
-
-
+27. srem-related vector miscompile on AArch64 (https://github.com/llvm/llvm-project/issues/77169)
