@@ -350,6 +350,8 @@ class arm2llvm {
       AArch64::INSvi8gpr,  AArch64::FCVTSHr,    AArch64::FCVTZSUWSr,
       AArch64::FCSELSrrr,  AArch64::FMULSrr,    AArch64::FABSSr,
       AArch64::UQADDv1i32,
+    AArch64::SQSUBv1i32,
+  AArch64::SQADDv1i32,
   };
 
   const set<int> instrs_64 = {
@@ -666,9 +668,53 @@ class arm2llvm {
       AArch64::MLSv4i16_indexed,
       AArch64::MLSv8i8,
       AArch64::MLSv4i16,
+    AArch64::SQADDv1i64,
+    AArch64::SQADDv8i8,
+    AArch64::SQADDv4i16,
+    AArch64::SQADDv2i32,
+    AArch64::SQSUBv1i64,
+    AArch64::SQSUBv8i8,
+    AArch64::SQSUBv4i16,
+    AArch64::SQSUBv2i32,
   };
 
+  /*
+SMLALv2i32_indexed
+SMLALv4i16_indexed
+
+SMLALv4i32_indexed
+SMLALv8i16_indexed
+
+SMLALv16i8_v8i16
+SMLALv4i32_v2i64
+SMLALv8i8_v8i16
+SMLALv2i32_v2i64
+SMLALv4i16_v4i32
+SMLALv8i16_v4i32
+
+UMLALv4i16_indexed
+UMLALv2i32_indexed
+
+UMLALv4i32_indexed
+UMLALv8i16_indexed
+
+UMLALv16i8_v8i16
+UMLALv4i32_v2i64
+UMLALv8i8_v8i16
+UMLALv2i32_v2i64
+UMLALv4i16_v4i32
+UMLALv8i16_v4i32
+  */
+
   const set<int> instrs_128 = {
+    AArch64::SQADDv2i64,
+    AArch64::SQADDv4i32,
+    AArch64::SQADDv16i8,
+    AArch64::SQADDv8i16,
+    AArch64::SQSUBv2i64,
+    AArch64::SQSUBv4i32,
+    AArch64::SQSUBv16i8,
+    AArch64::SQSUBv8i16,
       AArch64::MLSv16i8,
       AArch64::MLSv8i16,
       AArch64::MLSv4i32,
@@ -1135,6 +1181,18 @@ class arm2llvm {
     auto usub_decl = Intrinsic::getDeclaration(
         LiftedModule, Intrinsic::usub_sat, a->getType());
     return CallInst::Create(usub_decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  CallInst *createSAddSat(Value *a, Value *b) {
+    auto sadd_decl = Intrinsic::getDeclaration(
+        LiftedModule, Intrinsic::sadd_sat, a->getType());
+    return CallInst::Create(sadd_decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  CallInst *createSSubSat(Value *a, Value *b) {
+    auto ssub_decl = Intrinsic::getDeclaration(
+        LiftedModule, Intrinsic::ssub_sat, a->getType());
+    return CallInst::Create(ssub_decl, {a, b}, nextName(), LLVMBB);
   }
 
   CallInst *createCtPop(Value *v) {
@@ -5477,13 +5535,6 @@ public:
       // lane-wise binary vector instructions
     case AArch64::ORNv8i8:
     case AArch64::ORNv16i8:
-    case AArch64::UQSUBv8i8:
-    case AArch64::UQSUBv4i16:
-    case AArch64::UQSUBv2i32:
-    case AArch64::UQSUBv2i64:
-    case AArch64::UQSUBv4i32:
-    case AArch64::UQSUBv16i8:
-    case AArch64::UQSUBv8i16:
     case AArch64::SMINv8i8:
     case AArch64::SMINv4i16:
     case AArch64::SMINv2i32:
@@ -5616,15 +5667,6 @@ public:
       bool immShift = false;
       function<Value *(Value *, Value *)> op;
       switch (opcode) {
-      case AArch64::UQSUBv8i8:
-      case AArch64::UQSUBv4i16:
-      case AArch64::UQSUBv2i32:
-      case AArch64::UQSUBv2i64:
-      case AArch64::UQSUBv4i32:
-      case AArch64::UQSUBv16i8:
-      case AArch64::UQSUBv8i16:
-        op = [&](Value *a, Value *b) { return createUSubSat(a, b); };
-        break;
       case AArch64::SMINv8i8:
       case AArch64::SMINv4i16:
       case AArch64::SMINv2i32:
@@ -5844,7 +5886,6 @@ public:
         numElts = 1;
         eltSize = 64;
         break;
-      case AArch64::UQSUBv2i32:
       case AArch64::ORRv2i32:
       case AArch64::UMULLv2i32_v2i64:
       case AArch64::SMINv2i32:
@@ -5866,7 +5907,6 @@ public:
         numElts = 2;
         eltSize = 32;
         break;
-      case AArch64::UQSUBv2i64:
       case AArch64::SSHRv2i64_shift:
       case AArch64::SHLv2i64_shift:
       case AArch64::ADDv2i64:
@@ -5880,7 +5920,6 @@ public:
         numElts = 2;
         eltSize = 64;
         break;
-      case AArch64::UQSUBv4i16:
       case AArch64::ORRv4i16:
       case AArch64::UMULLv4i16_v4i32:
       case AArch64::SMINv4i16:
@@ -5902,7 +5941,6 @@ public:
         numElts = 4;
         eltSize = 16;
         break;
-      case AArch64::UQSUBv4i32:
       case AArch64::UMULLv4i32_v2i64:
       case AArch64::SMINv4i32:
       case AArch64::SMAXv4i32:
@@ -5925,7 +5963,6 @@ public:
         eltSize = 32;
         break;
       case AArch64::ORNv8i8:
-      case AArch64::UQSUBv8i8:
       case AArch64::UMULLv8i8_v8i16:
       case AArch64::SMINv8i8:
       case AArch64::SMAXv8i8:
@@ -5951,7 +5988,6 @@ public:
         numElts = 8;
         eltSize = 8;
         break;
-      case AArch64::UQSUBv8i16:
       case AArch64::ORRv8i16:
       case AArch64::UMULLv8i16_v4i32:
       case AArch64::SMULLv8i16_v4i32:
@@ -5974,7 +6010,6 @@ public:
         eltSize = 16;
         break;
       case AArch64::ORNv16i8:
-      case AArch64::UQSUBv16i8:
       case AArch64::UMULLv16i8_v8i16:
       case AArch64::SMINv16i8:
       case AArch64::SMAXv16i8:
@@ -6550,6 +6585,57 @@ public:
       auto x = readFromVecOperand(1, eltSize, numElts);
       auto y = readFromVecOperand(2, eltSize, numElts);
       auto res = createUAddSat(x, y);
+      updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::UQSUBv1i32:
+    case AArch64::UQSUBv1i64:
+    case AArch64::UQSUBv8i8:
+    case AArch64::UQSUBv4i16:
+    case AArch64::UQSUBv2i32:
+    case AArch64::UQSUBv2i64:
+    case AArch64::UQSUBv4i32:
+    case AArch64::UQSUBv16i8:
+    case AArch64::UQSUBv8i16: {
+      GET_SIZES9(UQSUB, );
+      auto x = readFromVecOperand(1, eltSize, numElts);
+      auto y = readFromVecOperand(2, eltSize, numElts);
+      auto res = createUSubSat(x, y);
+      updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::SQADDv1i32:
+    case AArch64::SQADDv1i64:
+    case AArch64::SQADDv8i8:
+    case AArch64::SQADDv4i16:
+    case AArch64::SQADDv2i32:
+    case AArch64::SQADDv2i64:
+    case AArch64::SQADDv4i32:
+    case AArch64::SQADDv16i8:
+    case AArch64::SQADDv8i16: {
+      GET_SIZES9(SQADD, );
+      auto x = readFromVecOperand(1, eltSize, numElts);
+      auto y = readFromVecOperand(2, eltSize, numElts);
+      auto res = createSAddSat(x, y);
+      updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::SQSUBv1i32:
+    case AArch64::SQSUBv1i64:
+    case AArch64::SQSUBv8i8:
+    case AArch64::SQSUBv4i16:
+    case AArch64::SQSUBv2i32:
+    case AArch64::SQSUBv2i64:
+    case AArch64::SQSUBv4i32:
+    case AArch64::SQSUBv16i8:
+    case AArch64::SQSUBv8i16: {
+      GET_SIZES9(SQSUB, );
+      auto x = readFromVecOperand(1, eltSize, numElts);
+      auto y = readFromVecOperand(2, eltSize, numElts);
+      auto res = createSSubSat(x, y);
       updateOutputReg(res);
       break;
     }
