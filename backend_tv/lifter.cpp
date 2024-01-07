@@ -837,6 +837,7 @@ class arm2llvm {
       AArch64::STPQi,
       AArch64::STRQroX,
       AArch64::ADDv8i16,
+      AArch64::ADDv1i64,
       AArch64::ADDv2i64,
       AArch64::ADDv4i32,
       AArch64::ADDv16i8,
@@ -5546,6 +5547,7 @@ public:
     case AArch64::BICv4i32:
     case AArch64::BICv16i8:
     case AArch64::ADDv2i32:
+    case AArch64::ADDv1i64:
     case AArch64::ADDv2i64:
     case AArch64::ADDv4i16:
     case AArch64::ADDv4i32:
@@ -5751,6 +5753,7 @@ public:
         elementWise = true;
         break;
       case AArch64::ADDv2i32:
+      case AArch64::ADDv1i64:
       case AArch64::ADDv2i64:
       case AArch64::ADDv4i16:
       case AArch64::ADDv4i32:
@@ -5837,6 +5840,7 @@ public:
       switch (opcode) {
       case AArch64::USHLv1i64:
       case AArch64::SSHLv1i64:
+      case AArch64::ADDv1i64:
         numElts = 1;
         eltSize = 64;
         break;
