@@ -313,42 +313,43 @@ class arm2llvm {
   };
 
   const set<int> instrs_32 = {
-      AArch64::ADDWrx,    AArch64::ADDSWrs,    AArch64::ADDSWri,
-      AArch64::ADDWrs,    AArch64::ADDWri,     AArch64::ADDSWrx,
-      AArch64::ADCWr,     AArch64::ADCSWr,     AArch64::ASRVWr,
-      AArch64::SUBWri,    AArch64::SUBWrs,     AArch64::SUBWrx,
-      AArch64::SUBSWrs,   AArch64::SUBSWri,    AArch64::SUBSWrx,
-      AArch64::SBFMWri,   AArch64::CSELWr,     AArch64::ANDWri,
-      AArch64::ANDWrr,    AArch64::ANDWrs,     AArch64::ANDSWri,
-      AArch64::ANDSWrr,   AArch64::ANDSWrs,    AArch64::MADDWrrr,
-      AArch64::MSUBWrrr,  AArch64::EORWri,     AArch64::CSINVWr,
-      AArch64::CSINCWr,   AArch64::MOVZWi,     AArch64::MOVNWi,
-      AArch64::MOVKWi,    AArch64::LSLVWr,     AArch64::LSRVWr,
-      AArch64::ORNWrs,    AArch64::UBFMWri,    AArch64::BFMWri,
-      AArch64::ORRWrs,    AArch64::ORRWri,     AArch64::SDIVWr,
-      AArch64::UDIVWr,    AArch64::EXTRWrri,   AArch64::EORWrs,
-      AArch64::RORVWr,    AArch64::RBITWr,     AArch64::CLZWr,
-      AArch64::REVWr,     AArch64::CSNEGWr,    AArch64::BICWrs,
-      AArch64::BICSWrs,   AArch64::EONWrs,     AArch64::REV16Wr,
-      AArch64::Bcc,       AArch64::CCMPWr,     AArch64::CCMPWi,
-      AArch64::LDRWui,    AArch64::LDRBBroW,   AArch64::LDRBBroX,
-      AArch64::LDRHHroW,  AArch64::LDRHHroX,   AArch64::LDRWroW,
-      AArch64::LDRWroX,   AArch64::LDRSui,     AArch64::LDRBBui,
-      AArch64::LDRBui,    AArch64::LDRSBWui,   AArch64::LDRSWui,
-      AArch64::LDRSHWui,  AArch64::LDRHHui,    AArch64::LDRHui,
-      AArch64::LDURBi,    AArch64::LDURBBi,    AArch64::LDURHi,
-      AArch64::LDURHHi,   AArch64::LDURSi,     AArch64::LDURWi,
-      AArch64::LDRWpost,  AArch64::STRWpost,   AArch64::STRWui,
-      AArch64::STRBBroW,  AArch64::STRBBroX,   AArch64::STRHHroW,
-      AArch64::STRHHroX,  AArch64::STRWroW,    AArch64::STRWroX,
-      AArch64::CCMNWi,    AArch64::CCMNWr,     AArch64::STRBBui,
-      AArch64::STRBui,    AArch64::STPWi,      AArch64::STRHHui,
-      AArch64::STRHui,    AArch64::STURWi,     AArch64::STRSui,
-      AArch64::LDPWi,     AArch64::STRWpre,    AArch64::FADDSrr,
-      AArch64::FSUBSrr,   AArch64::FCMPSrr,    AArch64::FCMPSri,
-      AArch64::FMOVSWr,   AArch64::INSvi32gpr, AArch64::INSvi16gpr,
-      AArch64::INSvi8gpr, AArch64::FCVTSHr,    AArch64::FCVTZSUWSr,
-      AArch64::FCSELSrrr, AArch64::FMULSrr,    AArch64::FABSSr,
+      AArch64::ADDWrx,     AArch64::ADDSWrs,    AArch64::ADDSWri,
+      AArch64::ADDWrs,     AArch64::ADDWri,     AArch64::ADDSWrx,
+      AArch64::ADCWr,      AArch64::ADCSWr,     AArch64::ASRVWr,
+      AArch64::SUBWri,     AArch64::SUBWrs,     AArch64::SUBWrx,
+      AArch64::SUBSWrs,    AArch64::SUBSWri,    AArch64::SUBSWrx,
+      AArch64::SBFMWri,    AArch64::CSELWr,     AArch64::ANDWri,
+      AArch64::ANDWrr,     AArch64::ANDWrs,     AArch64::ANDSWri,
+      AArch64::ANDSWrr,    AArch64::ANDSWrs,    AArch64::MADDWrrr,
+      AArch64::MSUBWrrr,   AArch64::EORWri,     AArch64::CSINVWr,
+      AArch64::CSINCWr,    AArch64::MOVZWi,     AArch64::MOVNWi,
+      AArch64::MOVKWi,     AArch64::LSLVWr,     AArch64::LSRVWr,
+      AArch64::ORNWrs,     AArch64::UBFMWri,    AArch64::BFMWri,
+      AArch64::ORRWrs,     AArch64::ORRWri,     AArch64::SDIVWr,
+      AArch64::UDIVWr,     AArch64::EXTRWrri,   AArch64::EORWrs,
+      AArch64::RORVWr,     AArch64::RBITWr,     AArch64::CLZWr,
+      AArch64::REVWr,      AArch64::CSNEGWr,    AArch64::BICWrs,
+      AArch64::BICSWrs,    AArch64::EONWrs,     AArch64::REV16Wr,
+      AArch64::Bcc,        AArch64::CCMPWr,     AArch64::CCMPWi,
+      AArch64::LDRWui,     AArch64::LDRBBroW,   AArch64::LDRBBroX,
+      AArch64::LDRHHroW,   AArch64::LDRHHroX,   AArch64::LDRWroW,
+      AArch64::LDRWroX,    AArch64::LDRSui,     AArch64::LDRBBui,
+      AArch64::LDRBui,     AArch64::LDRSBWui,   AArch64::LDRSWui,
+      AArch64::LDRSHWui,   AArch64::LDRHHui,    AArch64::LDRHui,
+      AArch64::LDURBi,     AArch64::LDURBBi,    AArch64::LDURHi,
+      AArch64::LDURHHi,    AArch64::LDURSi,     AArch64::LDURWi,
+      AArch64::LDRWpost,   AArch64::STRWpost,   AArch64::STRWui,
+      AArch64::STRBBroW,   AArch64::STRBBroX,   AArch64::STRHHroW,
+      AArch64::STRHHroX,   AArch64::STRWroW,    AArch64::STRWroX,
+      AArch64::CCMNWi,     AArch64::CCMNWr,     AArch64::STRBBui,
+      AArch64::STRBui,     AArch64::STPWi,      AArch64::STRHHui,
+      AArch64::STRHui,     AArch64::STURWi,     AArch64::STRSui,
+      AArch64::LDPWi,      AArch64::STRWpre,    AArch64::FADDSrr,
+      AArch64::FSUBSrr,    AArch64::FCMPSrr,    AArch64::FCMPSri,
+      AArch64::FMOVSWr,    AArch64::INSvi32gpr, AArch64::INSvi16gpr,
+      AArch64::INSvi8gpr,  AArch64::FCVTSHr,    AArch64::FCVTZSUWSr,
+      AArch64::FCSELSrrr,  AArch64::FMULSrr,    AArch64::FABSSr,
+      AArch64::UQADDv1i32,
   };
 
   const set<int> instrs_64 = {
@@ -639,9 +640,59 @@ class arm2llvm {
       AArch64::MLAv8i8,
       AArch64::MLAv2i32,
       AArch64::MLAv4i16,
+      AArch64::ORNv8i8,
+      AArch64::CMTSTv4i16,
+      AArch64::CMTSTv2i32,
+      AArch64::CMEQv1i64,
+      AArch64::CMGTv4i16rz,
+      AArch64::CMEQv1i64rz,
+      AArch64::CMGTv8i8rz,
+      AArch64::CMLEv4i16rz,
+      AArch64::CMGEv4i16rz,
+      AArch64::CMLEv8i8rz,
+      AArch64::CMLTv1i64rz,
+      AArch64::CMGTv2i32rz,
+      AArch64::CMGEv8i8rz,
+      AArch64::CMLEv2i32rz,
+      AArch64::CMGEv2i32rz,
+      AArch64::UQADDv1i64,
+      AArch64::UQADDv8i8,
+      AArch64::UQADDv4i16,
+      AArch64::UQADDv2i32,
+      AArch64::REV16v8i8,
+      AArch64::REV32v4i16,
+      AArch64::REV32v8i8,
+      AArch64::MLSv2i32_indexed,
+      AArch64::MLSv4i16_indexed,
+      AArch64::MLSv8i8,
+      AArch64::MLSv4i16,
   };
 
   const set<int> instrs_128 = {
+      AArch64::MLSv16i8,
+      AArch64::MLSv8i16,
+      AArch64::MLSv4i32,
+      AArch64::MLSv4i32_indexed,
+      AArch64::MLSv8i16_indexed,
+      AArch64::REV16v16i8,
+      AArch64::REV32v8i16,
+      AArch64::REV32v16i8,
+      AArch64::UQADDv2i64,
+      AArch64::UQADDv4i32,
+      AArch64::UQADDv16i8,
+      AArch64::UQADDv8i16,
+      AArch64::CMLEv8i16rz,
+      AArch64::CMLEv16i8rz,
+      AArch64::CMGTv16i8rz,
+      AArch64::CMGTv8i16rz,
+      AArch64::CMGTv2i64rz,
+      AArch64::CMGEv8i16rz,
+      AArch64::CMLEv4i32rz,
+      AArch64::CMGEv2i64rz,
+      AArch64::CMLEv2i64rz,
+      AArch64::CMGEv16i8rz,
+      AArch64::CMGEv4i32rz,
+      AArch64::ORNv16i8,
       AArch64::MLAv8i16_indexed,
       AArch64::MLAv4i32_indexed,
       AArch64::MLAv16i8,
@@ -1073,6 +1124,12 @@ class arm2llvm {
     return CallInst::Create(uadd_decl, {a, b}, nextName(), LLVMBB);
   }
 
+  CallInst *createUAddSat(Value *a, Value *b) {
+    auto uadd_decl = Intrinsic::getDeclaration(
+        LiftedModule, Intrinsic::uadd_sat, a->getType());
+    return CallInst::Create(uadd_decl, {a, b}, nextName(), LLVMBB);
+  }
+
   CallInst *createUSubSat(Value *a, Value *b) {
     auto usub_decl = Intrinsic::getDeclaration(
         LiftedModule, Intrinsic::usub_sat, a->getType());
@@ -1098,10 +1155,6 @@ class arm2llvm {
 
   CastInst *createPtrToInt(Value *v, Type *ty) {
     return new PtrToIntInst(v, ty, nextName(), LLVMBB);
-  }
-
-  InsertElementInst *createInsertElement(Value *vec, Value *val, Value *idx) {
-    return InsertElementInst::Create(vec, val, idx, nextName(), LLVMBB);
   }
 
   InsertElementInst *createInsertElement(Value *vec, Value *val, int idx) {
@@ -1322,7 +1375,7 @@ class arm2llvm {
       v = createTrunc(v, getIntTy(eltSize));
     Value *res = getUndefVec(numElts, eltSize);
     for (unsigned i = 0; i < numElts; ++i)
-      res = createInsertElement(res, v, getIntConst(i, 32));
+      res = createInsertElement(res, v, i);
     return res;
   }
 
@@ -1330,12 +1383,12 @@ class arm2llvm {
     auto bigEltTy = getIntTy(2 * eltSize);
     Value *res = getUndefVec(numElts / 2, 2 * eltSize);
     for (unsigned i = 0; i < numElts; i += 2) {
-      auto elt1 = createExtractElement(src, getIntConst(i, 32));
-      auto elt2 = createExtractElement(src, getIntConst(i + 1, 32));
+      auto elt1 = createExtractElement(src, i);
+      auto elt2 = createExtractElement(src, i + 1);
       auto ext1 = createZExt(elt1, bigEltTy);
       auto ext2 = createZExt(elt2, bigEltTy);
       auto sum = createAdd(ext1, ext2);
-      res = createInsertElement(res, sum, getIntConst(i / 2, 32));
+      res = createInsertElement(res, sum, i / 2);
     }
     return res;
   }
@@ -1376,10 +1429,10 @@ class arm2llvm {
     if (elementWise) {
       res = getUndefVec(numElts, eltSize);
       for (unsigned i = 0; i < numElts; ++i) {
-        auto aa = createExtractElement(a, getIntConst(i, 32));
-        auto bb = createExtractElement(b, getIntConst(i, 32));
+        auto aa = createExtractElement(a, i);
+        auto bb = createExtractElement(b, i);
         auto cc = op(aa, bb);
-        res = createInsertElement(res, cc, getIntConst(i, 32));
+        res = createInsertElement(res, cc, i);
       }
     } else {
       res = op(a, b);
@@ -1524,6 +1577,11 @@ class arm2llvm {
       V = val;
     }
     return V;
+  }
+
+  Value *readFromVecOperand(int idx, int eltSize, int numElts) {
+    auto *ty = getVecTy(eltSize, numElts);
+    return createBitCast(readFromOperand(idx), ty);
   }
 
   void updateOutputReg(Value *V, bool SExt = false) {
@@ -1713,20 +1771,19 @@ class arm2llvm {
     return createSelect(c, posRes, negRes);
   }
 
-  Value *rev64(Value *in, unsigned eltSize) {
+  Value *rev(Value *in, unsigned eltSize, unsigned amt) {
     assert(eltSize == 8 || eltSize == 16 || eltSize == 32);
     assert(getBitWidth(in) == 64 || getBitWidth(in) == 128);
     if (getBitWidth(in) == 64)
       in = createZExt(in, getIntTy(128));
     Value *rev = getUndefVec(128 / eltSize, eltSize);
     in = createBitCast(in, getVecTy(eltSize, 128 / eltSize));
-    for (unsigned i = 0; i < 2; ++i) {
-      auto innerCount = 64 / eltSize;
+    for (unsigned i = 0; i < (128 / amt); ++i) {
+      auto innerCount = amt / eltSize;
       for (unsigned j = 0; j < innerCount; j++) {
-        auto elt =
-            createExtractElement(in, getIntConst((i * innerCount) + j, 32));
-        rev = createInsertElement(
-            rev, elt, getIntConst((i * innerCount) + innerCount - j - 1, 32));
+        auto elt = createExtractElement(in, (i * innerCount) + j);
+        rev = createInsertElement(rev, elt,
+                                  (i * innerCount) + innerCount - j - 1);
       }
     }
     return rev;
@@ -1738,7 +1795,7 @@ class arm2llvm {
     assert(getBitWidth(v) == eltSize);
     Value *res = getUndefVec(numElts, eltSize);
     for (unsigned i = 0; i < numElts; i++)
-      res = createInsertElement(res, v, getIntConst(i, 32));
+      res = createInsertElement(res, v, i);
     return res;
   }
 
@@ -3781,8 +3838,7 @@ public:
 
       auto loaded = makeLoadWithOffset(base, 0, eltSize / 8);
       auto casted = createBitCast(dst, getVecTy(eltSize, numElts));
-      auto updated =
-          createInsertElement(casted, loaded, getIntConst(index, 32));
+      auto updated = createInsertElement(casted, loaded, index);
       updateOutputReg(updated);
       break;
     }
@@ -3861,8 +3917,7 @@ public:
       //  shuffle mask will just be <numElts x i32> zeroinitializer
       Value *updated_dst = casted;
       for (unsigned i = 0; i < numElts; i++) {
-        updated_dst =
-            createInsertElement(updated_dst, loaded, getIntConst(i, 32));
+        updated_dst = createInsertElement(updated_dst, loaded, i);
       }
 
       updateOutputReg(updated_dst);
@@ -4069,7 +4124,7 @@ public:
       }
 
       auto casted = createBitCast(src, getVecTy(eltSize, numElts));
-      auto loaded = createExtractElement(casted, getIntConst(index, 32));
+      auto loaded = createExtractElement(casted, index);
       storeToMemoryImmOffset(base, 0, eltSize / 8, loaded);
       break;
     }
@@ -4399,10 +4454,10 @@ public:
       } else {
         assert(false);
       }
-      auto in = createBitCast(readFromOperand(3), getVecTy(w, 128 / w));
-      auto out = createBitCast(readFromOperand(1), getVecTy(w, 128 / w));
-      auto ext = createExtractElement(in, getIntConst(getImm(4), 32));
-      auto ins = createInsertElement(out, ext, getIntConst(getImm(2), 32));
+      auto in = readFromVecOperand(3, w, 128 / w);
+      auto out = readFromVecOperand(1, w, 128 / w);
+      auto ext = createExtractElement(in, getImm(4));
+      auto ins = createInsertElement(out, ext, getImm(2));
       updateOutputReg(ins);
       break;
     }
@@ -4430,7 +4485,7 @@ public:
       auto lane = getImm(2);
       auto orig = readFromReg(CurInst->getOperand(1).getReg());
       auto vec = createBitCast(orig, getVecTy(w, 128 / w));
-      auto inserted = createInsertElement(vec, val, getIntConst(lane, 32));
+      auto inserted = createInsertElement(vec, val, lane);
       updateOutputReg(inserted);
       break;
     }
@@ -4608,7 +4663,7 @@ public:
       }
       auto vTy = getVecTy(sz, 128 / sz);
       auto reg = createBitCast(readFromOperand(1), vTy);
-      auto val = createExtractElement(reg, getIntConst(idx, 64));
+      auto val = createExtractElement(reg, idx);
       updateOutputReg(val);
       break;
     }
@@ -4737,58 +4792,94 @@ public:
     }
 
     case AArch64::REV64v4i32: {
-      auto v = rev64(readFromOperand(1), 32);
+      auto v = rev(readFromOperand(1), 32, 64);
       updateOutputReg(v);
       break;
     }
 
     case AArch64::REV64v2i32: {
-      auto v = rev64(readFromOperand(1), 32);
+      auto v = rev(readFromOperand(1), 32, 64);
       updateOutputReg(v);
       break;
     }
 
     case AArch64::REV64v4i16: {
-      auto v = rev64(readFromOperand(1), 16);
+      auto v = rev(readFromOperand(1), 16, 64);
       updateOutputReg(v);
       break;
     }
 
     case AArch64::REV64v8i8: {
-      auto v = rev64(readFromOperand(1), 8);
+      auto v = rev(readFromOperand(1), 8, 64);
       updateOutputReg(v);
       break;
     }
 
     case AArch64::REV64v8i16: {
-      auto v = rev64(readFromOperand(1), 16);
+      auto v = rev(readFromOperand(1), 16, 64);
       updateOutputReg(v);
       break;
     }
 
     case AArch64::REV64v16i8: {
-      auto v = rev64(readFromOperand(1), 8);
+      auto v = rev(readFromOperand(1), 8, 64);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV16v8i8: {
+      auto v = rev(readFromOperand(1), 8, 16);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV16v16i8: {
+      auto v = rev(readFromOperand(1), 8, 16);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV32v4i16: {
+      auto v = rev(readFromOperand(1), 16, 32);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV32v8i8: {
+      auto v = rev(readFromOperand(1), 8, 32);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV32v8i16: {
+      auto v = rev(readFromOperand(1), 16, 32);
+      updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::REV32v16i8: {
+      auto v = rev(readFromOperand(1), 8, 32);
       updateOutputReg(v);
       break;
     }
 
     case AArch64::DUPi16: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(16, 8));
-      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
+      auto in = readFromVecOperand(1, 16, 8);
+      auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(ext);
       break;
     }
 
     case AArch64::DUPi32: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(32, 4));
-      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
+      auto in = readFromVecOperand(1, 32, 4);
+      auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(ext);
       break;
     }
 
     case AArch64::DUPi64: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(64, 2));
-      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
+      auto in = readFromVecOperand(1, 64, 2);
+      auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(ext);
       break;
     }
@@ -4835,50 +4926,50 @@ public:
     }
 
     case AArch64::DUPv2i32lane: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(32, 2));
-      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
+      auto in = readFromVecOperand(1, 32, 2);
+      auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 2, 32));
       break;
     }
 
     case AArch64::DUPv2i64lane: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(64, 2));
-      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
+      auto in = readFromVecOperand(1, 64, 2);
+      auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 2, 64));
       break;
     }
 
     case AArch64::DUPv4i16lane: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(16, 4));
-      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
+      auto in = readFromVecOperand(1, 16, 4);
+      auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 4, 16));
       break;
     }
 
     case AArch64::DUPv4i32lane: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(32, 4));
-      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
+      auto in = readFromVecOperand(1, 32, 4);
+      auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 4, 32));
       break;
     }
 
     case AArch64::DUPv8i8lane: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(8, 8));
-      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
+      auto in = readFromVecOperand(1, 8, 8);
+      auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 8, 8));
       break;
     }
 
     case AArch64::DUPv8i16lane: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(16, 8));
-      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
+      auto in = readFromVecOperand(1, 16, 8);
+      auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 8, 16));
       break;
     }
 
     case AArch64::DUPv16i8lane: {
-      auto in = createBitCast(readFromOperand(1), getVecTy(8, 16));
-      auto ext = createExtractElement(in, getIntConst(getImm(2), 32));
+      auto in = readFromVecOperand(1, 8, 16);
+      auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 16, 8));
       break;
     }
@@ -4913,6 +5004,29 @@ public:
       break;
     }
 
+    case AArch64::CMGTv4i16rz:
+    case AArch64::CMEQv1i64rz:
+    case AArch64::CMGTv8i8rz:
+    case AArch64::CMLEv4i16rz:
+    case AArch64::CMGEv4i16rz:
+    case AArch64::CMLEv8i8rz:
+    case AArch64::CMLTv1i64rz:
+    case AArch64::CMGTv2i32rz:
+    case AArch64::CMGEv8i8rz:
+    case AArch64::CMLEv2i32rz:
+    case AArch64::CMGEv2i32rz:
+    case AArch64::CMLEv8i16rz:
+    case AArch64::CMLEv16i8rz:
+    case AArch64::CMGTv16i8rz:
+    case AArch64::CMGTv8i16rz:
+    case AArch64::CMGTv2i64rz:
+    case AArch64::CMGEv8i16rz:
+    case AArch64::CMLEv4i32rz:
+    case AArch64::CMGEv2i64rz:
+    case AArch64::CMLEv2i64rz:
+    case AArch64::CMGEv16i8rz:
+    case AArch64::CMGEv4i32rz:
+    case AArch64::CMEQv1i64:
     case AArch64::CMEQv16i8:
     case AArch64::CMEQv16i8rz:
     case AArch64::CMEQv2i32:
@@ -4965,6 +5079,8 @@ public:
     case AArch64::CMLTv4i32rz:
     case AArch64::CMLTv8i16rz:
     case AArch64::CMLTv8i8rz:
+    case AArch64::CMTSTv4i16:
+    case AArch64::CMTSTv2i32:
     case AArch64::CMTSTv16i8:
     case AArch64::CMTSTv2i64:
     case AArch64::CMTSTv4i32:
@@ -4973,6 +5089,28 @@ public:
       auto a = readFromOperand(1);
       Value *b;
       switch (opcode) {
+      case AArch64::CMGTv4i16rz:
+      case AArch64::CMEQv1i64rz:
+      case AArch64::CMGTv8i8rz:
+      case AArch64::CMLEv4i16rz:
+      case AArch64::CMGEv4i16rz:
+      case AArch64::CMLEv8i8rz:
+      case AArch64::CMLTv1i64rz:
+      case AArch64::CMGTv2i32rz:
+      case AArch64::CMGEv8i8rz:
+      case AArch64::CMLEv2i32rz:
+      case AArch64::CMGEv2i32rz:
+      case AArch64::CMLEv8i16rz:
+      case AArch64::CMLEv16i8rz:
+      case AArch64::CMGTv16i8rz:
+      case AArch64::CMGTv8i16rz:
+      case AArch64::CMGTv2i64rz:
+      case AArch64::CMGEv8i16rz:
+      case AArch64::CMLEv4i32rz:
+      case AArch64::CMGEv2i64rz:
+      case AArch64::CMLEv2i64rz:
+      case AArch64::CMGEv16i8rz:
+      case AArch64::CMGEv4i32rz:
       case AArch64::CMEQv16i8rz:
       case AArch64::CMEQv2i32rz:
       case AArch64::CMEQv2i64rz:
@@ -4990,6 +5128,7 @@ public:
       case AArch64::CMLTv8i8rz:
         b = getIntConst(0, getInstSize(opcode));
         break;
+      case AArch64::CMEQv1i64:
       case AArch64::CMEQv16i8:
       case AArch64::CMEQv2i32:
       case AArch64::CMEQv2i64:
@@ -5027,6 +5166,8 @@ public:
       case AArch64::CMHSv4i32:
       case AArch64::CMHSv8i16:
       case AArch64::CMHSv8i8:
+      case AArch64::CMTSTv4i16:
+      case AArch64::CMTSTv2i32:
       case AArch64::CMTSTv16i8:
       case AArch64::CMTSTv2i64:
       case AArch64::CMTSTv4i32:
@@ -5040,11 +5181,17 @@ public:
 
       int numElts, eltSize;
       switch (opcode) {
+      case AArch64::CMEQv1i64rz:
+      case AArch64::CMLTv1i64rz:
       case AArch64::CMHIv1i64:
       case AArch64::CMGTv1i64:
+      case AArch64::CMEQv1i64:
         numElts = 1;
         eltSize = 64;
         break;
+      case AArch64::CMLEv16i8rz:
+      case AArch64::CMGTv16i8rz:
+      case AArch64::CMGEv16i8rz:
       case AArch64::CMEQv16i8:
       case AArch64::CMEQv16i8rz:
       case AArch64::CMGEv16i8:
@@ -5056,7 +5203,11 @@ public:
         numElts = 16;
         eltSize = 8;
         break;
+      case AArch64::CMTSTv2i32:
       case AArch64::CMEQv2i32:
+      case AArch64::CMGTv2i32rz:
+      case AArch64::CMLEv2i32rz:
+      case AArch64::CMGEv2i32rz:
       case AArch64::CMEQv2i32rz:
       case AArch64::CMGEv2i32:
       case AArch64::CMGTv2i32:
@@ -5072,11 +5223,18 @@ public:
       case AArch64::CMGTv2i64:
       case AArch64::CMHIv2i64:
       case AArch64::CMHSv2i64:
+      case AArch64::CMGTv2i64rz:
+      case AArch64::CMGEv2i64rz:
+      case AArch64::CMLEv2i64rz:
       case AArch64::CMLTv2i64rz:
       case AArch64::CMTSTv2i64:
         numElts = 2;
         eltSize = 64;
         break;
+      case AArch64::CMLEv4i16rz:
+      case AArch64::CMGEv4i16rz:
+      case AArch64::CMGTv4i16rz:
+      case AArch64::CMTSTv4i16:
       case AArch64::CMEQv4i16:
       case AArch64::CMEQv4i16rz:
       case AArch64::CMGEv4i16:
@@ -5087,6 +5245,8 @@ public:
         numElts = 4;
         eltSize = 16;
         break;
+      case AArch64::CMLEv4i32rz:
+      case AArch64::CMGEv4i32rz:
       case AArch64::CMEQv4i32:
       case AArch64::CMEQv4i32rz:
       case AArch64::CMGEv4i32:
@@ -5099,6 +5259,9 @@ public:
         numElts = 4;
         eltSize = 32;
         break;
+      case AArch64::CMLEv8i16rz:
+      case AArch64::CMGTv8i16rz:
+      case AArch64::CMGEv8i16rz:
       case AArch64::CMEQv8i16:
       case AArch64::CMEQv8i16rz:
       case AArch64::CMGEv8i16:
@@ -5110,6 +5273,9 @@ public:
         numElts = 8;
         eltSize = 16;
         break;
+      case AArch64::CMGTv8i8rz:
+      case AArch64::CMLEv8i8rz:
+      case AArch64::CMGEv8i8rz:
       case AArch64::CMEQv8i8:
       case AArch64::CMEQv8i8rz:
       case AArch64::CMGEv8i8:
@@ -5131,6 +5297,17 @@ public:
       Value *res;
 
       switch (opcode) {
+      case AArch64::CMLEv16i8rz:
+      case AArch64::CMLEv2i32rz:
+      case AArch64::CMLEv2i64rz:
+      case AArch64::CMLEv4i16rz:
+      case AArch64::CMLEv4i32rz:
+      case AArch64::CMLEv8i16rz:
+      case AArch64::CMLEv8i8rz:
+        res = createICmp(ICmpInst::Predicate::ICMP_SLE, a, b);
+        break;
+      case AArch64::CMEQv1i64rz:
+      case AArch64::CMEQv1i64:
       case AArch64::CMEQv16i8:
       case AArch64::CMEQv16i8rz:
       case AArch64::CMEQv2i32:
@@ -5147,6 +5324,13 @@ public:
       case AArch64::CMEQv8i8rz:
         res = createICmp(ICmpInst::Predicate::ICMP_EQ, a, b);
         break;
+      case AArch64::CMGEv16i8rz:
+      case AArch64::CMGEv2i32rz:
+      case AArch64::CMGEv2i64rz:
+      case AArch64::CMGEv4i16rz:
+      case AArch64::CMGEv4i32rz:
+      case AArch64::CMGEv8i16rz:
+      case AArch64::CMGEv8i8rz:
       case AArch64::CMGEv16i8:
       case AArch64::CMGEv2i32:
       case AArch64::CMGEv2i64:
@@ -5156,6 +5340,12 @@ public:
       case AArch64::CMGEv8i8:
         res = createICmp(ICmpInst::Predicate::ICMP_SGE, a, b);
         break;
+      case AArch64::CMGTv16i8rz:
+      case AArch64::CMGTv2i32rz:
+      case AArch64::CMGTv2i64rz:
+      case AArch64::CMGTv4i16rz:
+      case AArch64::CMGTv8i16rz:
+      case AArch64::CMGTv8i8rz:
       case AArch64::CMGTv1i64:
       case AArch64::CMGTv16i8:
       case AArch64::CMGTv2i32:
@@ -5186,6 +5376,7 @@ public:
       case AArch64::CMHSv8i8:
         res = createICmp(ICmpInst::Predicate::ICMP_UGE, a, b);
         break;
+      case AArch64::CMLTv1i64rz:
       case AArch64::CMLTv16i8rz:
       case AArch64::CMLTv2i32rz:
       case AArch64::CMLTv2i64rz:
@@ -5195,6 +5386,8 @@ public:
       case AArch64::CMLTv8i8rz:
         res = createICmp(ICmpInst::Predicate::ICMP_SLT, a, b);
         break;
+      case AArch64::CMTSTv2i32:
+      case AArch64::CMTSTv4i16:
       case AArch64::CMTSTv16i8:
       case AArch64::CMTSTv2i64:
       case AArch64::CMTSTv4i32:
@@ -5281,6 +5474,8 @@ public:
     }
 
       // lane-wise binary vector instructions
+    case AArch64::ORNv8i8:
+    case AArch64::ORNv16i8:
     case AArch64::UQSUBv8i8:
     case AArch64::UQSUBv4i16:
     case AArch64::UQSUBv2i32:
@@ -5589,6 +5784,10 @@ public:
       case AArch64::ANDv16i8:
         op = [&](Value *a, Value *b) { return createAnd(a, b); };
         break;
+      case AArch64::ORNv8i8:
+      case AArch64::ORNv16i8:
+        op = [&](Value *a, Value *b) { return createOr(a, createNot(b)); };
+        break;
       case AArch64::ORRv8i8:
       case AArch64::ORRv16i8:
       case AArch64::ORRv2i32:
@@ -5721,6 +5920,7 @@ public:
         numElts = 4;
         eltSize = 32;
         break;
+      case AArch64::ORNv8i8:
       case AArch64::UQSUBv8i8:
       case AArch64::UMULLv8i8_v8i16:
       case AArch64::SMINv8i8:
@@ -5769,6 +5969,7 @@ public:
         numElts = 8;
         eltSize = 16;
         break;
+      case AArch64::ORNv16i8:
       case AArch64::UQSUBv16i8:
       case AArch64::UMULLv16i8_v8i16:
       case AArch64::SMINv16i8:
@@ -5807,8 +6008,8 @@ public:
     case AArch64::ADDPv2i64p: {
       auto vTy = getVecTy(64, 2);
       auto v = createBitCast(readFromOperand(1), vTy);
-      auto res = createAdd(createExtractElement(v, getIntConst(0, 32)),
-                           createExtractElement(v, getIntConst(1, 32)));
+      auto res =
+          createAdd(createExtractElement(v, 0), createExtractElement(v, 1));
       updateOutputReg(res);
       break;
     }
@@ -5866,10 +6067,10 @@ public:
       auto b = createBitCast(readFromOperand(2), vTy);
       Value *res = getUndefVec(numElts, eltSize);
       for (int i = 0; i < numElts / 2; ++i) {
-        auto e1 = createExtractElement(a, getIntConst((i * 2) + which, 32));
-        auto e2 = createExtractElement(b, getIntConst((i * 2) + which, 32));
-        res = createInsertElement(res, e1, getIntConst(i, 32));
-        res = createInsertElement(res, e2, getIntConst(i + (numElts / 2), 32));
+        auto e1 = createExtractElement(a, (i * 2) + which);
+        auto e2 = createExtractElement(b, (i * 2) + which);
+        res = createInsertElement(res, e1, i);
+        res = createInsertElement(res, e2, i + (numElts / 2));
       }
       updateOutputReg(res);
       break;
@@ -5891,6 +6092,31 @@ public:
   } else {                                                                     \
     assert(false);                                                             \
   }
+
+    case AArch64::MLSv2i32_indexed:
+    case AArch64::MLSv4i16_indexed:
+    case AArch64::MLSv8i16_indexed:
+    case AArch64::MLSv4i32_indexed: {
+      int numElts, eltSize;
+      GET_SIZES4(MLS, _indexed);
+      auto vTy = getVecTy(eltSize, numElts);
+      auto a = createBitCast(readFromOperand(1), vTy);
+      auto b = createBitCast(readFromOperand(2), vTy);
+      // this one is wide regardless of the others!
+      auto v2Ty = (opcode == AArch64::MLSv2i32_indexed ||
+                   opcode == AArch64::MLSv4i16_indexed)
+                      ? getVecTy(eltSize, numElts * 2)
+                      : vTy;
+      auto reg = CurInst->getOperand(3).getReg();
+      auto c = createBitCast(readFromReg(reg), v2Ty);
+      auto idx = getImm(4);
+      auto e = createExtractElement(c, idx);
+      auto spl = splatImm(e, numElts, eltSize, false);
+      auto mul = createMul(b, spl);
+      auto sum = createSub(a, mul);
+      updateOutputReg(sum);
+      break;
+    }
 
     case AArch64::MLAv2i32_indexed:
     case AArch64::MLAv4i16_indexed:
@@ -5968,15 +6194,14 @@ public:
       default:
         assert(false);
       }
-      auto vTy = getVecTy(eltSize, numElts);
-      auto a = createBitCast(readFromOperand(1), vTy);
-      auto b = createBitCast(readFromOperand(2), vTy);
+      auto a = readFromVecOperand(1, eltSize, numElts);
+      auto b = readFromVecOperand(2, eltSize, numElts);
       Value *res = getUndefVec(numElts, eltSize);
       for (int p = 0; p < numElts / 2; ++p) {
-        auto *e1 = createExtractElement(a, getIntConst((2 * p) + part, 32));
-        auto *e2 = createExtractElement(b, getIntConst((2 * p) + part, 32));
-        res = createInsertElement(res, e1, getIntConst(2 * p, 32));
-        res = createInsertElement(res, e2, getIntConst((2 * p) + 1, 32));
+        auto *e1 = createExtractElement(a, (2 * p) + part);
+        auto *e2 = createExtractElement(b, (2 * p) + part);
+        res = createInsertElement(res, e1, 2 * p);
+        res = createInsertElement(res, e2, (2 * p) + 1);
       }
       updateOutputReg(res);
       break;
@@ -6008,11 +6233,10 @@ public:
       GET_SIZES5(UMINV, v);
       GET_SIZES5(UMAXV, v);
       assert(numElts != -1 && eltSize != -1);
-      auto vTy = getVecTy(eltSize, numElts);
-      auto v = createBitCast(readFromOperand(1), vTy);
-      Value *min = createExtractElement(v, getIntConst(0, 32));
+      auto v = readFromVecOperand(1, eltSize, numElts);
+      Value *min = createExtractElement(v, 0);
       for (int i = 1; i < numElts; ++i) {
-        auto e = createExtractElement(v, getIntConst(i, 32));
+        auto e = createExtractElement(v, i);
         auto p{ICmpInst::Predicate::BAD_ICMP_PREDICATE};
         switch (opcode) {
         case AArch64::SMINVv8i8v:
@@ -6077,6 +6301,22 @@ public:
     assert(false);                                                             \
   }
 
+    case AArch64::MLSv8i8:
+    case AArch64::MLSv2i32:
+    case AArch64::MLSv4i16:
+    case AArch64::MLSv16i8:
+    case AArch64::MLSv8i16:
+    case AArch64::MLSv4i32: {
+      GET_SIZES6(MLS, );
+      auto a = readFromVecOperand(1, eltSize, numElts);
+      auto b = readFromVecOperand(2, eltSize, numElts);
+      auto c = readFromVecOperand(3, eltSize, numElts);
+      auto mul = createMul(b, c);
+      auto sum = createSub(a, mul);
+      updateOutputReg(sum);
+      break;
+    }
+
     case AArch64::MLAv8i8:
     case AArch64::MLAv2i32:
     case AArch64::MLAv4i16:
@@ -6084,10 +6324,9 @@ public:
     case AArch64::MLAv8i16:
     case AArch64::MLAv4i32: {
       GET_SIZES6(MLA, );
-      auto vTy = getVecTy(eltSize, numElts);
-      auto a = createBitCast(readFromOperand(1), vTy);
-      auto b = createBitCast(readFromOperand(2), vTy);
-      auto c = createBitCast(readFromOperand(3), vTy);
+      auto a = readFromVecOperand(1, eltSize, numElts);
+      auto b = readFromVecOperand(2, eltSize, numElts);
+      auto c = readFromVecOperand(3, eltSize, numElts);
       auto mul = createMul(b, c);
       auto sum = createAdd(mul, a);
       updateOutputReg(sum);
@@ -6119,7 +6358,7 @@ public:
       Value *op, *res;
       int exp;
       if (topHalf) {
-        res = createBitCast(readFromOperand(1), getVecTy(eltSize, numElts));
+        res = readFromVecOperand(1, eltSize, numElts);
         op = readFromOperand(2);
         exp = getImm(3);
         numElts /= 2;
@@ -6131,11 +6370,11 @@ public:
       auto vTy = getVecTy(2 * eltSize, numElts);
       auto a = createBitCast(op, vTy);
       for (int i = 0; i < numElts; ++i) {
-        auto e = createExtractElement(a, getIntConst(i, 32));
+        auto e = createExtractElement(a, i);
         auto shift = createMaskedLShr(e, getIntConst(exp, 2 * eltSize));
         auto trunc = createTrunc(shift, getIntTy(eltSize));
         int pos = topHalf ? (i + numElts) : i;
-        res = createInsertElement(res, trunc, getIntConst(pos, 32));
+        res = createInsertElement(res, trunc, pos);
       }
       updateOutputReg(res);
       break;
@@ -6176,17 +6415,16 @@ public:
     case AArch64::USRAv2i64_shift:
     case AArch64::USRAv4i32_shift: {
       GET_SIZES7(USRA, _shift);
-      auto vTy = getVecTy(eltSize, numElts);
-      auto a = createBitCast(readFromOperand(1), vTy);
-      auto b = createBitCast(readFromOperand(2), vTy);
+      auto a = readFromVecOperand(1, eltSize, numElts);
+      auto b = readFromVecOperand(2, eltSize, numElts);
       auto exp = getImm(3);
       Value *res = getUndefVec(numElts, eltSize);
       for (int i = 0; i < numElts; ++i) {
-        auto e1 = createExtractElement(a, getIntConst(i, 32));
-        auto e2 = createExtractElement(b, getIntConst(i, 32));
+        auto e1 = createExtractElement(a, i);
+        auto e2 = createExtractElement(b, i);
         auto shift = createMaskedLShr(e2, getIntConst(exp, eltSize));
         auto sum = createAdd(e1, shift);
-        res = createInsertElement(res, sum, getIntConst(i, 32));
+        res = createInsertElement(res, sum, i);
       }
       updateOutputReg(res);
       break;
@@ -6200,15 +6438,14 @@ public:
     case AArch64::ZIP1v2i64:
     case AArch64::ZIP1v4i32: {
       GET_SIZES7(ZIP1, );
-      auto vTy = getVecTy(eltSize, numElts);
-      auto a = createBitCast(readFromOperand(1), vTy);
-      auto b = createBitCast(readFromOperand(2), vTy);
+      auto a = readFromVecOperand(1, eltSize, numElts);
+      auto b = readFromVecOperand(2, eltSize, numElts);
       Value *res = getUndefVec(numElts, eltSize);
       for (int i = 0; i < numElts / 2; ++i) {
-        auto e1 = createExtractElement(a, getIntConst(i, 32));
-        auto e2 = createExtractElement(b, getIntConst(i, 32));
-        res = createInsertElement(res, e1, getIntConst(2 * i, 32));
-        res = createInsertElement(res, e2, getIntConst((2 * i) + 1, 32));
+        auto e1 = createExtractElement(a, i);
+        auto e2 = createExtractElement(b, i);
+        res = createInsertElement(res, e1, 2 * i);
+        res = createInsertElement(res, e2, (2 * i) + 1);
       }
       updateOutputReg(res);
       break;
@@ -6222,15 +6459,14 @@ public:
     case AArch64::ZIP2v16i8:
     case AArch64::ZIP2v4i32: {
       GET_SIZES7(ZIP2, );
-      auto vTy = getVecTy(eltSize, numElts);
-      auto a = createBitCast(readFromOperand(1), vTy);
-      auto b = createBitCast(readFromOperand(2), vTy);
+      auto a = readFromVecOperand(1, eltSize, numElts);
+      auto b = readFromVecOperand(2, eltSize, numElts);
       Value *res = getUndefVec(numElts, eltSize);
       for (int i = 0; i < numElts / 2; ++i) {
-        auto e1 = createExtractElement(a, getIntConst((numElts / 2) + i, 32));
-        auto e2 = createExtractElement(b, getIntConst((numElts / 2) + i, 32));
-        res = createInsertElement(res, e1, getIntConst(2 * i, 32));
-        res = createInsertElement(res, e2, getIntConst((2 * i) + 1, 32));
+        auto e1 = createExtractElement(a, (numElts / 2) + i);
+        auto e2 = createExtractElement(b, (numElts / 2) + i);
+        res = createInsertElement(res, e1, 2 * i);
+        res = createInsertElement(res, e2, (2 * i) + 1);
       }
       updateOutputReg(res);
       break;
@@ -6252,28 +6488,65 @@ public:
       Value *res = getUndefVec(numElts, eltSize);
       for (int e = 0; e < numElts; ++e) {
         *out << "e = " << e << "\n";
-        auto elt1 = createExtractElement(concV, getIntConst(2 * e, 32));
-        auto elt2 = createExtractElement(concV, getIntConst((2 * e) + 1, 32));
+        auto elt1 = createExtractElement(concV, 2 * e);
+        auto elt2 = createExtractElement(concV, (2 * e) + 1);
         auto sum = createAdd(elt1, elt2);
-        res = createInsertElement(res, sum, getIntConst(e, 32));
+        res = createInsertElement(res, sum, e);
       }
       updateOutputReg(res);
       break;
     }
 
-    case AArch64::MLSv2i32: {
-      auto accum = readFromOperand(1);
-      auto a = readFromOperand(2);
-      auto b = readFromOperand(3);
-      auto v1 = createVectorOp(
-          [&](Value *a, Value *b) { return createMul(a, b); }, a, b, 32, 2,
-          /*cast=*/false, extKind::None,
-          /*splatImm2=*/false, /*immShift=*/false);
-      auto v2 = createVectorOp(
-          [&](Value *a, Value *b) { return createSub(a, b); }, accum, v1, 32, 2,
-          /*cast=*/false, extKind::None,
-          /*splatImm2=*/false, /*immShift=*/false);
-      updateOutputReg(v2);
+#define GET_SIZES9(INSN, SUFF)                                                 \
+  int numElts, eltSize;                                                        \
+  if (opcode == AArch64::INSN##v8i8##SUFF) {                                   \
+    numElts = 8;                                                               \
+    eltSize = 8;                                                               \
+  } else if (opcode == AArch64::INSN##v4i16##SUFF) {                           \
+    numElts = 4;                                                               \
+    eltSize = 16;                                                              \
+  } else if (opcode == AArch64::INSN##v1i32##SUFF) {                           \
+    numElts = 1;                                                               \
+    eltSize = 32;                                                              \
+  } else if (opcode == AArch64::INSN##v2i32##SUFF) {                           \
+    numElts = 2;                                                               \
+    eltSize = 32;                                                              \
+  } else if (opcode == AArch64::INSN##v16i8##SUFF) {                           \
+    numElts = 16;                                                              \
+    eltSize = 8;                                                               \
+  } else if (opcode == AArch64::INSN##v4i32##SUFF) {                           \
+    numElts = 4;                                                               \
+    eltSize = 32;                                                              \
+  } else if (opcode == AArch64::INSN##v8i16##SUFF) {                           \
+    numElts = 8;                                                               \
+    eltSize = 16;                                                              \
+  } else if (opcode == AArch64::INSN##v1i64##SUFF) {                           \
+    numElts = 1;                                                               \
+    eltSize = 64;                                                              \
+  } else if (opcode == AArch64::INSN##v2i64##SUFF) {                           \
+    numElts = 2;                                                               \
+    eltSize = 64;                                                              \
+  } else {                                                                     \
+    assert(false);                                                             \
+  }
+
+      // FIXME: we're not doing this "If saturation occurs, the
+      // cumulative saturation bit FPSR.QC is set." (same applies to
+      // UQSUB)
+    case AArch64::UQADDv1i32:
+    case AArch64::UQADDv1i64:
+    case AArch64::UQADDv8i8:
+    case AArch64::UQADDv4i16:
+    case AArch64::UQADDv2i32:
+    case AArch64::UQADDv2i64:
+    case AArch64::UQADDv4i32:
+    case AArch64::UQADDv16i8:
+    case AArch64::UQADDv8i16: {
+      GET_SIZES9(UQADD, );
+      auto x = readFromVecOperand(1, eltSize, numElts);
+      auto y = readFromVecOperand(2, eltSize, numElts);
+      auto res = createUAddSat(x, y);
+      updateOutputReg(res);
       break;
     }
 
@@ -6336,9 +6609,9 @@ public:
                        ? (numElts / 2)
                        : 0;
       for (int i = 0; i < numElts; ++i) {
-        auto e1 = createExtractElement(a, getIntConst(i + offset, 32));
-        auto e2 = createExtractElement(b, getIntConst(idx, 32));
-        res = createInsertElement(res, createMul(e1, e2), getIntConst(i, 32));
+        auto e1 = createExtractElement(a, i + offset);
+        auto e2 = createExtractElement(b, idx);
+        res = createInsertElement(res, createMul(e1, e2), i);
       }
       updateOutputReg(res);
       break;
@@ -6370,9 +6643,9 @@ public:
       auto idx = getImm(3);
       Value *res = getUndefVec(numElts, eltSize);
       for (int i = 0; i < numElts; ++i) {
-        auto e1 = createExtractElement(a, getIntConst(i, 32));
-        auto e2 = createExtractElement(b, getIntConst(idx, 32));
-        res = createInsertElement(res, createMul(e1, e2), getIntConst(i, 32));
+        auto e1 = createExtractElement(a, i);
+        auto e2 = createExtractElement(b, idx);
+        res = createInsertElement(res, createMul(e1, e2), i);
       }
       updateOutputReg(res);
       break;
@@ -6429,8 +6702,8 @@ public:
         Value *dest = readFromReg(op0.getReg());
         Value *original_dest_vector = createBitCast(dest, getVecTy(64, 2));
 
-        new_dest_vector = createInsertElement(
-            original_dest_vector, new_dest_vector, getIntConst(1, 32));
+        new_dest_vector =
+            createInsertElement(original_dest_vector, new_dest_vector, 1);
       }
 
       // Write 64 bit or 128 bit register to output
@@ -6607,12 +6880,12 @@ public:
         auto src_vector = createBitCast(src, vTy);
         Value *sum = getIntConst(0, eltSize);
         for (unsigned i = 0; i < numElts; ++i) {
-          auto elt = createExtractElement(src_vector, getIntConst(i, 32));
+          auto elt = createExtractElement(src_vector, i);
           sum = createAdd(sum, elt);
         }
         // sum goes into the bottom lane, all others are zeroed out
         auto zero = getZeroVec(numElts, eltSize);
-        auto res = createInsertElement(zero, sum, getIntConst(0, 32));
+        auto res = createInsertElement(zero, sum, 0);
         updateOutputReg(res);
         break;
       }
@@ -6640,10 +6913,10 @@ public:
         Value *res = getUndefVec(numElts / 2, 2 * eltSize);
         auto src_vector = createBitCast(src, bigTy);
         for (unsigned i = 0; i < numElts / 2; ++i) {
-          auto elt1 = createExtractElement(src_vector, getIntConst(i, 32));
-          auto elt2 = createExtractElement(sum, getIntConst(i, 32));
+          auto elt1 = createExtractElement(src_vector, i);
+          auto elt2 = createExtractElement(sum, i);
           auto add = createAdd(elt1, elt2);
-          res = createInsertElement(res, add, getIntConst(i, 32));
+          res = createInsertElement(res, add, i);
         }
         updateOutputReg(res);
         break;
@@ -6657,7 +6930,7 @@ public:
         auto bigTy = getIntTy(2 * eltSize);
         Value *sum = getIntConst(0, 2 * eltSize);
         for (unsigned i = 0; i < numElts; ++i) {
-          auto elt = createExtractElement(src_vector, getIntConst(i, 32));
+          auto elt = createExtractElement(src_vector, i);
           auto ext = createZExt(elt, bigTy);
           sum = createAdd(sum, ext);
         }
