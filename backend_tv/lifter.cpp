@@ -2422,9 +2422,9 @@ public:
       return getIntConst(0, 8);
     auto cond = createICmp(ICmpInst::Predicate::ICMP_ULT, idx,
                            getIntConst((i + 1) * 16, 8));
-    auto t = createExtractElement(tbl.at(i), idx);
-    auto idx_sub = createSub(idx, getIntConst(16, 8));
-    auto f = tblHelper2(tbl, idx_sub, i + 1);
+    auto adjIdx = createSub(idx, getIntConst(i * 16, 8));
+    auto t = createExtractElement(tbl.at(i), adjIdx);
+    auto f = tblHelper2(tbl, idx, i + 1);
     return createSelect(cond, t, f);
   }
 
@@ -6195,6 +6195,10 @@ public:
       auto vTy = getVecTy(eltSize, numElts);
       auto a = createBitCast(readFromOperand(1), vTy);
       auto b = createBitCast(readFromOperand(2), vTy);
+
+      auto e2 = getIndexedElement(getImm(3), eltSize,
+                                  CurInst->getOperand(2).getReg());
+
       // this one is wide regardless of the others!
       auto v2Ty = (opcode == AArch64::SMLALv2i32_indexed ||
                    opcode == AArch64::SMLALv4i16_indexed)
@@ -6230,15 +6234,8 @@ public:
       auto vTy = getVecTy(eltSize, numElts);
       auto a = createBitCast(readFromOperand(1), vTy);
       auto b = createBitCast(readFromOperand(2), vTy);
-      // this one is wide regardless of the others!
-      auto v2Ty = (opcode == AArch64::MLSv2i32_indexed ||
-                   opcode == AArch64::MLSv4i16_indexed)
-                      ? getVecTy(eltSize, numElts * 2)
-                      : vTy;
-      auto reg = CurInst->getOperand(3).getReg();
-      auto c = createBitCast(readFromReg(reg), v2Ty);
-      auto idx = getImm(4);
-      auto e = createExtractElement(c, idx);
+      auto e = getIndexedElement(getImm(4), eltSize,
+                                 CurInst->getOperand(3).getReg());
       auto spl = splat(e, numElts, eltSize);
       auto mul = createMul(b, spl);
       auto sum = createSub(a, mul);
@@ -6255,15 +6252,8 @@ public:
       auto vTy = getVecTy(eltSize, numElts);
       auto a = createBitCast(readFromOperand(1), vTy);
       auto b = createBitCast(readFromOperand(2), vTy);
-      // this one is wide regardless of the others!
-      auto v2Ty = (opcode == AArch64::MLAv2i32_indexed ||
-                   opcode == AArch64::MLAv4i16_indexed)
-                      ? getVecTy(eltSize, numElts * 2)
-                      : vTy;
-      auto reg = CurInst->getOperand(3).getReg();
-      auto c = createBitCast(readFromReg(reg), v2Ty);
-      auto idx = getImm(4);
-      auto e = createExtractElement(c, idx);
+      auto e = getIndexedElement(getImm(4), eltSize,
+                                 CurInst->getOperand(3).getReg());
       auto spl = splat(e, numElts, eltSize);
       auto mul = createMul(b, spl);
       auto sum = createAdd(mul, a);
