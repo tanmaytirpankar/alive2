@@ -677,6 +677,7 @@ class arm2llvm {
       AArch64::SQSUBv8i8,
       AArch64::SQSUBv4i16,
       AArch64::SQSUBv2i32,
+      AArch64::ADDv1i64,
   };
 
   /*
@@ -884,7 +885,6 @@ UMLALv8i16_v4i32
       AArch64::STPQi,
       AArch64::STRQroX,
       AArch64::ADDv8i16,
-      AArch64::ADDv1i64,
       AArch64::ADDv2i64,
       AArch64::ADDv4i32,
       AArch64::ADDv16i8,
