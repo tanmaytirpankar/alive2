@@ -353,9 +353,6 @@ class arm2llvm {
   };
 
   const set<int> instrs_64 = {
-      AArch64::DUPv8i8lane,
-      AArch64::DUPv4i16lane,
-      AArch64::DUPv2i32lane,
       AArch64::BL,
       AArch64::ADDXrx,
       AArch64::ADDSXrs,
@@ -681,34 +678,29 @@ class arm2llvm {
   };
 
   /*
-SMLALv2i32_indexed
-SMLALv4i16_indexed
+  AArch64::SMLALv16i8_v8i16
+  AArch64::SMLALv4i32_v2i64
+  AArch64::SMLALv8i8_v8i16
+  AArch64::SMLALv2i32_v2i64
+  AArch64::SMLALv4i16_v4i32
+  AArch64::SMLALv8i16_v4i32
 
-SMLALv4i32_indexed
-SMLALv8i16_indexed
-
-SMLALv16i8_v8i16
-SMLALv4i32_v2i64
-SMLALv8i8_v8i16
-SMLALv2i32_v2i64
-SMLALv4i16_v4i32
-SMLALv8i16_v4i32
-
-UMLALv4i16_indexed
-UMLALv2i32_indexed
-
-UMLALv4i32_indexed
-UMLALv8i16_indexed
-
-UMLALv16i8_v8i16
-UMLALv4i32_v2i64
-UMLALv8i8_v8i16
-UMLALv2i32_v2i64
-UMLALv4i16_v4i32
-UMLALv8i16_v4i32
+  AArch64::UMLALv16i8_v8i16
+  AArch64::UMLALv4i32_v2i64
+  AArch64::UMLALv8i8_v8i16
+  AArch64::UMLALv2i32_v2i64
+  AArch64::UMLALv4i16_v4i32
+  AArch64::UMLALv8i16_v4i32
   */
 
   const set<int> instrs_128 = {
+      AArch64::DUPv8i8lane,
+      AArch64::DUPv4i16lane,
+      AArch64::DUPv2i32lane,
+      AArch64::UMLALv4i32_indexed,
+      AArch64::UMLALv8i16_indexed,
+      AArch64::SMLALv4i32_indexed,
+      AArch64::SMLALv8i16_indexed,
       AArch64::SQADDv2i64,
       AArch64::SQADDv4i32,
       AArch64::SQADDv16i8,
@@ -1433,6 +1425,14 @@ UMLALv8i16_v4i32
     }
     if (getBitWidth(v) > eltSize)
       v = createTrunc(v, getIntTy(eltSize));
+    Value *res = getUndefVec(numElts, eltSize);
+    for (unsigned i = 0; i < numElts; ++i)
+      res = createInsertElement(res, v, i);
+    return res;
+  }
+
+  Value *splat(Value *v, unsigned numElts, unsigned eltSize) {
+    assert(getBitWidth(v) == eltSize);
     Value *res = getUndefVec(numElts, eltSize);
     for (unsigned i = 0; i < numElts; ++i)
       res = createInsertElement(res, v, i);
@@ -5014,7 +5014,7 @@ public:
     }
 
     case AArch64::DUPv2i32lane: {
-      auto in = readFromVecOperand(1, 32, 2);
+      auto in = readFromVecOperand(1, 32, 4);
       auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 2, 32));
       break;
@@ -5028,7 +5028,7 @@ public:
     }
 
     case AArch64::DUPv4i16lane: {
-      auto in = readFromVecOperand(1, 16, 4);
+      auto in = readFromVecOperand(1, 16, 8);
       auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 4, 16));
       break;
@@ -5042,7 +5042,7 @@ public:
     }
 
     case AArch64::DUPv8i8lane: {
-      auto in = readFromVecOperand(1, 8, 8);
+      auto in = readFromVecOperand(1, 8, 16);
       auto ext = createExtractElement(in, getImm(2));
       updateOutputReg(dupElts(ext, 8, 8));
       break;
@@ -6161,6 +6161,42 @@ public:
     assert(false);                                                             \
   }
 
+      /*
+    case AArch64::SMLALv2i32_indexed:
+    case AArch64::SMLALv4i16_indexed:
+    case AArch64::SMLALv4i32_indexed:
+    case AArch64::SMLALv8i16_indexed: {
+      int numElts, eltSize;
+      GET_SIZES4(SMLAL, _indexed);
+      auto vTy = getVecTy(eltSize, numElts);
+      auto a = createBitCast(readFromOperand(1), vTy);
+      auto b = createBitCast(readFromOperand(2), vTy);
+      // this one is wide regardless of the others!
+      auto v2Ty = (opcode == AArch64::SMLALv2i32_indexed ||
+                   opcode == AArch64::SMLALv4i16_indexed)
+                      ? getVecTy(eltSize, numElts * 2)
+                      : vTy;
+      auto reg = CurInst->getOperand(3).getReg();
+      auto c = createBitCast(readFromReg(reg), v2Ty);
+      auto idx = getImm(4);
+      auto e = createExtractElement(c, idx);
+      auto spl = splat(e, numElts, eltSize);
+      auto mul = createMul(b, spl);
+      auto sum = createSub(a, mul);
+      updateOutputReg(sum);
+      break;
+    }
+
+    case AArch64::UMLALv4i16_indexed:
+    case AArch64::UMLALv2i32_indexed:
+    case AArch64::UMLALv4i32_indexed:
+    case AArch64::UMLALv8i16_indexed: {
+      int numElts, eltSize;
+      GET_SIZES4(UMLAL, _indexed);
+      break;
+    }
+      */
+
     case AArch64::MLSv2i32_indexed:
     case AArch64::MLSv4i16_indexed:
     case AArch64::MLSv8i16_indexed:
@@ -6179,7 +6215,7 @@ public:
       auto c = createBitCast(readFromReg(reg), v2Ty);
       auto idx = getImm(4);
       auto e = createExtractElement(c, idx);
-      auto spl = splatImm(e, numElts, eltSize, false);
+      auto spl = splat(e, numElts, eltSize);
       auto mul = createMul(b, spl);
       auto sum = createSub(a, mul);
       updateOutputReg(sum);
@@ -6204,7 +6240,7 @@ public:
       auto c = createBitCast(readFromReg(reg), v2Ty);
       auto idx = getImm(4);
       auto e = createExtractElement(c, idx);
-      auto spl = splatImm(e, numElts, eltSize, false);
+      auto spl = splat(e, numElts, eltSize);
       auto mul = createMul(b, spl);
       auto sum = createAdd(mul, a);
       updateOutputReg(sum);
