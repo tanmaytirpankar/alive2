@@ -1223,6 +1223,12 @@ class arm2llvm {
     return ExtractElementInst::Create(v, idxv, nextName(), LLVMBB);
   }
 
+  Value *getIndexedElement(int idx, int eltSize, unsigned reg) {
+    auto *ty = getVecTy(eltSize, 128 / eltSize);
+    auto *r = createBitCast(readFromReg(reg), ty);
+    return createExtractElement(r, idx);
+  }
+
   ExtractValueInst *createExtractValue(Value *v, ArrayRef<unsigned> idxs) {
     return ExtractValueInst::Create(v, idxs, nextName(), LLVMBB);
   }
@@ -6161,6 +6167,24 @@ public:
     assert(false);                                                             \
   }
 
+    case AArch64::MULv8i16_indexed:
+    case AArch64::MULv4i32_indexed:
+    case AArch64::MULv2i32_indexed:
+    case AArch64::MULv4i16_indexed: {
+      int eltSize, numElts;
+      GET_SIZES4(MUL, _indexed);
+      auto a = readFromVecOperand(1, eltSize, numElts);
+      auto e2 = getIndexedElement(getImm(3), eltSize,
+                                  CurInst->getOperand(2).getReg());
+      Value *res = getUndefVec(numElts, eltSize);
+      for (int i = 0; i < numElts; ++i) {
+        auto e1 = createExtractElement(a, i);
+        res = createInsertElement(res, createMul(e1, e2), i);
+      }
+      updateOutputReg(res);
+      break;
+    }
+
       /*
     case AArch64::SMLALv2i32_indexed:
     case AArch64::SMLALv4i16_indexed:
@@ -6765,40 +6789,6 @@ public:
                        : 0;
       for (int i = 0; i < numElts; ++i) {
         auto e1 = createExtractElement(a, i + offset);
-        auto e2 = createExtractElement(b, idx);
-        res = createInsertElement(res, createMul(e1, e2), i);
-      }
-      updateOutputReg(res);
-      break;
-    }
-
-    case AArch64::MULv8i16_indexed:
-    case AArch64::MULv4i32_indexed:
-    case AArch64::MULv2i32_indexed:
-    case AArch64::MULv4i16_indexed: {
-      int eltSize, numElts;
-      if (opcode == AArch64::MULv8i16_indexed) {
-        numElts = 8;
-        eltSize = 16;
-      } else if (opcode == AArch64::MULv4i32_indexed) {
-        numElts = 4;
-        eltSize = 32;
-      } else if (opcode == AArch64::MULv2i32_indexed) {
-        numElts = 2;
-        eltSize = 32;
-      } else if (opcode == AArch64::MULv4i16_indexed) {
-        numElts = 4;
-        eltSize = 16;
-      } else {
-        assert(false);
-      }
-      auto vTy = getVecTy(eltSize, numElts);
-      auto a = createBitCast(readFromOperand(1), vTy);
-      auto b = createBitCast(readFromOperand(2), vTy);
-      auto idx = getImm(3);
-      Value *res = getUndefVec(numElts, eltSize);
-      for (int i = 0; i < numElts; ++i) {
-        auto e1 = createExtractElement(a, i);
         auto e2 = createExtractElement(b, idx);
         res = createInsertElement(res, createMul(e1, e2), i);
       }

@@ -1,5 +1,7 @@
 # ARM-TV TODO
 
+- stop using instrs_64 and friends, just use the register numbers
+  in the instructions to get the correct-sized operands
 - support modules that contain more than one function
   - should be easy, just requires some refactoring to separate
     per-module code (such as processing global variables) from
