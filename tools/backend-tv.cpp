@@ -75,6 +75,11 @@ llvm::cl::opt<bool> opt_asm_only(
     llvm::cl::desc("Only generate assembly and exit (default=false)"),
     llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
 
+llvm::cl::opt<bool> save_lifted_ir(
+    "save-lifted-ir",
+    llvm::cl::desc("Save lifted LLVM IR to file (default=false)"),
+    llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
+
 llvm::cl::opt<string> opt_asm_input(
     "asm-input",
     llvm::cl::desc("Use the provied file as lifted assembly, instead of "
@@ -109,8 +114,8 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
 
   std::unique_ptr<llvm::Module> M2 =
       std::make_unique<llvm::Module>("M2", M1->getContext());
-  M2->setDataLayout(M1->getDataLayout());
-  M2->setTargetTriple(M1->getTargetTriple());
+  // M2->setDataLayout(M1->getDataLayout());
+  // M2->setTargetTriple(M1->getTargetTriple());
 
   auto [F1, F2] = lifter::liftFunc(M1, M2.get(), srcFn, std::move(AsmBuffer));
 
@@ -123,8 +128,17 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
     exit(-1);
   }
 
+  auto lifted = lifter::moduleToString(M2.get());
+  if (save_lifted_ir) {
+    std::filesystem::path p{(string)opt_file};
+    p.replace_extension(".lifted.ll");
+    ofstream of(p);
+    of << lifted;
+    of.close();
+  }
+
   *out << "\n\nafter optimization:\n\n";
-  *out << lifter::moduleToString(M2.get());
+  *out << lifted;
   *out << "\n";
   out->flush();
 
