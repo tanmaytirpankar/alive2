@@ -338,18 +338,19 @@ class arm2llvm {
       AArch64::LDRSHWui,   AArch64::LDRHHui,    AArch64::LDRHui,
       AArch64::LDURBi,     AArch64::LDURBBi,    AArch64::LDURHi,
       AArch64::LDURHHi,    AArch64::LDURSi,     AArch64::LDURWi,
-      AArch64::LDRWpost,   AArch64::STRWpost,   AArch64::STRWui,
-      AArch64::STRBBroW,   AArch64::STRBBroX,   AArch64::STRHHroW,
-      AArch64::STRHHroX,   AArch64::STRWroW,    AArch64::STRWroX,
-      AArch64::CCMNWi,     AArch64::CCMNWr,     AArch64::STRBBui,
-      AArch64::STRBui,     AArch64::STPWi,      AArch64::STRHHui,
-      AArch64::STRHui,     AArch64::STURWi,     AArch64::STRSui,
-      AArch64::LDPWi,      AArch64::STRWpre,    AArch64::FADDSrr,
-      AArch64::FSUBSrr,    AArch64::FCMPSrr,    AArch64::FCMPSri,
-      AArch64::FMOVSWr,    AArch64::INSvi32gpr, AArch64::INSvi16gpr,
-      AArch64::INSvi8gpr,  AArch64::FCVTSHr,    AArch64::FCVTZSUWSr,
-      AArch64::FCSELSrrr,  AArch64::FMULSrr,    AArch64::FABSSr,
-      AArch64::UQADDv1i32, AArch64::SQSUBv1i32, AArch64::SQADDv1i32,
+      AArch64::LDRWpre,    AArch64::LDRWpost,   AArch64::STRWpost,
+      AArch64::STRWui,     AArch64::STRBBroW,   AArch64::STRBBroX,
+      AArch64::STRHHroW,   AArch64::STRHHroX,   AArch64::STRWroW,
+      AArch64::STRWroX,    AArch64::CCMNWi,     AArch64::CCMNWr,
+      AArch64::STRBBui,    AArch64::STRBui,     AArch64::STPWi,
+      AArch64::STRHHui,    AArch64::STRHui,     AArch64::STURWi,
+      AArch64::STRSui,     AArch64::LDPWi,      AArch64::STRWpre,
+      AArch64::FADDSrr,    AArch64::FSUBSrr,    AArch64::FCMPSrr,
+      AArch64::FCMPSri,    AArch64::FMOVSWr,    AArch64::INSvi32gpr,
+      AArch64::INSvi16gpr, AArch64::INSvi8gpr,  AArch64::FCVTSHr,
+      AArch64::FCVTZSUWSr, AArch64::FCSELSrrr,  AArch64::FMULSrr,
+      AArch64::FABSSr,     AArch64::UQADDv1i32, AArch64::SQSUBv1i32,
+      AArch64::SQADDv1i32,
   };
 
   const set<int> instrs_64 = {
@@ -439,6 +440,7 @@ class arm2llvm {
       AArch64::CCMPXr,
       AArch64::CCMPXi,
       AArch64::LDRXui,
+      AArch64::LDRXpre,
       AArch64::LDRXpost,
       AArch64::LDPXpost,
       AArch64::LDPXi,
@@ -675,6 +677,12 @@ class arm2llvm {
       AArch64::SQSUBv4i16,
       AArch64::SQSUBv2i32,
       AArch64::ADDv1i64,
+      AArch64::SHADDv8i8,
+      AArch64::SHADDv4i16,
+      AArch64::SHADDv2i32,
+      AArch64::SHSUBv8i8,
+      AArch64::SHSUBv4i16,
+      AArch64::SHSUBv2i32,
   };
 
   /*
@@ -941,6 +949,12 @@ class arm2llvm {
       AArch64::SSHLv8i16,
       AArch64::SSHLv4i32,
       AArch64::SSHLv2i64,
+      AArch64::SHADDv16i8,
+      AArch64::SHADDv8i16,
+      AArch64::SHADDv4i32,
+      AArch64::SHSUBv16i8,
+      AArch64::SHSUBv8i16,
+      AArch64::SHSUBv4i32,
       AArch64::UADDLVv8i16v,
       AArch64::UADDLVv4i32v,
       AArch64::UADDLVv16i8v,
@@ -3788,6 +3802,8 @@ public:
       updateOutputReg(loaded);
       break;
     }
+    case AArch64::LDRWpre:
+    case AArch64::LDRXpre:
     case AArch64::LDRWpost:
     case AArch64::LDRXpost: {
       unsigned size = opcode == AArch64::LDRXpost ? 8 : 4;
@@ -3799,7 +3815,8 @@ public:
       assert(op0.getReg() == op2.getReg());
       assert(op3.isImm());
 
-      // For post instructions, the destination register is at position 1
+      // For pre and post index memory instructions, the destination register
+      // is at position 1
       auto destReg = op1.getReg();
       auto baseReg = op2.getReg();
       auto imm = op3.getImm();
@@ -3809,15 +3826,17 @@ public:
       auto base = readPtrFromReg(baseReg);
       auto baseAddr = createPtrToInt(base, i64);
 
-      auto loaded = makeLoadWithOffset(base, 0, size);
-      updateReg(loaded, destReg);
       // Start offset as a 9 bit signed integer and extend as required
       assert(imm <= 255 && imm >= -256);
-
       auto offset = getIntConst(imm, 9);
-      auto offsetVal = createSExt(offset, i64);
+      Value *offsetVal = createSExt(offset, i64);
+      Value *zeroVal = getIntConst(0, 64);
 
-      // Post update source register
+      bool isPre = opcode == AArch64::LDRWpre || opcode == AArch64::LDRXpre;
+
+      auto loaded = makeLoadWithOffset(base, isPre ? offsetVal : zeroVal, size);
+      updateReg(loaded, destReg);
+
       auto added = createAdd(baseAddr, offsetVal);
       updateOutputReg(added);
       break;
@@ -6785,6 +6804,77 @@ public:
       updateOutputReg(res);
       break;
     }
+    case AArch64::SHADDv8i8:
+    case AArch64::SHADDv16i8:
+    case AArch64::SHADDv4i16:
+    case AArch64::SHADDv8i16:
+    case AArch64::SHADDv2i32:
+    case AArch64::SHADDv4i32:
+      //    case AArch64::SHSUBv8i8:
+      //    case AArch64::SHSUBv16i8:
+      //    case AArch64::SHSUBv4i16:
+      //    case AArch64::SHSUBv8i16:
+      //    case AArch64::SHSUBv2i32:
+      //    case AArch64::SHSUBv4i32:
+      {
+        int numElts, eltSize;
+        switch (opcode) {
+        case AArch64::SHADDv8i8:
+        case AArch64::SHSUBv8i8:
+          numElts = 8;
+          eltSize = 8;
+          break;
+        case AArch64::SHADDv16i8:
+        case AArch64::SHSUBv16i8:
+          numElts = 16;
+          eltSize = 8;
+          break;
+        case AArch64::SHADDv4i16:
+        case AArch64::SHSUBv4i16:
+          numElts = 4;
+          eltSize = 16;
+          break;
+        case AArch64::SHADDv8i16:
+        case AArch64::SHSUBv8i16:
+          numElts = 8;
+          eltSize = 16;
+          break;
+        case AArch64::SHADDv2i32:
+        case AArch64::SHSUBv2i32:
+          numElts = 2;
+          eltSize = 32;
+          break;
+        case AArch64::SHADDv4i32:
+        case AArch64::SHSUBv4i32:
+          numElts = 4;
+          eltSize = 32;
+          break;
+        default:
+          assert(false);
+          break;
+        }
+
+        auto a = createSExt(readFromVecOperand(1, eltSize, numElts),
+                            getVecTy(2 * eltSize, numElts));
+        auto b = createSExt(readFromVecOperand(2, eltSize, numElts),
+                            getVecTy(2 * eltSize, numElts));
+
+        auto res = opcode == AArch64::SHADDv8i8 ||
+                           opcode == AArch64::SHADDv16i8 ||
+                           opcode == AArch64::SHADDv4i16 ||
+                           opcode == AArch64::SHADDv8i16 ||
+                           opcode == AArch64::SHADDv2i32 ||
+                           opcode == AArch64::SHADDv4i32
+                       ? createAdd(a, b)
+                       : createSub(a, b);
+
+        std::vector<Constant *> vectorOfOnes(numElts,
+                                             getIntConst(1, 2 * eltSize));
+        auto shifted = createRawAShr(res, getVectorConst(vectorOfOnes));
+
+        updateOutputReg(createTrunc(shifted, getVecTy(eltSize, numElts)));
+        break;
+      }
 
     case AArch64::XTNv2i32:
     case AArch64::XTNv4i32:
