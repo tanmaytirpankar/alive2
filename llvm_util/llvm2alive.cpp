@@ -619,7 +619,7 @@ public:
           }
 
           auto ofs_vector = llvm::ConstantVector::get(
-	      { offsets.data(), offsets.size() });
+            { offsets.data(), offsets.size() });
           gep->addIdx(1, *get_operand(ofs_vector));
         } else {
           gep->addIdx(1, *make_intconst(
@@ -628,8 +628,7 @@ public:
         continue;
       }
 
-      gep->addIdx(DL().getTypeAllocSize(I.getIndexedType()).getKnownMinValue(),
-                  *op);
+      gep->addIdx(I.getSequentialElementStride(DL()).getKnownMinValue(), *op);
     }
     RETURN_IDENTIFIER(std::move(gep));
   }
@@ -1592,7 +1591,9 @@ public:
     }
     handleRetAttrs(attrs_fndef.getAttributes(ret), attrs);
     handleFnAttrs(attrs_fndef.getAttributes(fnidx), attrs);
-    attrs.mem = handleMemAttrs(i.getMemoryEffects());
+    attrs.mem.setFullAccess();
+    if (!decl_only)
+      attrs.mem &= handleMemAttrs(i.getMemoryEffects());
     if (fn)
       attrs.mem &= handleMemAttrs(fn->getMemoryEffects());
     attrs.inferImpliedAttributes();
