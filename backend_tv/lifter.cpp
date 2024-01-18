@@ -190,7 +190,7 @@ class arm2llvm {
   unsigned armInstNum{0}, llvmInstNum{0};
   map<unsigned, Value *> RegFile;
   Value *stackMem{nullptr};
-  unordered_map<string, GlobalVariable *> LLVMglobals;
+  unordered_map<string, Value *> LLVMglobals;
   Value *initialSP, *initialReg[32];
   Function *assertDecl;
 
@@ -7709,6 +7709,15 @@ public:
 
     // also create function definitions, since these can be used as
     // addresses by the compiled code
+    for (auto &f : *srcFn.getParent()) {
+      if (&f == &srcFn)
+        continue;
+      auto name = f.getName();
+      auto newF = Function::Create(f.getFunctionType(),
+                                   GlobalValue::LinkageTypes::ExternalLinkage,
+                                   name, LiftedModule);
+      LLVMglobals[name.str()] = newF;
+    }
 
     // but we can't get everything by looking at the source module,
     // the target also contains new stuff not found in the source
@@ -7721,9 +7730,8 @@ public:
       if (!LLVMglobals.contains(g.name)) {
         auto ty = ArrayType::get(i8, size);
         vector<Constant *> vals;
-        for (unsigned i = 0; i < size; ++i) {
+        for (unsigned i = 0; i < size; ++i)
           vals.push_back(ConstantInt::get(i8, g.data[i]));
-        }
         auto initializer = ConstantArray::get(ty, vals);
         createLLVMGlobal(ty, name, g.align, /*isConstant=*/true, initializer);
         *out << "  created\n";
