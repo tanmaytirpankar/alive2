@@ -1774,7 +1774,7 @@ class arm2llvm {
     }
 
     if (!LLVMglobals.contains(sss)) {
-      *out << "\ncan't find global '" << sss << "\n";
+      *out << "\ncan't find global '" << sss << "'\n";
       *out << "ERROR: Unknown global in ADRP\n\n";
       exit(-1);
     }
@@ -7667,12 +7667,6 @@ public:
     return V;
   }
 
-  void printGlobals() {
-    for (auto &g : LLVMglobals) {
-      *out << g.first << " = " << g.second << "\n";
-    }
-  }
-
   void createLLVMGlobal(Type *ty, StringRef name, MaybeAlign al,
                         bool isConstant, Constant *init) {
     auto *g = new GlobalVariable(*LiftedModule, ty, isConstant,
@@ -7704,7 +7698,6 @@ public:
 
     // every global in the source module needs to get created in the
     // target module
-    set<string> LLVMglobals;
     for (auto &srcFnGlobal : srcFn.getParent()->globals()) {
       auto name = srcFnGlobal.getName();
       *out << "copying global variable " << name.str()
@@ -7712,8 +7705,10 @@ public:
       createLLVMGlobal(srcFnGlobal.getValueType(), srcFnGlobal.getName(),
                        srcFnGlobal.getAlign(), srcFnGlobal.isConstant(),
                        /*initializer=*/nullptr);
-      LLVMglobals.insert(name.str());
     }
+
+    // also create function definitions, since these can be used as
+    // addresses by the compiled code
 
     // but we can't get everything by looking at the source module,
     // the target also contains new stuff not found in the source
@@ -7723,7 +7718,7 @@ public:
       *out << "found a variable " << name << " in the assembly\n";
       auto size = g.data.size();
       *out << "  size = " << size << "\n";
-      if (LLVMglobals.find(g.name) == LLVMglobals.end()) {
+      if (!LLVMglobals.contains(g.name)) {
         auto ty = ArrayType::get(i8, size);
         vector<Constant *> vals;
         for (unsigned i = 0; i < size; ++i) {
@@ -8003,17 +7998,16 @@ public:
 
   virtual bool emitSymbolAttribute(MCSymbol *Symbol,
                                    MCSymbolAttr Attribute) override {
+    *out << "[emitSymbolAttribute '" << Symbol->getName().str() << "']\n";
     if (false) {
-      *out << "[emitSymbolAttribute]\n";
-      std::string sss;
-      llvm::raw_string_ostream ss(sss);
-      Symbol->print(ss, nullptr);
-      *out << "  " << sss << "\n";
       *out << "  Common? " << Symbol->isCommon() << "\n";
-      *out << "  Varible? " << Symbol->isVariable() << "\n";
-      *out << "  Attribute = " << attrName(Attribute) << "\n\n";
+      *out << "  Variable? " << Symbol->isVariable() << "\n";
     }
     return true;
+  }
+
+  virtual void emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override {
+    *out << "[emitSymbolDesc '" << Symbol->getName().str() << "']\n";
   }
 
   virtual void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
@@ -8060,7 +8054,7 @@ public:
   }
 
   virtual void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override {
-    *out << "[emitELFSize]\n";
+    *out << "[emitELFSize '" << Symbol->getName().str() << "']\n";
     emitConstant();
   }
 
@@ -8071,14 +8065,18 @@ public:
     curAlign = Alignment;
   }
 
+  virtual void emitAssignment(MCSymbol *Symbol, const MCExpr *Value) override {
+    *out << "[emitAssignment]\n";
+  }
+
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
     emitConstant();
     curSym = Symbol->getName().str();
 
     auto sp = getCurrentSection();
     string Lab = Symbol->getName().str();
-    *out << "[emitLabel " << Lab << " in section "
-         << (string)(sp.first->getName()) << "]\n";
+    *out << "[emitLabel '" << Lab << "' in section '"
+         << (string)(sp.first->getName()) << "']\n";
 
     if (Lab == ".Lfunc_end0")
       FunctionEnded = true;
