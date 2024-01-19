@@ -7685,6 +7685,7 @@ public:
     liftedFn =
         Function::Create(srcFn.getFunctionType(), GlobalValue::ExternalLinkage,
                          0, srcFn.getName(), LiftedModule);
+    liftedFn->copyAttributesFrom(&srcFn);
 
     // create LLVM-side basic blocks
     vector<pair<BasicBlock *, MCBasicBlock *>> BBs;
