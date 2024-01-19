@@ -369,6 +369,7 @@ class arm2llvm {
       AArch64::FCVTZSUWSr, AArch64::FCSELSrrr,  AArch64::FMULSrr,
       AArch64::FABSSr,     AArch64::UQADDv1i32, AArch64::SQSUBv1i32,
       AArch64::SQADDv1i32,
+      AArch64::FMOVSr,
   };
 
   const set<int> instrs_64 = {
@@ -1573,6 +1574,8 @@ class arm2llvm {
              vTy->getElementCount().getFixedValue();
     } else if (ty->isIntegerTy()) {
       return ty->getIntegerBitWidth();
+    } else if (ty->isHalfTy()) {
+      return 16;
     } else if (ty->isFloatTy()) {
       return 32;
     } else if (ty->isDoubleTy()) {
@@ -4970,7 +4973,8 @@ public:
     case AArch64::FMOVDXr:
     case AArch64::FMOVWSr:
     case AArch64::FMOVXDr:
-    case AArch64::FMOVDr: {
+    case AArch64::FMOVDr:
+    case AArch64::FMOVSr: {
       auto v = readFromOperand(1);
       updateOutputReg(v);
       break;
@@ -7710,6 +7714,7 @@ public:
 
     // also create function definitions, since these can be used as
     // addresses by the compiled code
+    // FIXME: only do this for address-taken functions
     for (auto &f : *srcFn.getParent()) {
       if (&f == &srcFn)
         continue;

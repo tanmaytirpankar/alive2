@@ -324,7 +324,7 @@ Function *adjustSrc(Function *srcFn) {
       typeSet.find(Type::getDoubleTy(Ctx)) != typeSet.end() ||
       typeSet.find(Type::getHalfTy(Ctx)) != typeSet.end() ||
       typeSet.find(Type::getBFloatTy(Ctx)) != typeSet.end()) {
-    if (true) {
+    if (false) {
       *out << "\nERROR: Not supporting float until this issue gets resolved\n";
       *out << "https://github.com/AliveToolkit/alive2/issues/982\n\n";
       exit(-1);
