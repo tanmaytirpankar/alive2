@@ -369,7 +369,7 @@ class arm2llvm {
       AArch64::FCVTZSUWSr, AArch64::FCSELSrrr,  AArch64::FMULSrr,
       AArch64::FABSSr,     AArch64::UQADDv1i32, AArch64::SQSUBv1i32,
       AArch64::SQADDv1i32,
-      AArch64::FMOVSr,
+      AArch64::FMOVSr, AArch64::FNEGSr,
   };
 
   const set<int> instrs_64 = {
@@ -1193,6 +1193,10 @@ class arm2llvm {
     auto decl =
         Intrinsic::getDeclaration(LiftedModule, Intrinsic::umax, a->getType());
     return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  Value *createFNeg(Value *v) {
+    return UnaryOperator::CreateFNeg(v, nextName(), LLVMBB);
   }
 
   Value *createFAbs(Value *v) {
@@ -2083,15 +2087,13 @@ class arm2llvm {
 
   Type *getFPOperandType(unsigned opcode) {
     auto size = getInstSize(opcode);
-    Type *fTy;
     if (size == 32) {
-      fTy = Type::getFloatTy(Ctx);
+      return Type::getFloatTy(Ctx);
     } else if (size == 64) {
-      fTy = Type::getDoubleTy(Ctx);
+      return Type::getDoubleTy(Ctx);
     } else {
       assert(false);
     }
-    return fTy;
   }
 
   inline uint64_t Replicate(uint64_t bit, int N) {
@@ -4966,6 +4968,16 @@ public:
       auto vec = createBitCast(orig, getVecTy(w, 128 / w));
       auto inserted = createInsertElement(vec, val, lane);
       updateOutputReg(inserted);
+      break;
+    }
+
+    case AArch64::FNEGSr: {
+      auto v = readFromOperand(1);
+      auto fTy = getFPOperandType(opcode);
+      auto f = createBitCast(v, fTy);
+      auto sizeTy = getIntTy(getInstSize(opcode));
+      auto res = createBitCast(createFNeg(f), sizeTy);
+      updateOutputReg(res);
       break;
     }
 
