@@ -124,6 +124,7 @@ struct MCGlobal {
   string name;
   Align align;
   string data;
+  // FIXME -- section
 };
 
 class MCFunction {
@@ -1757,8 +1758,8 @@ class arm2llvm {
 
   // Reads an Expr and maps containing string variable to a global variable
   void mapExprVar(const MCExpr *expr) {
-    std::string sss;
-    llvm::raw_string_ostream ss(sss);
+    std::string name;
+    llvm::raw_string_ostream ss(name);
     expr->print(ss, nullptr);
 
     // If the expression starts with a relocation specifier, strip it and map
@@ -1768,24 +1769,30 @@ class arm2llvm {
     // eg: ":lo12:a" becomes  "a"
     std::smatch sm1;
     std::regex reloc("^:[a-z0-9_]+:");
-    if (std::regex_search(sss, sm1, reloc)) {
-      sss = sm1.suffix();
+    if (std::regex_search(name, sm1, reloc)) {
+      name = sm1.suffix();
+    }
+
+    if (name.rfind(".L.", 0) == 0) {
+      // the assembler has mangled local symbols, which start with a
+      // dot, by prefixing them with ".L"; here we demangle
+      name = name.substr(2);
     }
 
     std::smatch sm2;
     std::regex offset("\\+[0-9]+$");
-    if (std::regex_search(sss, sm2, offset)) {
+    if (std::regex_search(name, sm2, offset)) {
       *out << "\nERROR: Not yet supporting offsets from globals\n\n";
       exit(-1);
     }
 
-    if (!LLVMglobals.contains(sss)) {
-      *out << "\ncan't find global '" << sss << "'\n";
+    if (!LLVMglobals.contains(name)) {
+      *out << "\ncan't find global '" << name << "'\n";
       *out << "ERROR: Unknown global in ADRP\n\n";
       exit(-1);
     }
 
-    instExprVarMap[CurInst] = sss;
+    instExprVarMap[CurInst] = name;
   }
 
   // Reads an Expr and gets the global variable corresponding the containing
@@ -1812,14 +1819,19 @@ class arm2llvm {
     // beginning (std::regex_constants::match_continuous).
     if (std::regex_search(sss, sm, re,
                           std::regex_constants::match_continuous)) {
-      auto stringVar = sm.suffix();
+      string stringVar = sm.suffix();
       // Check the relocation specifiers to determine whether to store ptr
       // global value in the register or load the value from the global
       if (!sm.empty() && (sm[0] == ":lo12:")) {
         storePtr = false;
       }
-      //  for (auto x:sm) { *out << x << " "; }
-      //  *out << stringVar << "\n";
+
+      if (stringVar.rfind(".L.", 0) == 0) {
+        // the assembler has mangled local symbols, which start with a
+        // dot, by prefixing them with ".L"; here we demangle
+        stringVar = stringVar.substr(2);
+      }
+
       if (!LLVMglobals.contains(stringVar)) {
         *out << "\nERROR: instruction mentions '" << stringVar << "'\n";
         *out << "which is not a global variable we know about\n\n";
@@ -7713,15 +7725,14 @@ public:
     // default to adding instructions to the entry block
     LLVMBB = BBs[0].first;
 
-    // every global in the source module needs to get created in the
-    // target module
+    // external globals in the IR don't get a label in the assembly,
+    // so we'll need to copy them over from the source module
     for (auto &srcFnGlobal : srcFn.getParent()->globals()) {
-      auto name = srcFnGlobal.getName();
-      *out << "copying global variable " << name.str()
+      string name{srcFnGlobal.getName()};
+      *out << "copying global variable " << name
            << " over from the source module\n";
-      createLLVMGlobal(srcFnGlobal.getValueType(), srcFnGlobal.getName(),
-                       srcFnGlobal.getAlign(), srcFnGlobal.isConstant(),
-                       /*initializer=*/nullptr);
+      createLLVMGlobal(srcFnGlobal.getValueType(), name, srcFnGlobal.getAlign(),
+                       srcFnGlobal.isConstant(), /*initializer=*/nullptr);
     }
 
     // also create function definitions, since these can be used as
@@ -7737,20 +7748,29 @@ public:
       LLVMglobals[name.str()] = newF;
     }
 
+    // FIXME -- probably we need to do this first!
+
     // but we can't get everything by looking at the source module,
     // the target also contains new stuff not found in the source
     // module at all, such as the constant pool
     for (const auto &g : MF.MCglobals) {
-      auto name = g.name;
+      string name{g.name};
       *out << "found a variable " << name << " in the assembly\n";
+      if (name.rfind(".L.", 0) == 0) {
+        // the assembler has mangled local symbols, which start with a
+        // dot, by prefixing them with ".L"; here we demangle
+        name = name.substr(2);
+        *out << "  (demangling local symbol)\n";
+      }
       auto size = g.data.size();
       *out << "  size = " << size << "\n";
-      if (!LLVMglobals.contains(g.name)) {
+      if (!LLVMglobals.contains(name)) {
         auto ty = ArrayType::get(i8, size);
         vector<Constant *> vals;
         for (unsigned i = 0; i < size; ++i)
           vals.push_back(ConstantInt::get(i8, g.data[i]));
         auto initializer = ConstantArray::get(ty, vals);
+        // FIXME -- look at the section we're in to figure out if it's constant
         createLLVMGlobal(ty, name, g.align, /*isConstant=*/true, initializer);
         *out << "  created\n";
       } else {
@@ -8067,15 +8087,16 @@ public:
   }
 
   void emitConstant() {
-    if (!curROData.empty()) {
-      MCGlobal g{
-          .name = curSym,
-          .align = curAlign,
-          .data = curROData,
-      };
-      MF.MCglobals.emplace_back(g);
-      curROData = "";
-    }
+    if (curROData.empty())
+      return;
+    MCGlobal g{
+        .name = curSym,
+        .align = curAlign,
+        .data = curROData,
+    };
+    MF.MCglobals.emplace_back(g);
+    curROData = "";
+    *out << "created constant: " << curSym << "\n";
   }
 
   virtual void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override {
