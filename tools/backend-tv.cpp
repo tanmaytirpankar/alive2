@@ -97,6 +97,13 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   // signature
   srcFn = lifter::adjustSrc(srcFn);
 
+  // nuke the rest of the functions in the module -- no need to
+  // generate and then parse assembly that we don't care about
+  for (auto &F : *M1) {
+    if (&F != srcFn && !F.isDeclaration())
+      F.deleteBody();
+  }
+
   auto AsmBuffer = (opt_asm_input != "")
                        ? ExitOnErr(llvm::errorOrToExpected(
                              llvm::MemoryBuffer::getFile(opt_asm_input)))
@@ -189,7 +196,7 @@ version )EOF";
   // that never reach a return instruction. let's just weed these out
   // here.
   config::fail_if_src_is_ub = true;
-  
+
   // turn on Alive2's asm-level memory model for the target; this
   // helps Alive2 deal more gracefully with the fact that integers and
   // pointers are freely mixed at the asm level, unlike in LLVM IR in
@@ -231,23 +238,12 @@ version )EOF";
     }
     doit(M1.get(), srcFn, verifier);
   } else {
-    vector<llvm::Function *> Funcs;
     for (auto &srcFn : *M1.get()) {
       if (srcFn.isDeclaration())
         continue;
-      Funcs.push_back(&srcFn);
+      doit(M1.get(), &srcFn, verifier);
+      break;
     }
-    if (Funcs.empty()) {
-      *out << "ERROR: No functions found\n";
-      exit(-1);
-    }
-    // FIXME -- relax this restriction
-    if (Funcs.size() > 1) {
-      *out << "ERROR: Only one function supported\n";
-      exit(-1);
-    }
-    for (auto *srcFn : Funcs)
-      doit(M1.get(), srcFn, verifier);
   }
 
   *out << "Summary:\n"

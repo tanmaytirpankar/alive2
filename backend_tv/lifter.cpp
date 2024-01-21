@@ -368,8 +368,7 @@ class arm2llvm {
       AArch64::INSvi16gpr, AArch64::INSvi8gpr,  AArch64::FCVTSHr,
       AArch64::FCVTZSUWSr, AArch64::FCSELSrrr,  AArch64::FMULSrr,
       AArch64::FABSSr,     AArch64::UQADDv1i32, AArch64::SQSUBv1i32,
-      AArch64::SQADDv1i32,
-      AArch64::FMOVSr, AArch64::FNEGSr,
+      AArch64::SQADDv1i32, AArch64::FMOVSr,     AArch64::FNEGSr,
   };
 
   const set<int> instrs_64 = {
@@ -7904,7 +7903,6 @@ public:
 
       for (auto &inst : mc_instrs) {
         *out << "  ";
-        inst.dump();
         llvmInstNum = 0;
         liftInst(inst);
         ++armInstNum;
