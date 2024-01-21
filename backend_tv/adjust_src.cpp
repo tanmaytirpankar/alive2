@@ -150,17 +150,13 @@ Function *adjustSrcReturn(Function *srcFn) {
 
   NF->splice(NF->begin(), srcFn);
   NF->takeName(srcFn);
+  srcFn->replaceAllUsesWith(NF);
 
   for (Function::arg_iterator I = srcFn->arg_begin(), E = srcFn->arg_end(),
                               I2 = NF->arg_begin();
        I != E; ++I, ++I2) {
     I->replaceAllUsesWith(&*I2);
   }
-
-  // FIXME -- doesn't matter if we're just dealing with one function,
-  // but if we're lifting modules with important calls, we need to
-  // replace uses of the function with NF, see code in
-  // DeadArgumentElimination.cpp
 
   srcFn->eraseFromParent();
   return NF;
@@ -181,30 +177,19 @@ void checkSupport(Instruction &i, const DataLayout &DL, set<Type *> &typeSet) {
       }
     }
   }
-  if (auto *gep = dyn_cast<GetElementPtrInst>(&i)) {
-    if (!gep->isInBounds()) {
-      *out << "\nERROR: only inbounds GEP instructions supported for now\n\n";
-      exit(-1);
-    }
-  }
   if (i.isVolatile()) {
-    *out << "\nERROR: volatiles not supported yet\n\n";
+    *out << "\nERROR: volatiles not supported\n\n";
     exit(-1);
   }
   if (i.isAtomic()) {
-    *out << "\nERROR: atomics not supported yet\n\n";
-    exit(-1);
-  }
-  if (isa<IntToPtrInst>(&i)) {
-    *out << "\nERROR: int2ptr instructions not supported yet\n\n";
+    *out << "\nERROR: atomics not supported\n\n";
     exit(-1);
   }
   if (auto *li = dyn_cast<LoadInst>(&i)) {
     auto *ty = li->getType();
     unsigned w = ty->getScalarSizeInBits();
     if ((w % 8) != 0) {
-      *out << "\nERROR: loads that have padding are disabled until we fix some "
-              "ABI issues\n\n";
+      *out << "\nERROR: loads that have padding are disabled\n\n";
       exit(-1);
     }
   }
@@ -213,29 +198,22 @@ void checkSupport(Instruction &i, const DataLayout &DL, set<Type *> &typeSet) {
     exit(-1);
   }
   if (auto *ci = dyn_cast<CallInst>(&i)) {
-    if (auto *ii = dyn_cast<IntrinsicInst>(ci)) {
-      if (IntrinsicInst::mayLowerToFunctionCall(ii->getIntrinsicID())) {
-        *out << "\nERROR: intrinsics that may lower to calls are not supported "
-                "yet\n\n";
+    auto callee = ci->getCalledFunction();
+    if (callee) {
+      auto name = (string)callee->getName();
+      if (name.find("llvm.objc") != string::npos) {
+        *out << "\nERROR: llvm.objc instrinsics not supported\n\n";
         exit(-1);
       }
-    } else {
-      *out << "\nERROR: calls not supported\n\n";
-      exit(-1);
-    }
-    auto callee = (string)ci->getCalledFunction()->getName();
-    if (callee.find("llvm.objc") != string::npos) {
-      *out << "\nERROR: llvm.objc instrinsics not supported\n\n";
-      exit(-1);
-    }
-    if (callee.find("llvm.thread") != string::npos) {
-      *out << "\nERROR: llvm.thread instrinsics not supported\n\n";
-      exit(-1);
-    }
-    if ((callee.find("llvm.experimental.gc") != string::npos) ||
-        (callee.find("llvm.experimental.stackmap") != string::npos)) {
-      *out << "\nERROR: llvm GC instrinsics not supported\n\n";
-      exit(-1);
+      if (name.find("llvm.thread") != string::npos) {
+        *out << "\nERROR: llvm.thread instrinsics not supported\n\n";
+        exit(-1);
+      }
+      if ((name.find("llvm.experimental.gc") != string::npos) ||
+          (name.find("llvm.experimental.stackmap") != string::npos)) {
+        *out << "\nERROR: llvm GC instrinsics not supported\n\n";
+        exit(-1);
+      }
     }
   }
 }
@@ -273,7 +251,7 @@ Function *adjustSrc(Function *srcFn) {
   }
 
   if (srcFn->isVarArg()) {
-    *out << "\nERROR: varargs not supported yet\n\n";
+    *out << "\nERROR: varargs not supported\n\n";
     exit(-1);
   }
 
@@ -304,8 +282,7 @@ Function *adjustSrc(Function *srcFn) {
     }
   }
 
-  auto RT = dyn_cast<VectorType>(srcFn->getReturnType());
-  if (RT)
+  if (auto RT = dyn_cast<VectorType>(srcFn->getReturnType()))
     checkVectorTy(RT);
 
   set<Type *> typeSet;
@@ -319,12 +296,12 @@ Function *adjustSrc(Function *srcFn) {
     }
   }
 
-  auto &Ctx = srcFn->getContext();
-  if (typeSet.find(Type::getFloatTy(Ctx)) != typeSet.end() ||
-      typeSet.find(Type::getDoubleTy(Ctx)) != typeSet.end() ||
-      typeSet.find(Type::getHalfTy(Ctx)) != typeSet.end() ||
-      typeSet.find(Type::getBFloatTy(Ctx)) != typeSet.end()) {
-    if (false) {
+  if (false) {
+    auto &Ctx = srcFn->getContext();
+    if (typeSet.find(Type::getFloatTy(Ctx)) != typeSet.end() ||
+        typeSet.find(Type::getDoubleTy(Ctx)) != typeSet.end() ||
+        typeSet.find(Type::getHalfTy(Ctx)) != typeSet.end() ||
+        typeSet.find(Type::getBFloatTy(Ctx)) != typeSet.end()) {
       *out << "\nERROR: Not supporting float until this issue gets resolved\n";
       *out << "https://github.com/AliveToolkit/alive2/issues/982\n\n";
       exit(-1);

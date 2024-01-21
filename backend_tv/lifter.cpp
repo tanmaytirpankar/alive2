@@ -2676,9 +2676,10 @@ public:
     case AArch64::SEH_Nop:
       break;
 
-    case AArch64::BL:
-      *out << "\nERROR: not lifting calls yet\n\n";
+    case AArch64::BL: {
+      *out << "\nERROR: calls not supported\n\n";
       exit(-1);
+    }
 
     case AArch64::MRS: {
       // https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/NZCV--Condition-Flags
