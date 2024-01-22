@@ -336,44 +336,43 @@ class arm2llvm {
       AArch64::CCMPWi,     AArch64::LDRWui,     AArch64::LDRBBroW,
       AArch64::LDRBBroX,   AArch64::LDRBroW,    AArch64::LDRBroX,
       AArch64::LDRHHroW,   AArch64::LDRHHroX,   AArch64::LDRHroW,
-      AArch64::LDRHroX,
-      AArch64::LDRWroW,    AArch64::LDRWroX,    AArch64::LDRSBWroW,
-      AArch64::LDRSBWroX,  AArch64::LDRSBXroW,  AArch64::LDRSBXroX,
-      AArch64::LDRSHWroW,  AArch64::LDRSHWroX,  AArch64::LDRSHXroW,
-      AArch64::LDRSHXroX,  AArch64::LDRSWroW,   AArch64::LDRSWroX,
-      AArch64::LDRSui,     AArch64::LDRBBui,    AArch64::LDRBui,
-      AArch64::LDRSBWui,   AArch64::LDRSHWui,   AArch64::LDRSBWpre,
-      AArch64::LDRSHWpre,  AArch64::LDRSBWpost, AArch64::LDRSHWpost,
-      AArch64::LDRHHui,    AArch64::LDRHui,     AArch64::LDURBi,
-      AArch64::LDURBBi,    AArch64::LDURHi,     AArch64::LDURHHi,
-      AArch64::LDURSi,     AArch64::LDURWi,     AArch64::LDURSBWi,
-      AArch64::LDURSHWi,   AArch64::LDRBBpre,   AArch64::LDRBpre,
-      AArch64::LDRHHpre,   AArch64::LDRHpre,    AArch64::LDRWpre,
-      AArch64::LDRSpre,    AArch64::LDRBBpost,  AArch64::LDRBpost,
-      AArch64::LDRHHpost,  AArch64::LDRHpost,   AArch64::LDRWpost,
-      AArch64::LDRSpost,   AArch64::STRBBpost,  AArch64::STRBpost,
-      AArch64::STRHHpost,  AArch64::STRHpost,   AArch64::STRWpost,
-      AArch64::STRSpost,   AArch64::STRWui,     AArch64::STRBBroW,
-      AArch64::STRBBroX,   AArch64::STRBroW,    AArch64::STRBroX,
-      AArch64::STRHHroW,   AArch64::STRHHroX,   AArch64::STRHroW,
-      AArch64::STRHroX,
-      AArch64::STRWroW,    AArch64::STRWroX,    AArch64::CCMNWi,
-      AArch64::CCMNWr,     AArch64::STRBBui,    AArch64::STRBui,
-      AArch64::STPWi,      AArch64::STPSi,      AArch64::STPWpre,
-      AArch64::STPSpre,    AArch64::STPWpost,   AArch64::STPSpost,
-      AArch64::STRHHui,    AArch64::STRHui,     AArch64::STURBBi,
-      AArch64::STURBi,     AArch64::STURHHi,    AArch64::STURHi,
-      AArch64::STURWi,     AArch64::STURSi,     AArch64::STRSui,
-      AArch64::LDPWi,      AArch64::LDPSi,      AArch64::LDPWpre,
-      AArch64::LDPSpre,    AArch64::LDPWpost,   AArch64::LDPSpost,
-      AArch64::STRBBpre,   AArch64::STRBpre,    AArch64::STRHHpre,
-      AArch64::STRHpre,    AArch64::STRWpre,    AArch64::STRSpre,
-      AArch64::FADDSrr,    AArch64::FSUBSrr,    AArch64::FCMPSrr,
-      AArch64::FCMPSri,    AArch64::FMOVSWr,    AArch64::INSvi32gpr,
-      AArch64::INSvi16gpr, AArch64::INSvi8gpr,  AArch64::FCVTSHr,
-      AArch64::FCVTZSUWSr, AArch64::FCSELSrrr,  AArch64::FMULSrr,
-      AArch64::FABSSr,     AArch64::UQADDv1i32, AArch64::SQSUBv1i32,
-      AArch64::SQADDv1i32, AArch64::FMOVSr,     AArch64::FNEGSr,
+      AArch64::LDRHroX,    AArch64::LDRWroW,    AArch64::LDRWroX,
+      AArch64::LDRSBWroW,  AArch64::LDRSBWroX,  AArch64::LDRSBXroW,
+      AArch64::LDRSBXroX,  AArch64::LDRSHWroW,  AArch64::LDRSHWroX,
+      AArch64::LDRSHXroW,  AArch64::LDRSHXroX,  AArch64::LDRSWroW,
+      AArch64::LDRSWroX,   AArch64::LDRSui,     AArch64::LDRBBui,
+      AArch64::LDRBui,     AArch64::LDRSBWui,   AArch64::LDRSHWui,
+      AArch64::LDRSBWpre,  AArch64::LDRSHWpre,  AArch64::LDRSBWpost,
+      AArch64::LDRSHWpost, AArch64::LDRHHui,    AArch64::LDRHui,
+      AArch64::LDURBi,     AArch64::LDURBBi,    AArch64::LDURHi,
+      AArch64::LDURHHi,    AArch64::LDURSi,     AArch64::LDURWi,
+      AArch64::LDURSBWi,   AArch64::LDURSHWi,   AArch64::LDRBBpre,
+      AArch64::LDRBpre,    AArch64::LDRHHpre,   AArch64::LDRHpre,
+      AArch64::LDRWpre,    AArch64::LDRSpre,    AArch64::LDRBBpost,
+      AArch64::LDRBpost,   AArch64::LDRHHpost,  AArch64::LDRHpost,
+      AArch64::LDRWpost,   AArch64::LDRSpost,   AArch64::STRBBpost,
+      AArch64::STRBpost,   AArch64::STRHHpost,  AArch64::STRHpost,
+      AArch64::STRWpost,   AArch64::STRSpost,   AArch64::STRWui,
+      AArch64::STRBBroW,   AArch64::STRBBroX,   AArch64::STRBroW,
+      AArch64::STRBroX,    AArch64::STRHHroW,   AArch64::STRHHroX,
+      AArch64::STRHroW,    AArch64::STRHroX,    AArch64::STRWroW,
+      AArch64::STRWroX,    AArch64::CCMNWi,     AArch64::CCMNWr,
+      AArch64::STRBBui,    AArch64::STRBui,     AArch64::STPWi,
+      AArch64::STPSi,      AArch64::STPWpre,    AArch64::STPSpre,
+      AArch64::STPWpost,   AArch64::STPSpost,   AArch64::STRHHui,
+      AArch64::STRHui,     AArch64::STURBBi,    AArch64::STURBi,
+      AArch64::STURHHi,    AArch64::STURHi,     AArch64::STURWi,
+      AArch64::STURSi,     AArch64::STRSui,     AArch64::LDPWi,
+      AArch64::LDPSi,      AArch64::LDPWpre,    AArch64::LDPSpre,
+      AArch64::LDPWpost,   AArch64::LDPSpost,   AArch64::STRBBpre,
+      AArch64::STRBpre,    AArch64::STRHHpre,   AArch64::STRHpre,
+      AArch64::STRWpre,    AArch64::STRSpre,    AArch64::FADDSrr,
+      AArch64::FSUBSrr,    AArch64::FCMPSrr,    AArch64::FCMPSri,
+      AArch64::FMOVSWr,    AArch64::INSvi32gpr, AArch64::INSvi16gpr,
+      AArch64::INSvi8gpr,  AArch64::FCVTSHr,    AArch64::FCVTZSUWSr,
+      AArch64::FCSELSrrr,  AArch64::FMULSrr,    AArch64::FABSSr,
+      AArch64::UQADDv1i32, AArch64::SQSUBv1i32, AArch64::SQADDv1i32,
+      AArch64::FMOVSr,     AArch64::FNEGSr,     AArch64::BRK,
   };
 
   const set<int> instrs_64 = {
@@ -1193,6 +1192,11 @@ class arm2llvm {
 
   void createStore(Value *v, Value *ptr) {
     new StoreInst(v, ptr, false, Align(1), LLVMBB);
+  }
+
+  Value *createTrap() {
+    auto decl = Intrinsic::getDeclaration(LiftedModule, Intrinsic::trap);
+    return CallInst::Create(decl, "", LLVMBB);
   }
 
   Value *createSMin(Value *a, Value *b) {
@@ -2735,6 +2739,11 @@ public:
     // real
     case AArch64::SEH_Nop:
       break;
+
+    case AArch64::BRK: {
+      createTrap();
+      break;
+    }
 
     case AArch64::BL: {
       *out << "\nERROR: calls not supported\n\n";
@@ -6932,82 +6941,81 @@ public:
       break;
     }
 
-    /*
-    case AArch64::UMLALv4i16_indexed:
-    case AArch64::UMLALv8i16_indexed:
-    case AArch64::UMLALv2i32_indexed:
-    case AArch64::UMLALv4i32_indexed:
-    case AArch64::UMLSLv4i16_indexed:
-    case AArch64::UMLSLv8i16_indexed:
-    case AArch64::UMLSLv2i32_indexed:
-    case AArch64::UMLSLv4i32_indexed:
-    case AArch64::SMLALv4i16_indexed:
-    case AArch64::SMLALv8i16_indexed:
-    case AArch64::SMLALv2i32_indexed:
-    case AArch64::SMLALv4i32_indexed:
-    case AArch64::SMLSLv4i16_indexed:
-    case AArch64::SMLSLv8i16_indexed:
-    case AArch64::SMLSLv2i32_indexed:
-    case AArch64::SMLSLv4i32_indexed: {
-      unsigned numElts, eltSize;
-      GET_SIZES4(SMLAL, _indexed);
-      auto isUpper = opcode == AArch64::UMLALv8i16_indexed ||
+      /*
+      case AArch64::UMLALv4i16_indexed:
+      case AArch64::UMLALv8i16_indexed:
+      case AArch64::UMLALv2i32_indexed:
+      case AArch64::UMLALv4i32_indexed:
+      case AArch64::UMLSLv4i16_indexed:
+      case AArch64::UMLSLv8i16_indexed:
+      case AArch64::UMLSLv2i32_indexed:
+      case AArch64::UMLSLv4i32_indexed:
+      case AArch64::SMLALv4i16_indexed:
+      case AArch64::SMLALv8i16_indexed:
+      case AArch64::SMLALv2i32_indexed:
+      case AArch64::SMLALv4i32_indexed:
+      case AArch64::SMLSLv4i16_indexed:
+      case AArch64::SMLSLv8i16_indexed:
+      case AArch64::SMLSLv2i32_indexed:
+      case AArch64::SMLSLv4i32_indexed: {
+        unsigned numElts, eltSize;
+        GET_SIZES4(SMLAL, _indexed);
+        auto isUpper = opcode == AArch64::UMLALv8i16_indexed ||
+                       opcode == AArch64::UMLSLv8i16_indexed ||
+                       opcode == AArch64::SMLALv8i16_indexed ||
+                       opcode == AArch64::SMLSLv8i16_indexed ||
+                       opcode == AArch64::UMLALv4i32_indexed ||
+                       opcode == AArch64::UMLSLv4i32_indexed ||
+                       opcode == AArch64::SMLALv4i32_indexed ||
+                       opcode == AArch64::SMLSLv4i32_indexed;
+        auto isSigned = opcode == AArch64::SMLALv4i16_indexed ||
+                        opcode == AArch64::SMLSLv4i16_indexed ||
+                        opcode == AArch64::SMLALv8i16_indexed ||
+                        opcode == AArch64::SMLSLv8i16_indexed ||
+                        opcode == AArch64::SMLALv2i32_indexed ||
+                        opcode == AArch64::SMLSLv2i32_indexed ||
+                        opcode == AArch64::SMLALv4i32_indexed ||
+                        opcode == AArch64::SMLSLv4i32_indexed;
+        auto isSub = opcode == AArch64::UMLSLv4i16_indexed ||
                      opcode == AArch64::UMLSLv8i16_indexed ||
-                     opcode == AArch64::SMLALv8i16_indexed ||
-                     opcode == AArch64::SMLSLv8i16_indexed ||
-                     opcode == AArch64::UMLALv4i32_indexed ||
+                     opcode == AArch64::UMLSLv2i32_indexed ||
                      opcode == AArch64::UMLSLv4i32_indexed ||
-                     opcode == AArch64::SMLALv4i32_indexed ||
+                     opcode == AArch64::SMLSLv4i16_indexed ||
+                     opcode == AArch64::SMLSLv8i16_indexed ||
+                     opcode == AArch64::SMLSLv2i32_indexed ||
                      opcode == AArch64::SMLSLv4i32_indexed;
-      auto isSigned = opcode == AArch64::SMLALv4i16_indexed ||
-                      opcode == AArch64::SMLSLv4i16_indexed ||
-                      opcode == AArch64::SMLALv8i16_indexed ||
-                      opcode == AArch64::SMLSLv8i16_indexed ||
-                      opcode == AArch64::SMLALv2i32_indexed ||
-                      opcode == AArch64::SMLSLv2i32_indexed ||
-                      opcode == AArch64::SMLALv4i32_indexed ||
-                      opcode == AArch64::SMLSLv4i32_indexed;
-      auto isSub = opcode == AArch64::UMLSLv4i16_indexed ||
-                   opcode == AArch64::UMLSLv8i16_indexed ||
-                   opcode == AArch64::UMLSLv2i32_indexed ||
-                   opcode == AArch64::UMLSLv4i32_indexed ||
-                   opcode == AArch64::SMLSLv4i16_indexed ||
-                   opcode == AArch64::SMLSLv8i16_indexed ||
-                   opcode == AArch64::SMLSLv2i32_indexed ||
-                   opcode == AArch64::SMLSLv4i32_indexed;
-      assert(isSIMDandFPReg(CurInst->getOperand(0)) &&
-             isSIMDandFPReg(CurInst->getOperand(1)) &&
-             CurInst->getOperand(0).getReg() ==
-                 CurInst->getOperand(1).getReg());
-      assert(CurInst->getOperand(4).isImm());
+        assert(isSIMDandFPReg(CurInst->getOperand(0)) &&
+               isSIMDandFPReg(CurInst->getOperand(1)) &&
+               CurInst->getOperand(0).getReg() ==
+                   CurInst->getOperand(1).getReg());
+        assert(CurInst->getOperand(4).isImm());
 
-      auto destReg =
-          readFromVecOperand(1, 2 * eltSize, isUpper ? numElts / 2 : numElts);
-      auto a = readFromVecOperand(2, eltSize, numElts, isUpper);
-      auto element = getIndexedElement(getImm(4), eltSize,
-                                       CurInst->getOperand(3).getReg());
-      auto splatElement = splat(element, numElts, eltSize);
+        auto destReg =
+            readFromVecOperand(1, 2 * eltSize, isUpper ? numElts / 2 : numElts);
+        auto a = readFromVecOperand(2, eltSize, numElts, isUpper);
+        auto element = getIndexedElement(getImm(4), eltSize,
+                                         CurInst->getOperand(3).getReg());
+        auto splatElement = splat(element, numElts, eltSize);
 
-      auto extended_a =
-          isSigned ? createSExt(a, getVecTy(2 * eltSize,
-                                            isUpper ? numElts / 2 : numElts))
-                   : createZExt(a, getVecTy(2 * eltSize,
-                                            isUpper ? numElts / 2 : numElts));
-      auto extended_b =
-          isSigned ? createSExt(
-                         splatElement,
-                         getVecTy(2 * eltSize, isUpper ? numElts / 2 : numElts))
-                   : createZExt(splatElement,
-                                getVecTy(2 * eltSize,
-                                         isUpper ? numElts / 2 : numElts));
+        auto extended_a =
+            isSigned ? createSExt(a, getVecTy(2 * eltSize,
+                                              isUpper ? numElts / 2 : numElts))
+                     : createZExt(a, getVecTy(2 * eltSize,
+                                              isUpper ? numElts / 2 : numElts));
+        auto extended_b =
+            isSigned ? createSExt(
+                           splatElement,
+                           getVecTy(2 * eltSize, isUpper ? numElts / 2 :
+      numElts)) : createZExt(splatElement, getVecTy(2 * eltSize, isUpper ?
+      numElts / 2 : numElts));
 
-      auto mul = createMul(extended_a, extended_b);
-      auto sum = isSub ? createSub(destReg, mul) : createAdd(destReg, mul);
+        auto mul = createMul(extended_a, extended_b);
+        auto sum = isSub ? createSub(destReg, mul) : createAdd(destReg, mul);
 
-      updateOutputReg(sum);
-      break;
-    }
-    */
+        updateOutputReg(sum);
+        break;
+      }
+      */
 
     case AArch64::UMLALv8i8_v8i16:
     case AArch64::UMLALv16i8_v8i16:
