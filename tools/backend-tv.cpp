@@ -89,8 +89,19 @@ llvm::cl::opt<string> opt_asm_input(
 
 llvm::ExitOnError ExitOnErr;
 
-void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
+void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
+          llvm::TargetLibraryInfoWrapperPass &TLI) {
   assert(lifter::out);
+
+  {
+    // let's not even bother if Alive2 can't process our function
+    auto fn = llvm2alive(*srcFn, TLI.getTLI(*srcFn), /*isSrc=*/true);
+    if (!fn) {
+      *out << "Fatal error, exiting\n";
+      exit(-1);
+    }
+  }
+
   lifter::reset();
 
   // this has to return a fresh function since it rewrites the
@@ -236,12 +247,12 @@ version )EOF";
       *out << "ERROR: Couldn't find function to verify\n";
       exit(-1);
     }
-    doit(M1.get(), srcFn, verifier);
+    doit(M1.get(), srcFn, verifier, TLI);
   } else {
     for (auto &srcFn : *M1.get()) {
       if (srcFn.isDeclaration())
         continue;
-      doit(M1.get(), &srcFn, verifier);
+      doit(M1.get(), &srcFn, verifier, TLI);
       break;
     }
   }
