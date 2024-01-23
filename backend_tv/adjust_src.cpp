@@ -193,6 +193,10 @@ void checkSupport(Instruction &i, const DataLayout &DL, set<Type *> &typeSet) {
       exit(-1);
     }
   }
+  if (isa<VAArgInst>(&i)) {
+    *out << "\nERROR: va_arg instructions not supported\n\n";
+    exit(-1);
+  }
   if (isa<InvokeInst>(&i)) {
     *out << "\nERROR: invoke instructions not supported\n\n";
     exit(-1);
@@ -200,6 +204,10 @@ void checkSupport(Instruction &i, const DataLayout &DL, set<Type *> &typeSet) {
   if (auto *ci = dyn_cast<CallInst>(&i)) {
     auto callee = ci->getCalledFunction();
     if (callee) {
+      if (callee->isVarArg()) {
+        *out << "\nERROR: varargs not supported\n\n";
+        exit(-1);
+      }
       auto name = (string)callee->getName();
       if (name.find("llvm.objc") != string::npos) {
         *out << "\nERROR: llvm.objc instrinsics not supported\n\n";
