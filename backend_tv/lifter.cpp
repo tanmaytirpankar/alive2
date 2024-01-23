@@ -124,7 +124,7 @@ struct MCGlobal {
   string name;
   Align align;
   string data;
-  // FIXME -- section
+  string section;
 };
 
 class MCFunction {
@@ -7947,40 +7947,62 @@ public:
     LLVMglobals[name.str()] = g;
   }
 
-  // FIXME -- split this into per-function code and whole-module code
   Function *run() {
     auto i8 = getIntTy(8);
     auto i32 = getIntTy(32);
     auto i64 = getIntTy(64);
 
+    // create a fresh function
     liftedFn =
         Function::Create(srcFn.getFunctionType(), GlobalValue::ExternalLinkage,
                          0, srcFn.getName(), LiftedModule);
     liftedFn->copyAttributesFrom(&srcFn);
 
-    // create LLVM-side basic blocks
-    vector<pair<BasicBlock *, MCBasicBlock *>> BBs;
-    for (auto &mbb : MF.BBs) {
-      auto bb = BasicBlock::Create(Ctx, mbb.getName(), liftedFn);
-      BBs.push_back(make_pair(bb, &mbb));
-    }
+    // FIXME: in each of the next three code blocks, we can save some
+    // work by only creating globals that the lifted function actually
+    // references
 
-    // default to adding instructions to the entry block
-    LLVMBB = BBs[0].first;
+    // create lifted globals corresponding to what we found in the
+    // assembly
+    for (const auto &g : MF.MCglobals) {
+      string name{g.name};
+      *out << "creating lifted global " << name << " from the assembly\n";
+      if (name.rfind(".L.", 0) == 0) {
+        // the assembler has mangled local symbols, which start with a
+        // dot, by prefixing them with ".L"; here we demangle
+        name = name.substr(2);
+        *out << "  (demangling local symbol)\n";
+      }
+      auto size = g.data.size();
+      *out << "  section = " << g.section << "\n";
+      *out << "  size = " << size << "\n";
+      assert(!LLVMglobals.contains(name));
+
+      auto ty = ArrayType::get(i8, size);
+      vector<Constant *> vals;
+      for (unsigned i = 0; i < size; ++i)
+        vals.push_back(ConstantInt::get(i8, g.data[i]));
+      auto initializer = ConstantArray::get(ty, vals);
+      bool isConstant =
+          g.section.starts_with(".rodata") || g.section == ".text";
+      createLLVMGlobal(ty, name, g.align, isConstant, initializer);
+    }
 
     // external globals in the IR don't get a label in the assembly,
     // so we'll need to copy them over from the source module
     for (auto &srcFnGlobal : srcFn.getParent()->globals()) {
       string name{srcFnGlobal.getName()};
-      *out << "copying global variable " << name
-           << " over from the source module\n";
-      createLLVMGlobal(srcFnGlobal.getValueType(), name, srcFnGlobal.getAlign(),
-                       srcFnGlobal.isConstant(), /*initializer=*/nullptr);
+      if (!LLVMglobals.contains(name)) {
+        *out << "copying global variable " << name
+             << " over from the source module\n";
+        createLLVMGlobal(srcFnGlobal.getValueType(), name,
+                         srcFnGlobal.getAlign(), srcFnGlobal.isConstant(),
+                         /*initializer=*/nullptr);
+      }
     }
 
     // also create function definitions, since these can be used as
     // addresses by the compiled code
-    // FIXME: only do this for address-taken functions
     for (auto &f : *srcFn.getParent()) {
       if (&f == &srcFn)
         continue;
@@ -7991,35 +8013,15 @@ public:
       LLVMglobals[name.str()] = newF;
     }
 
-    // FIXME -- probably we need to do this first!
-
-    // but we can't get everything by looking at the source module,
-    // the target also contains new stuff not found in the source
-    // module at all, such as the constant pool
-    for (const auto &g : MF.MCglobals) {
-      string name{g.name};
-      *out << "found a variable " << name << " in the assembly\n";
-      if (name.rfind(".L.", 0) == 0) {
-        // the assembler has mangled local symbols, which start with a
-        // dot, by prefixing them with ".L"; here we demangle
-        name = name.substr(2);
-        *out << "  (demangling local symbol)\n";
-      }
-      auto size = g.data.size();
-      *out << "  size = " << size << "\n";
-      if (!LLVMglobals.contains(name)) {
-        auto ty = ArrayType::get(i8, size);
-        vector<Constant *> vals;
-        for (unsigned i = 0; i < size; ++i)
-          vals.push_back(ConstantInt::get(i8, g.data[i]));
-        auto initializer = ConstantArray::get(ty, vals);
-        // FIXME -- look at the section we're in to figure out if it's constant
-        createLLVMGlobal(ty, name, g.align, /*isConstant=*/true, initializer);
-        *out << "  created\n";
-      } else {
-        *out << "  already exists -- not creating\n";
-      }
+    // create LLVM-side basic blocks
+    vector<pair<BasicBlock *, MCBasicBlock *>> BBs;
+    for (auto &mbb : MF.BBs) {
+      auto bb = BasicBlock::Create(Ctx, mbb.getName(), liftedFn);
+      BBs.push_back(make_pair(bb, &mbb));
     }
+
+    // default to adding instructions to the entry block
+    LLVMBB = BBs[0].first;
 
     // number of 8-byte stack slots for paramters
     const int numStackSlots = 32;
@@ -8332,10 +8334,15 @@ public:
   void emitConstant() {
     if (curROData.empty())
       return;
+
+    auto sp = getCurrentSection();
+    auto section = sp.first->getName();
+
     MCGlobal g{
         .name = curSym,
         .align = curAlign,
         .data = curROData,
+        .section = (string)section,
     };
     MF.MCglobals.emplace_back(g);
     curROData = "";
