@@ -2315,12 +2315,13 @@ public:
            (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
            (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
     assert((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
-           (offsetReg == AArch64::FP) || (offsetReg == AArch64::XZR) ||
-           (offsetReg >= AArch64::W0 && offsetReg <= AArch64::W28) ||
+           (offsetReg == AArch64::FP) || (offsetReg == AArch64::SP) ||
+           (offsetReg == AArch64::XZR) ||
+           (offsetReg >= AArch64::W0 && offsetReg <= AArch64::W29) ||
            (offsetReg == AArch64::WZR));
 
-    int extTyp, shiftAmt;
-    if ((offsetReg >= AArch64::W0 && offsetReg <= AArch64::W28) ||
+    int extTyp = -1, shiftAmt;
+    if ((offsetReg >= AArch64::W0 && offsetReg <= AArch64::W29) ||
         offsetReg == AArch64::WZR) {
       extTyp = extendTypeVal ? SXTW : UXTW;
     } else if ((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
