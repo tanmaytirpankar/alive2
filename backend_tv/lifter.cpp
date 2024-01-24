@@ -1601,12 +1601,12 @@ class arm2llvm {
     } else {
       res = op(a, b);
       // Some instructions use the upper half of the result. No case necessary
-      // for instructions that use the lower half, since the width used is halved
-      // by instruction size set.
-      if(isUpper) {
+      // for instructions that use the lower half, since the width used is
+      // halved by instruction size set.
+      if (isUpper) {
         assert(eltSize * numElts == 128);
         CastInst *casted;
-        if(ext == extKind::ZExt || ext == extKind::SExt) {
+        if (ext == extKind::ZExt || ext == extKind::SExt) {
           casted = createBitCast(res, getVecTy(128, 2));
         } else {
           casted = createBitCast(res, getVecTy(64, 2));
@@ -8262,6 +8262,24 @@ public:
     MF.MRI = MRI;
   }
 
+  void addConstant() {
+    if (curROData.empty())
+      return;
+
+    auto sp = getCurrentSection();
+    auto section = sp.first->getName();
+
+    MCGlobal g{
+        .name = curSym,
+        .align = curAlign,
+        .data = curROData,
+        .section = (string)section,
+    };
+    MF.MCglobals.emplace_back(g);
+    curROData = "";
+    *out << "created constant: " << curSym << "\n";
+  }
+
   // We only want to intercept the emission of new instructions.
   virtual void emitInstruction(const MCInst &Inst,
                                const MCSubtargetInfo & /* unused */) override {
@@ -8369,27 +8387,49 @@ public:
     *out << "[emitZerofill " << Size << " bytes]\n";
   }
 
-  void emitConstant() {
-    if (curROData.empty())
-      return;
-
-    auto sp = getCurrentSection();
-    auto section = sp.first->getName();
-
-    MCGlobal g{
-        .name = curSym,
-        .align = curAlign,
-        .data = curROData,
-        .section = (string)section,
-    };
-    MF.MCglobals.emplace_back(g);
-    curROData = "";
-    *out << "created constant: " << curSym << "\n";
-  }
-
   virtual void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override {
     *out << "[emitELFSize '" << Symbol->getName().str() << "']\n";
-    emitConstant();
+    addConstant();
+  }
+
+  virtual void emitDTPRel64Value(const MCExpr *Value) override {
+    *out << "[emitDTPRel64Value]\n";
+  }
+
+  virtual void emitTPRel64Value(const MCExpr *Value) override {
+    *out << "[emitTPRel64Value]\n";
+  }
+
+  virtual void emitGPRel64Value(const MCExpr *Value) override {
+    *out << "[emitGPRel64Value]\n";
+  }
+
+  virtual void emitValueImpl(const MCExpr *Value, unsigned Size,
+                             SMLoc Loc = SMLoc()) override {
+    *out << "[emitValue= ";
+    switch (Value->getKind()) {
+    case MCExpr::ExprKind::Binary:
+      *out << "binary";
+      break;
+    case MCExpr::ExprKind::Constant:
+      *out << "constant";
+      break;
+    case MCExpr::ExprKind::SymbolRef:
+      *out << "symbolref";
+      break;
+    case MCExpr::ExprKind::Unary:
+      *out << "unary";
+      break;
+    case MCExpr::ExprKind::Target:
+      *out << "target";
+      break;
+    default:
+      assert(false);
+    }
+    *out << "]\n";
+    if (auto SR = dyn_cast<MCSymbolRefExpr>(Value)) {
+      SR->dump();
+    }
   }
 
   virtual void emitValueToAlignment(Align Alignment, int64_t Value = 0,
@@ -8404,7 +8444,7 @@ public:
   }
 
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
-    emitConstant();
+    addConstant();
     curSym = Symbol->getName().str();
 
     auto sp = getCurrentSection();
