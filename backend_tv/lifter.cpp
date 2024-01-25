@@ -120,11 +120,13 @@ public:
   }
 };
 
+typedef variant<char, string> RODataItem;
+
 struct MCGlobal {
   string name;
   Align align;
-  string data;
   string section;
+  vector<RODataItem> data;
 };
 
 class MCFunction {
@@ -1586,10 +1588,10 @@ class arm2llvm {
     for (unsigned i = 0; i < numElts; i += 2) {
       auto elt1 = createExtractElement(src, i);
       auto elt2 = createExtractElement(src, i + 1);
-      auto ext1 = ext==extKind::SExt? createSExt(elt1, bigEltTy):
-                                       createZExt(elt1, bigEltTy);
-      auto ext2 = ext==extKind::SExt? createSExt(elt2, bigEltTy):
-                                       createZExt(elt2, bigEltTy);
+      auto ext1 = ext == extKind::SExt ? createSExt(elt1, bigEltTy)
+                                       : createZExt(elt1, bigEltTy);
+      auto ext2 = ext == extKind::SExt ? createSExt(elt2, bigEltTy)
+                                       : createZExt(elt2, bigEltTy);
       auto sum = createAdd(ext1, ext2);
       res = createInsertElement(res, sum, i / 2);
     }
@@ -7974,11 +7976,11 @@ public:
       case AArch64::SADALPv4i32_v2i64:
       case AArch64::SADALPv16i8_v8i16: {
         auto ext = opcode == AArch64::SADALPv4i16_v2i32 ||
-                   opcode == AArch64::SADALPv2i32_v1i64 ||
-                   opcode == AArch64::SADALPv8i8_v4i16 ||
-                   opcode == AArch64::SADALPv8i16_v4i32 ||
-                   opcode == AArch64::SADALPv4i32_v2i64 ||
-                   opcode == AArch64::SADALPv16i8_v8i16
+                           opcode == AArch64::SADALPv2i32_v1i64 ||
+                           opcode == AArch64::SADALPv8i8_v4i16 ||
+                           opcode == AArch64::SADALPv8i16_v4i32 ||
+                           opcode == AArch64::SADALPv4i32_v2i64 ||
+                           opcode == AArch64::SADALPv16i8_v8i16
                        ? extKind::SExt
                        : extKind::ZExt;
         auto src2 = readFromOperand(2);
@@ -8195,8 +8197,12 @@ public:
 
       auto ty = ArrayType::get(i8, size);
       vector<Constant *> vals;
-      for (unsigned i = 0; i < size; ++i)
-        vals.push_back(ConstantInt::get(i8, g.data[i]));
+      for (unsigned i = 0; i < size; ++i) {
+        if (holds_alternative<char>(g.data[i]))
+          vals.push_back(ConstantInt::get(i8, get<char>(g.data[i])));
+        else
+          assert(false);
+      }
       auto initializer = ConstantArray::get(ty, vals);
       bool isConstant =
           g.section.starts_with(".rodata") || g.section == ".text";
@@ -8425,7 +8431,8 @@ private:
   Align curAlign;
   string curSym;
   bool FunctionEnded = false;
-  string curROData;
+
+  vector<RODataItem> curROData;
 
 public:
   MCFunction MF;
@@ -8449,11 +8456,11 @@ public:
     MCGlobal g{
         .name = curSym,
         .align = curAlign,
-        .data = curROData,
         .section = (string)section,
+        .data = curROData,
     };
     MF.MCglobals.emplace_back(g);
-    curROData = "";
+    curROData.clear();
     *out << "created constant: " << curSym << "\n";
   }
 
@@ -8541,7 +8548,8 @@ public:
   virtual void emitBytes(StringRef Data) override {
     auto len = Data.size();
     *out << "[emitBytes " << len << " bytes]\n";
-    curROData += Data;
+    for (unsigned i = 0; i < len; ++i)
+      curROData.push_back(RODataItem{Data[i]});
   }
 
   virtual void emitFill(const MCExpr &NumBytes, uint64_t FillValue,
@@ -8552,7 +8560,7 @@ public:
       *out << "[emitFill value = " << FillValue << ", size = " << bytes
            << "]\n";
       for (int i = 0; i < bytes; ++i)
-        curROData += '0';
+        curROData.push_back(RODataItem{'0'});
     } else {
       *out << "[emitFill is unknown!]\n";
     }
@@ -8583,29 +8591,13 @@ public:
 
   virtual void emitValueImpl(const MCExpr *Value, unsigned Size,
                              SMLoc Loc = SMLoc()) override {
-    *out << "[emitValue= ";
-    switch (Value->getKind()) {
-    case MCExpr::ExprKind::Binary:
-      *out << "binary";
-      break;
-    case MCExpr::ExprKind::Constant:
-      *out << "constant";
-      break;
-    case MCExpr::ExprKind::SymbolRef:
-      *out << "symbolref";
-      break;
-    case MCExpr::ExprKind::Unary:
-      *out << "unary";
-      break;
-    case MCExpr::ExprKind::Target:
-      *out << "target";
-      break;
-    default:
-      assert(false);
-    }
-    *out << "]\n";
     if (auto SR = dyn_cast<MCSymbolRefExpr>(Value)) {
-      SR->dump();
+      const MCSymbol &Sym = SR->getSymbol();
+      string name{Sym.getName()};
+      *out << "[emitValue= " << name << "]\n";
+      curROData.push_back(RODataItem{name});
+    } else {
+      assert(false && "only MCSymbolRefExpr supported");
     }
   }
 
