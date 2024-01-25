@@ -8164,6 +8164,35 @@ public:
     LLVMglobals[name.str()] = g;
   }
 
+  string linkageStr(GlobalValue::LinkageTypes linkage) {
+    switch (linkage) {
+    case GlobalValue::LinkageTypes::ExternalLinkage:
+      return "External";
+    case GlobalValue::LinkageTypes::AvailableExternallyLinkage:
+      return "AvailableExternally";
+    case GlobalValue::LinkageTypes::LinkOnceAnyLinkage:
+      return "LinkOnceAny";
+    case GlobalValue::LinkageTypes::LinkOnceODRLinkage:
+      return "LinkOnceODR";
+    case GlobalValue::LinkageTypes::WeakAnyLinkage:
+      return "WeakAny";
+    case GlobalValue::LinkageTypes::WeakODRLinkage:
+      return "WeakODR";
+    case GlobalValue::LinkageTypes::AppendingLinkage:
+      return "Appending";
+    case GlobalValue::LinkageTypes::InternalLinkage:
+      return "Internal";
+    case GlobalValue::LinkageTypes::PrivateLinkage:
+      return "Private";
+    case GlobalValue::LinkageTypes::ExternalWeakLinkage:
+      return "ExternalWeak";
+    case GlobalValue::LinkageTypes::CommonLinkage:
+      return "Common";
+    default:
+      assert(false);
+    }
+  }
+
   Function *run() {
     auto i8 = getIntTy(8);
     auto i32 = getIntTy(32);
@@ -8175,47 +8204,21 @@ public:
                          0, srcFn.getName(), LiftedModule);
     liftedFn->copyAttributesFrom(&srcFn);
 
-    // FIXME: in each of the next three code blocks, we can save some
-    // work by only creating globals that the lifted function actually
-    // references
+    // FIXME: in all three of the subsequent code blocks, we can save
+    // some work by only creating globals that the lifted function
+    // actually references
 
-    // create lifted globals corresponding to what we found in the
-    // assembly
-    for (const auto &g : MF.MCglobals) {
-      string name{g.name};
-      *out << "creating lifted global " << name << " from the assembly\n";
-      if (name.rfind(".L.", 0) == 0) {
-        // the assembler has mangled local symbols, which start with a
-        // dot, by prefixing them with ".L"; here we demangle
-        name = name.substr(2);
-        *out << "  (demangling local symbol)\n";
-      }
-      auto size = g.data.size();
-      *out << "  section = " << g.section << "\n";
-      *out << "  size = " << size << "\n";
-      assert(!LLVMglobals.contains(name));
-
-      auto ty = ArrayType::get(i8, size);
-      vector<Constant *> vals;
-      for (unsigned i = 0; i < size; ++i) {
-        if (holds_alternative<char>(g.data[i]))
-          vals.push_back(ConstantInt::get(i8, get<char>(g.data[i])));
-        else
-          assert(false);
-      }
-      auto initializer = ConstantArray::get(ty, vals);
-      bool isConstant =
-          g.section.starts_with(".rodata") || g.section == ".text";
-      createLLVMGlobal(ty, name, g.align, isConstant, initializer);
-    }
-
-    // external globals in the IR don't get a label in the assembly,
-    // so we'll need to copy them over from the source module
+    // globals that are only declarations have to be registered in
+    // LLVM IR, but they don't show up anywhere in the assembly, the
+    // declaration is implicit. so here we find those and create them
+    // in the lifted module
     for (auto &srcFnGlobal : srcFn.getParent()->globals()) {
+      if (!srcFnGlobal.isDeclaration())
+        continue;
       string name{srcFnGlobal.getName()};
       if (!LLVMglobals.contains(name)) {
-        *out << "copying global variable " << name
-             << " over from the source module\n";
+        *out << "createing declaration for global variable " << name << "\n";
+        *out << "  linkage = " << srcFnGlobal.getLinkage() << "\n";
         createLLVMGlobal(srcFnGlobal.getValueType(), name,
                          srcFnGlobal.getAlign(), srcFnGlobal.isConstant(),
                          /*initializer=*/nullptr);
@@ -8232,6 +8235,47 @@ public:
                                    GlobalValue::LinkageTypes::ExternalLinkage,
                                    name, LiftedModule);
       LLVMglobals[name.str()] = newF;
+    }
+
+    // globals that are definitions in the assembly can be lifted
+    // directly. the trick here is that we have to deal with a mix of
+    // literal and symbolic data.
+    for (const auto &g : MF.MCglobals) {
+      string name{g.name};
+      *out << "creating lifted global " << name << " from the assembly\n";
+      if (name.rfind(".L.", 0) == 0) {
+        // the assembler has mangled local symbols, which start with a
+        // dot, by prefixing them with ".L"; here we demangle
+        name = name.substr(2);
+        *out << "  (demangling local symbol)\n";
+      }
+      auto size = g.data.size();
+      *out << "  section = " << g.section << "\n";
+      assert(!LLVMglobals.contains(name));
+
+      vector<Type *> tys;
+      vector<Constant *> vals;
+      for (unsigned i = 0; i < size; ++i) {
+        auto &data = g.data[i];
+        if (holds_alternative<char>(data)) {
+          tys.push_back(getIntTy(8));
+          vals.push_back(ConstantInt::get(i8, get<char>(data)));
+        } else if (holds_alternative<string>(data)) {
+          string symName = get<string>(data);
+          Value *sym = LLVMglobals[symName];
+          auto *symConst = dyn_cast<Constant>(sym);
+          assert(symConst);
+          tys.push_back(PointerType::get(Ctx, 0));
+          vals.push_back(symConst);
+        } else {
+          assert(false);
+        }
+      }
+      auto *ty = StructType::create(tys);
+      auto initializer = ConstantStruct::get(ty, vals);
+      bool isConstant =
+          g.section.starts_with(".rodata") || g.section == ".text";
+      createLLVMGlobal(ty, name, g.align, isConstant, initializer);
     }
 
     // create LLVM-side basic blocks
