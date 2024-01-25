@@ -8586,7 +8586,18 @@ public:
 
   virtual void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                                 Align ByteAlignment) override {
-    *out << "[emitCommonSymbol]\n";
+    vector<RODataItem> data;
+    string name{Symbol->getName()};
+    for (int i = 0; i < Size; ++i)
+      data.push_back(RODataItem{'0'});
+    MCGlobal g{
+        .name = name,
+        .align = ByteAlignment,
+        .section = "common",
+        .data = data,
+    };
+    MF.MCglobals.emplace_back(g);
+    *out << "[emitCommonSymbol = " << name << "]\n";
   }
 
   virtual void emitBytes(StringRef Data) override {
@@ -8600,6 +8611,7 @@ public:
                         SMLoc Loc) override {
     auto ce = dyn_cast<MCConstantExpr>(&NumBytes);
     if (ce) {
+      assert(FillValue == 0);
       auto bytes = ce->getValue();
       *out << "[emitFill value = " << FillValue << ", size = " << bytes
            << "]\n";
