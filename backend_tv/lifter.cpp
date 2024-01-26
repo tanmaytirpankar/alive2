@@ -89,7 +89,7 @@ private:
   SetVector<MCBasicBlock *> Succs;
 
 public:
-  MCBasicBlock(string name) : name(name) {}
+  MCBasicBlock(const string &name) : name(name) {}
 
   const string &getName() const {
     return name;
@@ -151,7 +151,7 @@ public:
     name = _name;
   }
 
-  MCBasicBlock *addBlock(string b_name) {
+  MCBasicBlock *addBlock(const string &b_name) {
     return &BBs.emplace_back(b_name);
   }
 
@@ -206,6 +206,105 @@ class arm2llvm {
   // names
   unordered_map<MCInst *, string> instExprVarMap;
   const DataLayout &DL;
+
+  Value *lazyAddGlobal(const string &newGlobal) {
+    // globals that are definitions in the assembly can be lifted
+    // directly. the trick here is that we have to deal with a mix of
+    // literal and symbolic data.
+    for (const auto &g : MF.MCglobals) {
+      string name{g.name};
+      if (name != newGlobal)
+        continue;
+      *out << "creating lifted global " << name << " from the assembly\n";
+      if (name.rfind(".L.", 0) == 0) {
+        // the assembler has mangled local symbols, which start with a
+        // dot, by prefixing them with ".L"; here we demangle
+        name = name.substr(2);
+        *out << "  (demangling local symbol)\n";
+      }
+      auto size = g.data.size();
+      *out << "  section = " << g.section << "\n";
+
+      vector<Type *> tys;
+      vector<Constant *> vals;
+      for (unsigned i = 0; i < size; ++i) {
+        auto &data = g.data[i];
+        if (holds_alternative<char>(data)) {
+          tys.push_back(getIntTy(8));
+          vals.push_back(ConstantInt::get(getIntTy(8), get<char>(data)));
+        } else if (holds_alternative<OffsetSym>(data)) {
+          auto s = get<OffsetSym>(data);
+          Constant *sym = dyn_cast<Constant>(LLVMglobals[s.sym]);
+          Constant *offset = getIntConst(s.offset, 64);
+          Constant *ptr =
+              ConstantExpr::getGetElementPtr(getIntTy(8), sym, offset);
+          tys.push_back(PointerType::get(Ctx, 0));
+          vals.push_back(ptr);
+        } else {
+          assert(false);
+        }
+      }
+      auto *ty = StructType::create(tys);
+      auto initializer = ConstantStruct::get(ty, vals);
+      bool isConstant =
+          g.section.starts_with(".rodata") || g.section == ".text";
+
+      auto *glob = new GlobalVariable(
+          *LiftedModule, ty, isConstant,
+          GlobalValue::LinkageTypes::ExternalLinkage, initializer, name);
+      glob->setAlignment(g.align);
+      return glob;
+    }
+
+    // globals that are only declarations have to be registered in
+    // LLVM IR, but they don't show up anywhere in the assembly, the
+    // declaration is implicit. so here we find those and create them
+    // in the lifted module
+    for (auto &srcFnGlobal : srcFn.getParent()->globals()) {
+      if (!srcFnGlobal.isDeclaration())
+        continue;
+      string name{srcFnGlobal.getName()};
+      if (name != newGlobal)
+        continue;
+      *out << "creating declaration for global variable " << name << "\n";
+      *out << "  linkage = " << srcFnGlobal.getLinkage() << "\n";
+      auto *glob = new GlobalVariable(
+          *LiftedModule, srcFnGlobal.getValueType(), srcFnGlobal.isConstant(),
+          GlobalValue::LinkageTypes::ExternalLinkage,
+          /*initializer=*/nullptr, name);
+      glob->setAlignment(srcFnGlobal.getAlign());
+      return glob;
+    }
+
+    // also create function definitions, since these can be used as
+    // addresses by the compiled code
+    for (auto &f : *srcFn.getParent()) {
+      if (&f == &srcFn)
+        continue;
+      auto name = f.getName();
+      if (name != newGlobal)
+        continue;
+      return Function::Create(f.getFunctionType(),
+                              GlobalValue::LinkageTypes::ExternalLinkage, name,
+                              LiftedModule);
+    }
+
+    return nullptr;
+  }
+
+  // we used to create globals eagerly, but large modules often
+  // contain a lot of global data that isn't touched by the function
+  // we're lifting, so now we do this only on demand
+  Value *lookupGlobal(const string &name) {
+    auto glob = LLVMglobals.find(name);
+    if (glob == LLVMglobals.end()) {
+      auto *g = lazyAddGlobal(name);
+      if (g)
+        LLVMglobals[name] = g;
+      return g;
+    }
+    return glob->second;
+  }
 
   BasicBlock *getBB(MCOperand &jmp_tgt) {
     assert(jmp_tgt.isExpr() && "[getBB] expected expression operand");
@@ -1893,7 +1992,7 @@ class arm2llvm {
       exit(-1);
     }
 
-    if (!LLVMglobals.contains(name)) {
+    if (!lookupGlobal(name)) {
       *out << "\ncan't find global '" << name << "'\n";
       *out << "ERROR: Unknown global in ADRP\n\n";
       exit(-1);
@@ -1939,7 +2038,7 @@ class arm2llvm {
         stringVar = stringVar.substr(2);
       }
 
-      if (!LLVMglobals.contains(stringVar)) {
+      if (!lookupGlobal(stringVar)) {
         *out << "\nERROR: instruction mentions '" << stringVar << "'\n";
         *out << "which is not a global variable we know about\n\n";
         exit(-1);
@@ -1962,19 +2061,17 @@ class arm2llvm {
         exit(-1);
       }
 
-      auto glob = LLVMglobals.find(stringVar);
-      if (glob == LLVMglobals.end()) {
+      globalVar = lookupGlobal(stringVar);
+      if (!globalVar) {
         *out << "\nERROR: global not found\n\n";
         exit(-1);
       }
-      globalVar = glob->second;
     } else {
-      auto glob = LLVMglobals.find(sss);
-      if (glob == LLVMglobals.end()) {
+      globalVar = lookupGlobal(sss);
+      if (!globalVar) {
         *out << "\nERROR: global not found\n\n";
         exit(-1);
       }
-      globalVar = glob->second;
     }
 
     return make_pair(globalVar, storePtr);
@@ -8160,15 +8257,6 @@ public:
     return V;
   }
 
-  void createLLVMGlobal(Type *ty, StringRef name, MaybeAlign al,
-                        bool isConstant, Constant *init) {
-    auto *g = new GlobalVariable(*LiftedModule, ty, isConstant,
-                                 GlobalValue::LinkageTypes::ExternalLinkage,
-                                 init, name);
-    g->setAlignment(al);
-    LLVMglobals[name.str()] = g;
-  }
-
   string linkageStr(GlobalValue::LinkageTypes linkage) {
     switch (linkage) {
     case GlobalValue::LinkageTypes::ExternalLinkage:
@@ -8208,81 +8296,6 @@ public:
         Function::Create(srcFn.getFunctionType(), GlobalValue::ExternalLinkage,
                          0, srcFn.getName(), LiftedModule);
     liftedFn->copyAttributesFrom(&srcFn);
-
-    // FIXME: instead of creating all of these lifted globals eagerly
-    // (there may be many) we should create them on demand, when
-    // lifted code references them
-
-    // globals that are only declarations have to be registered in
-    // LLVM IR, but they don't show up anywhere in the assembly, the
-    // declaration is implicit. so here we find those and create them
-    // in the lifted module
-    for (auto &srcFnGlobal : srcFn.getParent()->globals()) {
-      if (!srcFnGlobal.isDeclaration())
-        continue;
-      string name{srcFnGlobal.getName()};
-      if (!LLVMglobals.contains(name)) {
-        *out << "createing declaration for global variable " << name << "\n";
-        *out << "  linkage = " << srcFnGlobal.getLinkage() << "\n";
-        createLLVMGlobal(srcFnGlobal.getValueType(), name,
-                         srcFnGlobal.getAlign(), srcFnGlobal.isConstant(),
-                         /*initializer=*/nullptr);
-      }
-    }
-
-    // also create function definitions, since these can be used as
-    // addresses by the compiled code
-    for (auto &f : *srcFn.getParent()) {
-      if (&f == &srcFn)
-        continue;
-      auto name = f.getName();
-      auto newF = Function::Create(f.getFunctionType(),
-                                   GlobalValue::LinkageTypes::ExternalLinkage,
-                                   name, LiftedModule);
-      LLVMglobals[name.str()] = newF;
-    }
-
-    // globals that are definitions in the assembly can be lifted
-    // directly. the trick here is that we have to deal with a mix of
-    // literal and symbolic data.
-    for (const auto &g : MF.MCglobals) {
-      string name{g.name};
-      *out << "creating lifted global " << name << " from the assembly\n";
-      if (name.rfind(".L.", 0) == 0) {
-        // the assembler has mangled local symbols, which start with a
-        // dot, by prefixing them with ".L"; here we demangle
-        name = name.substr(2);
-        *out << "  (demangling local symbol)\n";
-      }
-      auto size = g.data.size();
-      *out << "  section = " << g.section << "\n";
-      assert(!LLVMglobals.contains(name));
-
-      vector<Type *> tys;
-      vector<Constant *> vals;
-      for (unsigned i = 0; i < size; ++i) {
-        auto &data = g.data[i];
-        if (holds_alternative<char>(data)) {
-          tys.push_back(getIntTy(8));
-          vals.push_back(ConstantInt::get(i8, get<char>(data)));
-        } else if (holds_alternative<OffsetSym>(data)) {
-          auto s = get<OffsetSym>(data);
-          Constant *sym = dyn_cast<Constant>(LLVMglobals[s.sym]);
-          Constant *offset = getIntConst(s.offset, 64);
-          Constant *ptr =
-              ConstantExpr::getGetElementPtr(getIntTy(8), sym, offset);
-          tys.push_back(PointerType::get(Ctx, 0));
-          vals.push_back(ptr);
-        } else {
-          assert(false);
-        }
-      }
-      auto *ty = StructType::create(tys);
-      auto initializer = ConstantStruct::get(ty, vals);
-      bool isConstant =
-          g.section.starts_with(".rodata") || g.section == ".text";
-      createLLVMGlobal(ty, name, g.align, isConstant, initializer);
-    }
 
     // create LLVM-side basic blocks
     vector<pair<BasicBlock *, MCBasicBlock *>> BBs;
