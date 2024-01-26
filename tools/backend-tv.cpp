@@ -104,6 +104,7 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
 
   lifter::reset();
 
+  // FIXME: adjust source only after lowering to asm!
   // this has to return a fresh function since it rewrites the
   // signature
   srcFn = lifter::adjustSrc(srcFn);
