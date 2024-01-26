@@ -25,6 +25,8 @@
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/TargetParser/Triple.h"
+#include "llvm/Transforms/IPO/GlobalDCE.h"
+#include "llvm/Transforms/IPO/Internalize.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 
 #include <fstream>
@@ -66,6 +68,15 @@ llvm::cl::opt<bool> opt_skip_verification(
     LLVM_ARGS_PREFIX "skip-verification",
     llvm::cl::desc(
         "Perform lifting but skip the refinement check (default=false)"),
+    llvm::cl::cat(alive_cmdargs), llvm::cl::init(false));
+
+// FIXME -- this needs to be turned off by default
+llvm::cl::opt<bool> opt_internalize(
+    LLVM_ARGS_PREFIX "internalize",
+    llvm::cl::desc(
+        "Internalize the module before performing TV, to allow removing more "
+        "clutter. WARNING: this sometimes changes the generated code, which "
+        "can invalidate TV results, generally do not use (default=false"),
     llvm::cl::cat(alive_cmdargs), llvm::cl::init(false));
 
 // FIXME support opt_asm_only and opt_asm_input
@@ -116,9 +127,30 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
       F.deleteBody();
   }
 
-  // FIXME -- here we could avoid wasting time with unnecessary
-  // lowering and parsing if we removed global variables not reachable
-  // from the lifted function
+  // now nuke everything not reachable from the target function
+  if (true) {
+    llvm::LoopAnalysisManager LAM;
+    llvm::FunctionAnalysisManager FAM;
+    llvm::CGSCCAnalysisManager CGAM;
+    llvm::ModuleAnalysisManager MAM;
+    llvm::PassBuilder PB;
+    llvm::ModulePassManager MPM;
+
+    PB.registerModuleAnalyses(MAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerLoopAnalyses(LAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+
+    auto preserve = [srcFn](const llvm::GlobalValue &GV) {
+      return &GV == srcFn;
+    };
+
+    if (opt_internalize)
+      MPM.addPass(llvm::InternalizePass(preserve));
+    MPM.addPass(llvm::GlobalDCEPass());
+    MPM.run(*M1, MAM);
+  }
 
   auto AsmBuffer = (opt_asm_input != "")
                        ? ExitOnErr(llvm::errorOrToExpected(

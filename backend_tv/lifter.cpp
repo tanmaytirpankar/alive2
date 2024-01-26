@@ -213,15 +213,10 @@ class arm2llvm {
     // literal and symbolic data.
     for (const auto &g : MF.MCglobals) {
       string name{g.name};
+      demangle(name);
       if (name != newGlobal)
         continue;
       *out << "creating lifted global " << name << " from the assembly\n";
-      if (name.rfind(".L.", 0) == 0) {
-        // the assembler has mangled local symbols, which start with a
-        // dot, by prefixing them with ".L"; here we demangle
-        name = name.substr(2);
-        *out << "  (demangling local symbol)\n";
-      }
       auto size = g.data.size();
       *out << "  section = " << g.section << "\n";
 
@@ -1962,6 +1957,20 @@ class arm2llvm {
     updateReg(V, destReg, SExt);
   }
 
+  std::tuple<string, long> getOffset(const string &var) {
+    std::smatch m;
+    std::regex offset("^(.*)\\+([0-9]+)$");
+    if (std::regex_search(var, m, offset)) {
+      auto root = m[1];
+      auto offset = m[2];
+      *out << "  root = " << root << "\n";
+      *out << "  offset = " << offset << "\n";
+      return make_tuple(root, stol(offset));
+    } else {
+      return make_tuple(var, 0);
+    }
+  }
+
   // Reads an Expr and maps containing string variable to a global variable
   void mapExprVar(const MCExpr *expr) {
     std::string name;
@@ -1979,18 +1988,9 @@ class arm2llvm {
       name = sm1.suffix();
     }
 
-    if (name.rfind(".L.", 0) == 0) {
-      // the assembler has mangled local symbols, which start with a
-      // dot, by prefixing them with ".L"; here we demangle
-      name = name.substr(2);
-    }
-
-    std::smatch sm2;
-    std::regex offset("\\+[0-9]+$");
-    if (std::regex_search(name, sm2, offset)) {
-      *out << "\nERROR: Not yet supporting offsets from globals\n\n";
-      exit(-1);
-    }
+    demangle(name);
+    auto [root, offset] = getOffset(name);
+    name = root;
 
     if (!lookupGlobal(name)) {
       *out << "\ncan't find global '" << name << "'\n";
@@ -2001,6 +2001,14 @@ class arm2llvm {
     instExprVarMap[CurInst] = name;
   }
 
+  void demangle(string &sss) {
+    if (sss.rfind(".L.", 0) == 0) {
+      // the assembler has mangled local symbols, which start with a
+      // dot, by prefixing them with ".L"; here we demangle
+      sss = sss.substr(2);
+    }
+  }
+    
   // Reads an Expr and gets the global variable corresponding the containing
   // string variable. Assuming the Expr consists of a single global variable.
   pair<Value *, bool> getExprVar(const MCExpr *expr) {
@@ -2019,6 +2027,9 @@ class arm2llvm {
     llvm::raw_string_ostream ss(sss);
     expr->print(ss, nullptr);
 
+    auto [root, offset] = getOffset(sss);
+    sss = root;
+
     // If the expression starts with a relocation specifier, strip it and look
     // for the rest (variable in the Expr) in the instExprVarMap and globals.
     // Assuming there is only one relocation specifier, and it is at the
@@ -2032,11 +2043,7 @@ class arm2llvm {
         storePtr = false;
       }
 
-      if (stringVar.rfind(".L.", 0) == 0) {
-        // the assembler has mangled local symbols, which start with a
-        // dot, by prefixing them with ".L"; here we demangle
-        stringVar = stringVar.substr(2);
-      }
+      demangle(stringVar);
 
       if (!lookupGlobal(stringVar)) {
         *out << "\nERROR: instruction mentions '" << stringVar << "'\n";
@@ -2067,6 +2074,7 @@ class arm2llvm {
         exit(-1);
       }
     } else {
+      demangle(sss);
       globalVar = lookupGlobal(sss);
       if (!globalVar) {
         *out << "\nERROR: global not found\n\n";
@@ -2074,6 +2082,7 @@ class arm2llvm {
       }
     }
 
+    globalVar = createGEP(getIntTy(8), globalVar, {getIntConst(offset,64)}, "");
     return make_pair(globalVar, storePtr);
   }
 
