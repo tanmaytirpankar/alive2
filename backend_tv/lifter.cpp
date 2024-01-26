@@ -8209,9 +8209,9 @@ public:
                          0, srcFn.getName(), LiftedModule);
     liftedFn->copyAttributesFrom(&srcFn);
 
-    // FIXME: we should do this differently -- by walking a list of
-    // symbols referenced in the assembly, and only create globals
-    // corresponding to those
+    // FIXME: instead of creating all of these lifted globals eagerly
+    // (there may be many) we should create them on demand, when
+    // lifted code references them
 
     // globals that are only declarations have to be registered in
     // LLVM IR, but they don't show up anywhere in the assembly, the
