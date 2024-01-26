@@ -115,6 +115,10 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
       F.deleteBody();
   }
 
+  // FIXME -- here we could avoid wasting time with unnecessary
+  // lowering and parsing if we removed global variables not reachable
+  // from the lifted function
+
   auto AsmBuffer = (opt_asm_input != "")
                        ? ExitOnErr(llvm::errorOrToExpected(
                              llvm::MemoryBuffer::getFile(opt_asm_input)))
