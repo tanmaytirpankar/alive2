@@ -120,7 +120,12 @@ public:
   }
 };
 
-typedef variant<char, string> RODataItem;
+struct OffsetSym {
+  string sym;
+  long offset;
+};
+
+typedef variant<char, OffsetSym> RODataItem;
 
 struct MCGlobal {
   string name;
@@ -233,6 +238,10 @@ class arm2llvm {
            (reg >= AArch64::S0 && reg <= AArch64::S31);
   }
 
+  Constant *getIntConst(uint64_t val, u_int64_t bits) {
+    return ConstantInt::get(Ctx, llvm::APInt(bits, val));
+  }
+
   VectorType *getVecTy(unsigned eltSize, unsigned numElts) {
     auto eTy = getIntTy(eltSize);
     auto ec = ElementCount::getFixed(numElts);
@@ -254,10 +263,6 @@ class arm2llvm {
     // just trying to catch silly errors, remove this sometime
     assert(bits > 0 && bits <= 256);
     return Type::getIntNTy(Ctx, bits);
-  }
-
-  Constant *getIntConst(uint64_t val, u_int64_t bits) {
-    return ConstantInt::get(Ctx, llvm::APInt(bits, val));
   }
 
   // Create and return a ConstantVector out of the vector of Constant vals
@@ -8204,9 +8209,9 @@ public:
                          0, srcFn.getName(), LiftedModule);
     liftedFn->copyAttributesFrom(&srcFn);
 
-    // FIXME: in all three of the subsequent code blocks, we can save
-    // some work by only creating globals that the lifted function
-    // actually references
+    // FIXME: we should do this differently -- by walking a list of
+    // symbols referenced in the assembly, and only create globals
+    // corresponding to those
 
     // globals that are only declarations have to be registered in
     // LLVM IR, but they don't show up anywhere in the assembly, the
@@ -8260,13 +8265,14 @@ public:
         if (holds_alternative<char>(data)) {
           tys.push_back(getIntTy(8));
           vals.push_back(ConstantInt::get(i8, get<char>(data)));
-        } else if (holds_alternative<string>(data)) {
-          string symName = get<string>(data);
-          Value *sym = LLVMglobals[symName];
-          auto *symConst = dyn_cast<Constant>(sym);
-          assert(symConst);
+        } else if (holds_alternative<OffsetSym>(data)) {
+          auto s = get<OffsetSym>(data);
+          Constant *sym = dyn_cast<Constant>(LLVMglobals[s.sym]);
+          Constant *offset = getIntConst(s.offset, 64);
+          Constant *ptr =
+              ConstantExpr::getGetElementPtr(getIntTy(8), sym, offset);
           tys.push_back(PointerType::get(Ctx, 0));
-          vals.push_back(symConst);
+          vals.push_back(ptr);
         } else {
           assert(false);
         }
@@ -8650,10 +8656,31 @@ public:
     if (auto SR = dyn_cast<MCSymbolRefExpr>(Value)) {
       const MCSymbol &Sym = SR->getSymbol();
       string name{Sym.getName()};
-      *out << "[emitValue= " << name << "]\n";
-      curROData.push_back(RODataItem{name});
+      *out << "[emitValue MCSymbolRefExpr= " << name << "]\n";
+      OffsetSym s{name, 0};
+      curROData.push_back(RODataItem{s});
+    } else if (auto CE = dyn_cast<MCConstantExpr>(Value)) {
+      *out << "[emitValue MCConstantExpr]\n";
+      CE->dump();
+      assert(false && "handle this");
+    } else if (auto UE = dyn_cast<MCUnaryExpr>(Value)) {
+      *out << "[emitValue MCUnaryExpr]\n";
+      UE->dump();
+      assert(false && "handle this");
+    } else if (auto BE = dyn_cast<MCBinaryExpr>(Value)) {
+      *out << "[emitValue MCBinaryExpr]\n";
+      auto *LHS = dyn_cast<MCSymbolRefExpr>(BE->getLHS());
+      assert(LHS);
+      auto *RHS = dyn_cast<MCConstantExpr>(BE->getRHS());
+      assert(RHS);
+      OffsetSym s{(string)LHS->getSymbol().getName(), RHS->getValue()};
+      curROData.push_back(RODataItem{s});
+    } else if (auto TE = dyn_cast<MCTargetExpr>(Value)) {
+      *out << "[emitValue MCTargetExpr]\n";
+      TE->dump();
+      assert(false && "handle this");
     } else {
-      assert(false && "only MCSymbolRefExpr supported");
+      assert(false && "unexpected MCExpr type");
     }
   }
 
