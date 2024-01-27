@@ -263,6 +263,11 @@ Function *adjustSrc(Function *srcFn) {
     exit(-1);
   }
 
+  if (srcFn->hasPersonalityFn()) {
+    *out << "\nERROR: personality functions not supported\n\n";
+    exit(-1);
+  }
+
   for (auto &v : srcFn->args()) {
     auto *ty = v.getType();
     if (ty->isStructTy()) {
@@ -294,7 +299,6 @@ Function *adjustSrc(Function *srcFn) {
     checkVectorTy(RT);
 
   set<Type *> typeSet;
-
   auto &DL = srcFn->getParent()->getDataLayout();
   unsigned llvmInstCount = 0;
   for (auto &bb : *srcFn) {

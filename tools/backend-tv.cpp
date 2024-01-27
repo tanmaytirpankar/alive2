@@ -120,10 +120,14 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
       F.deleteBody();
   }
 
-  srcFn->setLinkage(llvm::GlobalValue::LinkageTypes::ExternalLinkage);
-  
-  // now nuke everything not reachable from the target function
-  {
+  if (opt_internalize) {
+    // nuke everything not reachable from the target function; this is
+    // useful for removing clutter but should never be used when you
+    // want to trust the results, since changing linkage can change
+    // codegen
+
+    srcFn->setLinkage(llvm::GlobalValue::LinkageTypes::ExternalLinkage);
+
     llvm::LoopAnalysisManager LAM;
     llvm::FunctionAnalysisManager FAM;
     llvm::CGSCCAnalysisManager CGAM;
@@ -141,8 +145,7 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
       return &GV == srcFn;
     };
 
-    if (opt_internalize)
-      MPM.addPass(llvm::InternalizePass(preserve));
+    MPM.addPass(llvm::InternalizePass(preserve));
     MPM.addPass(llvm::GlobalDCEPass());
     MPM.run(*M1, MAM);
   }

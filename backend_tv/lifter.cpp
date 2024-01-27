@@ -2008,7 +2008,7 @@ class arm2llvm {
       sss = sss.substr(2);
     }
   }
-    
+
   // Reads an Expr and gets the global variable corresponding the containing
   // string variable. Assuming the Expr consists of a single global variable.
   pair<Value *, bool> getExprVar(const MCExpr *expr) {
@@ -2082,7 +2082,8 @@ class arm2llvm {
       }
     }
 
-    globalVar = createGEP(getIntTy(8), globalVar, {getIntConst(offset,64)}, "");
+    globalVar =
+        createGEP(getIntTy(8), globalVar, {getIntConst(offset, 64)}, "");
     return make_pair(globalVar, storePtr);
   }
 
