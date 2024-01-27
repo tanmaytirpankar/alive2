@@ -12,12 +12,12 @@ declare ptr @malloc()
 ; Function Attrs: strictfp
 define internal i32 @arc_compare(ptr %a1, ptr %a2) #1 {
 entry:
-  %0 = load ptr, ptr null, align 8
+  %0 = load ptr, ptr %a1, align 8
   %flow = getelementptr %struct.arc, ptr %0, i64 0, i32 7
-  %1 = load i64, ptr null, align 8
-  %2 = load ptr, ptr null, align 8
+  %1 = load i64, ptr %a2, align 8
+  %2 = load ptr, ptr %a1, align 8
   %flow1 = getelementptr %struct.arc, ptr %2, i64 0, i32 7
-  %3 = load i64, ptr null, align 8
+  %3 = load i64, ptr %a2, align 8
   %cmp = icmp sgt i64 0, 0
   %cmp4 = icmp slt i64 0, 0
   ret i32 0
