@@ -120,6 +120,8 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
       F.deleteBody();
   }
 
+  srcFn->setLinkage(llvm::GlobalValue::LinkageTypes::ExternalLinkage);
+  
   // now nuke everything not reachable from the target function
   {
     llvm::LoopAnalysisManager LAM;
