@@ -43,7 +43,7 @@ extern const llvm::Target *Targ;
 inline const char *TripleName = "aarch64-unknown-linux-gnu";
 inline const char *CPU = "generic";
 
-void reset();
+void init();
 
 llvm::Function *adjustSrc(llvm::Function *srcFn);
 

@@ -886,7 +886,7 @@ void BBFuzzer::go() {
 }
 
 void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
-  lifter::reset();
+  lifter::init();
 
   // this has to return a fresh function since it rewrites the
   // signature

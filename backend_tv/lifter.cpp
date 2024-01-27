@@ -8821,28 +8821,23 @@ unsigned int origRetWidth;
 bool has_ret_attr;
 const Target *Targ;
 
-void reset() {
+void init() {
   static bool initialized = false;
-
-  if (!initialized) {
-    LLVMInitializeAArch64TargetInfo();
-    LLVMInitializeAArch64Target();
-    LLVMInitializeAArch64TargetMC();
-    LLVMInitializeAArch64AsmParser();
-    LLVMInitializeAArch64AsmPrinter();
-    string Error;
-    Targ = TargetRegistry::lookupTarget(TripleName, Error);
-    if (!Targ) {
-      *out << Error;
-      exit(-1);
-    }
-    initialized = true;
+  assert(!initialized);
+  LLVMInitializeAArch64TargetInfo();
+  LLVMInitializeAArch64Target();
+  LLVMInitializeAArch64TargetMC();
+  LLVMInitializeAArch64AsmParser();
+  LLVMInitializeAArch64AsmPrinter();
+  string Error;
+  Targ = TargetRegistry::lookupTarget(TripleName, Error);
+  if (!Targ) {
+    *out << Error;
+    exit(-1);
   }
-
-  // FIXME this is a pretty error-prone way to reset the state,
-  // probably should just encapsulate this in a class
   origRetWidth = 64;
   has_ret_attr = false;
+  initialized = true;
 }
 
 pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,

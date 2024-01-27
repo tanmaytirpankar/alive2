@@ -113,13 +113,6 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
     }
   }
 
-  lifter::reset();
-
-  // FIXME: adjust source only after lowering to asm!
-  // this has to return a fresh function since it rewrites the
-  // signature
-  srcFn = lifter::adjustSrc(srcFn);
-
   // nuke the rest of the functions in the module -- no need to
   // generate and then parse assembly that we don't care about
   for (auto &F : *M1) {
@@ -128,7 +121,7 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
   }
 
   // now nuke everything not reachable from the target function
-  if (true) {
+  {
     llvm::LoopAnalysisManager LAM;
     llvm::FunctionAnalysisManager FAM;
     llvm::CGSCCAnalysisManager CGAM;
@@ -152,6 +145,8 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
     MPM.run(*M1, MAM);
   }
 
+  lifter::init();
+
   auto AsmBuffer = (opt_asm_input != "")
                        ? ExitOnErr(llvm::errorOrToExpected(
                              llvm::MemoryBuffer::getFile(opt_asm_input)))
@@ -166,6 +161,8 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
 
   if (opt_asm_only)
     exit(0);
+
+  srcFn = lifter::adjustSrc(srcFn);
 
   std::unique_ptr<llvm::Module> M2 =
       std::make_unique<llvm::Module>("M2", M1->getContext());
