@@ -208,9 +208,28 @@ class arm2llvm {
   const DataLayout &DL;
 
   Value *lazyAddGlobal(const string &newGlobal) {
+    *out << "lazyAddGlobal '" << newGlobal << "'\n";
+    
+    // it's a pointer to a function
+    for (auto &f : *srcFn.getParent()) {
+      auto name = f.getName();
+      if (name != newGlobal)
+        continue;
+      if (&f == liftedFn) {
+        *out << "  yay it's me!\n";
+        return liftedFn;
+      } else {
+        *out << "  creating function '" << newGlobal << "'\n";
+        return Function::Create(f.getFunctionType(),
+                                GlobalValue::LinkageTypes::ExternalLinkage, name,
+                                LiftedModule);
+      }
+    }
+
     // globals that are definitions in the assembly can be lifted
-    // directly. the trick here is that we have to deal with a mix of
-    // literal and symbolic data.
+    // directly. here we have to deal with a mix of literal and
+    // symbolic data, and also we have to correctly handle the
+    // recursive case
     for (const auto &g : MF.MCglobals) {
       string name{g.name};
       demangle(name);
@@ -229,10 +248,13 @@ class arm2llvm {
           vals.push_back(ConstantInt::get(getIntTy(8), get<char>(data)));
         } else if (holds_alternative<OffsetSym>(data)) {
           auto s = get<OffsetSym>(data);
-          Constant *sym = dyn_cast<Constant>(LLVMglobals[s.sym]);
+          *out << "  it's a symbol named " << s.sym << "\n";
+          auto var = lookupGlobal(s.sym);
+          assert(var);
+          auto *sym = dyn_cast<Constant>(var);
           Constant *offset = getIntConst(s.offset, 64);
           Constant *ptr =
-              ConstantExpr::getGetElementPtr(getIntTy(8), sym, offset);
+            ConstantExpr::getGetElementPtr(getIntTy(8), sym, offset);
           tys.push_back(PointerType::get(Ctx, 0));
           vals.push_back(ptr);
         } else {
@@ -243,7 +265,6 @@ class arm2llvm {
       auto initializer = ConstantStruct::get(ty, vals);
       bool isConstant =
           g.section.starts_with(".rodata") || g.section == ".text";
-
       auto *glob = new GlobalVariable(
           *LiftedModule, ty, isConstant,
           GlobalValue::LinkageTypes::ExternalLinkage, initializer, name);
@@ -252,7 +273,7 @@ class arm2llvm {
     }
 
     // globals that are only declarations have to be registered in
-    // LLVM IR, but they don't show up anywhere in the assembly, the
+    // LLVM IR, but they don't show up anywhere in the assembly -- the
     // declaration is implicit. so here we find those and create them
     // in the lifted module
     for (auto &srcFnGlobal : srcFn.getParent()->globals()) {
@@ -271,26 +292,13 @@ class arm2llvm {
       return glob;
     }
 
-    // also create function definitions, since these can be used as
-    // addresses by the compiled code
-    for (auto &f : *srcFn.getParent()) {
-      if (&f == &srcFn)
-        continue;
-      auto name = f.getName();
-      if (name != newGlobal)
-        continue;
-      return Function::Create(f.getFunctionType(),
-                              GlobalValue::LinkageTypes::ExternalLinkage, name,
-                              LiftedModule);
-    }
-
     return nullptr;
   }
 
-  // we used to create globals eagerly, but large modules often
-  // contain a lot of global data that isn't touched by the function
-  // we're lifting, so now we do this only on demand
+  // create lifted globals only on demand -- saves time and clutter for
+  // large modules
   Value *lookupGlobal(const string &name) {
+    *out << "lookupGlobal '" << name << "'\n";
     auto glob = LLVMglobals.find(name);
     if (glob == LLVMglobals.end()) {
       auto *g = lazyAddGlobal(name);
@@ -8469,7 +8477,6 @@ public:
       auto &mc_instrs = mc_bb->getInstrs();
 
       for (auto &inst : mc_instrs) {
-        *out << "  ";
         llvmInstNum = 0;
         liftInst(inst);
         ++armInstNum;
