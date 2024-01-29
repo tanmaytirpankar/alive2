@@ -207,32 +207,41 @@ class arm2llvm {
   unordered_map<MCInst *, string> instExprVarMap;
   const DataLayout &DL;
 
+  struct deferredGlobal {
+    string name;
+    GlobalVariable *val;
+  };
+  vector<deferredGlobal> deferredGlobs;
+  set<GlobalVariable *> finalized;
+
   Value *lazyAddGlobal(const string &newGlobal) {
-    *out << "lazyAddGlobal '" << newGlobal << "'\n";
-    
+    *out << "  lazyAddGlobal '" << newGlobal << "'\n";
+
     // it's a pointer to a function
     for (auto &f : *srcFn.getParent()) {
       auto name = f.getName();
       if (name != newGlobal)
         continue;
+      // pointer to the function we're lifting into is a special case
       if (&f == liftedFn) {
         *out << "  yay it's me!\n";
         return liftedFn;
       } else {
         *out << "  creating function '" << newGlobal << "'\n";
         return Function::Create(f.getFunctionType(),
-                                GlobalValue::LinkageTypes::ExternalLinkage, name,
-                                LiftedModule);
+                                GlobalValue::LinkageTypes::ExternalLinkage,
+                                name, LiftedModule);
       }
     }
 
     // globals that are definitions in the assembly can be lifted
     // directly. here we have to deal with a mix of literal and
-    // symbolic data, and also we have to correctly handle the
-    // recursive case
+    // symbolic data, and also deal with globals whose initializers
+    // reference each other. we support the latter by creating an
+    // initializer-free dummy variable right now, and then later
+    // creating the actual thing we need
     for (const auto &g : MF.MCglobals) {
-      string name{g.name};
-      demangle(name);
+      string name{demangle(g.name)};
       if (name != newGlobal)
         continue;
       *out << "creating lifted global " << name << " from the assembly\n";
@@ -249,12 +258,23 @@ class arm2llvm {
         } else if (holds_alternative<OffsetSym>(data)) {
           auto s = get<OffsetSym>(data);
           *out << "  it's a symbol named " << s.sym << "\n";
-          auto var = lookupGlobal(s.sym);
-          assert(var);
-          auto *sym = dyn_cast<Constant>(var);
+          auto res = LLVMglobals.find(s.sym);
+          Value *var;
+          if (res == LLVMglobals.end()) {
+            *out << "  breaking recursive loop by deferring " << s.sym << "\n";
+            auto *dummy =
+                new GlobalVariable(*LiftedModule, getIntTy(8), false,
+                                   GlobalValue::LinkageTypes::ExternalLinkage,
+                                   nullptr, s.sym + "_tmp");
+            deferredGlobs.push_back({.name = demangle(s.sym), .val = dummy});
+            var = dummy;
+          } else {
+            var = res->second;
+          }
+          auto con = dyn_cast<Constant>(var);
           Constant *offset = getIntConst(s.offset, 64);
           Constant *ptr =
-            ConstantExpr::getGetElementPtr(getIntTy(8), sym, offset);
+              ConstantExpr::getGetElementPtr(getIntTy(8), con, offset);
           tys.push_back(PointerType::get(Ctx, 0));
           vals.push_back(ptr);
         } else {
@@ -292,21 +312,35 @@ class arm2llvm {
       return glob;
     }
 
-    return nullptr;
+    assert(false);
   }
 
   // create lifted globals only on demand -- saves time and clutter for
   // large modules
-  Value *lookupGlobal(const string &name) {
+  Value *lookupGlobal(const string &nm) {
+    auto name = demangle(nm);
     *out << "lookupGlobal '" << name << "'\n";
+
     auto glob = LLVMglobals.find(name);
-    if (glob == LLVMglobals.end()) {
-      auto *g = lazyAddGlobal(name);
-      if (g)
-        LLVMglobals[name] = g;
-      return g;
+    if (glob != LLVMglobals.end())
+      return glob->second;
+
+    auto *g = lazyAddGlobal(name);
+    assert(g);
+    LLVMglobals[name] = g;
+
+    while (!deferredGlobs.empty()) {
+      auto def = deferredGlobs.at(0);
+      deferredGlobs.erase(deferredGlobs.begin());
+      if (finalized.contains(def.val))
+        continue;
+      auto g2 = lazyAddGlobal(def.name);
+      def.val->replaceAllUsesWith(g2);
+      def.val->eraseFromParent();
+      LLVMglobals[def.name] = def.val;
+      finalized.insert(def.val);
     }
-    return glob->second;
+    return g;
   }
 
   BasicBlock *getBB(MCOperand &jmp_tgt) {
@@ -1997,7 +2031,7 @@ class arm2llvm {
       name = sm1.suffix();
     }
 
-    demangle(name);
+    name = demangle(name);
     auto [root, offset] = getOffset(name);
     name = root;
 
@@ -2010,11 +2044,13 @@ class arm2llvm {
     instExprVarMap[CurInst] = name;
   }
 
-  void demangle(string &sss) {
-    if (sss.rfind(".L.", 0) == 0) {
+  string demangle(const string &name) {
+    if (name.rfind(".L.", 0) == 0) {
       // the assembler has mangled local symbols, which start with a
       // dot, by prefixing them with ".L"; here we demangle
-      sss = sss.substr(2);
+      return name.substr(2);
+    } else {
+      return name;
     }
   }
 
@@ -2052,7 +2088,7 @@ class arm2llvm {
         storePtr = false;
       }
 
-      demangle(stringVar);
+      stringVar = demangle(stringVar);
 
       if (!lookupGlobal(stringVar)) {
         *out << "\nERROR: instruction mentions '" << stringVar << "'\n";
@@ -2083,8 +2119,7 @@ class arm2llvm {
         exit(-1);
       }
     } else {
-      demangle(sss);
-      globalVar = lookupGlobal(sss);
+      globalVar = lookupGlobal(demangle(sss));
       if (!globalVar) {
         *out << "\nERROR: global not found\n\n";
         exit(-1);
