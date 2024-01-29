@@ -212,7 +212,6 @@ class arm2llvm {
     GlobalVariable *val;
   };
   vector<deferredGlobal> deferredGlobs;
-  set<GlobalVariable *> finalized;
 
   Value *lazyAddGlobal(const string &newGlobal) {
     *out << "  lazyAddGlobal '" << newGlobal << "'\n";
@@ -261,13 +260,22 @@ class arm2llvm {
           auto res = LLVMglobals.find(s.sym);
           Value *var;
           if (res == LLVMglobals.end()) {
-            *out << "  breaking recursive loop by deferring " << s.sym << "\n";
-            auto *dummy =
+            bool found = false;
+            for (auto [name, _var] : deferredGlobs) {
+              if (name == s.sym) {
+                found = true;
+                var = _var;
+              }
+            }
+            if (!found) {
+              *out << "  breaking recursive loop by deferring " << s.sym << "\n";
+              auto *dummy =
                 new GlobalVariable(*LiftedModule, getIntTy(8), false,
                                    GlobalValue::LinkageTypes::ExternalLinkage,
                                    nullptr, s.sym + "_tmp");
-            deferredGlobs.push_back({.name = demangle(s.sym), .val = dummy});
-            var = dummy;
+              deferredGlobs.push_back({.name = demangle(s.sym), .val = dummy});
+              var = dummy;
+            }
           } else {
             var = res->second;
           }
@@ -332,13 +340,10 @@ class arm2llvm {
     while (!deferredGlobs.empty()) {
       auto def = deferredGlobs.at(0);
       deferredGlobs.erase(deferredGlobs.begin());
-      if (finalized.contains(def.val))
-        continue;
       auto g2 = lazyAddGlobal(def.name);
       def.val->replaceAllUsesWith(g2);
       def.val->eraseFromParent();
       LLVMglobals[def.name] = def.val;
-      finalized.insert(def.val);
     }
     return g;
   }
