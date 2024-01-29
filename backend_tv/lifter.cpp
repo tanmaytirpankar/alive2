@@ -337,6 +337,11 @@ class arm2llvm {
     assert(g);
     LLVMglobals[name] = g;
 
+    // lifting this one may have necessitated lifting other variables,
+    // which we deferred, and created placeholders instead. fill those
+    // in now. this may keep cascading for a while, no problem! we
+    // need to end up lifting the transitive closure of stuff
+    // reachable from the function we're lifting.
     while (!deferredGlobs.empty()) {
       auto def = deferredGlobs.at(0);
       deferredGlobs.erase(deferredGlobs.begin());
