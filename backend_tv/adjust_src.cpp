@@ -188,7 +188,8 @@ void checkSupport(Instruction &i, const DataLayout &DL, set<Type *> &typeSet) {
   if (auto *li = dyn_cast<LoadInst>(&i)) {
     auto *ty = li->getType();
     unsigned w = ty->getScalarSizeInBits();
-    if ((w % 8) != 0) {
+    // i1 is a special case in the ABI
+    if ((w != 1) && ((w % 8) != 0)) {
       *out << "\nERROR: loads that have padding are disabled\n\n";
       exit(-1);
     }

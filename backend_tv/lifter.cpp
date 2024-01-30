@@ -285,6 +285,7 @@ class arm2llvm {
             var = res->second;
           }
           auto con = dyn_cast<Constant>(var);
+          assert(con);
           Constant *offset = getIntConst(s.offset, 64);
           Constant *ptr =
               ConstantExpr::getGetElementPtr(getIntTy(8), con, offset);
