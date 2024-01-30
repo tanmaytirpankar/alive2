@@ -268,11 +268,12 @@ class arm2llvm {
               }
             }
             if (!found) {
-              *out << "  breaking recursive loop by deferring " << s.sym << "\n";
+              *out << "  breaking recursive loop by deferring " << s.sym
+                   << "\n";
               auto *dummy =
-                new GlobalVariable(*LiftedModule, getIntTy(8), false,
-                                   GlobalValue::LinkageTypes::ExternalLinkage,
-                                   nullptr, s.sym + "_tmp");
+                  new GlobalVariable(*LiftedModule, getIntTy(8), false,
+                                     GlobalValue::LinkageTypes::ExternalLinkage,
+                                     nullptr, s.sym + "_tmp");
               deferredGlobs.push_back({.name = demangle(s.sym), .val = dummy});
               var = dummy;
             }
@@ -8973,12 +8974,12 @@ public:
                         SMLoc Loc) override {
     auto ce = dyn_cast<MCConstantExpr>(&NumBytes);
     if (ce) {
-      assert(FillValue == 0);
+      assert(FillValue < 256);
       auto bytes = ce->getValue();
       *out << "[emitFill value = " << FillValue << ", size = " << bytes
            << "]\n";
       for (int i = 0; i < bytes; ++i)
-        curROData.push_back(RODataItem{'0'});
+        curROData.push_back(RODataItem{(char)FillValue});
     } else {
       *out << "[emitFill is unknown!]\n";
     }
