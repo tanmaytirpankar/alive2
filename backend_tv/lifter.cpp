@@ -260,11 +260,15 @@ class arm2llvm {
           auto res = LLVMglobals.find(s.sym);
           Value *var;
           if (res == LLVMglobals.end()) {
+            // ok, this global hasn't been lifted yet. but it might
+            // already be in the deferred queue, in which case we can
+            // use its dummy version.
             bool found = false;
             for (auto [name, _var] : deferredGlobs) {
               if (name == s.sym) {
                 found = true;
                 var = _var;
+                break;
               }
             }
             if (!found) {
@@ -340,9 +344,10 @@ class arm2llvm {
 
     // lifting this one may have necessitated lifting other variables,
     // which we deferred, and created placeholders instead. fill those
-    // in now. this may keep cascading for a while, no problem! we
-    // need to end up lifting the transitive closure of stuff
-    // reachable from the function we're lifting.
+    // in now. this may keep cascading for a while, no problem! our
+    // overall goal here is to end up lifting the transitive closure
+    // of stuff reachable from the function we're lifting, and nothing
+    // else.
     while (!deferredGlobs.empty()) {
       auto def = deferredGlobs.at(0);
       deferredGlobs.erase(deferredGlobs.begin());
@@ -8837,6 +8842,7 @@ private:
   unsigned prev_line{0};
   Align curAlign;
   string curSym;
+  string curSec;
   bool FunctionEnded = false;
 
   vector<RODataItem> curROData;
@@ -8857,13 +8863,10 @@ public:
     if (curROData.empty())
       return;
 
-    auto sp = getCurrentSection();
-    auto section = sp.first->getName();
-
     MCGlobal g{
         .name = curSym,
         .align = curAlign,
-        .section = (string)section,
+        .section = curSec,
         .data = curROData,
     };
     MF.MCglobals.emplace_back(g);
@@ -9053,13 +9056,15 @@ public:
   }
 
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
-    addConstant();
-    curSym = Symbol->getName().str();
-
     auto sp = getCurrentSection();
     string Lab = Symbol->getName().str();
     *out << "[emitLabel '" << Lab << "' in section '"
          << (string)(sp.first->getName()) << "']\n";
+
+    addConstant();
+
+    curSym = Symbol->getName().str();
+    curSec = (string)sp.first->getName();
 
     if (Lab == ".Lfunc_end0")
       FunctionEnded = true;

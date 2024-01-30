@@ -104,6 +104,13 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
           llvm::TargetLibraryInfoWrapperPass &TLI) {
   assert(lifter::out);
 
+  // sigh... do this check earlier to stop an assertion in LLVM from
+  // firing
+  if (srcFn->isVarArg()) {
+    *out << "\nERROR: varargs not supported\n\n";
+    exit(-1);
+  }
+
   {
     // let's not even bother if Alive2 can't process our function
     auto fn = llvm2alive(*srcFn, TLI.getTLI(*srcFn), /*isSrc=*/true);

@@ -258,11 +258,6 @@ Function *adjustSrc(Function *srcFn) {
     exit(-1);
   }
 
-  if (srcFn->isVarArg()) {
-    *out << "\nERROR: varargs not supported\n\n";
-    exit(-1);
-  }
-
   if (srcFn->hasPersonalityFn()) {
     *out << "\nERROR: personality functions not supported\n\n";
     exit(-1);
