@@ -1,5 +1,6 @@
 # ARM-TV TODO
 
+- anytime SP is updated, assert that it's a multiple of 16
 - assert that stack memory is not trashed
   - saved ret addr
   - saved FP

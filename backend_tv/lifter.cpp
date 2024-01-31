@@ -216,21 +216,20 @@ class arm2llvm {
   Value *lazyAddGlobal(const string &newGlobal) {
     *out << "  lazyAddGlobal '" << newGlobal << "'\n";
 
-    // it's a pointer to a function
+    // is the global the address of a function?
+    if (newGlobal == liftedFn->getName()) {
+      // pointer to the function we're lifting into is a special case
+      *out << "  yay it's me!\n";
+      return liftedFn;
+    }
     for (auto &f : *srcFn.getParent()) {
       auto name = f.getName();
       if (name != newGlobal)
         continue;
-      // pointer to the function we're lifting into is a special case
-      if (&f == liftedFn) {
-        *out << "  yay it's me!\n";
-        return liftedFn;
-      } else {
-        *out << "  creating function '" << newGlobal << "'\n";
-        return Function::Create(f.getFunctionType(),
-                                GlobalValue::LinkageTypes::ExternalLinkage,
-                                name, LiftedModule);
-      }
+      *out << "  creating function '" << newGlobal << "'\n";
+      return Function::Create(f.getFunctionType(),
+                              GlobalValue::LinkageTypes::ExternalLinkage, name,
+                              LiftedModule);
     }
 
     // globals that are definitions in the assembly can be lifted
