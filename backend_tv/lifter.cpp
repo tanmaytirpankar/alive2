@@ -198,7 +198,7 @@ class arm2llvm {
   unsigned armInstNum{0}, llvmInstNum{0};
   map<unsigned, Value *> RegFile;
   Value *stackMem{nullptr};
-  unordered_map<string, Value *> LLVMglobals;
+  unordered_map<string, Constant *> LLVMglobals;
   Value *initialSP, *initialReg[32];
   Function *assertDecl;
 
@@ -213,7 +213,7 @@ class arm2llvm {
   };
   vector<deferredGlobal> deferredGlobs;
 
-  Value *lazyAddGlobal(const string &newGlobal) {
+  Constant *lazyAddGlobal(const string &newGlobal) {
     *out << "  lazyAddGlobal '" << newGlobal << "'\n";
 
     // is the global the address of a function?
@@ -257,16 +257,16 @@ class arm2llvm {
           auto s = get<OffsetSym>(data);
           *out << "  it's a symbol named " << s.sym << "\n";
           auto res = LLVMglobals.find(s.sym);
-          Value *var;
+          Constant *con;
           if (res == LLVMglobals.end()) {
             // ok, this global hasn't been lifted yet. but it might
             // already be in the deferred queue, in which case we can
             // use its dummy version.
             bool found = false;
-            for (auto [name, _var] : deferredGlobs) {
+            for (auto [name, _con] : deferredGlobs) {
               if (name == s.sym) {
                 found = true;
-                var = _var;
+                con = _con;
                 break;
               }
             }
@@ -278,13 +278,12 @@ class arm2llvm {
                                      GlobalValue::LinkageTypes::ExternalLinkage,
                                      nullptr, s.sym + "_tmp");
               deferredGlobs.push_back({.name = demangle(s.sym), .val = dummy});
-              var = dummy;
+              con = dummy;
             }
           } else {
-            var = res->second;
+            *out << "  found it using regular lookup\n";
+            con = res->second;
           }
-          auto con = dyn_cast<Constant>(var);
-          assert(con);
           Constant *offset = getIntConst(s.offset, 64);
           Constant *ptr =
               ConstantExpr::getGetElementPtr(getIntTy(8), con, offset);
@@ -330,7 +329,7 @@ class arm2llvm {
 
   // create lifted globals only on demand -- saves time and clutter for
   // large modules
-  Value *lookupGlobal(const string &nm) {
+  Constant *lookupGlobal(const string &nm) {
     auto name = demangle(nm);
     *out << "lookupGlobal '" << name << "'\n";
 
@@ -354,7 +353,7 @@ class arm2llvm {
       auto g2 = lazyAddGlobal(def.name);
       def.val->replaceAllUsesWith(g2);
       def.val->eraseFromParent();
-      LLVMglobals[def.name] = def.val;
+      LLVMglobals[def.name] = g2;
     }
     return g;
   }
@@ -2158,6 +2157,7 @@ class arm2llvm {
       }
     }
 
+    assert(globalVar);
     globalVar =
         createGEP(getIntTy(8), globalVar, {getIntConst(offset, 64)}, "");
     return make_pair(globalVar, storePtr);
@@ -2631,6 +2631,7 @@ public:
   Value *makeLoadWithOffset(Value *base, Value *offset, int size) {
     // Create a GEP instruction based on a byte addressing basis (8 bits)
     // returning pointer to base + offset
+    assert(base);
     auto ptr = createGEP(getIntTy(8), base, {offset}, "");
 
     // Load Value val in the pointer returned by the GEP instruction
@@ -3002,6 +3003,7 @@ public:
 
     // Create a GEP instruction based on a byte addressing basis (8 bits)
     // returning pointer to base + offset
+    assert(base);
     auto ptr = createGEP(getIntTy(8), base, {offsetVal}, "");
 
     // Load Value val in the pointer returned by the GEP instruction
@@ -3086,6 +3088,7 @@ public:
                               Value *val) {
     // Create a GEP instruction based on a byte addressing basis (8 bits)
     // returning pointer to base + offset
+    assert(base);
     auto ptr = createGEP(getIntTy(8), base, {offset}, "");
 
     // Store Value val in the pointer returned by the GEP instruction
@@ -3121,7 +3124,8 @@ public:
 
     // Create a GEP instruction based on a byte addressing basis (8 bits)
     // returning pointer to base + offset
-    auto ptr = createGEP(getIntTy(8), base, {offsetVal}, nextName());
+    assert(base);
+    auto ptr = createGEP(getIntTy(8), base, {offsetVal}, "");
 
     // Store Value val in the pointer returned by the GEP instruction
     createStore(val, ptr);
@@ -4796,7 +4800,7 @@ public:
              (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
       assert((regCounter >= AArch64::Q0 && regCounter <= AArch64::Q31) ||
              (regCounter >= AArch64::D0 && regCounter <= AArch64::D31));
-      Value *offset;
+      Value *offset = nullptr;
       if (isPost) {
         if (CurInst->getOperand(3).isReg() &&
             CurInst->getOperand(3).getReg() != AArch64::XZR) {
