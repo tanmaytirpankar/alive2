@@ -533,6 +533,7 @@ class arm2llvm {
 
   const set<int> instrs_64 = {
       AArch64::BL,
+      AArch64::BLR,
       AArch64::ADDXrx,
       AArch64::ADDSXrs,
       AArch64::ADDSXri,
@@ -3157,10 +3158,17 @@ public:
       break;
     }
 
+#if 0
     case AArch64::BL: {
       *out << "\nERROR: calls not supported\n\n";
       exit(-1);
     }
+
+    case AArch64::BLR: {
+      *out << "\nERROR: calls not supported\n\n";
+      exit(-1);
+    }
+#endif
 
     case AArch64::MRS: {
       // https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/NZCV--Condition-Flags
@@ -8930,11 +8938,6 @@ public:
   virtual void emitInstruction(const MCInst &Inst,
                                const MCSubtargetInfo & /* unused */) override {
 
-    if (Inst.getOpcode() == AArch64::BL) {
-      *out << "\nERROR: not lifting calls yet\n\n";
-      exit(-1);
-    }
-
     assert(prev_line != ASMLine::none);
 
     if (prev_line == ASMLine::terminator)
@@ -9063,6 +9066,8 @@ public:
     *out << "[emitGPRel64Value]\n";
   }
 
+  // FIXME -- we probably need a proper recursive descent parser for
+  // MCExprs here
   virtual void emitValueImpl(const MCExpr *Value, unsigned Size,
                              SMLoc Loc = SMLoc()) override {
     if (auto SR = dyn_cast<MCSymbolRefExpr>(Value)) {

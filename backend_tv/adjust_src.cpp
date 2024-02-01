@@ -63,6 +63,164 @@ using namespace lifter;
 
 namespace {
 
+void checkSupportHelper(Instruction &i, const DataLayout &DL,
+                        set<Type *> &typeSet) {
+  typeSet.insert(i.getType());
+  for (auto &op : i.operands()) {
+    auto *ty = op.get()->getType();
+    typeSet.insert(ty);
+    if (auto *vty = dyn_cast<VectorType>(ty)) {
+      typeSet.insert(vty->getElementType());
+    }
+    if (auto *pty = dyn_cast<PointerType>(ty)) {
+      if (pty->getAddressSpace() != 0) {
+        *out << "\nERROR: address spaces other than 0 are unsupported\n\n";
+        exit(-1);
+      }
+    }
+  }
+  if (i.isVolatile()) {
+    *out << "\nERROR: volatiles not supported\n\n";
+    exit(-1);
+  }
+  if (i.isAtomic()) {
+    *out << "\nERROR: atomics not supported\n\n";
+    exit(-1);
+  }
+  if (auto *li = dyn_cast<LoadInst>(&i)) {
+    auto *ty = li->getType();
+    unsigned w = ty->getScalarSizeInBits();
+    // i1 is a special case in the ABI
+    if ((w != 1) && ((w % 8) != 0)) {
+      *out << "\nERROR: loads that have padding are disabled\n\n";
+      exit(-1);
+    }
+  }
+  if (isa<VAArgInst>(&i)) {
+    *out << "\nERROR: va_arg instructions not supported\n\n";
+    exit(-1);
+  }
+  if (isa<InvokeInst>(&i)) {
+    *out << "\nERROR: invoke instructions not supported\n\n";
+    exit(-1);
+  }
+  if (auto *ci = dyn_cast<CallInst>(&i)) {
+    auto callee = ci->getCalledFunction();
+    if (callee) {
+      if (callee->isVarArg()) {
+        *out << "\nERROR: varargs not supported\n\n";
+        exit(-1);
+      }
+      auto name = (string)callee->getName();
+      if (name.find("llvm.objc") != string::npos) {
+        *out << "\nERROR: llvm.objc instrinsics not supported\n\n";
+        exit(-1);
+      }
+      if (name.find("llvm.thread") != string::npos) {
+        *out << "\nERROR: llvm.thread instrinsics not supported\n\n";
+        exit(-1);
+      }
+      if ((name.find("llvm.experimental.gc") != string::npos) ||
+          (name.find("llvm.experimental.stackmap") != string::npos)) {
+        *out << "\nERROR: llvm GC instrinsics not supported\n\n";
+        exit(-1);
+      }
+    }
+  }
+}
+
+void checkVectorTy(VectorType *Ty) {
+  auto *EltTy = Ty->getElementType();
+  if (auto *IntTy = dyn_cast<IntegerType>(EltTy)) {
+    auto Width = IntTy->getBitWidth();
+    if (Width != 8 && Width != 16 && Width != 32 && Width != 64) {
+      *out << "\nERROR: Only vectors of i8, i16, i32, i64 are supported\n\n";
+      exit(-1);
+    }
+    auto Count = Ty->getElementCount().getFixedValue();
+    auto VecSize = (Count * Width) / 8;
+    if (VecSize != 8 && VecSize != 16) {
+      *out << "\nERROR: Only short vectors 8 and 16 bytes long are supported, "
+              "in parameters and return values; please see Section 5.4 of "
+              "AAPCS64 for more details\n\n";
+      exit(-1);
+    }
+  } else {
+    *out << "\nERROR: Only vectors of integers supported for now\n\n";
+    exit(-1);
+  }
+}
+
+} // namespace
+
+namespace lifter {
+
+void checkSupport(Function *srcFn) {
+  if (srcFn->getCallingConv() != CallingConv::C) {
+    *out << "\nERROR: Only the C calling convention is supported\n\n";
+    exit(-1);
+  }
+
+  if (srcFn->hasPersonalityFn()) {
+    *out << "\nERROR: personality functions not supported\n\n";
+    exit(-1);
+  }
+
+  for (auto &v : srcFn->args()) {
+    auto *ty = v.getType();
+    if (ty->isStructTy()) {
+      *out << "\nERROR: we don't support structures in arguments yet\n\n";
+      exit(-1);
+    }
+    if (ty->isArrayTy()) {
+      *out << "\nERROR: we don't support arrays in arguments yet\n\n";
+      exit(-1);
+    }
+    auto &DL = srcFn->getParent()->getDataLayout();
+    auto orig_width = DL.getTypeSizeInBits(ty);
+    if (auto vTy = dyn_cast<VectorType>(ty)) {
+      checkVectorTy(vTy);
+      if (orig_width > 128) {
+        *out << "\nERROR: Vector arguments >128 bits not supported\n\n";
+        exit(-1);
+      }
+    } else {
+      if (orig_width > 64) {
+        *out << "\nERROR: Unsupported function argument: Only integer / "
+                "pointer parameters 64 bits or smaller supported for now\n\n";
+        exit(-1);
+      }
+    }
+  }
+
+  if (auto RT = dyn_cast<VectorType>(srcFn->getReturnType()))
+    checkVectorTy(RT);
+
+  set<Type *> typeSet;
+  auto &DL = srcFn->getParent()->getDataLayout();
+  unsigned llvmInstCount = 0;
+  for (auto &bb : *srcFn) {
+    for (auto &i : bb) {
+      checkSupportHelper(i, DL, typeSet);
+      ++llvmInstCount;
+    }
+  }
+
+  if (false) {
+    auto &Ctx = srcFn->getContext();
+    if (typeSet.find(Type::getFloatTy(Ctx)) != typeSet.end() ||
+        typeSet.find(Type::getDoubleTy(Ctx)) != typeSet.end() ||
+        typeSet.find(Type::getHalfTy(Ctx)) != typeSet.end() ||
+        typeSet.find(Type::getBFloatTy(Ctx)) != typeSet.end()) {
+      *out << "\nERROR: Not supporting float until this issue gets resolved\n";
+      *out << "https://github.com/AliveToolkit/alive2/issues/982\n\n";
+      exit(-1);
+    }
+  }
+
+  *out << "source function has " << llvmInstCount << " LLVM instructions\n";
+}
+
 /*
  * a function that have the sext or zext attribute on its return value
  * is awkward: this obligates the function to sign- or zero-extend the
@@ -160,164 +318,6 @@ Function *adjustSrcReturn(Function *srcFn) {
 
   srcFn->eraseFromParent();
   return NF;
-}
-
-void checkSupport(Instruction &i, const DataLayout &DL, set<Type *> &typeSet) {
-  typeSet.insert(i.getType());
-  for (auto &op : i.operands()) {
-    auto *ty = op.get()->getType();
-    typeSet.insert(ty);
-    if (auto *vty = dyn_cast<VectorType>(ty)) {
-      typeSet.insert(vty->getElementType());
-    }
-    if (auto *pty = dyn_cast<PointerType>(ty)) {
-      if (pty->getAddressSpace() != 0) {
-        *out << "\nERROR: address spaces other than 0 are unsupported\n\n";
-        exit(-1);
-      }
-    }
-  }
-  if (i.isVolatile()) {
-    *out << "\nERROR: volatiles not supported\n\n";
-    exit(-1);
-  }
-  if (i.isAtomic()) {
-    *out << "\nERROR: atomics not supported\n\n";
-    exit(-1);
-  }
-  if (auto *li = dyn_cast<LoadInst>(&i)) {
-    auto *ty = li->getType();
-    unsigned w = ty->getScalarSizeInBits();
-    // i1 is a special case in the ABI
-    if ((w != 1) && ((w % 8) != 0)) {
-      *out << "\nERROR: loads that have padding are disabled\n\n";
-      exit(-1);
-    }
-  }
-  if (isa<VAArgInst>(&i)) {
-    *out << "\nERROR: va_arg instructions not supported\n\n";
-    exit(-1);
-  }
-  if (isa<InvokeInst>(&i)) {
-    *out << "\nERROR: invoke instructions not supported\n\n";
-    exit(-1);
-  }
-  if (auto *ci = dyn_cast<CallInst>(&i)) {
-    auto callee = ci->getCalledFunction();
-    if (callee) {
-      if (callee->isVarArg()) {
-        *out << "\nERROR: varargs not supported\n\n";
-        exit(-1);
-      }
-      auto name = (string)callee->getName();
-      if (name.find("llvm.objc") != string::npos) {
-        *out << "\nERROR: llvm.objc instrinsics not supported\n\n";
-        exit(-1);
-      }
-      if (name.find("llvm.thread") != string::npos) {
-        *out << "\nERROR: llvm.thread instrinsics not supported\n\n";
-        exit(-1);
-      }
-      if ((name.find("llvm.experimental.gc") != string::npos) ||
-          (name.find("llvm.experimental.stackmap") != string::npos)) {
-        *out << "\nERROR: llvm GC instrinsics not supported\n\n";
-        exit(-1);
-      }
-    }
-  }
-}
-
-void checkVectorTy(VectorType *Ty) {
-  auto *EltTy = Ty->getElementType();
-  if (auto *IntTy = dyn_cast<IntegerType>(EltTy)) {
-    auto Width = IntTy->getBitWidth();
-    if (Width != 8 && Width != 16 && Width != 32 && Width != 64) {
-      *out << "\nERROR: Only vectors of i8, i16, i32, i64 are supported\n\n";
-      exit(-1);
-    }
-    auto Count = Ty->getElementCount().getFixedValue();
-    auto VecSize = (Count * Width) / 8;
-    if (VecSize != 8 && VecSize != 16) {
-      *out << "\nERROR: Only short vectors 8 and 16 bytes long are supported, "
-              "in parameters and return values; please see Section 5.4 of "
-              "AAPCS64 for more details\n\n";
-      exit(-1);
-    }
-  } else {
-    *out << "\nERROR: Only vectors of integers supported for now\n\n";
-    exit(-1);
-  }
-}
-
-} // namespace
-
-namespace lifter {
-
-Function *adjustSrc(Function *srcFn) {
-  if (srcFn->getCallingConv() != CallingConv::C) {
-    *out << "\nERROR: Only the C calling convention is supported\n\n";
-    exit(-1);
-  }
-
-  if (srcFn->hasPersonalityFn()) {
-    *out << "\nERROR: personality functions not supported\n\n";
-    exit(-1);
-  }
-
-  for (auto &v : srcFn->args()) {
-    auto *ty = v.getType();
-    if (ty->isStructTy()) {
-      *out << "\nERROR: we don't support structures in arguments yet\n\n";
-      exit(-1);
-    }
-    if (ty->isArrayTy()) {
-      *out << "\nERROR: we don't support arrays in arguments yet\n\n";
-      exit(-1);
-    }
-    auto &DL = srcFn->getParent()->getDataLayout();
-    auto orig_width = DL.getTypeSizeInBits(ty);
-    if (auto vTy = dyn_cast<VectorType>(ty)) {
-      checkVectorTy(vTy);
-      if (orig_width > 128) {
-        *out << "\nERROR: Vector arguments >128 bits not supported\n\n";
-        exit(-1);
-      }
-    } else {
-      if (orig_width > 64) {
-        *out << "\nERROR: Unsupported function argument: Only integer / "
-                "pointer parameters 64 bits or smaller supported for now\n\n";
-        exit(-1);
-      }
-    }
-  }
-
-  if (auto RT = dyn_cast<VectorType>(srcFn->getReturnType()))
-    checkVectorTy(RT);
-
-  set<Type *> typeSet;
-  auto &DL = srcFn->getParent()->getDataLayout();
-  unsigned llvmInstCount = 0;
-  for (auto &bb : *srcFn) {
-    for (auto &i : bb) {
-      checkSupport(i, DL, typeSet);
-      ++llvmInstCount;
-    }
-  }
-
-  if (false) {
-    auto &Ctx = srcFn->getContext();
-    if (typeSet.find(Type::getFloatTy(Ctx)) != typeSet.end() ||
-        typeSet.find(Type::getDoubleTy(Ctx)) != typeSet.end() ||
-        typeSet.find(Type::getHalfTy(Ctx)) != typeSet.end() ||
-        typeSet.find(Type::getBFloatTy(Ctx)) != typeSet.end()) {
-      *out << "\nERROR: Not supporting float until this issue gets resolved\n";
-      *out << "https://github.com/AliveToolkit/alive2/issues/982\n\n";
-      exit(-1);
-    }
-  }
-
-  *out << "source function has " << llvmInstCount << " LLVM instructions\n";
-  return adjustSrcReturn(srcFn);
 }
 
 } // namespace lifter

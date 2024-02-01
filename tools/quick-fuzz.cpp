@@ -65,10 +65,10 @@ cl::opt<bool>
                    cl::desc("Generate IR but then don't invoke Alive"),
                    cl::cat(alive_cmdargs), cl::init(false));
 
-cl::opt<bool>
-    opt_backend_tv(LLVM_ARGS_PREFIX "backend-tv",
-		   cl::desc("Instead of testing the middle end, test the AArch64 backend"),
-                   cl::cat(alive_cmdargs), cl::init(false));
+cl::opt<bool> opt_backend_tv(
+    LLVM_ARGS_PREFIX "backend-tv",
+    cl::desc("Instead of testing the middle end, test the AArch64 backend"),
+    cl::cat(alive_cmdargs), cl::init(false));
 
 cl::opt<bool> opt_run_sroa(
     LLVM_ARGS_PREFIX "run-sroa",
@@ -224,9 +224,10 @@ public:
       auto NarrowWidth = ilog2_ceil(Ty->getIntegerBitWidth() - 1, true);
       auto *NarrowTy = Type::getIntNTy(BB->getContext(), NarrowWidth);
       auto *Mask = ConstantInt::get(Ty, (1UL << NarrowWidth) - 1);
-      auto *AltRHS = C.flip() ? adapt(adapt(RHS, NarrowTy, "maskA"), Ty, "maskB")
-                              : BinaryOperator::Create(BinaryOperator::And, RHS,
-                                                       Mask, "maskC", BB);
+      auto *AltRHS = C.flip()
+                         ? adapt(adapt(RHS, NarrowTy, "maskA"), Ty, "maskB")
+                         : BinaryOperator::Create(BinaryOperator::And, RHS,
+                                                  Mask, "maskC", BB);
       BinaryOperator *BinOp = randomBinop(LHS, PoisonValue::get(Ty));
       Val = BinOp;
       auto Op = BinOp->getOpcode();
@@ -695,8 +696,8 @@ class ValueFuzzer : public Fuzzer {
   bool gone = false;
 
 public:
-  ValueFuzzer(Module &_M, long seed) : M(_M), Ctx(M.getContext()), C(seed),
-    VG(C, MaxIntWidth, Ctx) {}
+  ValueFuzzer(Module &_M, long seed)
+      : M(_M), Ctx(M.getContext()), C(seed), VG(C, MaxIntWidth, Ctx) {}
 
   void go() override;
 };
@@ -710,8 +711,7 @@ void ValueFuzzer::go() {
   vector<Type *> ParamsTy, ParamsRealTy;
   for (int i = 0; i < NumIntParams; ++i) {
     auto *origTy = Type::getIntNTy(Ctx, VG.getWidth());
-    auto *realTy =
-      true ? (Type *)origTy : (Type *)PointerType::get(Ctx, 0);
+    auto *realTy = true ? (Type *)origTy : (Type *)PointerType::get(Ctx, 0);
     ParamsRealTy.push_back(origTy);
     ParamsTy.push_back(realTy);
   }
@@ -766,8 +766,8 @@ class BBFuzzer : public Fuzzer {
   bool gone = false;
 
 public:
-  BBFuzzer(Module &_M, long seed) : M(_M), Ctx(M.getContext()), C(seed),
-    VG(C, MaxWidth, Ctx) {}
+  BBFuzzer(Module &_M, long seed)
+      : M(_M), Ctx(M.getContext()), C(seed), VG(C, MaxWidth, Ctx) {}
 
   void go() override;
 };
@@ -887,26 +887,28 @@ void BBFuzzer::go() {
 
 void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   lifter::init();
+  lifter::checkSupport(srcFn);
 
   // this has to return a fresh function since it rewrites the
   // signature
-  srcFn = lifter::adjustSrc(srcFn);
-  
-  std::unique_ptr<llvm::Module> M2 = std::make_unique<llvm::Module>("M2", M1->getContext());
+  srcFn = lifter::adjustSrcReturn(srcFn);
+
+  std::unique_ptr<llvm::Module> M2 =
+      std::make_unique<llvm::Module>("M2", M1->getContext());
   M2->setDataLayout(M1->getDataLayout());
   M2->setTargetTriple(M1->getTargetTriple());
 
   auto AsmBuffer = lifter::generateAsm(*M1);
 
   cout << "\n\nAArch64 Assembly:\n\n";
-  for (auto it = AsmBuffer->getBuffer().begin(); it != AsmBuffer->getBuffer().end();
-       ++it) {
+  for (auto it = AsmBuffer->getBuffer().begin();
+       it != AsmBuffer->getBuffer().end(); ++it) {
     cout << *it;
   }
   cout << "-------------\n";
 
   auto [F1, F2] = lifter::liftFunc(M1, M2.get(), srcFn, std::move(AsmBuffer));
-  
+
   auto err = optimize_module(M2.get(), "Oz");
   assert(err.empty());
 
@@ -1049,9 +1051,9 @@ reduced using llvm-reduce.
     if (opt_backend_tv) {
       llvm::Function *srcFn = nullptr;
       for (auto &F : *M1.get()) {
-	if (F.isDeclaration())
-	  continue;
-	srcFn = &F;
+        if (F.isDeclaration())
+          continue;
+        srcFn = &F;
       }
       assert(srcFn != nullptr);
       doit(M1.get(), srcFn, verifier);
@@ -1059,8 +1061,8 @@ reduced using llvm-reduce.
       unique_ptr<Module> M2 = CloneModule(*M1.get());
       auto err = optimize_module(M2.get(), optPass);
       if (!err.empty()) {
-	*out << "Error parsing list of LLVM passes: " << err << '\n';
-	return -1;
+        *out << "Error parsing list of LLVM passes: " << err << '\n';
+        return -1;
       }
 
       auto *F1 = M1->getFunction("f");
@@ -1075,8 +1077,8 @@ reduced using llvm-reduce.
       F2->removeFnAttr(Attribute::WillReturn);
 
       if (!verifier.compareFunctions(*F1, *F2))
-	if (opt_error_fatal)
-	  goto end;
+        if (opt_error_fatal)
+          goto end;
 
       F1->eraseFromParent();
       vector<Function *> Funcs;

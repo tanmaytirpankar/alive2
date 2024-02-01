@@ -158,6 +158,7 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
   }
 
   lifter::init();
+  lifter::checkSupport(srcFn);
 
   auto AsmBuffer = (opt_asm_input != "")
                        ? ExitOnErr(llvm::errorOrToExpected(
@@ -174,7 +175,7 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
   if (opt_asm_only)
     exit(0);
 
-  srcFn = lifter::adjustSrc(srcFn);
+  srcFn = lifter::adjustSrcReturn(srcFn);
 
   std::unique_ptr<llvm::Module> M2 =
       std::make_unique<llvm::Module>("M2", M1->getContext());
