@@ -4707,7 +4707,7 @@ public:
              (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
              (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
       assert((regCounter >= AArch64::Q0 && regCounter <= AArch64::Q31));
-      Value *totalOffset;
+      Value *totalOffset{nullptr};
       if (isPost) {
         if (CurInst->getOperand(5).isReg() &&
             CurInst->getOperand(5).getReg() != AArch64::XZR) {
