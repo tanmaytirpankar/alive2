@@ -348,6 +348,7 @@ class arm2llvm {
     // of stuff reachable from the function we're lifting, and nothing
     // else.
     while (!deferredGlobs.empty()) {
+      *out << "  processing a deferred global\n";
       auto def = deferredGlobs.at(0);
       deferredGlobs.erase(deferredGlobs.begin());
       auto g2 = lazyAddGlobal(def.name);
@@ -355,6 +356,7 @@ class arm2llvm {
       def.val->eraseFromParent();
       LLVMglobals[def.name] = g2;
     }
+
     return g;
   }
 
@@ -533,6 +535,7 @@ class arm2llvm {
 
   const set<int> instrs_64 = {
       AArch64::BL,
+      AArch64::BR,
       AArch64::BLR,
       AArch64::ADDXrx,
       AArch64::ADDSXrs,
@@ -2159,8 +2162,13 @@ class arm2llvm {
     }
 
     assert(globalVar);
-    globalVar =
-        createGEP(getIntTy(8), globalVar, {getIntConst(offset, 64)}, "");
+    if (offset != 0) {
+      // FIXME -- would be better to return the root symbol and the
+      // offset separately, and let the caller do the pointer
+      // arithmetic
+      globalVar =
+          createGEP(getIntTy(8), globalVar, {getIntConst(offset, 64)}, "");
+    }
     return make_pair(globalVar, storePtr);
   }
 
@@ -3158,17 +3166,31 @@ public:
       break;
     }
 
-#if 0
     case AArch64::BL: {
-      *out << "\nERROR: calls not supported\n\n";
+      auto &op0 = CurInst->getOperand(0);
+      assert(op0.isExpr());
+      auto [expr, _] = getExprVar(op0.getExpr());
+      assert(expr);
+      string calleeName = (string)expr->getName();
+      *out << "callee is: '" << calleeName << "'\n";
+      auto *callee = dyn_cast<Function>(expr);
+      assert(callee);
+      // ABI logic to collect function arguments
+      // issue the call
+      // invalidate stuff that needs invalidating
+      // drop the return value into x0
+      exit(-1);
+    }
+
+    case AArch64::BR: {
+      *out << "\nERROR: BR not supported\n\n";
       exit(-1);
     }
 
     case AArch64::BLR: {
-      *out << "\nERROR: calls not supported\n\n";
+      *out << "\nERROR: BLR not supported\n\n";
       exit(-1);
     }
-#endif
 
     case AArch64::MRS: {
       // https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/NZCV--Condition-Flags
