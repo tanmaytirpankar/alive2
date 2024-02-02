@@ -2031,7 +2031,6 @@ class arm2llvm {
 
   void updateOutputReg(Value *V, bool SExt = false) {
     auto destReg = CurInst->getOperand(0).getReg();
-
     updateReg(V, destReg, SExt);
   }
 
@@ -3172,14 +3171,18 @@ public:
       auto [expr, _] = getExprVar(op0.getExpr());
       assert(expr);
       string calleeName = (string)expr->getName();
-      *out << "callee is: '" << calleeName << "'\n";
+      *out << "lifting a call, callee is: '" << calleeName << "'\n";
       auto *callee = dyn_cast<Function>(expr);
       assert(callee);
+      auto FC = FunctionCallee(callee);
+      // invalidate machine state that needs invalidating
+      vector<Value *> args;
       // ABI logic to collect function arguments
-      // issue the call
-      // invalidate stuff that needs invalidating
-      // drop the return value into x0
-      exit(-1);
+      auto CI = CallInst::Create(FC, args, "", LLVMBB);
+      if (!callee->getReturnType()->isVoidTy()) {
+	updateReg(CI, AArch64::X0);
+      }
+      break;
     }
 
     case AArch64::BR: {
