@@ -1,4 +1,3 @@
-; XFAIL: 
 
 define i32 @f(i32 noundef %x) {
 entry:

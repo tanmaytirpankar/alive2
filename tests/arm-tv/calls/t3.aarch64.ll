@@ -1,4 +1,3 @@
-; XFAIL: 
 
 define i32 @f(i32 %x) {
   %y = add i32 %x, 77

@@ -3139,6 +3139,41 @@ public:
     createStore(val, ptr);
   }
 
+  vector<Value *> marshallArgs(Function *fn) {
+    // unsigned vecArgNum = 0;
+    unsigned scalarArgNum = 0;
+    // unsigned stackSlot = 0;
+    vector<Value *> args;
+    for (auto arg = fn->arg_begin(); arg != fn->arg_end(); ++arg) {
+      auto *argTy = arg->getType();
+      if (argTy->isFloatingPointTy() || argTy->isVectorTy()) {
+        // FIXME handle floats and vectors
+        assert(false);
+      } else if (argTy->isIntegerTy() || argTy->isPointerTy()) {
+        assert(getBitWidth(arg) <= 64);
+        Value *param;
+        // FIXME check signext and zeroext
+        if (scalarArgNum < 8) {
+          param = readFromReg(AArch64::X0 + scalarArgNum);
+          ++scalarArgNum;
+        } else {
+          // FIXME load from stack
+          assert(false);
+        }
+        if (argTy->isPointerTy()) {
+          param = new IntToPtrInst(param, PointerType::get(Ctx, 0), "", LLVMBB);
+        } else {
+          if (getBitWidth(arg) < 64) {
+            param = createTrunc(param, getIntTy(getBitWidth(arg)));
+          }
+        }
+        args.push_back(param);
+      }
+    }
+    *out << "marshalled up " << args.size() << " arguments\n";
+    return args;
+  }
+
   // Visit an MCInst and convert it to LLVM IR
   // See: https://documentation-service.arm.com/static/6245e8f0f7d10f7540e0c054
   void liftInst(MCInst &I) {
@@ -3175,12 +3210,12 @@ public:
       auto *callee = dyn_cast<Function>(expr);
       assert(callee);
       auto FC = FunctionCallee(callee);
-      // invalidate machine state that needs invalidating
-      vector<Value *> args;
-      // ABI logic to collect function arguments
+      auto args = marshallArgs(callee);
       auto CI = CallInst::Create(FC, args, "", LLVMBB);
+      // FIXME invalidate machine state that needs invalidating
       if (!callee->getReturnType()->isVoidTy()) {
-	updateReg(CI, AArch64::X0);
+        // FIXME handle signext and zeroext
+        updateReg(CI, AArch64::X0);
       }
       break;
     }
