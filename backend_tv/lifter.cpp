@@ -1971,9 +1971,11 @@ class arm2llvm {
     if (reg == AArch64::WZR || reg == AArch64::XZR)
       return;
 
-    // FIXME do we really want to do this? and if so, do this for
-    //  floats too?
     if (V->getType()->isVectorTy())
+      V = createBitCast(V, getIntTy(getBitWidth(V)));
+    else if (V->getType()->isPointerTy())
+      V = createPtrToInt(V, getIntTy(getBitWidth(V)));
+    else if (V->getType()->isFloatingPointTy())
       V = createBitCast(V, getIntTy(getBitWidth(V)));
 
     auto destRegSize = getRegSize(reg);
@@ -2482,9 +2484,12 @@ class arm2llvm {
     auto args = marshallArgs(callee);
     auto CI = CallInst::Create(FC, args, "", LLVMBB);
     // FIXME invalidate machine state that needs invalidating
-    if (!callee->getReturnType()->isVoidTy()) {
-      // FIXME handle signext and zeroext
+    // FIXME handle signext and zeroext
+    auto retTy = callee->getReturnType();
+    if (retTy->isIntegerTy() || retTy->isPointerTy()) {
       updateReg(CI, AArch64::X0);
+    } else if (retTy->isFloatingPointTy() || retTy->isVectorTy()) {
+      updateReg(CI, AArch64::Q0);
     }
   }
 
