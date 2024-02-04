@@ -167,9 +167,7 @@ public:
     for (auto &bb : BBs)
       if (bb.getName() == b_name)
         return &bb;
-    *out << "could not find block " << b_name << "\n";
-    *out << "ERROR: jump target not found, probably a tail call\n\n";
-    exit(-1);
+    return nullptr;
   }
 
   void checkEntryBlock() {
@@ -9299,12 +9297,16 @@ public:
       if (IA->isConditionalBranch(last_mc_instr)) {
         string target = findTargetLabel(last_mc_instr);
         auto target_bb = MF.findBlockByName(target);
+        assert(target_bb);
         cur_bb.addSucc(target_bb);
         if (next_bb_ptr)
           cur_bb.addSucc(next_bb_ptr);
       } else if (IA->isUnconditionalBranch(last_mc_instr)) {
         string target = findTargetLabel(last_mc_instr);
         auto target_bb = MF.findBlockByName(target);
+        if (!target_bb) {
+          assert(false && "FIXME: handle tail calls");
+        }
         cur_bb.addSucc(target_bb);
       } else if (IA->isReturn(last_mc_instr)) {
         continue;
