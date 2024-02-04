@@ -2495,7 +2495,6 @@ class arm2llvm {
         }
       } else if (argTy->isIntegerTy() || argTy->isPointerTy()) {
         assert(getBitWidth(arg) <= 64);
-        Value *param;
         // FIXME check signext and zeroext
         if (scalarArgNum < 8) {
           param = readFromReg(AArch64::X0 + scalarArgNum);
