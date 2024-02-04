@@ -2469,6 +2469,25 @@ class arm2llvm {
     return res;
   }
 
+  void doCall() {
+    auto &op0 = CurInst->getOperand(0);
+    assert(op0.isExpr());
+    auto [expr, _] = getExprVar(op0.getExpr());
+    assert(expr);
+    string calleeName = (string)expr->getName();
+    *out << "lifting a call, callee is: '" << calleeName << "'\n";
+    auto *callee = dyn_cast<Function>(expr);
+    assert(callee);
+    auto FC = FunctionCallee(callee);
+    auto args = marshallArgs(callee);
+    auto CI = CallInst::Create(FC, args, "", LLVMBB);
+    // FIXME invalidate machine state that needs invalidating
+    if (!callee->getReturnType()->isVoidTy()) {
+      // FIXME handle signext and zeroext
+      updateReg(CI, AArch64::X0);
+    }
+  }
+
   void doReturn() {
     auto i32 = getIntTy(32);
     auto i64 = getIntTy(64);
@@ -3242,21 +3261,28 @@ public:
     }
 
     case AArch64::BL: {
-      auto &op0 = CurInst->getOperand(0);
-      assert(op0.isExpr());
-      auto [expr, _] = getExprVar(op0.getExpr());
-      assert(expr);
-      string calleeName = (string)expr->getName();
-      *out << "lifting a call, callee is: '" << calleeName << "'\n";
-      auto *callee = dyn_cast<Function>(expr);
-      assert(callee);
-      auto FC = FunctionCallee(callee);
-      auto args = marshallArgs(callee);
-      auto CI = CallInst::Create(FC, args, "", LLVMBB);
-      // FIXME invalidate machine state that needs invalidating
-      if (!callee->getReturnType()->isVoidTy()) {
-        // FIXME handle signext and zeroext
-        updateReg(CI, AArch64::X0);
+      doCall();
+      break;
+    }
+
+    case AArch64::B: {
+      BasicBlock *dst{nullptr};
+      // JDR: I don't understand this
+      if (CurInst->getOperand(0).isImm()) {
+        // handles the case when we add an entry block with no predecessors
+        auto &dst_name = MF.BBs[getImm(0)].getName();
+        dst = getBBByName(dst_name);
+      } else {
+        dst = getBB(CurInst->getOperand(0));
+      }
+      if (dst) {
+        createBranch(dst);
+      } else {
+        // ok, if we don't have a destination block then we left this
+        // dangling on purpose, with the assumption that it's a tail
+        // call
+        doCall();
+        doReturn();
       }
       break;
     }
@@ -3269,6 +3295,38 @@ public:
     case AArch64::BLR: {
       *out << "\nERROR: BLR not supported\n\n";
       exit(-1);
+    }
+
+    case AArch64::RET:
+      doReturn();
+      break;
+
+    case AArch64::Bcc: {
+      auto cond_val_imm = getImm(0);
+      auto cond_val = conditionHolds(cond_val_imm);
+
+      auto &jmp_tgt_op = CurInst->getOperand(1);
+      assert(jmp_tgt_op.isExpr() && "expected expression");
+      assert((jmp_tgt_op.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
+             "expected symbol ref as bcc operand");
+      const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt_op.getExpr());
+      const MCSymbol &Sym = SRE.getSymbol();
+
+      auto *dst_true = getBBByName(Sym.getName());
+
+      assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
+      const string *dst_false_name = nullptr;
+      for (auto &succ : MCBB->getSuccs()) {
+        if (succ->getName() != Sym.getName()) {
+          dst_false_name = &succ->getName();
+          break;
+        }
+      }
+      auto *dst_false =
+          getBBByName(dst_false_name ? *dst_false_name : Sym.getName());
+
+      createBranch(cond_val, dst_true, dst_false);
+      break;
     }
 
     case AArch64::MRS: {
@@ -5579,57 +5637,6 @@ public:
     case AArch64::ADRP: {
       assert(CurInst->getOperand(0).isReg());
       mapExprVar(CurInst->getOperand(1).getExpr());
-      break;
-    }
-
-    case AArch64::RET:
-      doReturn();
-      break;
-
-    case AArch64::B: {
-      BasicBlock *dst{nullptr};
-      // JDR: I don't understand this
-      if (CurInst->getOperand(0).isImm()) {
-        // handles the case when we add an entry block with no predecessors
-        auto &dst_name = MF.BBs[getImm(0)].getName();
-        dst = getBBByName(dst_name);
-      } else {
-        dst = getBB(CurInst->getOperand(0));
-      }
-      if (!dst) {
-        *out << "ERROR: unconditional branch target not found, this might be "
-                "a tail call\n\n";
-        exit(-1);
-      }
-      createBranch(dst);
-      break;
-    }
-
-    case AArch64::Bcc: {
-      auto cond_val_imm = getImm(0);
-      auto cond_val = conditionHolds(cond_val_imm);
-
-      auto &jmp_tgt_op = CurInst->getOperand(1);
-      assert(jmp_tgt_op.isExpr() && "expected expression");
-      assert((jmp_tgt_op.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
-             "expected symbol ref as bcc operand");
-      const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt_op.getExpr());
-      const MCSymbol &Sym = SRE.getSymbol();
-
-      auto *dst_true = getBBByName(Sym.getName());
-
-      assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
-      const string *dst_false_name = nullptr;
-      for (auto &succ : MCBB->getSuccs()) {
-        if (succ->getName() != Sym.getName()) {
-          dst_false_name = &succ->getName();
-          break;
-        }
-      }
-      auto *dst_false =
-          getBBByName(dst_false_name ? *dst_false_name : Sym.getName());
-
-      createBranch(cond_val, dst_true, dst_false);
       break;
     }
 
@@ -9371,8 +9378,7 @@ public:
     MF.checkEntryBlock();
   }
 
-  // Only call after MF with Basicblocks is constructed to generate the
-  // successors for each basic block
+  // Fill in the CFG
   void generateSuccessors() {
     *out << "generating basic block successors" << '\n';
     for (unsigned i = 0; i < MF.BBs.size(); ++i) {
@@ -9407,10 +9413,11 @@ public:
       } else if (IA->isUnconditionalBranch(last_mc_instr)) {
         string target = findTargetLabel(last_mc_instr);
         auto target_bb = MF.findBlockByName(target);
-        if (!target_bb) {
-          assert(false && "FIXME: handle tail calls");
+        if (target_bb) {
+          cur_bb.addSucc(target_bb);
+        } else {
+          *out << "looks like a tail call to " << target << "\n";
         }
-        cur_bb.addSucc(target_bb);
       } else if (IA->isReturn(last_mc_instr)) {
         continue;
       } else if (next_bb_ptr) {

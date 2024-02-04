@@ -1,6 +1,7 @@
 # ARM-TV TODO
 
-- support jump tables, requires symbolic register contents...
+- refactor so instructions go into separate files and use a proper API
+- support jump tables, requires symbolic register contents
 - anytime SP is updated, assert that it's a multiple of 16
 - we're making a mess out of handling layoutinfo and targettriple,
   figure out the best thing to do here and do it
