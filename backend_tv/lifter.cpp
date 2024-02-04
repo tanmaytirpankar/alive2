@@ -1874,8 +1874,7 @@ class arm2llvm {
     return res;
   }
 
-  static unsigned int getBitWidth(Value *V) {
-    auto ty = V->getType();
+  static unsigned int getBitWidth(Type *ty) {
     if (auto vTy = dyn_cast<VectorType>(ty)) {
       return vTy->getScalarSizeInBits() *
              vTy->getElementCount().getFixedValue();
@@ -1893,6 +1892,10 @@ class arm2llvm {
       ty->dump();
       assert(false && "Unhandled type");
     }
+  }
+
+  static unsigned int getBitWidth(Value *V) {
+    return getBitWidth(V->getType());
   }
 
   // Returns bitWidth corresponding the registers
@@ -2469,6 +2472,49 @@ class arm2llvm {
     uint64_t frac = ((imm8 & 0x3f) << (F - 6)) | Replicate(0, F - 6);
     uint64_t res = (sign << (E + F)) | (exp << F) | frac;
     return res;
+  }
+
+  vector<Value *> marshallArgs(Function *fn) {
+    unsigned vecArgNum = 0;
+    unsigned scalarArgNum = 0;
+    // unsigned stackSlot = 0;
+    vector<Value *> args;
+    for (auto arg = fn->arg_begin(); arg != fn->arg_end(); ++arg) {
+      auto *argTy = arg->getType();
+      Value *param{nullptr};
+      if (argTy->isFloatingPointTy() || argTy->isVectorTy()) {
+        if (scalarArgNum < 8) {
+          param = readFromReg(AArch64::Q0 + vecArgNum);
+          if (getBitWidth(argTy) < 128)
+            param = createTrunc(param, getIntTy(getBitWidth(argTy)));
+          param = createBitCast(param, argTy);
+          ++vecArgNum;
+        } else {
+          // FIXME load from stack
+          assert(false);
+        }
+      } else if (argTy->isIntegerTy() || argTy->isPointerTy()) {
+        assert(getBitWidth(arg) <= 64);
+        Value *param;
+        // FIXME check signext and zeroext
+        if (scalarArgNum < 8) {
+          param = readFromReg(AArch64::X0 + scalarArgNum);
+          ++scalarArgNum;
+        } else {
+          // FIXME load from stack
+          assert(false);
+        }
+        if (argTy->isPointerTy()) {
+          param = new IntToPtrInst(param, PointerType::get(Ctx, 0), "", LLVMBB);
+        } else {
+          if (getBitWidth(arg) < 64)
+            param = createTrunc(param, getIntTy(getBitWidth(arg)));
+        }
+      }
+      args.push_back(param);
+    }
+    *out << "marshalled up " << args.size() << " arguments\n";
+    return args;
   }
 
   void doCall() {
@@ -3202,41 +3248,6 @@ public:
 
     // Store Value val in the pointer returned by the GEP instruction
     createStore(val, ptr);
-  }
-
-  vector<Value *> marshallArgs(Function *fn) {
-    // unsigned vecArgNum = 0;
-    unsigned scalarArgNum = 0;
-    // unsigned stackSlot = 0;
-    vector<Value *> args;
-    for (auto arg = fn->arg_begin(); arg != fn->arg_end(); ++arg) {
-      auto *argTy = arg->getType();
-      if (argTy->isFloatingPointTy() || argTy->isVectorTy()) {
-        // FIXME handle floats and vectors
-        assert(false);
-      } else if (argTy->isIntegerTy() || argTy->isPointerTy()) {
-        assert(getBitWidth(arg) <= 64);
-        Value *param;
-        // FIXME check signext and zeroext
-        if (scalarArgNum < 8) {
-          param = readFromReg(AArch64::X0 + scalarArgNum);
-          ++scalarArgNum;
-        } else {
-          // FIXME load from stack
-          assert(false);
-        }
-        if (argTy->isPointerTy()) {
-          param = new IntToPtrInst(param, PointerType::get(Ctx, 0), "", LLVMBB);
-        } else {
-          if (getBitWidth(arg) < 64) {
-            param = createTrunc(param, getIntTy(getBitWidth(arg)));
-          }
-        }
-        args.push_back(param);
-      }
-    }
-    *out << "marshalled up " << args.size() << " arguments\n";
-    return args;
   }
 
   // Visit an MCInst and convert it to LLVM IR
