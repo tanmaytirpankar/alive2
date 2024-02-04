@@ -2592,27 +2592,6 @@ class arm2llvm {
     }
   }
 
-public:
-  arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
-           MCInstPrinter *instrPrinter)
-      : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
-        instrPrinter(instrPrinter), DL(srcFn.getParent()->getDataLayout()) {
-
-    // sanity checking
-    assert(disjoint(instrs_32, instrs_64));
-    assert(disjoint(instrs_32, instrs_128));
-    assert(disjoint(instrs_64, instrs_128));
-    *out << (instrs_32.size() + instrs_64.size() + instrs_128.size())
-         << " instructions supported\n";
-
-    // we'll want this later
-    vector<Type *> args{getIntTy(1)};
-    FunctionType *assertTy =
-        FunctionType::get(Type::getVoidTy(Ctx), args, false);
-    assertDecl = Function::Create(assertTy, Function::ExternalLinkage,
-                                  "llvm.assert", LiftedModule);
-  }
-
   bool disjoint(const set<int> &a, const set<int> &b) {
     set<int> i;
     std::set_intersection(a.begin(), a.end(), b.begin(), b.end(),
@@ -3247,6 +3226,27 @@ public:
 
     // Store Value val in the pointer returned by the GEP instruction
     createStore(val, ptr);
+  }
+
+public:
+  arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
+           MCInstPrinter *instrPrinter)
+      : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
+        instrPrinter(instrPrinter), DL(srcFn.getParent()->getDataLayout()) {
+
+    // sanity checking
+    assert(disjoint(instrs_32, instrs_64));
+    assert(disjoint(instrs_32, instrs_128));
+    assert(disjoint(instrs_64, instrs_128));
+    *out << (instrs_32.size() + instrs_64.size() + instrs_128.size())
+         << " instructions supported\n";
+
+    // we'll want this later
+    vector<Type *> args{getIntTy(1)};
+    FunctionType *assertTy =
+        FunctionType::get(Type::getVoidTy(Ctx), args, false);
+    assertDecl = Function::Create(assertTy, Function::ExternalLinkage,
+                                  "llvm.assert", LiftedModule);
   }
 
   // Visit an MCInst and convert it to LLVM IR
