@@ -128,8 +128,9 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
   }
   if (auto *ci = dyn_cast<CallInst>(&i)) {
     auto callee = ci->getCalledFunction();
-    for (auto arg = callee->arg_begin(); arg != callee->arg_end(); ++arg)
-      if (auto *vTy = dyn_cast<VectorType>(arg->getType()))
+    if (!callee->isIntrinsic())
+      for (auto arg = callee->arg_begin(); arg != callee->arg_end(); ++arg)
+        if (auto *vTy = dyn_cast<VectorType>(arg->getType()))
           checkVectorTy(vTy);
     if (callee) {
       if (callee->isVarArg()) {
