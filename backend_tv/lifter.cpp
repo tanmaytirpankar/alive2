@@ -211,8 +211,12 @@ class arm2llvm {
   };
   vector<deferredGlobal> deferredGlobs;
 
-  Constant *lazyAddGlobal(const string &newGlobal) {
+  Constant *lazyAddGlobal(string newGlobal) {
     *out << "  lazyAddGlobal '" << newGlobal << "'\n";
+
+    // gross
+    if (newGlobal == "memset")
+      newGlobal = "llvm.memset.p0.i64";
 
     // is the global the address of a function?
     if (newGlobal == liftedFn->getName()) {
@@ -322,6 +326,7 @@ class arm2llvm {
       return glob;
     }
 
+    *out << "ERROR: symbol '" << newGlobal << "' not found\n";
     assert(false);
   }
 
@@ -2527,6 +2532,12 @@ class arm2llvm {
     assert(callee);
     auto FC = FunctionCallee(callee);
     auto args = marshallArgs(callee);
+
+    // yikes
+    if (calleeName == "llvm.memset.p0.i64") {
+      args[3] = getIntConst(0, 1);
+    }
+
     auto CI = CallInst::Create(FC, args, "", LLVMBB);
     // FIXME invalidate machine state that needs invalidating
     // FIXME handle signext and zeroext

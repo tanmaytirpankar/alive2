@@ -127,12 +127,11 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
     exit(-1);
   }
   if (auto *ci = dyn_cast<CallInst>(&i)) {
-    auto callee = ci->getCalledFunction();
-    if (!callee->isIntrinsic())
-      for (auto arg = callee->arg_begin(); arg != callee->arg_end(); ++arg)
-        if (auto *vTy = dyn_cast<VectorType>(arg->getType()))
-          checkVectorTy(vTy);
-    if (callee) {
+    if (auto callee = ci->getCalledFunction()) {
+      if (!callee->isIntrinsic())
+        for (auto arg = callee->arg_begin(); arg != callee->arg_end(); ++arg)
+          if (auto *vTy = dyn_cast<VectorType>(arg->getType()))
+            checkVectorTy(vTy);
       if (callee->isVarArg()) {
         *out << "\nERROR: varargs not supported\n\n";
         exit(-1);
@@ -162,7 +161,8 @@ namespace lifter {
 void checkSupport(Function *srcFn) {
   if (srcFn->getCallingConv() != CallingConv::C &&
       srcFn->getCallingConv() != CallingConv::Fast) {
-    *out << "\nERROR: Only the C and fast calling conventions are supported\n\n";
+    *out
+        << "\nERROR: Only the C and fast calling conventions are supported\n\n";
     exit(-1);
   }
 
