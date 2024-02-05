@@ -160,8 +160,9 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
 namespace lifter {
 
 void checkSupport(Function *srcFn) {
-  if (srcFn->getCallingConv() != CallingConv::C) {
-    *out << "\nERROR: Only the C calling convention is supported\n\n";
+  if (srcFn->getCallingConv() != CallingConv::C &&
+      srcFn->getCallingConv() != CallingConv::Fast) {
+    *out << "\nERROR: Only the C and fast calling conventions are supported\n\n";
     exit(-1);
   }
 
