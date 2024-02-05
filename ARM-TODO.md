@@ -1,5 +1,6 @@
 # ARM-TV TODO
 
+- rig llvm-reduce to be a fuzzer
 - refactor so instructions go into separate files and use a proper API
 - support jump tables, requires symbolic register contents
 - anytime SP is updated, assert that it's a multiple of 16
