@@ -9012,9 +9012,8 @@ public:
     auto argTy = V->getType();
     unsigned targetWidth;
 
-    // these are already sized appropriately for their register or
-    // stack slot
-    if (argTy->isPointerTy())
+    // no work needed
+    if (argTy->isPointerTy() || argTy->isVoidTy())
       return V;
 
     if (argTy->isVectorTy() || argTy->isFloatingPointTy()) {
