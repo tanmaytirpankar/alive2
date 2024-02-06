@@ -193,6 +193,12 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
     exit(-1);
   }
 
+  // NoCapture messes up Alive2 as it follows int2ptr/ptr2int
+  // instructions
+  for (auto arg = F2->arg_begin(); arg != F2->arg_end(); ++arg) {
+    arg->removeAttr(llvm::Attribute::NoCapture);
+  }
+
   auto lifted = lifter::moduleToString(M2.get());
   if (save_lifted_ir) {
     std::filesystem::path p{(string)opt_file};
