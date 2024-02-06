@@ -223,9 +223,12 @@ class arm2llvm {
   Constant *lazyAddGlobal(string newGlobal) {
     *out << "  lazyAddGlobal '" << newGlobal << "'\n";
 
-    // gross
+    // unmangle these
+    if (newGlobal == "memcpy")
+      newGlobal = "llvm.memcpy.p0.p0.i64";
     if (newGlobal == "memset")
       newGlobal = "llvm.memset.p0.i64";
+
     if (newGlobal == "__stack_chk_fail") {
       return new GlobalVariable(*LiftedModule, getIntTy(8), false,
                          GlobalValue::LinkageTypes::ExternalLinkage,
@@ -2605,8 +2608,13 @@ class arm2llvm {
     auto FC = FunctionCallee(callee);
     auto args = marshallArgs(callee);
 
-    // yikes
+    // yikes -- these functions have an LLVM "immediate" as their last
+    // argument; this is not present in the assembly at all, we have
+    // to provide it by hand
     if (calleeName == "llvm.memset.p0.i64") {
+      args[3] = getIntConst(0, 1);
+    }
+    if (calleeName == "llvm.memcpy.p0.p0.i64") {
       args[3] = getIntConst(0, 1);
     }
 
