@@ -147,11 +147,11 @@ public:
 
   MCFunction() {
     MCGlobal g{
-      .name = "__stack_chk_guard",
-      .align = Align(8),
-      .section = ".rodata",
-      // FIXME -- use symbolic data here? does this matter?
-      .data = { '7', '7', '7', '7', '7', '7', '7', '7' },
+        .name = "__stack_chk_guard",
+        .align = Align(8),
+        .section = ".rodata",
+        // FIXME -- use symbolic data here? does this matter?
+        .data = {'7', '7', '7', '7', '7', '7', '7', '7'},
     };
     MCglobals.push_back(g);
   }
@@ -231,8 +231,8 @@ class arm2llvm {
 
     if (newGlobal == "__stack_chk_fail") {
       return new GlobalVariable(*LiftedModule, getIntTy(8), false,
-                         GlobalValue::LinkageTypes::ExternalLinkage,
-                         nullptr, "__stack_chk_fail");
+                                GlobalValue::LinkageTypes::ExternalLinkage,
+                                nullptr, "__stack_chk_fail");
     }
 
     // is the global the address of a function?
@@ -247,10 +247,14 @@ class arm2llvm {
         continue;
       *out << "  creating function '" << newGlobal << "'\n";
       auto newF = Function::Create(f.getFunctionType(),
-                                   GlobalValue::LinkageTypes::ExternalLinkage, name,
-                                   LiftedModule);
+                                   GlobalValue::LinkageTypes::ExternalLinkage,
+                                   name, LiftedModule);
       if (f.hasRetAttribute(Attribute::NoAlias))
         newF->addRetAttr(Attribute::NoAlias);
+      if (f.hasRetAttribute(Attribute::SExt))
+        newF->addRetAttr(Attribute::SExt);
+      if (f.hasRetAttribute(Attribute::ZExt))
+        newF->addRetAttr(Attribute::ZExt);
       return newF;
     }
 
@@ -2622,13 +2626,14 @@ class arm2llvm {
     }
 
     auto CI = CallInst::Create(FC, args, "", LLVMBB);
+    auto RV = enforceABIRules(CI, callee->hasRetAttribute(Attribute::SExt),
+                              callee->hasRetAttribute(Attribute::ZExt));
     // FIXME invalidate machine state that needs invalidating
-    // FIXME handle signext and zeroext
     auto retTy = callee->getReturnType();
     if (retTy->isIntegerTy() || retTy->isPointerTy()) {
-      updateReg(CI, AArch64::X0);
+      updateReg(RV, AArch64::X0);
     } else if (retTy->isFloatingPointTy() || retTy->isVectorTy()) {
-      updateReg(CI, AArch64::Q0);
+      updateReg(RV, AArch64::Q0);
     }
   }
 
@@ -8986,11 +8991,12 @@ public:
   }
 
   /*
-   * the idea here is that if a parameter is, for example, 8 bits,
-   * then we only want to initialize the lower 8 bits of the register
-   * or stack slot, with the remaining bits containing junk, in order
-   * to detect cases where the compiler incorrectly emits code
-   * depending on that junk. on the other hand, if a parameter is
+   * the idea here is that if a parameter to the lifted function, or
+   * the return value from the lifted function is, for example, 8
+   * bits, then we only want to initialize the lower 8 bits of the
+   * register or stack slot, with the remaining bits containing junk,
+   * in order to detect cases where the compiler incorrectly emits
+   * code depending on that junk. on the other hand, if a parameter is
    * signext or zeroext then we have to actually initialize those
    * higher bits.
    *
@@ -9000,7 +9006,7 @@ public:
    * 128 bits, which seemed (as of Nov 2023) to be the only ones with
    * a stable ABI
    */
-  Value *parameterABIRules(Value *V, bool isSExt, bool isZExt) {
+  Value *enforceABIRules(Value *V, bool isSExt, bool isZExt) {
     auto i8 = getIntTy(8);
     auto i32 = getIntTy(32);
     auto argTy = V->getType();
@@ -9193,7 +9199,7 @@ public:
            << ", stackSlot = " << stackSlot;
       auto *argTy = arg->getType();
       auto *val =
-          parameterABIRules(arg, srcArg->hasSExtAttr(), srcArg->hasZExtAttr());
+          enforceABIRules(arg, srcArg->hasSExtAttr(), srcArg->hasZExtAttr());
 
       // first 8 integer parameters go in the first 8 integer registers
       if ((argTy->isIntegerTy() || argTy->isPointerTy()) && scalarArgNum < 8) {
