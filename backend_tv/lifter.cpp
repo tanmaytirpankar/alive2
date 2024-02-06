@@ -145,7 +145,16 @@ public:
   vector<MCBasicBlock> BBs;
   vector<MCGlobal> MCglobals;
 
-  MCFunction() {}
+  MCFunction() {
+    MCGlobal g{
+      .name = "__stack_chk_guard",
+      .align = Align(8),
+      .section = ".rodata",
+      // FIXME -- use symbolic data here? does this matter?
+      .data = { '7', '7', '7', '7', '7', '7', '7', '7' },
+    };
+    MCglobals.push_back(g);
+  }
 
   void setName(const string &_name) {
     name = _name;
@@ -217,6 +226,11 @@ class arm2llvm {
     // gross
     if (newGlobal == "memset")
       newGlobal = "llvm.memset.p0.i64";
+    if (newGlobal == "__stack_chk_fail") {
+      return new GlobalVariable(*LiftedModule, getIntTy(8), false,
+                         GlobalValue::LinkageTypes::ExternalLinkage,
+                         nullptr, "__stack_chk_fail");
+    }
 
     // is the global the address of a function?
     if (newGlobal == liftedFn->getName()) {
@@ -2578,6 +2592,13 @@ class arm2llvm {
     auto [expr, _] = getExprVar(op0.getExpr());
     assert(expr);
     string calleeName = (string)expr->getName();
+
+    // yikes
+    if (calleeName == "__stack_chk_fail") {
+      createTrap();
+      return;
+    }
+
     *out << "lifting a call, callee is: '" << calleeName << "'\n";
     auto *callee = dyn_cast<Function>(expr);
     assert(callee);
