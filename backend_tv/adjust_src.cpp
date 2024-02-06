@@ -167,6 +167,11 @@ void checkSupport(Function *srcFn) {
     exit(-1);
   }
 
+  if (srcFn->hasFnAttribute(Attribute::StackProtect)) {
+    *out << "\nERROR: StackProtect attribute not supported\n\n";
+    exit(-1);
+  }
+
   if (srcFn->hasPersonalityFn()) {
     *out << "\nERROR: personality functions not supported\n\n";
     exit(-1);
