@@ -246,9 +246,12 @@ class arm2llvm {
       if (name != newGlobal)
         continue;
       *out << "  creating function '" << newGlobal << "'\n";
-      return Function::Create(f.getFunctionType(),
-                              GlobalValue::LinkageTypes::ExternalLinkage, name,
-                              LiftedModule);
+      auto newF = Function::Create(f.getFunctionType(),
+                                   GlobalValue::LinkageTypes::ExternalLinkage, name,
+                                   LiftedModule);
+      if (f.hasRetAttribute(Attribute::NoAlias))
+        newF->addRetAttr(Attribute::NoAlias);
+      return newF;
     }
 
     // globals that are definitions in the assembly can be lifted
