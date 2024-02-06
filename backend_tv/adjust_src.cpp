@@ -80,6 +80,7 @@ void checkVectorTy(VectorType *Ty) {
       exit(-1);
     }
   } else {
+    // FIXME there's no reason for this restriction
     *out << "\nERROR: Only vectors of integers supported for now\n\n";
     exit(-1);
   }
@@ -201,6 +202,14 @@ void checkSupport(Function *srcFn) {
   if (auto RT = dyn_cast<VectorType>(srcFn->getReturnType()))
     checkVectorTy(RT);
 
+  if (srcFn->getReturnType()->isStructTy()) {
+    *out << "\nERROR: we don't support structures in return values yet\n\n";
+    exit(-1);
+  }
+  if (srcFn->getReturnType()->isArrayTy()) {
+    *out << "\nERROR: we don't support arrays in return values yet\n\n";
+    exit(-1);
+  }
   set<Type *> typeSet;
   auto &DL = srcFn->getParent()->getDataLayout();
   unsigned llvmInstCount = 0;

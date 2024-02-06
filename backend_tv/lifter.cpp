@@ -2501,12 +2501,28 @@ class arm2llvm {
   }
 
   vector<Value *> marshallArgs(Function *fn) {
+    if (fn->getReturnType()->isStructTy()) {
+      *out << "\nERROR: we don't support structures in return values yet\n\n";
+      exit(-1);
+    }
+    if (fn->getReturnType()->isArrayTy()) {
+      *out << "\nERROR: we don't support arrays in return values yet\n\n";
+      exit(-1);
+    }
     unsigned vecArgNum = 0;
     unsigned scalarArgNum = 0;
     // unsigned stackSlot = 0;
     vector<Value *> args;
     for (auto arg = fn->arg_begin(); arg != fn->arg_end(); ++arg) {
       auto *argTy = arg->getType();
+      if (argTy->isStructTy()) {
+        *out << "\nERROR: we don't support structures in arguments yet\n\n";
+        exit(-1);
+      }
+      if (argTy->isArrayTy()) {
+        *out << "\nERROR: we don't support arrays in arguments yet\n\n";
+        exit(-1);
+      }
       Value *param{nullptr};
       if (argTy->isFloatingPointTy() || argTy->isVectorTy()) {
         if (scalarArgNum < 8) {
