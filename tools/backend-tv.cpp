@@ -193,10 +193,11 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
     exit(-1);
   }
 
-  // NoCapture messes up Alive2 as it follows int2ptr/ptr2int
-  // instructions
+  // these attributes can be soundly removed, and a good thing too
+  // since they cause spurious TV failures in ASM memory mode
   for (auto arg = F2->arg_begin(); arg != F2->arg_end(); ++arg) {
     arg->removeAttr(llvm::Attribute::NoCapture);
+    arg->removeAttr(llvm::Attribute::ReadNone);
   }
 
   auto lifted = lifter::moduleToString(M2.get());
