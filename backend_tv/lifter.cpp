@@ -249,6 +249,8 @@ class arm2llvm {
       auto newF = Function::Create(f.getFunctionType(),
                                    GlobalValue::LinkageTypes::ExternalLinkage,
                                    name, LiftedModule);
+      if (f.hasFnAttribute(Attribute::NoReturn))
+        newF->addFnAttr(Attribute::NoReturn);
       if (f.hasRetAttribute(Attribute::NoAlias))
         newF->addRetAttr(Attribute::NoAlias);
       if (f.hasRetAttribute(Attribute::SExt))
