@@ -198,6 +198,7 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
   for (auto arg = F2->arg_begin(); arg != F2->arg_end(); ++arg) {
     arg->removeAttr(llvm::Attribute::NoCapture);
     arg->removeAttr(llvm::Attribute::ReadNone);
+    arg->removeAttr(llvm::Attribute::WriteOnly);
   }
 
   auto lifted = lifter::moduleToString(M2.get());
