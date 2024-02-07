@@ -228,6 +228,8 @@ class arm2llvm {
       newGlobal = "llvm.memcpy.p0.p0.i64";
     if (newGlobal == "memset")
       newGlobal = "llvm.memset.p0.i64";
+    if (newGlobal == "memmove")
+      newGlobal = "llvm.memmove.p0.p0.i64";
 
     if (newGlobal == "__stack_chk_fail") {
       return new GlobalVariable(*LiftedModule, getIntTy(8), false,
@@ -2638,12 +2640,12 @@ class arm2llvm {
     // yikes -- these functions have an LLVM "immediate" as their last
     // argument; this is not present in the assembly at all, we have
     // to provide it by hand
-    if (calleeName == "llvm.memset.p0.i64") {
+    if (calleeName == "llvm.memset.p0.i64")
       args[3] = getIntConst(0, 1);
-    }
-    if (calleeName == "llvm.memcpy.p0.p0.i64") {
+    if (calleeName == "llvm.memcpy.p0.p0.i64")
       args[3] = getIntConst(0, 1);
-    }
+    if (calleeName == "llvm.memmove.p0.p0.i64")
+      args[3] = getIntConst(0, 1);
 
     auto CI = CallInst::Create(FC, args, "", LLVMBB);
     auto RV = enforceABIRules(CI, callee->hasRetAttribute(Attribute::SExt),
