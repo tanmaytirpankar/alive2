@@ -7308,6 +7308,8 @@ public:
         op = 1;
         break;
       }
+      default:
+        assert(false);
       }
       unsigned cmode = 15;
       auto imm = getImm(1);
@@ -9395,7 +9397,7 @@ public:
     case AArch64::MLSv16i8:
     case AArch64::MLSv8i16:
     case AArch64::MLSv4i32: {
-      unsigned numElts, eltSize;
+      unsigned numElts = -1, eltSize = -1;
       GET_SIZES6(MLS, );
       auto a = readFromVecOperand(1, eltSize, numElts);
       auto b = readFromVecOperand(2, eltSize, numElts);
@@ -9412,7 +9414,7 @@ public:
     case AArch64::MLAv16i8:
     case AArch64::MLAv8i16:
     case AArch64::MLAv4i32: {
-      unsigned numElts, eltSize;
+      unsigned numElts = -1, eltSize = -1;
       GET_SIZES6(MLA, );
       auto a = readFromVecOperand(1, eltSize, numElts);
       auto b = readFromVecOperand(2, eltSize, numElts);
@@ -9773,7 +9775,7 @@ public:
     case AArch64::SABDv8i16:
     case AArch64::SABDv2i32:
     case AArch64::SABDv4i32: {
-      unsigned numElts, eltSize;
+      unsigned numElts = -1, eltSize = -1;
       GET_SIZES6(SABD, );
       GET_SIZES6(UABD, );
 
