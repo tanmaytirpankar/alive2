@@ -10127,7 +10127,7 @@ public:
     case AArch64::SHSUBv8i16:
     case AArch64::SHSUBv2i32:
     case AArch64::SHSUBv4i32: {
-      unsigned numElts, eltSize;
+      unsigned numElts = -1, eltSize = -1;
       GET_SIZES6(UHADD, );
       GET_SIZES6(SHADD, );
       GET_SIZES6(UHSUB, );
