@@ -444,8 +444,14 @@ class arm2llvm {
   }
 
   Constant *getZeroVec(unsigned numElts, unsigned eltSize) {
+    return getElemSplat(numElts, eltSize, 0);
+  }
+
+  Constant *getElemSplat(unsigned numElts, unsigned eltSize, uint64_t val,
+                         bool isSigned = false) {
     auto ec = ElementCount::getFixed(numElts);
-    return ConstantVector::getSplat(ec, getIntConst(0, eltSize));
+    return ConstantVector::getSplat(
+        ec, ConstantInt::get(Ctx, APInt(eltSize, val, isSigned)));
   }
 
   Type *getIntTy(unsigned bits) {
@@ -965,9 +971,15 @@ class arm2llvm {
       AArch64::SQSUBv4i16,
       AArch64::SQSUBv2i32,
       AArch64::ADDv1i64,
+      AArch64::URHADDv8i8,
+      AArch64::URHADDv4i16,
+      AArch64::URHADDv2i32,
       AArch64::UHADDv8i8,
       AArch64::UHADDv4i16,
       AArch64::UHADDv2i32,
+      AArch64::SRHADDv8i8,
+      AArch64::SRHADDv4i16,
+      AArch64::SRHADDv2i32,
       AArch64::SHADDv8i8,
       AArch64::SHADDv4i16,
       AArch64::SHADDv2i32,
@@ -1014,6 +1026,30 @@ class arm2llvm {
       AArch64::DUPv8i8lane,
       AArch64::DUPv4i16lane,
       AArch64::DUPv2i32lane,
+      AArch64::RADDHNv2i64_v2i32,
+      AArch64::RADDHNv2i64_v4i32,
+      AArch64::RADDHNv4i32_v4i16,
+      AArch64::RADDHNv4i32_v8i16,
+      AArch64::RADDHNv8i16_v16i8,
+      AArch64::RADDHNv8i16_v8i8,
+      AArch64::ADDHNv2i64_v2i32,
+      AArch64::ADDHNv2i64_v4i32,
+      AArch64::ADDHNv4i32_v4i16,
+      AArch64::ADDHNv4i32_v8i16,
+      AArch64::ADDHNv8i16_v16i8,
+      AArch64::ADDHNv8i16_v8i8,
+      AArch64::RSUBHNv2i64_v2i32,
+      AArch64::RSUBHNv2i64_v4i32,
+      AArch64::RSUBHNv4i32_v4i16,
+      AArch64::RSUBHNv4i32_v8i16,
+      AArch64::RSUBHNv8i16_v16i8,
+      AArch64::RSUBHNv8i16_v8i8,
+      AArch64::SUBHNv2i64_v2i32,
+      AArch64::SUBHNv2i64_v4i32,
+      AArch64::SUBHNv4i32_v4i16,
+      AArch64::SUBHNv4i32_v8i16,
+      AArch64::SUBHNv8i16_v16i8,
+      AArch64::SUBHNv8i16_v8i8,
       AArch64::UADDLv16i8_v8i16,
       AArch64::UADDLv8i16_v4i32,
       AArch64::UADDLv4i32_v2i64,
@@ -1559,9 +1595,15 @@ class arm2llvm {
       AArch64::SSHLv8i16,
       AArch64::SSHLv4i32,
       AArch64::SSHLv2i64,
+      AArch64::URHADDv16i8,
+      AArch64::URHADDv8i16,
+      AArch64::URHADDv4i32,
       AArch64::UHADDv16i8,
       AArch64::UHADDv8i16,
       AArch64::UHADDv4i32,
+      AArch64::SRHADDv16i8,
+      AArch64::SRHADDv8i16,
+      AArch64::SRHADDv4i32,
       AArch64::SHADDv16i8,
       AArch64::SHADDv8i16,
       AArch64::SHADDv4i32,
@@ -7306,8 +7348,7 @@ public:
       Constant *expandedImmVal = getIntConst(expandedImm, 64);
       if (bitWidth128) {
         // Create a 128-bit vector with the expanded immediate
-        expandedImmVal =
-            ConstantVector::getSplat(ElementCount::getFixed(2), expandedImmVal);
+        expandedImmVal = getElemSplat(2, 64, expandedImm);
       }
 
       auto result =
@@ -8358,6 +8399,160 @@ public:
       break;
     }
 
+    case AArch64::RADDHNv2i64_v2i32:
+    case AArch64::RADDHNv2i64_v4i32:
+    case AArch64::RADDHNv4i32_v4i16:
+    case AArch64::RADDHNv4i32_v8i16:
+    case AArch64::RADDHNv8i16_v8i8:
+    case AArch64::RADDHNv8i16_v16i8:
+    case AArch64::ADDHNv2i64_v2i32:
+    case AArch64::ADDHNv2i64_v4i32:
+    case AArch64::ADDHNv4i32_v4i16:
+    case AArch64::ADDHNv4i32_v8i16:
+    case AArch64::ADDHNv8i16_v8i8:
+    case AArch64::ADDHNv8i16_v16i8:
+    case AArch64::RSUBHNv2i64_v2i32:
+    case AArch64::RSUBHNv2i64_v4i32:
+    case AArch64::RSUBHNv4i32_v4i16:
+    case AArch64::RSUBHNv4i32_v8i16:
+    case AArch64::RSUBHNv8i16_v8i8:
+    case AArch64::RSUBHNv8i16_v16i8:
+    case AArch64::SUBHNv2i64_v2i32:
+    case AArch64::SUBHNv2i64_v4i32:
+    case AArch64::SUBHNv4i32_v4i16:
+    case AArch64::SUBHNv4i32_v8i16:
+    case AArch64::SUBHNv8i16_v8i8:
+    case AArch64::SUBHNv8i16_v16i8: {
+      unsigned eltSize = -1, numElts = -1;
+      switch (opcode) {
+      case AArch64::RADDHNv2i64_v2i32:
+      case AArch64::RADDHNv2i64_v4i32:
+      case AArch64::ADDHNv2i64_v2i32:
+      case AArch64::ADDHNv2i64_v4i32:
+      case AArch64::RSUBHNv2i64_v2i32:
+      case AArch64::RSUBHNv2i64_v4i32:
+      case AArch64::SUBHNv2i64_v2i32:
+      case AArch64::SUBHNv2i64_v4i32:
+        eltSize = 32;
+        numElts = 2;
+        break;
+      case AArch64::RADDHNv4i32_v4i16:
+      case AArch64::RADDHNv4i32_v8i16:
+      case AArch64::ADDHNv4i32_v4i16:
+      case AArch64::ADDHNv4i32_v8i16:
+      case AArch64::RSUBHNv4i32_v4i16:
+      case AArch64::RSUBHNv4i32_v8i16:
+      case AArch64::SUBHNv4i32_v4i16:
+      case AArch64::SUBHNv4i32_v8i16:
+        eltSize = 16;
+        numElts = 4;
+        break;
+      case AArch64::RADDHNv8i16_v8i8:
+      case AArch64::RADDHNv8i16_v16i8:
+      case AArch64::ADDHNv8i16_v8i8:
+      case AArch64::ADDHNv8i16_v16i8:
+      case AArch64::RSUBHNv8i16_v8i8:
+      case AArch64::RSUBHNv8i16_v16i8:
+      case AArch64::SUBHNv8i16_v8i8:
+      case AArch64::SUBHNv8i16_v16i8:
+        eltSize = 8;
+        numElts = 8;
+        break;
+      default:
+        assert(false);
+        break;
+      }
+
+      Instruction::BinaryOps op;
+      bool addRoundingConst = false;
+      switch (opcode) {
+      case AArch64::RADDHNv2i64_v2i32:
+      case AArch64::RADDHNv4i32_v4i16:
+      case AArch64::RADDHNv8i16_v8i8:
+      case AArch64::RADDHNv2i64_v4i32:
+      case AArch64::RADDHNv4i32_v8i16:
+      case AArch64::RADDHNv8i16_v16i8:
+        addRoundingConst = true;
+      case AArch64::ADDHNv2i64_v2i32:
+      case AArch64::ADDHNv4i32_v4i16:
+      case AArch64::ADDHNv8i16_v8i8:
+      case AArch64::ADDHNv2i64_v4i32:
+      case AArch64::ADDHNv4i32_v8i16:
+      case AArch64::ADDHNv8i16_v16i8:
+        op = Instruction::BinaryOps::Add;
+        break;
+      case AArch64::RSUBHNv2i64_v2i32:
+      case AArch64::RSUBHNv4i32_v4i16:
+      case AArch64::RSUBHNv8i16_v8i8:
+      case AArch64::RSUBHNv2i64_v4i32:
+      case AArch64::RSUBHNv4i32_v8i16:
+      case AArch64::RSUBHNv8i16_v16i8:
+        addRoundingConst = true;
+      case AArch64::SUBHNv2i64_v2i32:
+      case AArch64::SUBHNv4i32_v4i16:
+      case AArch64::SUBHNv8i16_v8i8:
+      case AArch64::SUBHNv2i64_v4i32:
+      case AArch64::SUBHNv4i32_v8i16:
+      case AArch64::SUBHNv8i16_v16i8:
+        op = Instruction::BinaryOps::Sub;
+        break;
+      default:
+        assert(false);
+        break;
+      }
+
+      bool storeInUpperHalf = false;
+      switch (opcode) {
+      // RADDHN2 variants
+      case AArch64::RADDHNv2i64_v4i32:
+      case AArch64::RADDHNv4i32_v8i16:
+      case AArch64::RADDHNv8i16_v16i8:
+      // ADDHN2 variants
+      case AArch64::ADDHNv2i64_v4i32:
+      case AArch64::ADDHNv4i32_v8i16:
+      case AArch64::ADDHNv8i16_v16i8:
+      // RSUBHN2 variants
+      case AArch64::RSUBHNv2i64_v4i32:
+      case AArch64::RSUBHNv4i32_v8i16:
+      case AArch64::RSUBHNv8i16_v16i8:
+      // SUBHN2 variants
+      case AArch64::SUBHNv2i64_v4i32:
+      case AArch64::SUBHNv4i32_v8i16:
+      case AArch64::SUBHNv8i16_v16i8:
+        storeInUpperHalf = true;
+        break;
+      default:
+        break;
+      }
+
+      auto a =
+          readFromVecOperand(storeInUpperHalf ? 2 : 1, 2 * eltSize, numElts);
+      auto b =
+          readFromVecOperand(storeInUpperHalf ? 3 : 2, 2 * eltSize, numElts);
+
+      Value *res = createBinop(a, b, op);
+
+      if (addRoundingConst) {
+        auto roundingConst =
+            getElemSplat(numElts, 2 * eltSize, 1 << (eltSize - 1));
+        res = createBinop(res, roundingConst, Instruction::BinaryOps::Add);
+      }
+
+      Value *shifted =
+          createRawLShr(res, getElemSplat(numElts, 2 * eltSize, eltSize));
+      res = createTrunc(shifted, getVecTy(eltSize, numElts));
+      if (storeInUpperHalf) {
+        // Preserve the lower 64 bits so, read from destination register
+        // and insert to the upper 64 bits
+        Value *dest = readFromVecOperand(1, 64, 2);
+        Value *element = createBitCast(res, i64);
+        res = createInsertElement(dest, element, 1);
+      }
+
+      updateOutputReg(res);
+      break;
+    }
+
       // lane-wise binary vector instructions
     case AArch64::ORNv8i8:
     case AArch64::ORNv16i8:
@@ -9399,7 +9594,7 @@ public:
     case AArch64::MLSv8i16:
     case AArch64::MLSv4i32: {
       unsigned numElts = -1, eltSize = -1;
-      GET_SIZES6(MLS, );
+      GET_SIZES6(MLS, )
       auto a = readFromVecOperand(1, eltSize, numElts);
       auto b = readFromVecOperand(2, eltSize, numElts);
       auto c = readFromVecOperand(3, eltSize, numElts);
@@ -9416,7 +9611,7 @@ public:
     case AArch64::MLAv8i16:
     case AArch64::MLAv4i32: {
       unsigned numElts = -1, eltSize = -1;
-      GET_SIZES6(MLA, );
+      GET_SIZES6(MLA, )
       auto a = readFromVecOperand(1, eltSize, numElts);
       auto b = readFromVecOperand(2, eltSize, numElts);
       auto c = readFromVecOperand(3, eltSize, numElts);
@@ -9433,7 +9628,7 @@ public:
     case AArch64::SHRNv8i16_shift:
     case AArch64::SHRNv16i8_shift: {
       unsigned numElts, eltSize;
-      GET_SIZES6(SHRN, _shift);
+      GET_SIZES6(SHRN, _shift)
       bool topHalf;
       switch (opcode) {
       case AArch64::SHRNv2i32_shift:
@@ -9777,8 +9972,8 @@ public:
     case AArch64::SABDv2i32:
     case AArch64::SABDv4i32: {
       unsigned numElts = -1, eltSize = -1;
-      GET_SIZES6(SABD, );
-      GET_SIZES6(UABD, );
+      GET_SIZES6(SABD, )
+      GET_SIZES6(UABD, )
 
       bool isSigned = false;
       switch (opcode) {
@@ -10103,12 +10298,24 @@ public:
       break;
     }
 
+    case AArch64::URHADDv8i8:
+    case AArch64::URHADDv16i8:
+    case AArch64::URHADDv4i16:
+    case AArch64::URHADDv8i16:
+    case AArch64::URHADDv2i32:
+    case AArch64::URHADDv4i32:
     case AArch64::UHADDv8i8:
     case AArch64::UHADDv16i8:
     case AArch64::UHADDv4i16:
     case AArch64::UHADDv8i16:
     case AArch64::UHADDv2i32:
     case AArch64::UHADDv4i32:
+    case AArch64::SRHADDv8i8:
+    case AArch64::SRHADDv16i8:
+    case AArch64::SRHADDv4i16:
+    case AArch64::SRHADDv8i16:
+    case AArch64::SRHADDv2i32:
+    case AArch64::SRHADDv4i32:
     case AArch64::SHADDv8i8:
     case AArch64::SHADDv16i8:
     case AArch64::SHADDv4i16:
@@ -10128,13 +10335,21 @@ public:
     case AArch64::SHSUBv2i32:
     case AArch64::SHSUBv4i32: {
       unsigned numElts = -1, eltSize = -1;
-      GET_SIZES6(UHADD, );
-      GET_SIZES6(SHADD, );
-      GET_SIZES6(UHSUB, );
-      GET_SIZES6(SHSUB, );
+      GET_SIZES6(URHADD, )
+      GET_SIZES6(UHADD, )
+      GET_SIZES6(SRHADD, )
+      GET_SIZES6(SHADD, )
+      GET_SIZES6(UHSUB, )
+      GET_SIZES6(SHSUB, )
 
       bool isSigned = false;
       switch (opcode) {
+      case AArch64::SRHADDv8i8:
+      case AArch64::SRHADDv16i8:
+      case AArch64::SRHADDv4i16:
+      case AArch64::SRHADDv8i16:
+      case AArch64::SRHADDv2i32:
+      case AArch64::SRHADDv4i32:
       case AArch64::SHADDv8i8:
       case AArch64::SHADDv16i8:
       case AArch64::SHADDv4i16:
@@ -10152,7 +10367,21 @@ public:
       }
 
       Instruction::BinaryOps op;
+      bool addRoundingConst = false;
       switch (opcode) {
+      case AArch64::URHADDv8i8:
+      case AArch64::URHADDv16i8:
+      case AArch64::URHADDv4i16:
+      case AArch64::URHADDv8i16:
+      case AArch64::URHADDv2i32:
+      case AArch64::URHADDv4i32:
+      case AArch64::SRHADDv8i8:
+      case AArch64::SRHADDv16i8:
+      case AArch64::SRHADDv4i16:
+      case AArch64::SRHADDv8i16:
+      case AArch64::SRHADDv2i32:
+      case AArch64::SRHADDv4i32:
+        addRoundingConst = true;
       case AArch64::UHADDv8i8:
       case AArch64::UHADDv16i8:
       case AArch64::UHADDv4i16:
@@ -10198,10 +10427,13 @@ public:
                                      vecTyDoubledEltSize);
 
       auto res = createBinop(a, b, op);
+      if (addRoundingConst) {
+        auto roundingConst = getElemSplat(numElts, 2 * eltSize, 1);
+        res = createAdd(res, roundingConst);
+      }
 
-      std::vector<Constant *> vectorOfOnes(numElts,
-                                           getIntConst(1, 2 * eltSize));
-      auto shifted = createRawAShr(res, getVectorConst(vectorOfOnes));
+      auto onesVec = getElemSplat(numElts, 2 * eltSize, 1);
+      auto shifted = createRawAShr(res, onesVec);
 
       updateOutputReg(createTrunc(shifted, vecTy));
       break;
