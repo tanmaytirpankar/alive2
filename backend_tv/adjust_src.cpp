@@ -240,7 +240,7 @@ void checkSupport(Function *srcFn) {
     }
   }
 
-  *out << "source function has " << llvmInstCount << " LLVM instructions\n";
+  *out << llvmInstCount << " LLVM instructions in source function\n";
 }
 
 /*

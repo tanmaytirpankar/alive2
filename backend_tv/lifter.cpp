@@ -11219,6 +11219,7 @@ public:
         }
       }
     }
+    *out << armInstNum << " AArch64 instructions\n";
     return liftedFn;
   }
 };
