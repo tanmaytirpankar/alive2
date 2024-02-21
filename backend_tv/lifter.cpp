@@ -7320,13 +7320,15 @@ public:
 
       auto md = MDString::get(Ctx, "fpexcept.strict");
       Value *converted;
-      if (opcode == AArch64::FRINTMSr || opcode == AArch64::FRINTMDr)
+      if (opcode == AArch64::FRINTMSr || opcode == AArch64::FRINTMDr) {
         converted = createConstrainedFloor(
             readFromFPOperand(1, getRegSize(op1.getReg())), md);
-      else if (opcode == AArch64::FRINTPSr || opcode == AArch64::FRINTPDr)
+      } else if (opcode == AArch64::FRINTPSr || opcode == AArch64::FRINTPDr) {
         converted = createConstrainedCeil(
             readFromFPOperand(1, getRegSize(op1.getReg())), md);
-
+      } else {
+	assert(false);
+      }
       updateOutputReg(converted);
       break;
     }
