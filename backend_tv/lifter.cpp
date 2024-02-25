@@ -7556,6 +7556,8 @@ public:
               readFromFPOperand(1, getRegSize(op1.getReg())), md);
           break;
         }
+      default:
+	assert(false);
       }
 
       updateOutputReg(converted);
