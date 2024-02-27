@@ -11577,6 +11577,7 @@ public:
     AttrBuilder B(Ctx);
     B.addAllocKindAttr(AllocFnKind::Alloc);
     B.addAllocSizeAttr(0, {});
+    B.addAttribute(Attribute::WillReturn);
     myAlloc->addFnAttrs(B);
     myAlloc->addParamAttr(1, Attribute::AllocAlign);
     stackMem =
