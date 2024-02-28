@@ -253,6 +253,8 @@ class arm2llvm {
                                    name, LiftedModule);
       if (f.hasFnAttribute(Attribute::NoReturn))
         newF->addFnAttr(Attribute::NoReturn);
+      if (f.hasFnAttribute(Attribute::WillReturn))
+        newF->addFnAttr(Attribute::WillReturn);
       if (f.hasRetAttribute(Attribute::NoAlias))
         newF->addRetAttr(Attribute::NoAlias);
       if (f.hasRetAttribute(Attribute::SExt))
