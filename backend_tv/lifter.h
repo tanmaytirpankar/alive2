@@ -46,6 +46,7 @@ inline const char *CPU = "generic";
 void init();
 
 llvm::Function *adjustSrcReturn(llvm::Function *srcFn);
+void addDebugInfo(llvm::Function *srcFn);
 void checkSupport(llvm::Function *srcFn);
 
 std::unique_ptr<llvm::MemoryBuffer> generateAsm(llvm::Module &OrigModule);

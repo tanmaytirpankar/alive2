@@ -12,10 +12,13 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/Bitcode/BitcodeReader.h"
+#include "llvm/IR/DebugInfo.h"
+#include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/MC/MCContext.h"
@@ -158,6 +161,49 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
 } // namespace
 
 namespace lifter {
+
+std::unique_ptr<DIBuilder> DBuilder;
+DICompileUnit *CU;
+DISubprogram *SP;
+DIFile *DIF;
+
+void addDebugInfo(Function *srcFn) {
+  auto &M = *srcFn->getParent();
+
+  // start with a clean slate
+  StripDebugInfo(M);
+  
+  M.addModuleFlag(Module::Warning, "Dwarf Version", dwarf::DWARF_VERSION);
+  M.addModuleFlag(Module::Warning, "Debug Info Version", DEBUG_METADATA_VERSION);
+ 
+  auto &Ctx = srcFn->getContext();
+  
+  DBuilder = std::make_unique<DIBuilder>(M);
+  DIF = DBuilder->createFile("foo.ll", ".");
+  CU = DBuilder->createCompileUnit(dwarf::DW_LANG_C, DIF,
+                                        "arm-tv", false, "", 0);
+  auto Ty = DBuilder->createSubroutineType(DBuilder->getOrCreateTypeArray({}));
+  SP = DBuilder->createFunction(CU,
+                                srcFn->getName(),
+                                StringRef(),
+                                DIF,
+                                0,
+                                Ty,
+                                0,
+                                DINode::FlagPrototyped,
+                                DISubprogram::SPFlagDefinition);
+  srcFn->setSubprogram(SP);
+  unsigned line = 0;
+  for (auto &bb : *srcFn)
+    for (auto &i : bb)
+      i.setDebugLoc(DILocation::get(Ctx, line++, 0, SP));
+
+  DBuilder->finalize();
+  verifyModule(M);
+  *out << "\n\n\n";
+  M.dump();
+  *out << "\n\n\n";
+}
 
 void checkSupport(Function *srcFn) {
   if (srcFn->getCallingConv() != CallingConv::C &&

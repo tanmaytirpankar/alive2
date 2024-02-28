@@ -160,6 +160,9 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
   lifter::init();
   lifter::checkSupport(srcFn);
 
+  // FIXME do this only conditionally?
+  lifter::addDebugInfo(srcFn);
+
   auto AsmBuffer = (opt_asm_input != "")
                        ? ExitOnErr(llvm::errorOrToExpected(
                              llvm::MemoryBuffer::getFile(opt_asm_input)))

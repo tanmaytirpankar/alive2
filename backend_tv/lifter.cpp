@@ -12041,6 +12041,10 @@ public:
   // MCExprs here
   virtual void emitValueImpl(const MCExpr *Value, unsigned Size,
                              SMLoc Loc = SMLoc()) override {
+    if (curSec.starts_with(".debug")) {
+      *out << "skipping emitValue in debug section\n";
+      return;
+    }
     if (auto SR = dyn_cast<MCSymbolRefExpr>(Value)) {
       const MCSymbol &Sym = SR->getSymbol();
       string name{Sym.getName()};
@@ -12083,21 +12087,35 @@ public:
     *out << "[emitAssignment]\n";
   }
 
+  virtual void emitDwarfLocDirective(unsigned FileNo, unsigned Line,
+                                     unsigned Column, unsigned Flags,
+                                     unsigned Isa, unsigned Discriminator,
+                                     StringRef FileName) override {
+    *out << "[dwarf loc directive: line = " << Line << "]\n";
+  }
+  
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
     auto sp = getCurrentSection();
-    string Lab = Symbol->getName().str();
-    *out << "[emitLabel '" << Lab << "' in section '"
-         << (string)(sp.first->getName()) << "']\n";
+    string secName = sp.first->getName().str();
+    string lab = Symbol->getName().str();
+    *out << "[emitLabel '" << lab << "' in section '"
+         << secName << "']\n";
+    
+    if (secName.starts_with(".debug")) {
+      *out << "  skipping debug stuff\n";
+      curSec = (string)sp.first->getName();
+      return;
+    }
 
     addConstant();
 
     curSym = Symbol->getName().str();
     curSec = (string)sp.first->getName();
 
-    if (Lab == ".Lfunc_end0")
+    if (lab == ".Lfunc_end0")
       FunctionEnded = true;
     if (!FunctionEnded) {
-      curBB = MF.addBlock(Lab);
+      curBB = MF.addBlock(lab);
       MCInst nop;
       // subsequent logic can be a bit simpler if we assume each BB
       // contains at least one instruction. might need to revisit this
