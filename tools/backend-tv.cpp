@@ -70,6 +70,13 @@ llvm::cl::opt<bool> opt_skip_verification(
         "Perform lifting but skip the refinement check (default=false)"),
     llvm::cl::cat(alive_cmdargs), llvm::cl::init(false));
 
+llvm::cl::opt<bool> opt_use_debuginfo(
+    LLVM_ARGS_PREFIX "use-debug-info",
+    llvm::cl::desc(
+        "Try to improve results by using LLVM debuginfo to provide a mapping "
+        "between LLVM and ARM instructions (default=true)"),
+    llvm::cl::cat(alive_cmdargs), llvm::cl::init(true));
+
 // FIXME -- this needs to be turned off by default
 llvm::cl::opt<bool> opt_internalize(
     LLVM_ARGS_PREFIX "internalize",
@@ -160,8 +167,8 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier,
   lifter::init();
   lifter::checkSupport(srcFn);
 
-  // FIXME do this only conditionally?
-  lifter::addDebugInfo(srcFn);
+  if (opt_use_debuginfo)
+    lifter::addDebugInfo(srcFn);
 
   auto AsmBuffer = (opt_asm_input != "")
                        ? ExitOnErr(llvm::errorOrToExpected(
