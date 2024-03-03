@@ -12093,14 +12093,13 @@ public:
                                      StringRef FileName) override {
     *out << "[dwarf loc directive: line = " << Line << "]\n";
   }
-  
+
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
     auto sp = getCurrentSection();
     string secName = sp.first->getName().str();
     string lab = Symbol->getName().str();
-    *out << "[emitLabel '" << lab << "' in section '"
-         << secName << "']\n";
-    
+    *out << "[emitLabel '" << lab << "' in section '" << secName << "']\n";
+
     if (secName.starts_with(".debug")) {
       *out << "  skipping debug stuff\n";
       curSec = (string)sp.first->getName();

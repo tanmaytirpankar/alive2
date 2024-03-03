@@ -12,8 +12,8 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/Bitcode/BitcodeReader.h"
-#include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/DIBuilder.h"
+#include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManager.h"
@@ -172,25 +172,20 @@ void addDebugInfo(Function *srcFn) {
 
   // start with a clean slate
   StripDebugInfo(M);
-  
+
   M.addModuleFlag(Module::Warning, "Dwarf Version", dwarf::DWARF_VERSION);
-  M.addModuleFlag(Module::Warning, "Debug Info Version", DEBUG_METADATA_VERSION);
- 
+  M.addModuleFlag(Module::Warning, "Debug Info Version",
+                  DEBUG_METADATA_VERSION);
+
   auto &Ctx = srcFn->getContext();
-  
+
   DBuilder = std::make_unique<DIBuilder>(M);
   DIF = DBuilder->createFile("foo.ll", ".");
-  CU = DBuilder->createCompileUnit(dwarf::DW_LANG_C, DIF,
-                                        "arm-tv", false, "", 0);
+  CU = DBuilder->createCompileUnit(dwarf::DW_LANG_C, DIF, "arm-tv", false, "",
+                                   0);
   auto Ty = DBuilder->createSubroutineType(DBuilder->getOrCreateTypeArray({}));
-  SP = DBuilder->createFunction(CU,
-                                srcFn->getName(),
-                                StringRef(),
-                                DIF,
-                                0,
-                                Ty,
-                                0,
-                                DINode::FlagPrototyped,
+  SP = DBuilder->createFunction(CU, srcFn->getName(), StringRef(), DIF, 0, Ty,
+                                0, DINode::FlagPrototyped,
                                 DISubprogram::SPFlagDefinition);
   srcFn->setSubprogram(SP);
   unsigned line = 0;
