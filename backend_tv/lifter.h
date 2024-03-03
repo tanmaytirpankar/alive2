@@ -43,6 +43,8 @@ extern const llvm::Target *Targ;
 inline const char *TripleName = "aarch64-unknown-linux-gnu";
 inline const char *CPU = "generic";
 
+extern std::unordered_map<unsigned, llvm::Instruction *> lineMap;
+
 void init();
 
 llvm::Function *adjustSrcReturn(llvm::Function *srcFn);

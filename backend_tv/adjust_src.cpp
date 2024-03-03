@@ -163,9 +163,7 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
 namespace lifter {
 
 std::unique_ptr<DIBuilder> DBuilder;
-DICompileUnit *CU;
-DISubprogram *SP;
-DIFile *DIF;
+std::unordered_map<unsigned, llvm::Instruction *> lineMap;
 
 void addDebugInfo(Function *srcFn) {
   auto &M = *srcFn->getParent();
@@ -180,18 +178,22 @@ void addDebugInfo(Function *srcFn) {
   auto &Ctx = srcFn->getContext();
 
   DBuilder = std::make_unique<DIBuilder>(M);
-  DIF = DBuilder->createFile("foo.ll", ".");
-  CU = DBuilder->createCompileUnit(dwarf::DW_LANG_C, DIF, "arm-tv", false, "",
-                                   0);
+  auto DIF = DBuilder->createFile("foo.ll", ".");
+  auto CU = DBuilder->createCompileUnit(dwarf::DW_LANG_C, DIF, "arm-tv", false,
+                                        "", 0);
   auto Ty = DBuilder->createSubroutineType(DBuilder->getOrCreateTypeArray({}));
-  SP = DBuilder->createFunction(CU, srcFn->getName(), StringRef(), DIF, 0, Ty,
-                                0, DINode::FlagPrototyped,
-                                DISubprogram::SPFlagDefinition);
+  auto SP = DBuilder->createFunction(CU, srcFn->getName(), StringRef(), DIF, 0,
+                                     Ty, 0, DINode::FlagPrototyped,
+                                     DISubprogram::SPFlagDefinition);
   srcFn->setSubprogram(SP);
   unsigned line = 0;
-  for (auto &bb : *srcFn)
-    for (auto &i : bb)
-      i.setDebugLoc(DILocation::get(Ctx, line++, 0, SP));
+  for (auto &bb : *srcFn) {
+    for (auto &i : bb) {
+      lineMap[line] = &i;
+      i.setDebugLoc(DILocation::get(Ctx, line, 0, SP));
+      ++line;
+    }
+  }
 
   DBuilder->finalize();
   verifyModule(M);
