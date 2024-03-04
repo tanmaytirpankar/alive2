@@ -261,6 +261,9 @@ class arm2llvm {
         newF->addRetAttr(Attribute::SExt);
       if (f.hasRetAttribute(Attribute::ZExt))
         newF->addRetAttr(Attribute::ZExt);
+      auto attr = f.getFnAttribute(Attribute::Memory);
+      if (attr.hasAttribute(Attribute::Memory))
+        newF->addFnAttr(attr);
       return newF;
     }
 
