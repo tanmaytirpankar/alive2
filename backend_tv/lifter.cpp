@@ -3519,14 +3519,8 @@ class arm2llvm {
     return make_pair(baseAddr, offset);
   }
 
-  Value *makeLoadWithOffset(Value *base, Value *offset, int size) {
-    // Create a GEP instruction based on a byte addressing basis (8 bits)
-    // returning pointer to base + offset
-    assert(base);
-    auto ptr = createGEP(getIntTy(8), base, {offset}, "");
-
-    // Load Value val in the pointer returned by the GEP instruction
-    return createLoad(getIntTy(8 * size), ptr);
+  Instruction *getCurLLVMInst() {
+    return (Instruction *)(CurInst->getLoc().getPointer());
   }
 
   unsigned decodeRegSet(unsigned r) {
@@ -3886,19 +3880,42 @@ class arm2llvm {
     return make_pair(baseAddr, op2.getImm());
   }
 
-  // Creates instructions to store val in memory pointed by base + offset
-  // offset and size are in bytes
-  Value *makeLoadWithOffset(Value *base, int offset, unsigned size) {
-    // Get offset as a 64-bit LLVM constant
-    auto offsetVal = getIntConst(offset, 64);
-
+  Value *makeLoadWithOffset(Value *base, Value *offset, int size) {
     // Create a GEP instruction based on a byte addressing basis (8 bits)
     // returning pointer to base + offset
     assert(base);
-    auto ptr = createGEP(getIntTy(8), base, {offsetVal}, "");
+    auto ptr = createGEP(getIntTy(8), base, {offset}, "");
 
     // Load Value val in the pointer returned by the GEP instruction
-    return createLoad(getIntTy(8 * size), ptr);
+    Value *loaded = createLoad(getIntTy(8 * size), ptr);
+
+    *out << "[makeLoadWithOffset size = " << size << "]\n";
+
+    if (size == 1) {
+      *out << "[it's a 1-byte load]\n";
+      if (auto llvmInst = getCurLLVMInst()) {
+        assert(llvmInst);
+        llvmInst->dump();
+        if (auto LI = dyn_cast<LoadInst>(llvmInst)) {
+          if (LI->getType() == getIntTy(1)) {
+            *out << "[following ABI rules for i1]\n";
+            loaded = createAnd(loaded, getIntConst(1, 8));
+          } else {
+            *out << "[LLVM inst for this ARM load isn't a load i1]\n";
+          }
+        } else {
+          *out << "[LLVM inst for this ARM load is not a load]\n";
+        }
+      } else {
+        *out << "[can't find an LLVM inst for this ARM load]\n";
+      }
+    }
+
+    return loaded;
+  }
+
+  Value *makeLoadWithOffset(Value *base, int offset, unsigned size) {
+    return makeLoadWithOffset(base, getIntConst(offset, 64), size);
   }
 
   tuple<Value *, Value *, Value *> getParamsStoreReg() {
@@ -5293,6 +5310,7 @@ public:
 
       MCOperand &op2 = CurInst->getOperand(2);
       if (op2.isExpr()) {
+        *out << "[operand 2 is expr]\n";
         auto [globalVar, storePtr] = getExprVar(op2.getExpr());
         if (storePtr) {
           Value *ptrToInt = createPtrToInt(globalVar, getIntTy(size * 8));
@@ -5302,6 +5320,7 @@ public:
           updateOutputReg(loaded, sExt);
         }
       } else {
+        *out << "[operand 2 is not expr]\n";
         auto [base, imm] = getParamsLoadImmed();
         auto loaded = makeLoadWithOffset(base, imm * size, size);
         updateOutputReg(loaded, sExt);
@@ -11823,10 +11842,9 @@ public:
     auto initFP = createGEP(i64, paramBase, {getIntConst(stackSlot, 64)}, "");
     createStore(initFP, RegFile[AArch64::FP]);
 
-    *out << "about to lift the instructions\n";
+    *out << "\n\nabout to lift the instructions\n";
 
     for (auto &[llvm_bb, mc_bb] : BBs) {
-      *out << "visiting bb: " << mc_bb->getName() << "\n";
       LLVMBB = llvm_bb;
       MCBB = mc_bb;
       auto &mc_instrs = mc_bb->getInstrs();
@@ -11875,6 +11893,7 @@ private:
   string curSym;
   string curSec;
   bool FunctionEnded = false;
+  unsigned curDebugLine = 0;
 
   vector<RODataItem> curROData;
 
@@ -11913,14 +11932,18 @@ public:
 
     if (prev_line == ASMLine::terminator)
       curBB = MF.addBlock(MF.getLabel());
-    MCInst curInst(Inst);
-    curBB->addInst(curInst);
+
+    Instruction *LLVMInst = lineMap[curDebugLine];
+    SMLoc Loc = SMLoc::getFromPointer((char *)LLVMInst);
+    MCInst i(Inst);
+    i.setLoc(Loc);
+    curBB->addInst(i);
 
     prev_line =
         IA->isTerminator(Inst) ? ASMLine::terminator : ASMLine::non_term_instr;
-    auto num_operands = curInst.getNumOperands();
-    for (unsigned i = 0; i < num_operands; ++i) {
-      auto op = curInst.getOperand(i);
+    auto num_operands = i.getNumOperands();
+    for (unsigned idx = 0; idx < num_operands; ++idx) {
+      auto op = i.getOperand(idx);
       if (op.isExpr()) {
         auto expr = op.getExpr();
         if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
@@ -12092,6 +12115,7 @@ public:
                                      unsigned Isa, unsigned Discriminator,
                                      StringRef FileName) override {
     *out << "[dwarf loc directive: line = " << Line << "]\n";
+    curDebugLine = Line;
   }
 
   virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
