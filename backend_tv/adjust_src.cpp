@@ -275,15 +275,13 @@ void checkSupport(Function *srcFn) {
     }
   }
 
-  if (false) {
-    auto &Ctx = srcFn->getContext();
-    if (typeSet.find(Type::getFloatTy(Ctx)) != typeSet.end() ||
-        typeSet.find(Type::getDoubleTy(Ctx)) != typeSet.end() ||
-        typeSet.find(Type::getHalfTy(Ctx)) != typeSet.end() ||
-        typeSet.find(Type::getBFloatTy(Ctx)) != typeSet.end()) {
-      *out << "\nERROR: Not supporting float until this issue gets resolved\n";
-      *out << "https://github.com/AliveToolkit/alive2/issues/982\n\n";
-      exit(-1);
+  for (auto ty : typeSet) {
+    if (ty->isFloatingPointTy()) {
+      if (!(ty->isFloatTy() ||
+            ty->isDoubleTy())) {
+        *out << "\nERROR: only float and double supported (not  bfloat, half, fp128, etc.)\n\n";
+        exit(-1);
+      }
     }
   }
 
