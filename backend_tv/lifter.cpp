@@ -3298,7 +3298,6 @@ class arm2llvm {
     assert(expr);
     string calleeName = (string)expr->getName();
 
-    // yikes
     if (calleeName == "__stack_chk_fail") {
       createTrap();
       return;
@@ -3310,7 +3309,7 @@ class arm2llvm {
     auto FC = FunctionCallee(callee);
     auto args = marshallArgs(callee);
 
-    // yikes -- these functions have an LLVM "immediate" as their last
+    // ugh -- these functions have an LLVM "immediate" as their last
     // argument; this is not present in the assembly at all, we have
     // to provide it by hand
     if (calleeName == "llvm.memset.p0.i64")
@@ -3321,14 +3320,36 @@ class arm2llvm {
       args[3] = getIntConst(0, 1);
 
     auto CI = CallInst::Create(FC, args, "", LLVMBB);
+
+    // to deal with call site attributes, we need to look at the
+    // specific call in the original code
+    *out << "looking for call site attributes\n";
+    if (auto llvmInst = getCurLLVMInst()) {
+      if (auto llvmCI = dyn_cast<CallInst>(llvmInst)) {
+        if (llvmCI->hasFnAttr(Attribute::NoReturn)) {
+          auto a = CI->getAttributes();
+          auto a2 = a.addFnAttribute(Ctx, Attribute::NoReturn);
+          CI->setAttributes(a2);
+        }
+      } else {
+        *out << "  oops, debuginfo gave us something that's not a callinst\n";
+      }
+    } else {
+      *out << "  oops, no debuginfo mapping exists\n";
+    }
+
     auto RV = enforceABIRules(CI, callee->hasRetAttribute(Attribute::SExt),
                               callee->hasRetAttribute(Attribute::ZExt));
+
     // FIXME invalidate machine state that needs invalidating
+
     auto retTy = callee->getReturnType();
     if (retTy->isIntegerTy() || retTy->isPointerTy()) {
       updateReg(RV, AArch64::X0);
     } else if (retTy->isFloatingPointTy() || retTy->isVectorTy()) {
       updateReg(RV, AArch64::Q0);
+    } else {
+      assert(retTy->isVoidTy());
     }
   }
 
@@ -3894,8 +3915,6 @@ class arm2llvm {
     if (size == 1) {
       *out << "[it's a 1-byte load]\n";
       if (auto llvmInst = getCurLLVMInst()) {
-        assert(llvmInst);
-        llvmInst->dump();
         if (auto LI = dyn_cast<LoadInst>(llvmInst)) {
           if (LI->getType() == getIntTy(1)) {
             *out << "[following ABI rules for i1]\n";
