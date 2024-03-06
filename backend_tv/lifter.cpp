@@ -2289,11 +2289,11 @@ class arm2llvm {
   }
 
   ICmpInst *createICmp(ICmpInst::Predicate p, Value *a, Value *b) {
-    return new ICmpInst(*LLVMBB, p, a, b, nextName());
+    return new ICmpInst(LLVMBB, p, a, b, nextName());
   }
 
   FCmpInst *createFCmp(FCmpInst::Predicate p, Value *a, Value *b) {
-    return new FCmpInst(*LLVMBB, p, a, b, nextName());
+    return new FCmpInst(LLVMBB, p, a, b, nextName());
   }
 
   BinaryOperator *createBinop(Value *a, Value *b, Instruction::BinaryOps op) {
