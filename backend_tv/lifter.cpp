@@ -223,7 +223,7 @@ class arm2llvm {
   Constant *lazyAddGlobal(string newGlobal) {
     *out << "  lazyAddGlobal '" << newGlobal << "'\n";
 
-    // unmangle these
+    // these have been mangled opaquely to us, just hard code the mapping
     if (newGlobal == "memcpy")
       newGlobal = "llvm.memcpy.p0.p0.i64";
     if (newGlobal == "memset")
