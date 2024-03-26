@@ -6320,8 +6320,7 @@ public:
 
       // Deinterleave the loaded vector into nregs vectors and store them in the
       // registers
-      int mask[numElts];
-      ArrayRef<int> maskRef(mask, numElts);
+      vector<int> mask(numElts);
       Value *res;
 
       // Outer loop control for register to store into
@@ -6330,7 +6329,7 @@ public:
           assert(maskVal < nregs * numElts);
           mask[i] = maskVal;
         }
-        res = createShuffleVector(casted, maskRef);
+        res = createShuffleVector(casted, mask);
         updateReg(res, regCounter);
 
         regCounter++;
@@ -7084,8 +7083,7 @@ public:
       auto base = readPtrFromReg(baseReg);
       auto baseAddr = createPtrToInt(base, i64);
 
-      int mask[nregs * numElts];
-      ArrayRef<int> maskRef(mask, nregs * numElts);
+      vector<int> mask(nregs * numElts);
 
       Value *valueToStore = getUndefVec(nregs, numElts * eltSize);
       // Outer loop control for register to load from
@@ -7113,7 +7111,7 @@ public:
       // Shuffle the vector to interleave the nregs vectors
       auto casted =
           createBitCast(valueToStore, getVecTy(eltSize, nregs * numElts));
-      Value *res = createShuffleVector(casted, maskRef);
+      Value *res = createShuffleVector(casted, mask);
 
       storeToMemoryImmOffset(base, 0, nregs * numElts * (eltSize / 8), res);
 
@@ -9874,9 +9872,7 @@ public:
       case AArch64::UMAXPv16i8:
       case AArch64::UMAXPv8i16:
       case AArch64::UMAXPv4i32: {
-        unsigned mask1[numElts], mask2[numElts];
-        ArrayRef<int> mask1Ref((int *)mask1, numElts),
-            mask2Ref((int *)mask2, numElts);
+        vector<int> mask1(numElts), mask2(numElts);
         for (unsigned i = 0; i < numElts; i++) {
           mask1[i] = 2 * i;
           mask2[i] = 2 * i + 1;
@@ -9884,8 +9880,8 @@ public:
         auto vector_a = createBitCast(a, getVecTy(eltSize, numElts));
         auto vector_b = createBitCast(b, getVecTy(eltSize, numElts));
 
-        auto new_a = createShuffleVector(vector_b, vector_a, mask1Ref);
-        auto new_b = createShuffleVector(vector_b, vector_a, mask2Ref);
+        auto new_a = createShuffleVector(vector_b, vector_a, mask1);
+        auto new_b = createShuffleVector(vector_b, vector_a, mask2);
 
         a = createBitCast(new_a, getIntTy(eltSize * numElts));
         b = createBitCast(new_b, getIntTy(eltSize * numElts));
