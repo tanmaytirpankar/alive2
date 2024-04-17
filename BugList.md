@@ -149,3 +149,5 @@ Please contact us or submit a PR if something is missing or inaccurate.
 28. AArch64 with global isel turns OOB extractelement into OOB load (https://github.com/llvm/llvm-project/issues/78383)
 29. AArch64 with global isel miscompile (https://github.com/llvm/llvm-project/issues/78477)
 30. miscompilation of trivial but non-canonical arithmetic by AArch64 backend (https://github.com/llvm/llvm-project/issues/84718)
+31. AArch64 backend: extractelement with poison index leads to OOB memory load (https://github.com/llvm/llvm-project/issues/88959)
+
