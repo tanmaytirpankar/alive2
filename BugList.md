@@ -158,3 +158,5 @@ Please contact us or submit a PR if something is missing or inaccurate.
 31. AArch64 backend: extractelement with poison index leads to OOB memory load (https://github.com/llvm/llvm-project/issues/88959)
 32. AArch64 backend incorrectly selecting uabdl (https://github.com/llvm/llvm-project/issues/88784)
 33. AArch64 backend miscompilation related to sshl.sat (https://github.com/llvm/llvm-project/issues/88950)
+34. incorrect coalescing of stores by AArch64 global isel backend (https://github.com/llvm/llvm-project/issues/90242)
+35. scalar/integer miscompile from global isel for AArch64 (https://github.com/llvm/llvm-project/issues/90245)
