@@ -11063,7 +11063,7 @@ public:
     case AArch64::ZIP1v16i8:
     case AArch64::ZIP1v2i64:
     case AArch64::ZIP1v4i32: {
-      unsigned numElts, eltSize;
+      unsigned numElts = -1, eltSize = -1;
       GET_SIZES7(ZIP1, );
       auto a = readFromVecOperand(1, eltSize, numElts);
       auto b = readFromVecOperand(2, eltSize, numElts);
@@ -11085,7 +11085,7 @@ public:
     case AArch64::ZIP2v2i64:
     case AArch64::ZIP2v16i8:
     case AArch64::ZIP2v4i32: {
-      unsigned numElts, eltSize;
+      unsigned numElts = -1, eltSize = -1;
       GET_SIZES7(ZIP2, );
       auto a = readFromVecOperand(1, eltSize, numElts);
       auto b = readFromVecOperand(2, eltSize, numElts);
@@ -11107,7 +11107,7 @@ public:
     case AArch64::ADDPv4i32:
     case AArch64::ADDPv8i16:
     case AArch64::ADDPv2i64: {
-      unsigned numElts, eltSize;
+      unsigned numElts = -1, eltSize = -1;
       GET_SIZES7(ADDP, );
       auto x = readFromOperand(1);
       auto y = readFromOperand(2);
