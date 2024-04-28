@@ -66,29 +66,6 @@ using namespace lifter;
 
 namespace {
 
-void checkVectorTy(VectorType *Ty) {
-  auto *EltTy = Ty->getElementType();
-  if (auto *IntTy = dyn_cast<IntegerType>(EltTy)) {
-    auto Width = IntTy->getBitWidth();
-    if (Width != 8 && Width != 16 && Width != 32 && Width != 64) {
-      *out << "\nERROR: Only vectors of i8, i16, i32, i64 are supported\n\n";
-      exit(-1);
-    }
-    auto Count = Ty->getElementCount().getFixedValue();
-    auto VecSize = (Count * Width) / 8;
-    if (VecSize != 8 && VecSize != 16) {
-      *out << "\nERROR: Only short vectors 8 and 16 bytes long are supported, "
-              "in parameters and return values; please see Section 5.4 of "
-              "AAPCS64 for more details\n\n";
-      exit(-1);
-    }
-  } else {
-    // FIXME there's no reason for this restriction
-    *out << "\nERROR: Only vectors of integers supported for now\n\n";
-    exit(-1);
-  }
-}
-
 void checkSupportHelper(Instruction &i, const DataLayout &DL,
                         set<Type *> &typeSet) {
   typeSet.insert(i.getType());
@@ -116,9 +93,18 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
   if (auto *li = dyn_cast<LoadInst>(&i)) {
     auto *ty = li->getType();
     unsigned w = ty->getScalarSizeInBits();
-    // i1 is a special case in the ABI
-    if ((w != 1) && ((w % 8) != 0)) {
+    // FIXME support loads of i1
+    if ((w % 8) != 0) {
       *out << "\nERROR: loads that have padding are disabled\n\n";
+      exit(-1);
+    }
+  }
+  if (auto *si = dyn_cast<StoreInst>(&i)) {
+    auto *ty = si->getType();
+    unsigned w = ty->getScalarSizeInBits();
+    // FIXME support stores of i1
+    if ((w % 8) != 0) {
+      *out << "\nERROR: stores that have padding are disabled\n\n";
       exit(-1);
     }
   }
@@ -161,6 +147,29 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
 } // namespace
 
 namespace lifter {
+
+void checkVectorTy(VectorType *Ty) {
+  auto *EltTy = Ty->getElementType();
+  if (auto *IntTy = dyn_cast<IntegerType>(EltTy)) {
+    auto Width = IntTy->getBitWidth();
+    if (Width != 8 && Width != 16 && Width != 32 && Width != 64) {
+      *out << "\nERROR: Only vectors of i8, i16, i32, i64 are supported\n\n";
+      exit(-1);
+    }
+    auto Count = Ty->getElementCount().getFixedValue();
+    auto VecSize = (Count * Width) / 8;
+    if (VecSize != 8 && VecSize != 16) {
+      *out << "\nERROR: Only short vectors 8 and 16 bytes long are supported, "
+              "in parameters and return values; please see Section 5.4 of "
+              "AAPCS64 for more details\n\n";
+      exit(-1);
+    }
+  } else {
+    // FIXME there's no reason for this restriction
+    *out << "\nERROR: Only vectors of integers supported for now\n\n";
+    exit(-1);
+  }
+}
 
 std::unique_ptr<DIBuilder> DBuilder;
 std::unordered_map<unsigned, llvm::Instruction *> lineMap;
@@ -277,9 +286,9 @@ void checkSupport(Function *srcFn) {
 
   for (auto ty : typeSet) {
     if (ty->isFloatingPointTy()) {
-      if (!(ty->isFloatTy() ||
-            ty->isDoubleTy())) {
-        *out << "\nERROR: only float and double supported (not  bfloat, half, fp128, etc.)\n\n";
+      if (!(ty->isFloatTy() || ty->isDoubleTy())) {
+        *out << "\nERROR: only float and double supported (not  bfloat, half, "
+                "fp128, etc.)\n\n";
         exit(-1);
       }
     }

@@ -3423,6 +3423,14 @@ class arm2llvm {
     *out << "lifting a call, callee is: '" << calleeName << "'\n";
     auto *callee = dyn_cast<Function>(expr);
     assert(callee);
+
+    for (auto &arg : callee->args()) {
+      if (auto vTy = dyn_cast<VectorType>(arg.getType()))
+        checkVectorTy(vTy);
+    }
+    if (auto RT = dyn_cast<VectorType>(callee->getReturnType()))
+      checkVectorTy(RT);
+
     auto FC = FunctionCallee(callee);
     auto args = marshallArgs(callee);
 

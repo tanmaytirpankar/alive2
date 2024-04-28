@@ -12,9 +12,12 @@
 namespace llvm {
 class Function;
 class Module;
+class VectorType;
 } // namespace llvm
 
 namespace lifter {
+
+void checkVectorTy(llvm::VectorType *Ty);
 
 extern std::ostream *out;
 
