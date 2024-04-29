@@ -10,6 +10,7 @@
 #include "smt/solver.h"
 #include "util/compiler.h"
 #include "util/config.h"
+#include <algorithm>
 #include <functional>
 #include <numeric>
 #include <sstream>
@@ -2225,8 +2226,7 @@ vector<Value*> FnCall::operands() const {
   vector<Value*> output;
   if (fnptr)
     output.emplace_back(fnptr);
-  transform(args.begin(), args.end(), back_inserter(output),
-            [](auto &p){ return p.first; });
+  ranges::transform(args, back_inserter(output), [](auto &p){ return p.first;});
   return output;
 }
 
@@ -3992,7 +3992,7 @@ DEFINE_AS_RETZEROALIGN(Memset, getMaxAllocSize);
 DEFINE_AS_RETZERO(Memset, getMaxGEPOffset);
 
 uint64_t Memset::getMaxAccessSize() const {
-  return round_up(getIntOr(*bytes, UINT64_MAX), align);
+  return getIntOr(*bytes, UINT64_MAX);
 }
 
 MemInstr::ByteAccessInfo Memset::getByteAccessInfo() const {
@@ -4160,7 +4160,7 @@ DEFINE_AS_RETZEROALIGN(Memcpy, getMaxAllocSize);
 DEFINE_AS_RETZERO(Memcpy, getMaxGEPOffset);
 
 uint64_t Memcpy::getMaxAccessSize() const {
-  return round_up(getIntOr(*bytes, UINT64_MAX), max(align_src, align_dst));
+  return getIntOr(*bytes, UINT64_MAX);
 }
 
 MemInstr::ByteAccessInfo Memcpy::getByteAccessInfo() const {

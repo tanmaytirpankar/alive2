@@ -492,10 +492,7 @@ static vector<Byte> valueToBytes(const StateValue &val, const Type &fromType,
     // constant global can't store pointers that alias with local blocks
     if (s->isInitializationPhase() && !p.isLocal().isFalse()) {
       expr bid  = expr::mkUInt(0, 1).concat(p.getShortBid());
-      expr off  = p.getOffset();
-      expr attr = p.getAttrs();
-      p.~Pointer();
-      new (&p) Pointer(mem, bid, off, attr);
+      p = Pointer(mem, bid, p.getOffset(), p.getAttrs());
     }
 
     for (unsigned i = 0; i < bytesize; ++i)
@@ -1051,13 +1048,18 @@ void Memory::store(const Pointer &ptr,
     auto mem = blk.val;
 
     uint64_t blk_size;
-    bool full_write = false;
+    bool full_write
+      = Pointer(*this, bid, local).blockSize().isUInt(blk_size) &&
+        blk_size == bytes;
+
     // optimization: if fully rewriting the block, don't bother with the old
     // contents. Pick a value as the default one.
-    if (Pointer(*this, bid, local).blockSize().isUInt(blk_size) &&
-        blk_size == bytes) {
-      mem = expr::mkConstArray(offset, data[0].second);
-      full_write = true;
+    // If we are initializing const globals, the size may be larger than the
+    // init because the size is rounded up to the alignment.
+    // The remaining bytes are poison.
+    if (full_write || state->isInitializationPhase()) {
+      mem = expr::mkConstArray(offset,
+              full_write ? data[0].second : Byte::mkPoisonByte(*this)());
       if (cond.isTrue()) {
         blk.undef.clear();
         blk.type = stored_ty_full;
@@ -2020,7 +2022,7 @@ void Memory::memset(const expr &p, const StateValue &val, const expr &bytesize,
   unsigned bytesz = bits_byte / 8;
   Pointer ptr(*this, p);
   if (deref_check)
-    state->addUB(ptr.isDereferenceable(bytesize, align, true));
+    state->addUB(ptr.isDereferenceable(bytesize, align, true, false, false));
 
   auto wval = val;
   for (unsigned i = 1; i < bytesz; ++i) {
@@ -2085,8 +2087,8 @@ void Memory::memcpy(const expr &d, const expr &s, const expr &bytesize,
   unsigned bytesz = bits_byte / 8;
 
   Pointer dst(*this, d), src(*this, s);
-  state->addUB(dst.isDereferenceable(bytesize, align_dst, true));
-  state->addUB(src.isDereferenceable(bytesize, align_src, false));
+  state->addUB(dst.isDereferenceable(bytesize, align_dst, true, false, false));
+  state->addUB(src.isDereferenceable(bytesize, align_src, false, false, false));
   if (!is_move)
     src.isDisjointOrEqual(bytesize, dst, bytesize);
 
@@ -2368,6 +2370,15 @@ Memory::refined(const Memory &other, bool fncall,
     Pointer q(other, p());
     if (p.isByval().isTrue() && q.isByval().isTrue())
       continue;
+
+    // In assembly mode we verify each function individually and
+    // global constants are not validated (assumed to be correct).
+    // Hence we may not have all initializers if tgt doesn't reference them.
+    if (other.isAsmMode() &&
+        is_constglb(bid) &&
+        isInitialMemBlock(other.non_local_block_val[bid].val))
+      continue;
+
     ret &= (ptr_bid == bid_expr).implies(blockRefined(p, q, bid, undef_vars));
   }
 
