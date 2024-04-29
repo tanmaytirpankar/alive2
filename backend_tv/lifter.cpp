@@ -3424,6 +3424,11 @@ class arm2llvm {
     auto *callee = dyn_cast<Function>(expr);
     assert(callee);
 
+    if (callee == liftedFn) {
+      cout << "Recursion currently not supported\n\n";
+      exit(-1);
+    }
+
     for (auto &arg : callee->args()) {
       if (auto vTy = dyn_cast<VectorType>(arg.getType()))
         checkVectorTy(vTy);
