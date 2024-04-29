@@ -161,3 +161,4 @@ Please contact us or submit a PR if something is missing or inaccurate.
 33. AArch64 backend miscompilation related to sshl.sat (https://github.com/llvm/llvm-project/issues/88950)
 34. incorrect coalescing of stores by AArch64 global isel backend (https://github.com/llvm/llvm-project/issues/90242)
 35. scalar/integer miscompile from global isel for AArch64 (https://github.com/llvm/llvm-project/issues/90245)
+36. miscompile of non-canonical IR by AArch64 global isel backend (https://github.com/llvm/llvm-project/issues/90532)
