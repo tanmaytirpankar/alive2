@@ -219,6 +219,13 @@ void checkSupport(Function *srcFn) {
     exit(-1);
   }
 
+  if (srcFn->getLinkage() ==
+      GlobalValue::LinkageTypes::AvailableExternallyLinkage) {
+    *out << "\nERROR: function has externally_available linkage type and won't "
+            "be codegenned\n\n";
+    exit(-1);
+  }
+
   if (false) {
     // can't reject this, basically everything has it
     if (srcFn->hasFnAttribute(Attribute::StackProtect)) {
