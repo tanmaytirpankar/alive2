@@ -288,10 +288,10 @@ version )EOF";
   // frozen
   config::disable_poison_input = true;
 
-  // FIXME: For now, we're hardcoding these
+  // FIXME: we should avoid hard-coding these
   M1.get()->setTargetTriple("aarch64-linux-gnu");
   M1.get()->setDataLayout(
-      "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128");
+      "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128-Fn32");
 
   lifter::out = out;
 

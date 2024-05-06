@@ -43,7 +43,7 @@ extern unsigned origRetWidth;
 extern bool has_ret_attr;
 extern const llvm::Target *Targ;
 
-// TODO -- make expose these to the command line, probably
+// TODO -- expose these to the command line
 inline const char *TripleName = "aarch64-unknown-linux-gnu";
 inline const char *CPU = "generic";
 
