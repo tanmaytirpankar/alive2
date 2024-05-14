@@ -4282,6 +4282,16 @@ public:
     }
 
     case AArch64::BLR: {
+      if (auto llvmInst = getCurLLVMInst()) {
+        if (auto llvmCI = dyn_cast<CallInst>(llvmInst)) {
+          *out << "got a callinst\n";
+          llvmCI->dump();
+        } else {
+          *out << "  oops, debuginfo gave us something that's not a callinst\n";
+        }
+      } else {
+        *out << "  oops, no debuginfo mapping exists\n";
+      }
       *out << "\nERROR: BLR not supported\n\n";
       exit(-1);
     }
