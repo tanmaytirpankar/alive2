@@ -3350,12 +3350,12 @@ class arm2llvm {
     return imm64;
   }
 
-  vector<Value *> marshallArgs(Function *fn) {
-    if (fn->getReturnType()->isStructTy()) {
+  vector<Value *> marshallArgs(FunctionType *fTy) {
+    if (fTy->getReturnType()->isStructTy()) {
       *out << "\nERROR: we don't support structures in return values yet\n\n";
       exit(-1);
     }
-    if (fn->getReturnType()->isArrayTy()) {
+    if (fTy->getReturnType()->isArrayTy()) {
       *out << "\nERROR: we don't support arrays in return values yet\n\n";
       exit(-1);
     }
@@ -3363,8 +3363,8 @@ class arm2llvm {
     unsigned scalarArgNum = 0;
     // unsigned stackSlot = 0;
     vector<Value *> args;
-    for (auto arg = fn->arg_begin(); arg != fn->arg_end(); ++arg) {
-      auto *argTy = arg->getType();
+    for (auto arg = fTy->param_begin(); arg != fTy->param_end(); ++arg) {
+      Type *argTy = *arg;
       if (argTy->isStructTy()) {
         *out << "\nERROR: we don't support structures in arguments yet\n\n";
         exit(-1);
@@ -3386,7 +3386,7 @@ class arm2llvm {
           assert(false);
         }
       } else if (argTy->isIntegerTy() || argTy->isPointerTy()) {
-        assert(getBitWidth(arg) <= 64);
+        assert(argTy->getIntegerBitWidth() <= 64);
         // FIXME check signext and zeroext
         if (scalarArgNum < 8) {
           param = readFromReg(AArch64::X0 + scalarArgNum);
@@ -3398,8 +3398,8 @@ class arm2llvm {
         if (argTy->isPointerTy()) {
           param = new IntToPtrInst(param, PointerType::get(Ctx, 0), "", LLVMBB);
         } else {
-          if (getBitWidth(arg) < 64)
-            param = createTrunc(param, getIntTy(getBitWidth(arg)));
+          if (argTy->getIntegerBitWidth() < 64)
+            param = createTrunc(param, getIntTy(argTy->getIntegerBitWidth()));
         }
       }
       args.push_back(param);
@@ -3408,36 +3408,15 @@ class arm2llvm {
     return args;
   }
 
-  void doCall() {
-    auto &op0 = CurInst->getOperand(0);
-    assert(op0.isExpr());
-    auto [expr, _] = getExprVar(op0.getExpr());
-    assert(expr);
-    string calleeName = (string)expr->getName();
-
-    if (calleeName == "__stack_chk_fail") {
-      createTrap();
-      return;
-    }
-
-    *out << "lifting a call, callee is: '" << calleeName << "'\n";
-    auto *callee = dyn_cast<Function>(expr);
-    assert(callee);
-
-    if (callee == liftedFn) {
-      cout << "Recursion currently not supported\n\n";
-      exit(-1);
-    }
-
-    for (auto &arg : callee->args()) {
-      if (auto vTy = dyn_cast<VectorType>(arg.getType()))
+  void doCall(FunctionCallee FC, CallInst *llvmCI, const string &calleeName) {
+    for (auto &arg : FC.getFunctionType()->params()) {
+      if (auto vTy = dyn_cast<VectorType>(arg))
         checkVectorTy(vTy);
     }
-    if (auto RT = dyn_cast<VectorType>(callee->getReturnType()))
+    if (auto RT = dyn_cast<VectorType>(FC.getFunctionType()->getReturnType()))
       checkVectorTy(RT);
 
-    auto FC = FunctionCallee(callee);
-    auto args = marshallArgs(callee);
+    auto args = marshallArgs(FC.getFunctionType());
 
     // ugh -- these functions have an LLVM "immediate" as their last
     // argument; this is not present in the assembly at all, we have
@@ -3451,29 +3430,26 @@ class arm2llvm {
 
     auto CI = CallInst::Create(FC, args, "", LLVMBB);
 
-    // to deal with call site attributes, we need to look at the
-    // specific call in the original code
-    *out << "looking for call site attributes\n";
-    if (auto llvmInst = getCurLLVMInst()) {
-      if (auto llvmCI = dyn_cast<CallInst>(llvmInst)) {
-        if (llvmCI->hasFnAttr(Attribute::NoReturn)) {
-          auto a = CI->getAttributes();
-          auto a2 = a.addFnAttribute(Ctx, Attribute::NoReturn);
-          CI->setAttributes(a2);
-        }
-      } else {
-        *out << "  oops, debuginfo gave us something that's not a callinst\n";
+    bool sext{false}, zext{false};
+    
+    if (llvmCI) {
+      if (llvmCI->hasFnAttr(Attribute::NoReturn)) {
+        auto a = CI->getAttributes();
+        auto a2 = a.addFnAttribute(Ctx, Attribute::NoReturn);
+        CI->setAttributes(a2);
       }
-    } else {
-      *out << "  oops, no debuginfo mapping exists\n";
+      auto calledFn = llvmCI->getCalledFunction();
+      if (calledFn) {
+        sext = calledFn->hasRetAttribute(Attribute::SExt);
+        zext = calledFn->hasRetAttribute(Attribute::ZExt);
+      }
     }
-
-    auto RV = enforceABIRules(CI, callee->hasRetAttribute(Attribute::SExt),
-                              callee->hasRetAttribute(Attribute::ZExt));
+    
+    auto RV = enforceABIRules(CI, sext, zext);
 
     // FIXME invalidate machine state that needs invalidating
 
-    auto retTy = callee->getReturnType();
+    auto retTy = FC.getFunctionType()->getReturnType();
     if (retTy->isIntegerTy() || retTy->isPointerTy()) {
       updateReg(RV, AArch64::X0);
     } else if (retTy->isFloatingPointTy() || retTy->isVectorTy()) {
@@ -3481,6 +3457,41 @@ class arm2llvm {
     } else {
       assert(retTy->isVoidTy());
     }
+  }
+  
+  void doDirectCall() {
+    auto &op0 = CurInst->getOperand(0);
+    assert(op0.isExpr());
+    auto [expr, _] = getExprVar(op0.getExpr());
+    assert(expr);
+    string calleeName = (string)expr->getName();
+
+    if (calleeName == "__stack_chk_fail") {
+      createTrap();
+      return;
+    }
+
+    *out << "lifting a direct call, callee is: '" << calleeName << "'\n";
+    auto *callee = dyn_cast<Function>(expr);
+    assert(callee);
+
+    if (callee == liftedFn) {
+      cout << "Recursion currently not supported\n\n";
+      exit(-1);
+    }
+
+    auto llvmInst = getCurLLVMInst();
+    CallInst *llvmCI{nullptr};
+    if (!llvmInst) {
+      *out << "  oops, no debuginfo mapping exists\n";
+    } else {
+      llvmCI = dyn_cast<CallInst>(llvmInst);
+      if (!llvmCI)
+        *out << "  oops, debuginfo gave us something that's not a callinst\n";
+    }
+
+    FunctionCallee FC{callee};
+    doCall(FC, llvmCI, calleeName);
   }
 
   void doReturn() {
@@ -4250,7 +4261,7 @@ public:
     }
 
     case AArch64::BL: {
-      doCall();
+      doDirectCall();
       break;
     }
 
@@ -4270,7 +4281,7 @@ public:
         // ok, if we don't have a destination block then we left this
         // dangling on purpose, with the assumption that it's a tail
         // call
-        doCall();
+        doDirectCall();
         doReturn();
       }
       break;
@@ -4283,17 +4294,26 @@ public:
 
     case AArch64::BLR: {
       if (auto llvmInst = getCurLLVMInst()) {
-        if (auto llvmCI = dyn_cast<CallInst>(llvmInst)) {
-          *out << "got a callinst\n";
-          llvmCI->dump();
+        if (auto CI = dyn_cast<CallInst>(llvmInst)) {
+          if (!CI->isIndirectCall()) {
+            *out << "OOPS: expected BLR to map to an indirect call\n\n";
+            exit(-1);
+          }
+          auto reg = CurInst->getOperand(0).getReg();
+          auto fnPtr = readPtrFromReg(reg);
+          FunctionCallee FC(CI->getFunctionType(), fnPtr);
+          doCall(FC, CI, "");
         } else {
-          *out << "  oops, debuginfo gave us something that's not a callinst\n";
+          *out << "OOPS: debuginfo gave us something that's not a callinst\n";
+          *out << "Can't process BLR instructions\n\n";
+          exit(-1);
         }
       } else {
-        *out << "  oops, no debuginfo mapping exists\n";
+        *out << "OOPS: no debuginfo mapping exists\n";
+        *out << "Can't process BLR instructions\n\n";
+        exit(-1);
       }
-      *out << "\nERROR: BLR not supported\n\n";
-      exit(-1);
+      break;
     }
 
     case AArch64::RET:
@@ -12325,6 +12345,7 @@ public:
       }
     }
     *out << armInstNum << " AArch64 instructions\n";
+    liftedFn->dump();
     return liftedFn;
   }
 };
