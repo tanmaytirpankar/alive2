@@ -3351,6 +3351,8 @@ class arm2llvm {
   }
 
   vector<Value *> marshallArgs(FunctionType *fTy) {
+    *out << "entering marshallArgs()\n";
+    assert(fTy);
     if (fTy->getReturnType()->isStructTy()) {
       *out << "\nERROR: we don't support structures in return values yet\n\n";
       exit(-1);
@@ -3365,6 +3367,8 @@ class arm2llvm {
     vector<Value *> args;
     for (auto arg = fTy->param_begin(); arg != fTy->param_end(); ++arg) {
       Type *argTy = *arg;
+      assert(argTy);
+      *out << "  vecArgNum = " << vecArgNum << " scalarArgNum = " << scalarArgNum << "\n";
       if (argTy->isStructTy()) {
         *out << "\nERROR: we don't support structures in arguments yet\n\n";
         exit(-1);
@@ -3386,7 +3390,6 @@ class arm2llvm {
           assert(false);
         }
       } else if (argTy->isIntegerTy() || argTy->isPointerTy()) {
-        assert(argTy->getIntegerBitWidth() <= 64);
         // FIXME check signext and zeroext
         if (scalarArgNum < 8) {
           param = readFromReg(AArch64::X0 + scalarArgNum);
@@ -3398,9 +3401,12 @@ class arm2llvm {
         if (argTy->isPointerTy()) {
           param = new IntToPtrInst(param, PointerType::get(Ctx, 0), "", LLVMBB);
         } else {
+          assert(argTy->getIntegerBitWidth() <= 64);
           if (argTy->getIntegerBitWidth() < 64)
             param = createTrunc(param, getIntTy(argTy->getIntegerBitWidth()));
         }
+      } else {
+        assert(false && "unknown arg type\n");
       }
       args.push_back(param);
     }
@@ -3409,6 +3415,8 @@ class arm2llvm {
   }
 
   void doCall(FunctionCallee FC, CallInst *llvmCI, const string &calleeName) {
+    *out << "entering doCall()\n";
+    
     for (auto &arg : FC.getFunctionType()->params()) {
       if (auto vTy = dyn_cast<VectorType>(arg))
         checkVectorTy(vTy);
