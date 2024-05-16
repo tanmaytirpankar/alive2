@@ -3483,7 +3483,7 @@ class arm2llvm {
     auto *callee = dyn_cast<Function>(expr);
     assert(callee);
 
-    if (callee == liftedFn) {
+    if (false && callee == liftedFn) {
       cout << "Recursion currently not supported\n\n";
       exit(-1);
     }
