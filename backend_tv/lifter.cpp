@@ -3502,6 +3502,29 @@ class arm2llvm {
     doCall(FC, llvmCI, calleeName);
   }
 
+  void doIndirectCall() {
+    if (auto llvmInst = getCurLLVMInst()) {
+      if (auto CI = dyn_cast<CallInst>(llvmInst)) {
+        if (!CI->isIndirectCall()) {
+          *out << "OOPS: expected BR/BLR to map to an indirect call\n\n";
+          exit(-1);
+        }
+        auto reg = CurInst->getOperand(0).getReg();
+        auto fnPtr = readPtrFromReg(reg);
+        FunctionCallee FC(CI->getFunctionType(), fnPtr);
+        doCall(FC, CI, "");
+      } else {
+        *out << "OOPS: debuginfo gave us something that's not a callinst\n";
+        *out << "Can't process BR/BLR instruction\n\n";
+        exit(-1);
+      }
+    } else {
+      *out << "OOPS: no debuginfo mapping exists\n";
+      *out << "Can't process BR/BLR instruction\n\n";
+      exit(-1);
+    }
+  }
+    
   void doReturn() {
     auto i32 = getIntTy(32);
     auto i64 = getIntTy(64);
@@ -4296,31 +4319,13 @@ public:
     }
 
     case AArch64::BR: {
-      *out << "\nERROR: BR not supported\n\n";
-      exit(-1);
+      doIndirectCall();
+      doReturn();
+      break;
     }
 
     case AArch64::BLR: {
-      if (auto llvmInst = getCurLLVMInst()) {
-        if (auto CI = dyn_cast<CallInst>(llvmInst)) {
-          if (!CI->isIndirectCall()) {
-            *out << "OOPS: expected BLR to map to an indirect call\n\n";
-            exit(-1);
-          }
-          auto reg = CurInst->getOperand(0).getReg();
-          auto fnPtr = readPtrFromReg(reg);
-          FunctionCallee FC(CI->getFunctionType(), fnPtr);
-          doCall(FC, CI, "");
-        } else {
-          *out << "OOPS: debuginfo gave us something that's not a callinst\n";
-          *out << "Can't process BLR instructions\n\n";
-          exit(-1);
-        }
-      } else {
-        *out << "OOPS: no debuginfo mapping exists\n";
-        *out << "Can't process BLR instructions\n\n";
-        exit(-1);
-      }
+      doIndirectCall();
       break;
     }
 
