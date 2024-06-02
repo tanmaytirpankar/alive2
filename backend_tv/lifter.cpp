@@ -3363,7 +3363,7 @@ class arm2llvm {
     }
     unsigned vecArgNum = 0;
     unsigned scalarArgNum = 0;
-    // unsigned stackSlot = 0;
+    unsigned stackSlot = 0;
     vector<Value *> args;
     for (auto arg = fTy->param_begin(); arg != fTy->param_end(); ++arg) {
       Type *argTy = *arg;
@@ -3395,8 +3395,10 @@ class arm2llvm {
           param = readFromReg(AArch64::X0 + scalarArgNum);
           ++scalarArgNum;
         } else {
-          // FIXME load from stack
-          assert(false);
+	  auto SP = readPtrFromReg(AArch64::SP);
+	  auto addr = createGEP(getIntTy(64), SP, { getIntConst(stackSlot, 64) }, nextName());
+	  param = createLoad(getIntTy(64), addr);
+	  ++stackSlot;
         }
         if (argTy->isPointerTy()) {
           param = new IntToPtrInst(param, PointerType::get(Ctx, 0), "", LLVMBB);
