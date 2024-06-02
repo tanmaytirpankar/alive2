@@ -197,7 +197,7 @@ class arm2llvm {
   LLVMContext &Ctx = LiftedModule->getContext();
   MCFunction &MF;
   Function &srcFn;
-  Function *liftedFn{nullptr};
+  Function *liftedFn{nullptr}, *myFree{nullptr};
   MCBasicBlock *MCBB{nullptr};
   BasicBlock *LLVMBB{nullptr};
   MCInstPrinter *instrPrinter{nullptr};
@@ -3368,7 +3368,8 @@ class arm2llvm {
     for (auto arg = fTy->param_begin(); arg != fTy->param_end(); ++arg) {
       Type *argTy = *arg;
       assert(argTy);
-      *out << "  vecArgNum = " << vecArgNum << " scalarArgNum = " << scalarArgNum << "\n";
+      *out << "  vecArgNum = " << vecArgNum
+           << " scalarArgNum = " << scalarArgNum << "\n";
       if (argTy->isStructTy()) {
         *out << "\nERROR: we don't support structures in arguments yet\n\n";
         exit(-1);
@@ -3395,10 +3396,11 @@ class arm2llvm {
           param = readFromReg(AArch64::X0 + scalarArgNum);
           ++scalarArgNum;
         } else {
-	  auto SP = readPtrFromReg(AArch64::SP);
-	  auto addr = createGEP(getIntTy(64), SP, { getIntConst(stackSlot, 64) }, nextName());
-	  param = createLoad(getIntTy(64), addr);
-	  ++stackSlot;
+          auto SP = readPtrFromReg(AArch64::SP);
+          auto addr = createGEP(getIntTy(64), SP, {getIntConst(stackSlot, 64)},
+                                nextName());
+          param = createLoad(getIntTy(64), addr);
+          ++stackSlot;
         }
         if (argTy->isPointerTy()) {
           param = new IntToPtrInst(param, PointerType::get(Ctx, 0), "", LLVMBB);
@@ -3418,7 +3420,7 @@ class arm2llvm {
 
   void doCall(FunctionCallee FC, CallInst *llvmCI, const string &calleeName) {
     *out << "entering doCall()\n";
-    
+
     for (auto &arg : FC.getFunctionType()->params()) {
       if (auto vTy = dyn_cast<VectorType>(arg))
         checkVectorTy(vTy);
@@ -3441,7 +3443,7 @@ class arm2llvm {
     auto CI = CallInst::Create(FC, args, "", LLVMBB);
 
     bool sext{false}, zext{false};
-    
+
     if (llvmCI) {
       if (llvmCI->hasFnAttr(Attribute::NoReturn)) {
         auto a = CI->getAttributes();
@@ -3454,7 +3456,7 @@ class arm2llvm {
         zext = calledFn->hasRetAttribute(Attribute::ZExt);
       }
     }
-    
+
     auto RV = enforceABIRules(CI, sext, zext);
 
     // FIXME invalidate machine state that needs invalidating
@@ -3468,7 +3470,7 @@ class arm2llvm {
       assert(retTy->isVoidTy());
     }
   }
-  
+
   void doDirectCall() {
     auto &op0 = CurInst->getOperand(0);
     assert(op0.isExpr());
@@ -3526,7 +3528,7 @@ class arm2llvm {
       exit(-1);
     }
   }
-    
+
   void doReturn() {
     auto i32 = getIntTy(32);
     auto i64 = getIntTy(64);
@@ -3545,6 +3547,8 @@ class arm2llvm {
       for (unsigned r = 19; r <= 28; ++r)
         assertSame(initialReg[r], readFromReg(AArch64::X0 + r));
     }
+
+    CallInst::Create(myFree, {stackMem}, "", LLVMBB);
 
     auto *retTyp = srcFn.getReturnType();
     if (retTyp->isVoidTy()) {
@@ -12175,7 +12179,7 @@ public:
 
   Function *run() {
     auto i8 = getIntTy(8);
-    auto i32 = getIntTy(32);
+    // auto i32 = getIntTy(32);
     auto i64 = getIntTy(64);
 
     // create a fresh function
@@ -12200,20 +12204,33 @@ public:
     const int localFrame = 1024;
 
     auto *allocTy =
-        FunctionType::get(PointerType::get(Ctx, 0), {i32, i32}, false);
+        FunctionType::get(PointerType::get(Ctx, 0), {i64, i64}, false);
     auto *myAlloc = Function::Create(allocTy, GlobalValue::ExternalLinkage, 0,
                                      "myalloc", LiftedModule);
     myAlloc->addRetAttr(Attribute::NonNull);
-    AttrBuilder B(Ctx);
-    B.addAllocKindAttr(AllocFnKind::Alloc);
-    B.addAllocSizeAttr(0, {});
-    B.addAttribute(Attribute::WillReturn);
-    myAlloc->addFnAttrs(B);
+    AttrBuilder B1(Ctx);
+    B1.addAllocKindAttr(AllocFnKind::Alloc);
+    B1.addAllocSizeAttr(0, {});
+    B1.addAttribute(Attribute::WillReturn);
+    myAlloc->addFnAttrs(B1);
     myAlloc->addParamAttr(1, Attribute::AllocAlign);
+    myAlloc->addFnAttr("alloc-family", "arm-tv-alloc");
+
+    auto *freeTy = FunctionType::get(Type::getVoidTy(Ctx),
+                                     {PointerType::get(Ctx, 0)}, false);
+    myFree = Function::Create(freeTy, GlobalValue::ExternalLinkage, 0, "myfree",
+                              LiftedModule);
+    AttrBuilder B2(Ctx);
+    B2.addAllocKindAttr(AllocFnKind::Free);
+    B2.addAttribute(Attribute::WillReturn);
+    myFree->addFnAttrs(B2);
+    myFree->addParamAttr(0, Attribute::AllocatedPointer);
+    myFree->addFnAttr("alloc-family", "arm-tv-alloc");
+
     stackMem =
         CallInst::Create(myAlloc,
-                         {getIntConst(localFrame + (8 * numStackSlots), 32),
-                          getIntConst(16, 32)},
+                         {getIntConst(localFrame + (8 * numStackSlots), 64),
+                          getIntConst(16, 64)},
                          "stack", LLVMBB);
 
     // allocate storage for the main register file
