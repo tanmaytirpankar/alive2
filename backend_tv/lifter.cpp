@@ -3459,7 +3459,14 @@ class arm2llvm {
 
     auto RV = enforceABIRules(CI, sext, zext);
 
-    // FIXME invalidate machine state that needs invalidating
+    // invalidate machine state that is not guaranteed to be preserved across a
+    // call
+    invalidateReg(AArch64::N, 1);
+    invalidateReg(AArch64::Z, 1);
+    invalidateReg(AArch64::C, 1);
+    invalidateReg(AArch64::V, 1);
+    for (unsigned reg = 9; reg <= 15; ++reg)
+      invalidateReg(AArch64::X0 + reg, 64);
 
     auto retTy = FC.getFunctionType()->getReturnType();
     if (retTy->isIntegerTy() || retTy->isPointerTy()) {
@@ -12060,6 +12067,11 @@ public:
               "detected----------partially-lifted-arm-target----------\n";
       visitError();
     }
+  }
+
+  void invalidateReg(unsigned Reg, unsigned Width) {
+    auto F = createFreeze(PoisonValue::get(getIntTy(Width)));
+    createStore(F, RegFile[Reg]);
   }
 
   // create the actual storage associated with a register -- all of its
