@@ -3380,15 +3380,22 @@ class arm2llvm {
       }
       Value *param{nullptr};
       if (argTy->isFloatingPointTy() || argTy->isVectorTy()) {
-        if (scalarArgNum < 8) {
+        if (vecArgNum < 8) {
           param = readFromReg(AArch64::Q0 + vecArgNum);
           if (getBitWidth(argTy) < 128)
             param = createTrunc(param, getIntTy(getBitWidth(argTy)));
           param = createBitCast(param, argTy);
           ++vecArgNum;
         } else {
-          // FIXME load from stack
-          assert(false);
+	  auto sz = getBitWidth(argTy);
+	  *out << "vector parameter going on stack with size = " << sz << "\n";
+          auto SP = readPtrFromReg(AArch64::SP);
+          auto addr = createGEP(getIntTy(64), SP, {getIntConst(stackSlot, 64)},
+                                nextName());
+          param = createBitCast(createLoad(getIntTy(sz), addr), argTy);
+          ++stackSlot;
+	  if (sz > 64)
+	    ++stackSlot;
         }
       } else if (argTy->isIntegerTy() || argTy->isPointerTy()) {
         // FIXME check signext and zeroext
