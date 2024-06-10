@@ -184,6 +184,8 @@ void BinOp::print(ostream &os) const {
   case SMin:          str = "smin "; break;
   case SMax:          str = "smax "; break;
   case Abs:           str = "abs "; break;
+  case UCmp:          str = "ucmp "; break;
+  case SCmp:          str = "scmp "; break;
   }
 
   os << getName() << " = " << str;
@@ -196,6 +198,9 @@ void BinOp::print(ostream &os) const {
     os << "exact ";
   if (flags & Disjoint)
     os << "disjoint ";
+
+  if (op == UCmp || op == SCmp)
+    os << getType() << ' ';
   os << *lhs << ", " << rhs->getName();
 }
 
@@ -453,6 +458,21 @@ StateValue BinOp::toSMT(State &s) const {
       return { a.abs(), ap && bp && (b == 0 || a != expr::IntSMin(a.bits())) };
     };
     break;
+
+  case UCmp:
+  case SCmp:
+    fn = [&](auto &a, auto &ap, auto &b, auto &bp) -> StateValue {
+      auto &ty = getType();
+      uint32_t resBits =
+          (ty.isVectorType() ? ty.getAsAggregateType()->getChild(0) : ty)
+              .bits();
+      return {expr::mkIf(a == b, expr::mkUInt(0, resBits),
+                         expr::mkIf(op == UCmp ? a.ult(b) : a.slt(b),
+                                    expr::mkInt(-1, resBits),
+                                    expr::mkInt(1, resBits))),
+              ap && bp};
+    };
+    break;
   }
 
   function<pair<StateValue,StateValue>(const expr&, const expr&, const expr&,
@@ -498,8 +518,9 @@ StateValue BinOp::toSMT(State &s) const {
       vals.emplace_back(val2ty->aggregateVals(vals2));
     } else {
       StateValue tmp;
-      for (unsigned i = 0, e = retty->numElementsConst(); i != e; ++i) {
-        auto ai = retty->extract(a, i);
+      auto opty = lhs->getType().getAsAggregateType();
+      for (unsigned i = 0, e = opty->numElementsConst(); i != e; ++i) {
+        auto ai = opty->extract(a, i);
         const StateValue *bi;
         switch (op) {
         case Abs:
@@ -508,7 +529,7 @@ StateValue BinOp::toSMT(State &s) const {
           bi = &b;
           break;
         default:
-          tmp = retty->extract(b, i);
+          tmp = opty->extract(b, i);
           bi = &tmp;
           break;
         }
@@ -556,6 +577,14 @@ expr BinOp::getTypeConstraints(const Function &f) const {
     instrconstr = getType().enforceIntOrVectorType() &&
                   getType() == lhs->getType() &&
                   rhs->getType().enforceIntType(1);
+    break;
+  case UCmp:
+  case SCmp:
+    instrconstr = getType().enforceScalarOrVectorType([&](auto &ty) {
+      return ty.enforceIntType() && ty.sizeVar() >= 2;
+    }) && getType().enforceVectorTypeEquiv(lhs->getType()) &&
+                  lhs->getType().enforceIntOrVectorType() &&
+                  lhs->getType() == rhs->getType();
     break;
   default:
     instrconstr = getType().enforceIntOrVectorType() &&
@@ -2369,6 +2398,7 @@ StateValue FnCall::toSMT(State &s) const {
   vector<StateValue> inputs;
   vector<Memory::PtrInput> ptr_inputs;
 
+  unsigned indirect_hash = 0;
   auto ptr = fnptr;
   // This is a direct call, but check if there are indirect calls elsewhere
   // to this function. If so, call it indirectly to match the other calls.
@@ -2389,7 +2419,7 @@ StateValue FnCall::toSMT(State &s) const {
       decl.inputs.emplace_back(&arg->getType(), params);
     }
     s.addUB(expr::mkUF("#fndeclty", { inputs[0].value }, expr::mkUInt(0, 32)) ==
-            decl.hash());
+            (indirect_hash = decl.hash()));
   } else {
     fnName_mangled << fnName;
   }
@@ -2513,7 +2543,7 @@ StateValue FnCall::toSMT(State &s) const {
 
   auto ret = s.addFnCall(std::move(fnName_mangled).str(), std::move(inputs),
                          std::move(ptr_inputs), getType(), std::move(ret_val),
-                         ret_arg_ty, std::move(ret_vals), attrs);
+                         ret_arg_ty, std::move(ret_vals), attrs, indirect_hash);
 
   return isVoid() ? StateValue()
                   : pack_return(s, getType(), std::move(ret), attrs, args);
