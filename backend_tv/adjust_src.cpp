@@ -90,22 +90,23 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
     *out << "\nERROR: atomics not supported\n\n";
     exit(-1);
   }
-  if (auto *li = dyn_cast<LoadInst>(&i)) {
-    auto *ty = li->getType();
-    unsigned w = ty->getScalarSizeInBits();
-    // FIXME support loads of i1
-    if (false && (w % 8) != 0) {
-      *out << "\nERROR: loads that have padding are disabled\n\n";
-      exit(-1);
+  if (false) {
+    // these work now!
+    if (auto *li = dyn_cast<LoadInst>(&i)) {
+      auto *ty = li->getType();
+      unsigned w = ty->getScalarSizeInBits();
+      if ((w % 8) != 0) {
+        *out << "\nERROR: loads that have padding are disabled\n\n";
+        exit(-1);
+      }
     }
-  }
-  if (auto *si = dyn_cast<StoreInst>(&i)) {
-    auto *ty = si->getType();
-    unsigned w = ty->getScalarSizeInBits();
-    // FIXME support stores of i1
-    if (false && (w % 8) != 0) {
-      *out << "\nERROR: stores that have padding are disabled\n\n";
-      exit(-1);
+    if (auto *si = dyn_cast<StoreInst>(&i)) {
+      auto *ty = si->getType();
+      unsigned w = ty->getScalarSizeInBits();
+      if ((w % 8) != 0) {
+        *out << "\nERROR: stores that have padding are disabled\n\n";
+        exit(-1);
+      }
     }
   }
   if (isa<VAArgInst>(&i)) {
