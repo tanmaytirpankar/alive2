@@ -94,7 +94,7 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
     auto *ty = li->getType();
     unsigned w = ty->getScalarSizeInBits();
     // FIXME support loads of i1
-    if ((w % 8) != 0) {
+    if (false && (w % 8) != 0) {
       *out << "\nERROR: loads that have padding are disabled\n\n";
       exit(-1);
     }
@@ -103,7 +103,7 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
     auto *ty = si->getType();
     unsigned w = ty->getScalarSizeInBits();
     // FIXME support stores of i1
-    if ((w % 8) != 0) {
+    if (false && (w % 8) != 0) {
       *out << "\nERROR: stores that have padding are disabled\n\n";
       exit(-1);
     }
