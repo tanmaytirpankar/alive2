@@ -12396,7 +12396,7 @@ public:
       }
     }
     *out << armInstNum << " AArch64 instructions\n";
-    liftedFn->dump();
+    // liftedFn->dump();
     return liftedFn;
   }
 };
@@ -12485,7 +12485,7 @@ public:
     *out << cnt++ << "  : ";
     std::string sss;
     llvm::raw_string_ostream ss(sss);
-    Inst.dump_pretty(ss, IP, " ", MRI);
+    // Inst.dump_pretty(ss, IP, " ", MRI);
     *out << sss;
     if (IA->isBranch(Inst))
       *out << ": branch ";

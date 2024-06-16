@@ -222,8 +222,8 @@ void addDebugInfo(Function *srcFn) {
   DBuilder->finalize();
   verifyModule(M);
   *out << "\n\n\n";
-  M.dump();
-  *out << "\n\n\n";
+  //M.dump();
+  //*out << "\n\n\n";
 }
 
 void checkSupport(Function *srcFn) {
