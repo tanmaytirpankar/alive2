@@ -3388,14 +3388,14 @@ class arm2llvm {
           ++vecArgNum;
         } else {
 	  auto sz = getBitWidth(argTy);
+	  if (sz > 64 && ((stackSlot % 2) != 0))
+	      ++stackSlot;
 	  *out << "vector parameter going on stack with size = " << sz << "\n";
           auto SP = readPtrFromReg(AArch64::SP);
           auto addr = createGEP(getIntTy(64), SP, {getIntConst(stackSlot, 64)},
                                 nextName());
           param = createBitCast(createLoad(getIntTy(sz), addr), argTy);
           ++stackSlot;
-	  if (sz > 64)
-	    ++stackSlot;
         }
       } else if (argTy->isIntegerTy() || argTy->isPointerTy()) {
         // FIXME check signext and zeroext
@@ -12410,9 +12410,6 @@ class MCStreamerWrapper final : public MCStreamer {
 
 private:
   MCInstrAnalysis *IA;
-  MCInstPrinter *IP;
-  MCRegisterInfo *MRI;
-
   MCBasicBlock *curBB{nullptr};
   unsigned prev_line{0};
   Align curAlign;
@@ -12429,7 +12426,7 @@ public:
 
   MCStreamerWrapper(MCContext &Context, MCInstrAnalysis *IA, MCInstPrinter *IP,
                     MCRegisterInfo *MRI)
-      : MCStreamer(Context), IA(IA), IP(IP), MRI(MRI) {
+      : MCStreamer(Context), IA(IA) {
     MF.IA = IA;
     MF.IP = IP;
     MF.MRI = MRI;
