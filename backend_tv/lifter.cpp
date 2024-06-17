@@ -3387,10 +3387,10 @@ class arm2llvm {
           param = createBitCast(param, argTy);
           ++vecArgNum;
         } else {
-	  auto sz = getBitWidth(argTy);
-	  if (sz > 64 && ((stackSlot % 2) != 0))
-	      ++stackSlot;
-	  *out << "vector parameter going on stack with size = " << sz << "\n";
+          auto sz = getBitWidth(argTy);
+          if (sz > 64 && ((stackSlot % 2) != 0))
+            ++stackSlot;
+          *out << "vector parameter going on stack with size = " << sz << "\n";
           auto SP = readPtrFromReg(AArch64::SP);
           auto addr = createGEP(getIntTy(64), SP, {getIntConst(stackSlot, 64)},
                                 nextName());
