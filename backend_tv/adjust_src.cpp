@@ -87,7 +87,7 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
     exit(-1);
   }
   if (i.isAtomic()) {
-    *out << "\nERROR: atomics not supported\n\n";
+    *out << "\nERROR: atomics not supported yet\n\n";
     exit(-1);
   }
   if (false) {
@@ -133,6 +133,10 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
         exit(-1);
       }
       auto name = (string)callee->getName();
+      if (name.find("llvm.memcpy.element.unordered.atomic") != string::npos) {
+        *out << "\nERROR: atomic instrinsics not supported\n\n";
+        exit(-1);
+      }
       if (name.find("llvm.objc") != string::npos) {
         *out << "\nERROR: llvm.objc instrinsics not supported\n\n";
         exit(-1);
