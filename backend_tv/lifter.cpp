@@ -3388,14 +3388,18 @@ class arm2llvm {
           ++vecArgNum;
         } else {
           auto sz = getBitWidth(argTy);
-          if (sz > 64 && ((stackSlot % 2) != 0))
+          if (sz > 64 && ((stackSlot % 2) != 0)) {
             ++stackSlot;
+	    *out << "aligning stack slot for large vector parameter\n";
+	  }
           *out << "vector parameter going on stack with size = " << sz << "\n";
           auto SP = readPtrFromReg(AArch64::SP);
           auto addr = createGEP(getIntTy(64), SP, {getIntConst(stackSlot, 64)},
                                 nextName());
           param = createBitCast(createLoad(getIntTy(sz), addr), argTy);
           ++stackSlot;
+	  if (sz > 64)
+	    ++stackSlot;
         }
       } else if (argTy->isIntegerTy() || argTy->isPointerTy()) {
         // FIXME check signext and zeroext
