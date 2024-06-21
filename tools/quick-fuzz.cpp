@@ -22,7 +22,7 @@
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Passes/PassBuilder.h"
-#include "llvm/Support/PrettyStackTrace.h"
+#include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/TargetParser/Triple.h"
@@ -926,9 +926,8 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
 
 int main(int argc, char **argv) {
   sys::PrintStackTraceOnErrorSignal(argv[0]);
-  PrettyStackTraceProgram X(argc, argv);
+  llvm::InitLLVM X(argc, argv);
   EnableDebugBuffering = true;
-  llvm_shutdown_obj llvm_shutdown; // Call llvm_shutdown() on exit.
   LLVMContext Context;
 
   string Usage =
