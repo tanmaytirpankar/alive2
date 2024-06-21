@@ -21,7 +21,7 @@
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Passes/PassBuilder.h"
-#include "llvm/Support/PrettyStackTrace.h"
+#include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/TargetParser/Triple.h"
@@ -246,10 +246,8 @@ int main(int argc, char **argv) {
     cout << endl;
   }
 
-  llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
-  llvm::PrettyStackTraceProgram X(argc, argv);
+  llvm::InitLLVM X(argc, argv);
   llvm::EnableDebugBuffering = true;
-  llvm::llvm_shutdown_obj llvm_shutdown; // Call llvm_shutdown() on exit.
   llvm::LLVMContext Context;
 
   std::string Usage =
