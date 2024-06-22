@@ -54,6 +54,7 @@
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+#include <cmath>
 #include <algorithm>
 #include <fstream>
 #include <iostream>
