@@ -88,6 +88,7 @@ bool hit_limits;
 unsigned constexpr_idx;
 unsigned copy_idx;
 unsigned alignopbundle_idx;
+unsigned metadata_idx;
 
 #define PARSE_UNOP()                       \
   auto ty = llvm_type2alive(i.getType());  \
@@ -357,6 +358,8 @@ public:
     if (!ty)
       return error(i);
 
+    unsigned vararg_idx = -1u;
+
     // record fn decl in case there are indirect calls to this function
     // elsewhere
     auto fn_decl = fn;
@@ -382,8 +385,12 @@ public:
       Function::FnDecl decl;
       decl.name  = '@' + fn_decl->getName().str();
       decl.attrs = attrs;
+      decl.is_varargs = fn_decl->isVarArg();
       if (!(decl.output = llvm_type2alive(fn_decl->getReturnType())))
         return error(i);
+
+      if (fn_decl->isVarArg())
+        vararg_idx = fn_decl->arg_size();
 
       // it's UB if there's a mismatch in the number of function arguments
       if (( fn_decl->isVarArg() && i.arg_size() < fn_decl->arg_size()) ||
@@ -441,7 +448,7 @@ public:
 
       call = make_unique<FnCall>(*ty, value_name(i),
                                  fn ? '@' + fn->getName().str() : string(),
-                                 std::move(attrs), fnptr);
+                                 std::move(attrs), fnptr, vararg_idx);
     }
 
     auto attrs_callsite = i.getAttributes();
@@ -1320,6 +1327,46 @@ public:
         BB->addInstr(make_unique<Assume>(*i, Assume::WellDefined));
         break;
 
+      case LLVMContext::MD_callees: {
+        auto *fn_call = dynamic_cast<FnCall*>(i);
+        assert(fn_call);
+        auto &i1_type = get_int_type(1);
+        Value *last_value = nullptr;
+
+        for (auto &Op : Node->operands()) {
+          auto *callee =
+            get_operand(llvm::mdconst::dyn_extract_or_null<llvm::Function>(Op));
+
+          if (!callee) {
+            *out << "ERROR: Unsupported !callee metadata\n";
+            return false;
+          }
+
+          auto icmp = make_unique<ICmp>(i1_type,
+                                        "#cmp#" + to_string(metadata_idx),
+                                        ICmp::EQ, *fn_call->getFnPtr(),
+                                        *callee);
+          auto *icmp_ptr = icmp.get();
+          BB->addInstrAt(std::move(icmp), fn_call, true);
+
+          if (last_value) {
+            auto or_i
+              = make_unique<BinOp>(i1_type,
+                                   "#or#" + to_string(metadata_idx),
+                                   *last_value, *icmp_ptr, BinOp::Or);
+            last_value = or_i.get();
+            BB->addInstrAt(std::move(or_i), fn_call, true);
+          } else {
+            last_value = icmp_ptr;
+          }
+          ++metadata_idx;
+        }
+        auto val = last_value ? last_value : make_intconst(0, 1);
+        BB->addInstrAt(make_unique<Assume>(*val, Assume::AndNonPoison),
+                       fn_call, true);
+        break;
+      }
+
       case LLVMContext::MD_dereferenceable:
       case LLVMContext::MD_dereferenceable_or_null: {
         auto kind = ID == LLVMContext::MD_dereferenceable
@@ -1666,6 +1713,7 @@ public:
     constexpr_idx = 0;
     copy_idx = 0;
     alignopbundle_idx = 0;
+    metadata_idx = 0;
 
     // don't even bother if number of BBs or instructions is huge..
     if (distance(f.begin(), f.end()) > 5000 ||
@@ -1773,8 +1821,8 @@ public:
 
           if (!alive_i->isVoid()) {
             add_identifier(i, *alive_i);
-          } else {
-            alive_i = static_cast<Instr *>(get_operand(&i));
+          } else if (auto *ptr = static_cast<Instr*>(get_identifier(i))) {
+            alive_i = ptr;
           }
 
           if (i.hasMetadataOtherThanDebugLoc() &&
