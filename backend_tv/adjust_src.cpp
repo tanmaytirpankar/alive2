@@ -90,25 +90,6 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
     *out << "\nERROR: atomics not supported yet\n\n";
     exit(-1);
   }
-  if (false) {
-    // these work now!
-    if (auto *li = dyn_cast<LoadInst>(&i)) {
-      auto *ty = li->getType();
-      unsigned w = ty->getScalarSizeInBits();
-      if ((w % 8) != 0) {
-        *out << "\nERROR: loads that have padding are disabled\n\n";
-        exit(-1);
-      }
-    }
-    if (auto *si = dyn_cast<StoreInst>(&i)) {
-      auto *ty = si->getType();
-      unsigned w = ty->getScalarSizeInBits();
-      if ((w % 8) != 0) {
-        *out << "\nERROR: stores that have padding are disabled\n\n";
-        exit(-1);
-      }
-    }
-  }
   if (isa<VAArgInst>(&i)) {
     *out << "\nERROR: va_arg instructions not supported\n\n";
     exit(-1);
@@ -116,6 +97,12 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
   if (isa<InvokeInst>(&i)) {
     *out << "\nERROR: invoke instructions not supported\n\n";
     exit(-1);
+  }
+  if (auto *cb = dyn_cast<CallBase>(&i)) {
+    if (isa<InlineAsm>(cb->getCalledOperand())) {
+      *out << "\nERROR: inline assembly not supported\n\n";
+      exit(-1);
+    }      
   }
   if (auto *ci = dyn_cast<CallInst>(&i)) {
     auto &Ctx = ci->getContext();
