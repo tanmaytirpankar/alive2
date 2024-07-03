@@ -66,6 +66,15 @@ using namespace lifter;
 
 namespace {
 
+void checkCallingConv(Function *fn) {
+  if (fn->getCallingConv() != CallingConv::C &&
+      fn->getCallingConv() != CallingConv::Fast) {
+    *out
+      << "\nERROR: Only the C and fast calling conventions are supported\n\n";
+    exit(-1);
+  }
+}
+  
 void checkSupportHelper(Instruction &i, const DataLayout &DL,
                         set<Type *> &typeSet) {
   typeSet.insert(i.getType());
@@ -107,6 +116,7 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
   if (auto *ci = dyn_cast<CallInst>(&i)) {
     auto &Ctx = ci->getContext();
     if (auto callee = ci->getCalledFunction()) {
+      checkCallingConv(callee);
       if (!callee->isIntrinsic()) {
         for (auto arg = callee->arg_begin(); arg != callee->arg_end(); ++arg)
           if (auto *vTy = dyn_cast<VectorType>(arg->getType()))
@@ -218,13 +228,7 @@ void addDebugInfo(Function *srcFn) {
 }
 
 void checkSupport(Function *srcFn) {
-  if (srcFn->getCallingConv() != CallingConv::C &&
-      srcFn->getCallingConv() != CallingConv::Fast) {
-    *out
-        << "\nERROR: Only the C and fast calling conventions are supported\n\n";
-    exit(-1);
-  }
-
+  checkCallingConv(srcFn);
   if (srcFn->getLinkage() ==
       GlobalValue::LinkageTypes::AvailableExternallyLinkage) {
     *out << "\nERROR: function has externally_available linkage type and won't "
