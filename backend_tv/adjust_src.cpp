@@ -70,11 +70,11 @@ void checkCallingConv(Function *fn) {
   if (fn->getCallingConv() != CallingConv::C &&
       fn->getCallingConv() != CallingConv::Fast) {
     *out
-      << "\nERROR: Only the C and fast calling conventions are supported\n\n";
+        << "\nERROR: Only the C and fast calling conventions are supported\n\n";
     exit(-1);
   }
 }
-  
+
 void checkSupportHelper(Instruction &i, const DataLayout &DL,
                         set<Type *> &typeSet) {
   typeSet.insert(i.getType());
@@ -107,11 +107,17 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
     *out << "\nERROR: invoke instructions not supported\n\n";
     exit(-1);
   }
+  if (auto *ai = dyn_cast<AllocaInst>(&i)) {
+    if (!ai->isStaticAlloca()) {
+      *out << "\nERROR: only static allocas supported for now\n\n";
+      exit(-1);
+    }
+  }
   if (auto *cb = dyn_cast<CallBase>(&i)) {
     if (isa<InlineAsm>(cb->getCalledOperand())) {
       *out << "\nERROR: inline assembly not supported\n\n";
       exit(-1);
-    }      
+    }
   }
   if (auto *ci = dyn_cast<CallInst>(&i)) {
     auto &Ctx = ci->getContext();
