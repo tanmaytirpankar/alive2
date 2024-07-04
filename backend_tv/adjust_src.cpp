@@ -64,6 +64,8 @@ using namespace std;
 using namespace llvm;
 using namespace lifter;
 
+long totalAllocas;
+
 namespace {
 
 void checkCallingConv(Function *fn) {
@@ -112,6 +114,9 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
       *out << "\nERROR: only static allocas supported for now\n\n";
       exit(-1);
     }
+    auto allocSize = ai->getAllocationSize(DL);
+    if (allocSize)
+      totalAllocas += allocSize->getFixedValue();
   }
   if (auto *cb = dyn_cast<CallBase>(&i)) {
     if (isa<InlineAsm>(cb->getCalledOperand())) {
@@ -232,14 +237,6 @@ void checkSupport(Function *srcFn) {
     exit(-1);
   }
 
-  if (false) {
-    // can't reject this, basically everything has it
-    if (srcFn->hasFnAttribute(Attribute::StackProtect)) {
-      *out << "\nERROR: StackProtect attribute not supported\n\n";
-      exit(-1);
-    }
-  }
-
   if (srcFn->hasPersonalityFn()) {
     *out << "\nERROR: personality functions not supported\n\n";
     exit(-1);
@@ -290,11 +287,18 @@ void checkSupport(Function *srcFn) {
   set<Type *> typeSet;
   auto &DL = srcFn->getParent()->getDataLayout();
   unsigned llvmInstCount = 0;
+
+  totalAllocas = 0;
   for (auto &bb : *srcFn) {
     for (auto &i : bb) {
       checkSupportHelper(i, DL, typeSet);
       ++llvmInstCount;
     }
+  }
+  if (totalAllocas >= stackBytes) {
+    *out << "ERROR: ARM stack frame too large, consider increasing "
+            "stackBytes\n\n";
+    exit(-1);
   }
 
   for (auto ty : typeSet) {

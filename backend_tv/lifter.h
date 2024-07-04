@@ -17,6 +17,9 @@ class VectorType;
 
 namespace lifter {
 
+// amount of stack available for use by the lifted function, in bytes
+const int stackBytes = 1024;
+
 void checkArguments(llvm::CallInst *ci, llvm::Value *val);
 void checkVectorTy(llvm::VectorType *Ty);
 

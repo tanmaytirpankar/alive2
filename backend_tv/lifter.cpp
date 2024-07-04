@@ -12222,10 +12222,8 @@ public:
     // default to adding instructions to the entry block
     LLVMBB = BBs[0].first;
 
-    // number of 8-byte stack slots for paramters
+    // number of 8-byte stack slots for parameters
     const int numStackSlots = 32;
-    // amount of stack available for use by the lifted function, in bytes
-    const int localFrame = 1024;
 
     auto *allocTy =
         FunctionType::get(PointerType::get(Ctx, 0), {i64, i64}, false);
@@ -12253,7 +12251,7 @@ public:
 
     stackMem =
         CallInst::Create(myAlloc,
-                         {getIntConst(localFrame + (8 * numStackSlots), 64),
+                         {getIntConst(stackBytes + (8 * numStackSlots), 64),
                           getIntConst(16, 64)},
                          "stack", LLVMBB);
 
@@ -12277,7 +12275,7 @@ public:
     // load the base address for the stack memory; FIXME: this works
     // for accessing parameters but it doesn't support the general
     // case
-    auto paramBase = createGEP(i8, stackMem, {getIntConst(localFrame, 64)}, "");
+    auto paramBase = createGEP(i8, stackMem, {getIntConst(stackBytes, 64)}, "");
     createStore(paramBase, RegFile[AArch64::SP]);
     initialSP = readFromReg(AArch64::SP);
 
