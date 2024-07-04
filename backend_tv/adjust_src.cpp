@@ -77,6 +77,17 @@ void checkCallingConv(Function *fn) {
   }
 }
 
+void avoidArgMD(CallInst *ci, const string &str) {
+  auto &Ctx = ci->getContext();
+  auto val = MetadataAsValue::get(Ctx, MDString::get(Ctx, str));
+  for (auto &arg : ci->args()) {
+    if (arg.get() == val) {
+      *out << "\nERROR: " << val->getNameOrAsOperand() << " not supported\n\n";
+      exit(-1);
+    }
+  }
+}
+
 void checkSupportHelper(Instruction &i, const DataLayout &DL,
                         set<Type *> &typeSet) {
   typeSet.insert(i.getType());
@@ -127,14 +138,23 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
   if (auto *ci = dyn_cast<CallInst>(&i)) {
     if (auto callee = ci->getCalledFunction()) {
       checkCallingConv(callee);
-      if (!callee->isIntrinsic()) {
+
+      if (callee->isIntrinsic()) {
+	const auto &name = callee->getName();
+	if (callee->isConstrainedFPIntrinsic() ||
+	    name.contains("llvm.fptrunc.round")) {
+	  avoidArgMD(ci, "round.dynamic");
+	  avoidArgMD(ci, "round.downward");
+	  avoidArgMD(ci, "round.upward");
+	  avoidArgMD(ci, "round.towardzero");
+	  avoidArgMD(ci, "round.tonearestaway");
+	}
+      } else {
         for (auto arg = callee->arg_begin(); arg != callee->arg_end(); ++arg)
           if (auto *vTy = dyn_cast<VectorType>(arg->getType()))
             checkVectorTy(vTy);
-      } else if (callee->isConstrainedFPIntrinsic()) {
-        *out << "\nERROR: constrained FP intrinsics not supported\n\n";
-        exit(-1);
       }
+
       if (callee->isVarArg()) {
         *out << "\nERROR: varargs not supported\n\n";
         exit(-1);
