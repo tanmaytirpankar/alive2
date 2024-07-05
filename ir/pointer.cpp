@@ -251,7 +251,7 @@ expr Pointer::getBlockBaseAddress(bool simplify) const {
 
 expr Pointer::getAddress(bool simplify) const {
   return
-    getBlockBaseAddress(simplify) + getOffset().zextOrTrunc(bits_ptr_address);
+    getBlockBaseAddress(simplify) + getOffset().sextOrTrunc(bits_ptr_address);
 }
 
 expr Pointer::blockSize() const {
@@ -672,6 +672,11 @@ expr Pointer::isNull() const {
   if (!has_null_block)
     return false;
   return *this == mkNullPointer(m);
+}
+
+bool Pointer::isBlkSingleByte() const {
+  uint64_t blk_size;
+  return blockSize().isUInt(blk_size) && blk_size == bits_byte/8;
 }
 
 Pointer
