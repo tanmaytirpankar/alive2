@@ -140,15 +140,16 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
       checkCallingConv(callee);
 
       if (callee->isIntrinsic()) {
-	const auto &name = callee->getName();
-	if (callee->isConstrainedFPIntrinsic() ||
-	    name.contains("llvm.fptrunc.round")) {
-	  avoidArgMD(ci, "round.dynamic");
-	  avoidArgMD(ci, "round.downward");
-	  avoidArgMD(ci, "round.upward");
-	  avoidArgMD(ci, "round.towardzero");
-	  avoidArgMD(ci, "round.tonearestaway");
-	}
+        const auto &name = callee->getName();
+        if (callee->isConstrainedFPIntrinsic() ||
+            name.contains("llvm.fptrunc.round")) {
+          // FIXME we should be able to support these, except round.dynamic
+          avoidArgMD(ci, "round.dynamic");
+          avoidArgMD(ci, "round.downward");
+          avoidArgMD(ci, "round.upward");
+          avoidArgMD(ci, "round.towardzero");
+          avoidArgMD(ci, "round.tonearestaway");
+        }
       } else {
         for (auto arg = callee->arg_begin(); arg != callee->arg_end(); ++arg)
           if (auto *vTy = dyn_cast<VectorType>(arg->getType()))
@@ -159,23 +160,39 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
         *out << "\nERROR: varargs not supported\n\n";
         exit(-1);
       }
+
       auto name = (string)callee->getName();
       if (name.find("llvm.memcpy.element.unordered.atomic") != string::npos) {
         *out << "\nERROR: atomic instrinsics not supported\n\n";
         exit(-1);
       }
+
       if (name.find("llvm.objc") != string::npos) {
         *out << "\nERROR: llvm.objc instrinsics not supported\n\n";
         exit(-1);
       }
+
       if (name.find("llvm.thread") != string::npos) {
         *out << "\nERROR: llvm.thread instrinsics not supported\n\n";
         exit(-1);
       }
+
       if ((name.find("llvm.experimental.gc") != string::npos) ||
           (name.find("llvm.experimental.stackmap") != string::npos)) {
         *out << "\nERROR: llvm GC instrinsics not supported\n\n";
         exit(-1);
+      }
+    } else {
+      // indirect call or signature mismatch
+      auto co = ci->getCalledOperand();
+      assert(co);
+      if (auto cf = dyn_cast<Function>(co)) {
+        if (cf->isVarArg()) {
+          *out << "\nERROR: varargs not supported\n\n";
+          exit(-1);
+        }
+      } else {
+        // FIXME -- do we need to handle this case?
       }
     }
   }
