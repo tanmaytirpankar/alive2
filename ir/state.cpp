@@ -256,7 +256,7 @@ State::State(const Function &f, bool source)
     fp_rounding_mode(expr::mkVar("fp_rounding_mode", 3)),
     fp_denormal_mode(expr::mkVar("fp_denormal_mode", 2)),
     return_val(DisjointExpr(f.getType().getDummyValue(false))),
-    return_memory(DisjointExpr(memory.dup())) {}
+    return_memory(DisjointExpr<Memory>()) {}
 
 void State::resetGlobals() {
   Memory::resetGlobals();
@@ -1019,7 +1019,7 @@ State::addFnCall(const string &name, vector<StateValue> &&inputs,
   }
 
   auto isgvar = [&](const auto &decl) {
-    if (auto gv = getFn().getGlobalVar(string_view(decl.name).substr(1)))
+    if (auto gv = getFn().getGlobalVar(decl.name))
       return fn_ptr_bid == Pointer(memory, (*this)[*gv].value).getShortBid();
     return expr();
   };
@@ -1136,6 +1136,8 @@ State::addFnCall(const string &name, vector<StateValue> &&inputs,
       };
 
       output = ret_arg_ty ? std::move(ret_arg) : mk_output(out_type);
+      if (ret_arg_ty && ret_arg_ty->isPtrType())
+        ret_data.emplace_back(Memory::FnRetData());
 
       // Indirect calls may be changed into direct in tgt
       // Account for this if we have declarations with a returned argument
@@ -1333,8 +1335,10 @@ const StateValue& State::returnValCached() {
 }
 
 Memory& State::returnMemory() {
-  if (auto *m = get_if<DisjointExpr<Memory>>(&return_memory))
-    return_memory = *std::move(*m)();
+  if (auto *m = get_if<DisjointExpr<Memory>>(&return_memory)) {
+    auto val = std::move(*m)();
+    return_memory = val ? *std::move(val) : memory.dup();
+  }
   return get<Memory>(return_memory);
 }
 
@@ -1387,7 +1391,7 @@ void State::mkAxioms(State &tgt) {
 
   if (has_indirect_fncalls) {
     for (auto &decl : f.getFnDecls()) {
-      if (auto gv = f.getGlobalVar(string_view(decl.name).substr(1))) {
+      if (auto gv = f.getGlobalVar(decl.name)) {
         Pointer ptr(memory, (*this)[*gv].value);
         addAxiom(!ptr.isLocal());
         addAxiom(ptr.getOffset() == 0);
