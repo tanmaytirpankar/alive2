@@ -3456,20 +3456,27 @@ class arm2llvm {
 
     bool sext{false}, zext{false};
 
-    if (llvmCI) {
-      if (llvmCI->hasFnAttr(Attribute::NoReturn)) {
-        auto a = CI->getAttributes();
-        auto a2 = a.addFnAttribute(Ctx, Attribute::NoReturn);
-        CI->setAttributes(a2);
-      }
-      auto calledFn = llvmCI->getCalledFunction();
-      if (calledFn) {
-        sext = calledFn->hasRetAttribute(Attribute::SExt);
-        zext = calledFn->hasRetAttribute(Attribute::ZExt);
-      }
+    assert(llvmCI);
+    if (llvmCI->hasFnAttr(Attribute::NoReturn)) {
+      auto a = CI->getAttributes();
+      auto a2 = a.addFnAttribute(Ctx, Attribute::NoReturn);
+      CI->setAttributes(a2);
+    }
+    // NB we have to check for both function attributes and call site
+    // attributes
+    if (llvmCI->hasRetAttr(Attribute::SExt))
+      sext = true;
+    if (llvmCI->hasRetAttr(Attribute::ZExt))
+      zext = true;
+    auto calledFn = llvmCI->getCalledFunction();
+    if (calledFn) {
+      if (calledFn->hasRetAttribute(Attribute::SExt))
+	sext = true;
+      if (calledFn->hasRetAttribute(Attribute::ZExt))
+	zext = true;
     }
 
-    auto RV = enforceABIRules(CI, sext, zext);
+    auto RV = enforceSExtZExt(CI, sext, zext);
 
     // invalidate machine state that is not guaranteed to be preserved across a
     // call
@@ -3507,18 +3514,22 @@ class arm2llvm {
     assert(callee);
 
     if (false && callee == liftedFn) {
-      cout << "Recursion currently not supported\n\n";
+      *out << "Recursion currently not supported\n\n";
       exit(-1);
     }
 
     auto llvmInst = getCurLLVMInst();
     CallInst *llvmCI{nullptr};
     if (!llvmInst) {
-      *out << "  oops, no debuginfo mapping exists\n";
+      *out << "oops, no debuginfo mapping exists\n";
     } else {
       llvmCI = dyn_cast<CallInst>(llvmInst);
       if (!llvmCI)
-        *out << "  oops, debuginfo gave us something that's not a callinst\n";
+        *out << "oops, debuginfo gave us something that's not a callinst\n";
+    }
+    if (!llvmCI) {
+      *out << "error: can't locate corresponding source-side call instruction\n";
+      exit(-1);
     }
 
     FunctionCallee FC{callee};
@@ -12111,7 +12122,7 @@ public:
    * 128 bits, which seemed (as of Nov 2023) to be the only ones with
    * a stable ABI
    */
-  Value *enforceABIRules(Value *V, bool isSExt, bool isZExt) {
+  Value *enforceSExtZExt(Value *V, bool isSExt, bool isZExt) {
     auto i8 = getIntTy(8);
     auto i32 = getIntTy(32);
     auto argTy = V->getType();
@@ -12315,7 +12326,7 @@ public:
            << ", stackSlot = " << stackSlot;
       auto *argTy = arg->getType();
       auto *val =
-          enforceABIRules(arg, srcArg->hasSExtAttr(), srcArg->hasZExtAttr());
+          enforceSExtZExt(arg, srcArg->hasSExtAttr(), srcArg->hasZExtAttr());
 
       // first 8 integer parameters go in the first 8 integer registers
       if ((argTy->isIntegerTy() || argTy->isPointerTy()) && scalarArgNum < 8) {
