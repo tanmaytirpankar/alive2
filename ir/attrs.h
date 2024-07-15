@@ -88,13 +88,15 @@ public:
   bool poisonImpliesUB() const;
 
   uint64_t getDerefBytes() const;
+  uint64_t maxAccessSize() const;
 
   void merge(const ParamAttrs &other);
 
   friend std::ostream& operator<<(std::ostream &os, const ParamAttrs &attr);
 
   // Encodes the semantics of attributes using UB and poison.
-  StateValue encode(State &s, StateValue &&val, const Type &ty) const;
+  StateValue encode(State &s, StateValue &&val, const Type &ty,
+                    bool isdecl = false) const;
 };
 
 struct FPDenormalAttrs {

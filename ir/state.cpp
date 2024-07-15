@@ -1168,7 +1168,8 @@ State::addFnCall(const string &name, vector<StateValue> &&inputs,
               : expr::mkFreshVar((name + "#noreturn").c_str(), false),
             memaccess.canWriteSomething().isFalse()
               ? Memory::CallState()
-              : memory.mkCallState(name, attrs.has(FnAttrs::NoFree), memaccess),
+              : memory.mkCallState(name, attrs.has(FnAttrs::NoFree),
+                                   I->first.args_ptr.size(), memaccess),
             std::move(ret_data) };
 
       // add equality constraints between source's function calls
@@ -1267,7 +1268,7 @@ void State::addNonDetVar(const expr &var) {
 
 expr State::getFreshNondetVar(const char *prefix, const expr &type) {
   expr var = expr::mkFreshVar(prefix, type);
-  nondet_vars.emplace(var);
+  addNonDetVar(var);
   return var;
 }
 
