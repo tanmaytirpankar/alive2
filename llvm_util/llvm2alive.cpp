@@ -871,7 +871,7 @@ public:
 
           BB->addInstr(make_unique<Assume>(*ptr, Assume::NonNull));
         }
-        else if (name == "cold") {
+        else if (name == "cold" || name == "ignore") {
           // Not relevant for correctness
         } else {
           return error(i);
@@ -1413,9 +1413,14 @@ public:
         FnAttrs attrs;
         parse_fn_decl_attrs(fn, attrs);
 
-        BB->addInstr(
-          make_unique<FnCall>(*ty, i->getName() + "#arc",
-                              '@' + fn->getName().str(), std::move(attrs)));
+        auto call
+          = make_unique<FnCall>(*ty, i->getName() + "#arc",
+                                '@' + fn->getName().str(), std::move(attrs));
+
+        if (fn->isIntrinsic())
+          call->setApproximated(true);
+
+        BB->addInstr(std::move(call));
       }
     }
 
