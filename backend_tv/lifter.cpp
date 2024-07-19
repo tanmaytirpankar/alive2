@@ -6588,36 +6588,36 @@ public:
       case AArch64::STRBBpost:
       case AArch64::STRBpost:
         size = 1;
-        loaded = createTrunc(readFromRegOld(srcReg), i8);
+        loaded = readFromRegTyped(srcReg, i8);
         break;
       case AArch64::STRHHpre:
       case AArch64::STRHpre:
       case AArch64::STRHHpost:
       case AArch64::STRHpost:
         size = 2;
-        loaded = createTrunc(readFromRegOld(srcReg), i16);
+        loaded = readFromRegTyped(srcReg, i16);
         break;
       case AArch64::STRWpre:
       case AArch64::STRSpre:
       case AArch64::STRWpost:
       case AArch64::STRSpost:
         size = 4;
-        loaded = createTrunc(readFromRegOld(srcReg), i32);
+        loaded = readFromRegTyped(srcReg, i32);
         break;
       case AArch64::STRXpre:
       case AArch64::STRXpost:
         size = 8;
-        loaded = readFromRegOld(srcReg);
+        loaded = readFromRegTyped(srcReg, i64);
         break;
       case AArch64::STRDpre:
       case AArch64::STRDpost:
         size = 8;
-        loaded = createTrunc(readFromRegOld(srcReg), i64);
+        loaded = readFromRegTyped(srcReg, i64);
         break;
       case AArch64::STRQpre:
       case AArch64::STRQpost:
         size = 16;
-        loaded = readFromRegOld(srcReg);
+        loaded = readFromRegTyped(srcReg, getIntTy(128));
         break;
       default:
         assert(false);
