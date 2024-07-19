@@ -3386,10 +3386,7 @@ class arm2llvm {
       Value *param{nullptr};
       if (argTy->isFloatingPointTy() || argTy->isVectorTy()) {
         if (vecArgNum < 8) {
-          param = readFromRegOld(AArch64::Q0 + vecArgNum);
-          if (getBitWidth(argTy) < 128)
-            param = createTrunc(param, getIntTy(getBitWidth(argTy)));
-          param = createBitCast(param, argTy);
+          param = readFromRegTyped(AArch64::Q0 + vecArgNum, argTy);
           ++vecArgNum;
         } else {
           auto sz = getBitWidth(argTy);
@@ -3409,7 +3406,7 @@ class arm2llvm {
       } else if (argTy->isIntegerTy() || argTy->isPointerTy()) {
         // FIXME check signext and zeroext
         if (scalarArgNum < 8) {
-          param = readFromRegOld(AArch64::X0 + scalarArgNum);
+          param = readFromRegTyped(AArch64::X0 + scalarArgNum, getIntTy(64));
           ++scalarArgNum;
         } else {
           auto SP = readPtrFromReg(AArch64::SP);
@@ -3577,9 +3574,9 @@ class arm2llvm {
       // FIXME: check callee-saved vector registers
       // FIXME: make sure code doesn't touch 16, 17?
       // FIXME: check FP and LR?
-      assertSame(initialSP, readFromRegOld(AArch64::SP));
+      assertSame(initialSP, readFromRegTyped(AArch64::SP, getIntTy(64)));
       for (unsigned r = 19; r <= 28; ++r)
-        assertSame(initialReg[r], readFromRegOld(AArch64::X0 + r));
+        assertSame(initialReg[r], readFromRegTyped(AArch64::X0 + r, getIntTy(64)));
     }
 
     CallInst::Create(myFree, {stackMem}, "", LLVMBB);
@@ -5907,9 +5904,8 @@ public:
       auto offset = 0;
       for (unsigned i = 0; i < nregs; i++, offset += eltSize / 8) {
         auto loaded = makeLoadWithOffset(base, offset, eltSize / 8);
-        auto dst = readFromRegOld(regCounter);
-        auto dst_casted = createBitCast(dst, getVecTy(eltSize, numElts));
-        auto updated = createInsertElement(dst_casted, loaded, index);
+        auto dst = readFromRegTyped(regCounter, getVecTy(eltSize, numElts));
+        auto updated = createInsertElement(dst, loaded, index);
         updateReg(updated, regCounter);
 
         regCounter++;
