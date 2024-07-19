@@ -3587,7 +3587,7 @@ class arm2llvm {
     } else {
       Value *retVal = nullptr;
       if (retTyp->isVectorTy() || retTyp->isFloatingPointTy()) {
-        retVal = readFromRegOld(AArch64::Q0);
+        retVal = readFromRegTyped(AArch64::Q0, retTyp);
       } else {
         retVal = readFromRegOld(AArch64::X0);
       }
@@ -3743,7 +3743,7 @@ class arm2llvm {
     }
 
     auto baseAddr = readPtrFromReg(baseReg);
-    auto offset = extendAndShiftValue(readFromRegOld(offsetReg),
+    auto offset = extendAndShiftValue(readFromRegTyped(offsetReg, getIntTy(64)),
                                       (ExtendType)extTyp, shiftAmt);
 
     return make_pair(baseAddr, offset);
