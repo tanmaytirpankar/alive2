@@ -141,7 +141,7 @@ class MCFunction {
 
 public:
   MCInstrAnalysis *IA;
-  MCInstPrinter *IP;
+  MCInstPrinter *InstPrinter;
   MCRegisterInfo *MRI;
   vector<MCBasicBlock> BBs;
   vector<MCGlobal> MCglobals;
@@ -201,7 +201,7 @@ class arm2llvm {
   Function *liftedFn{nullptr}, *myFree{nullptr};
   MCBasicBlock *MCBB{nullptr};
   BasicBlock *LLVMBB{nullptr};
-  MCInstPrinter *instrPrinter{nullptr};
+  MCInstPrinter *InstPrinter{nullptr};
   MCInst *CurInst{nullptr}, *PrevInst{nullptr};
   unsigned armInstNum{0}, llvmInstNum{0};
   map<unsigned, Value *> RegFile;
@@ -515,7 +515,7 @@ class arm2llvm {
 
   [[noreturn]] void visitError() {
     out->flush();
-    string str(instrPrinter->getOpcodeName(CurInst->getOpcode()));
+    string str(InstPrinter->getOpcodeName(CurInst->getOpcode()));
     *out << "\nERROR: Unsupported AArch64 instruction: " << str << "\n";
     out->flush();
     exit(-1);
@@ -4268,9 +4268,9 @@ class arm2llvm {
 
 public:
   arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
-           MCInstPrinter *instrPrinter)
+           MCInstPrinter *InstPrinter)
       : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
-        instrPrinter(instrPrinter), DL(srcFn.getParent()->getDataLayout()) {
+        InstPrinter(InstPrinter), DL(srcFn.getParent()->getDataLayout()) {
 
     // sanity checking
     assert(disjoint(instrs_32, instrs_64));
@@ -12381,7 +12381,7 @@ public:
     auto initFP = createGEP(i64, paramBase, {getIntConst(stackSlot, 64)}, "");
     createStore(initFP, RegFile[AArch64::FP]);
 
-    *out << "\n\nabout to lift the instructions\n";
+    *out << "\n\nlifting ARM instructions to LLVM\n";
 
     for (auto &[llvm_bb, mc_bb] : BBs) {
       LLVMBB = llvm_bb;
@@ -12390,6 +12390,7 @@ public:
 
       for (auto &inst : mc_instrs) {
         llvmInstNum = 0;
+	*out << armInstNum << " : " << (string)InstPrinter->getOpcodeName(inst.getOpcode()) << "\n";
         liftInst(inst);
         ++armInstNum;
       }
@@ -12410,7 +12411,6 @@ public:
       }
     }
     *out << armInstNum << " AArch64 instructions\n";
-    // liftedFn->dump();
     return liftedFn;
   }
 };
@@ -12438,11 +12438,11 @@ public:
   MCFunction MF;
   unsigned cnt{0};
 
-  MCStreamerWrapper(MCContext &Context, MCInstrAnalysis *IA, MCInstPrinter *IP,
+  MCStreamerWrapper(MCContext &Context, MCInstrAnalysis *IA, MCInstPrinter *InstPrinter,
                     MCRegisterInfo *MRI)
       : MCStreamer(Context), IA(IA) {
     MF.IA = IA;
-    MF.IP = IP;
+    MF.InstPrinter = InstPrinter;
     MF.MRI = MRI;
   }
 
