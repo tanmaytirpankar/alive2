@@ -126,7 +126,7 @@ struct OffsetSym {
   long offset;
 };
 
-typedef variant<char, OffsetSym> RODataItem;
+typedef variant<OffsetSym, char> RODataItem;
 
 struct MCGlobal {
   string name;
@@ -12557,8 +12557,10 @@ public:
   virtual void emitBytes(StringRef Data) override {
     auto len = Data.size();
     *out << "[emitBytes " << len << " bytes]\n";
-    for (unsigned i = 0; i < len; ++i)
-      curROData.push_back(RODataItem{Data[i]});
+    for (unsigned i = 0; i < len; ++i) {
+      auto rod = RODataItem{Data[i]};
+      curROData.push_back(rod);
+    }
   }
 
   virtual void emitFill(const MCExpr &NumBytes, uint64_t FillValue,
@@ -12569,8 +12571,10 @@ public:
       auto bytes = ce->getValue();
       *out << "[emitFill value = " << FillValue << ", size = " << bytes
            << "]\n";
-      for (int i = 0; i < bytes; ++i)
-        curROData.push_back(RODataItem{(char)FillValue});
+      for (int i = 0; i < bytes; ++i) {
+        auto rod = RODataItem{(char)FillValue};
+        curROData.push_back(rod);
+      }
     } else {
       *out << "[emitFill is unknown!]\n";
     }
