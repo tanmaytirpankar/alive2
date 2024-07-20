@@ -8202,6 +8202,8 @@ public:
         eltSizeLog2 = 5;
         truncSize = i32;
         break;
+      default:
+        assert(false && "error");
       }
       auto shiftAmt = getIntConst(index << eltSizeLog2, 128);
       auto shifted = createRawLShr(val, shiftAmt);
