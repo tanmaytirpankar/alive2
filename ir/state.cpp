@@ -72,7 +72,7 @@ expr SMTMemoryAccess::canWriteSomething() const {
 }
 
 expr SMTMemoryAccess::refinedBy(const SMTMemoryAccess &other) const {
-  return val == other.val;
+  return (val & other.val) == val;
 }
 
 SMTMemoryAccess
@@ -1181,10 +1181,8 @@ State::addFnCall(const string &name, vector<StateValue> &&inputs,
             (noret || willret)
               ? expr(noret)
               : expr::mkFreshVar((name + "#noreturn").c_str(), false),
-            memaccess.canWriteSomething().isFalse()
-              ? Memory::CallState()
-              : memory.mkCallState(name, attrs.has(FnAttrs::NoFree),
-                                   I->first.args_ptr.size(), memaccess),
+            memory.mkCallState(name, attrs.has(FnAttrs::NoFree),
+                               I->first.args_ptr.size(), memaccess),
             std::move(ret_data) };
 
       // add equality constraints between source's function calls
