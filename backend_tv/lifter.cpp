@@ -12413,6 +12413,7 @@ public:
       }
     }
     *out << armInstNum << " AArch64 instructions\n";
+    out->flush();
     return liftedFn;
   }
 };
