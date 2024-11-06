@@ -705,8 +705,7 @@ llvmGetPassPluginInfo() {
       // ClangTVFinalizePass internally checks whether we're running clang tv
       // and finalizes resources then.
       PB.registerOptimizerLastEPCallback(
-          [](llvm::ModulePassManager &MPM, llvm::OptimizationLevel,
-             llvm::ThinOrFullLTOPhase) {
+          [](llvm::ModulePassManager &MPM, llvm::OptimizationLevel) {
             MPM.addPass(ClangTVFinalizePass());
           });
 
