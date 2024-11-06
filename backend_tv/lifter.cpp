@@ -12227,9 +12227,16 @@ public:
 
     // create LLVM-side basic blocks
     vector<pair<BasicBlock *, MCBasicBlock *>> BBs;
-    for (auto &mbb : MF.BBs) {
-      auto bb = BasicBlock::Create(Ctx, mbb.getName(), liftedFn);
-      BBs.push_back(make_pair(bb, &mbb));
+    {
+      long insts = 0;
+      for (auto &mbb : MF.BBs) {
+	for (auto &inst [[maybe_unused]] : mbb.getInstrs())
+	  ++insts;
+	auto bb = BasicBlock::Create(Ctx, mbb.getName(), liftedFn);
+	BBs.push_back(make_pair(bb, &mbb));
+      }
+      *out << insts << " AArch64 instructions\n";
+      out->flush();
     }
 
     // default to adding instructions to the entry block
@@ -12412,8 +12419,6 @@ public:
         }
       }
     }
-    *out << armInstNum << " AArch64 instructions\n";
-    out->flush();
     return liftedFn;
   }
 };
