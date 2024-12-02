@@ -897,6 +897,12 @@ unsigned Memory::nextNonlocalBid() {
   return next;
 }
 
+unsigned Memory::numCurrentNonLocals() const {
+  unsigned bids = min(next_nonlocal_bid, max_program_nonlocal_bid());
+  assert(!is_fncall_mem(bids));
+  return bids + 1;
+}
+
 unsigned Memory::numLocals() const {
   return state->isSource() ? num_locals_src : num_locals_tgt;
 }
@@ -1298,6 +1304,8 @@ void Memory::storeLambda(const Pointer &ptr, const expr &offset,
 
 
 expr Memory::hasStored(const Pointer &p, const expr &bytes) const {
+  assert(has_initializes_attr);
+
   unsigned bytes_per_byte = bits_byte / 8;
   expr bid = p.getShortBid();
   expr offset = p.getShortOffset();
@@ -1320,6 +1328,8 @@ expr Memory::hasStored(const Pointer &p, const expr &bytes) const {
 }
 
 void Memory::record_store(const Pointer &p, const smt::expr &bytes) {
+  assert(has_initializes_attr);
+
   auto is_local = p.isLocal();
   if (is_local.isTrue())
     return;
@@ -1507,8 +1517,10 @@ Memory::Memory(State &state)
   }
 
   // no argument has been written to at entry
-  unsigned bits = Pointer::bitsShortBid() + Pointer::bitsShortOffset();
-  has_stored_arg = expr::mkConstArray(expr::mkUInt(0, bits), false);
+  if (has_initializes_attr) {
+    unsigned bits = Pointer::bitsShortBid() + Pointer::bitsShortOffset();
+    has_stored_arg = expr::mkConstArray(expr::mkUInt(0, bits), false);
+  }
 
   // Initialize a memory block for null pointer.
   if (skip_null) {
@@ -2511,8 +2523,9 @@ expr Memory::ptr2int(const expr &ptr) {
   return p.getAddress();
 }
 
-expr Memory::int2ptr(const expr &val) const {
+expr Memory::int2ptr(const expr &val) {
   assert(!memory_unused() && observesAddresses());
+  nextNonlocalBid();
   return
     Pointer::mkPhysical(*this, val.zextOrTrunc(bits_ptr_address)).release();
 }

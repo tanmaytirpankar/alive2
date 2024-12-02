@@ -532,7 +532,7 @@ Pointer::isDereferenceable(const expr &bytes0, uint64_t align,
 
     // If we are loading from an argument and it has the 'initializes'
     // attribute, make sure we have already stored to it before.
-    if (!ignore_accessability && !iswrite) {
+    if (!ignore_accessability && !iswrite && has_initializes_attr) {
       auto &s = m.getState();
       for (auto &input0 : s.getFn().getInputs()) {
         auto &input = static_cast<const Input&>(input0);
@@ -596,8 +596,7 @@ Pointer::isDereferenceable(const expr &bytes0, uint64_t align,
 
         bool same_size = bytes.eq(this_ptr.blockSizeAligned());
         expr this_addr = this_ptr.getLogAddress();
-        expr offset
-          = same_size ? expr::mkUInt(0, bits_for_offset) : addr - this_addr;
+        expr offset = same_size ? expr::mkUInt(0, addr) : addr - this_addr;
 
         expr cond = p.isInboundsOf(this_ptr, bytes, is_phy) &&
                     block_constraints(this_ptr + offset);
@@ -616,7 +615,7 @@ Pointer::isDereferenceable(const expr &bytes0, uint64_t align,
       }
     };
     add(m.numLocals(), true);
-    add(m.nextNonlocalBid(), false);
+    add(m.numCurrentNonLocals(), false);
 
     expr bid = *std::move(bids)();
     if (!observes_local)
@@ -699,7 +698,7 @@ Pointer::isDereferenceable(const expr &bytes0, uint64_t align,
   auto ptrs = std::move(all_ptrs)();
   p = ptrs ? *std::move(ptrs) : expr::mkUInt(0, totalBits());
 
-  if (!ignore_accessability && iswrite)
+  if (!ignore_accessability && iswrite && has_initializes_attr)
     m.record_store(*this, bytes);
 
   return { std::move(exprs), *std::move(is_aligned)() };
