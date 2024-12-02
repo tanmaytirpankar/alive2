@@ -1305,36 +1305,52 @@ expr Memory::hasStored(const Pointer &p, const expr &bytes) const {
   if (bytes.isUInt(bytes_i) && (bytes_i / bytes_per_byte) <= 8) {
     expr ret = true;
     for (uint64_t off = 0; off < (bytes_i / bytes_per_byte); ++off) {
-      expr off_expr = expr::mkUInt(off, Pointer::bitsShortOffset());
+      expr off_expr = expr::mkUInt(off, offset);
       ret &= has_stored_arg.load(bid.concat(offset + off_expr));
     }
     return ret;
   } else {
     expr var = expr::mkFreshVar("#off", offset);
     state->addQuantVar(var);
-    expr bytes_div = bytes.udiv(expr::mkUInt(bytes_per_byte, bytes));
+    expr bytes_div = bytes.zextOrTrunc(offset.bits())
+                          .udiv(expr::mkUInt(bytes_per_byte, bytes));
     return (var.uge(offset) && var.ult(offset + bytes_div))
              .implies(has_stored_arg.load(bid.concat(var)));
   }
 }
 
 void Memory::record_store(const Pointer &p, const smt::expr &bytes) {
+  auto is_local = p.isLocal();
+  if (is_local.isTrue())
+    return;
+
   unsigned bytes_per_byte = bits_byte / 8;
   expr bid = p.getShortBid();
   expr offset = p.getShortOffset();
   uint64_t bytes_i;
   if (bytes.isUInt(bytes_i) && (bytes_i / bytes_per_byte) <= 8) {
     for (uint64_t off = 0; off < (bytes_i / bytes_per_byte); ++off) {
-      expr off_expr = expr::mkUInt(off, Pointer::bitsShortOffset());
+      expr off_expr = expr::mkUInt(off, offset);
       has_stored_arg
-        = has_stored_arg.store(bid.concat(offset + off_expr), true);
+        = expr::mkIf(is_local,
+                     has_stored_arg,
+                     has_stored_arg.store(bid.concat(offset + off_expr), true));
     }
   } else {
-    expr var = expr::mkFreshVar("#off", offset);
-    expr bytes_div = bytes.udiv(expr::mkUInt(bytes_per_byte, bytes));
-    has_stored_arg = expr::mkLambda(var,
-      (var.uge(offset) && var.ult(offset + bytes_div)) ||
-      has_stored_arg.load(bid.concat(var)));
+    expr var     = expr::mkFreshVar("#bid_off", bid.concat(offset));
+    expr var_bid = var.extract(var.bits()-1, offset.bits());
+    expr var_off = var.trunc(offset.bits());
+
+    expr bytes_div = bytes.zextOrTrunc(offset.bits())
+                          .udiv(expr::mkUInt(bytes_per_byte, bytes));
+    has_stored_arg
+      = expr::mkIf(is_local,
+                   has_stored_arg,
+                   expr::mkLambda(var,
+                     (bid == var_bid &&
+                      var_off.uge(offset) &&
+                      var_off.ult(offset + bytes_div)) ||
+                     has_stored_arg.load(var)));
   }
 }
 
