@@ -436,7 +436,7 @@ class arm2llvm {
     return ConstantInt::get(Ctx, llvm::APInt(1, val ? 1 : 0));
   }
 
-  Constant *getSignedIntConst(uint64_t val, u_int64_t bits) {
+  Constant *getSignedIntConst(int64_t val, u_int64_t bits) {
     return ConstantInt::get(Ctx, llvm::APInt(bits, val, /*signed=*/true));
   }
 
@@ -2094,31 +2094,32 @@ class arm2llvm {
   }
 
   Value *createTrap() {
-    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::trap);
+    auto decl =
+        Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::trap);
     return CallInst::Create(decl, "", LLVMBB);
   }
 
   Value *createSMin(Value *a, Value *b) {
-    auto decl =
-        Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::smin, a->getType());
+    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::smin,
+                                                  a->getType());
     return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
   }
 
   Value *createSMax(Value *a, Value *b) {
-    auto decl =
-        Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::smax, a->getType());
+    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::smax,
+                                                  a->getType());
     return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
   }
 
   Value *createUMin(Value *a, Value *b) {
-    auto decl =
-        Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::umin, a->getType());
+    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::umin,
+                                                  a->getType());
     return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
   }
 
   Value *createUMax(Value *a, Value *b) {
-    auto decl =
-        Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::umax, a->getType());
+    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::umax,
+                                                  a->getType());
     return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
   }
 
@@ -2127,8 +2128,8 @@ class arm2llvm {
   }
 
   Value *createFAbs(Value *v) {
-    auto fabs_decl =
-        Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::fabs, v->getType());
+    auto fabs_decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::fabs, v->getType());
     return CallInst::Create(fabs_decl, {v}, nextName(), LLVMBB);
   }
 
@@ -2181,15 +2182,15 @@ class arm2llvm {
   }
 
   CallInst *createCtPop(Value *v) {
-    auto decl =
-        Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::ctpop, v->getType());
+    auto decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::ctpop, v->getType());
     return CallInst::Create(decl, {v}, nextName(), LLVMBB);
   }
 
   // first argument is an i16
   CallInst *createConvertFromFP16(Value *v, Type *ty) {
-    auto cvt_decl = Intrinsic::getOrInsertDeclaration(LiftedModule,
-                                              Intrinsic::convert_from_fp16, ty);
+    auto cvt_decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::convert_from_fp16, ty);
     return CallInst::Create(cvt_decl, {v}, nextName(), LLVMBB);
   }
 
@@ -2250,38 +2251,38 @@ class arm2llvm {
   }
 
   CallInst *createFShr(Value *a, Value *b, Value *c) {
-    auto *decl =
-        Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::fshr, a->getType());
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::fshr, a->getType());
     return CallInst::Create(decl, {a, b, c}, nextName(), LLVMBB);
   }
 
   CallInst *createFShl(Value *a, Value *b, Value *c) {
-    auto *decl =
-        Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::fshl, a->getType());
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::fshl, a->getType());
     return CallInst::Create(decl, {a, b, c}, nextName(), LLVMBB);
   }
 
   CallInst *createBitReverse(Value *v) {
-    auto *decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::bitreverse,
-                                           v->getType());
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::bitreverse, v->getType());
     return CallInst::Create(decl, {v}, nextName(), LLVMBB);
   }
 
   CallInst *createAbs(Value *v) {
-    auto *decl =
-        Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::abs, v->getType());
+    auto *decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::abs,
+                                                   v->getType());
     return CallInst::Create(decl, {v, getBoolConst(false)}, nextName(), LLVMBB);
   }
 
   CallInst *createCtlz(Value *v) {
-    auto *decl =
-        Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::ctlz, v->getType());
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::ctlz, v->getType());
     return CallInst::Create(decl, {v, getBoolConst(false)}, nextName(), LLVMBB);
   }
 
   CallInst *createBSwap(Value *v) {
-    auto *decl =
-        Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::bswap, v->getType());
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::bswap, v->getType());
     return CallInst::Create(decl, {v}, nextName(), LLVMBB);
   }
 
@@ -2292,14 +2293,14 @@ class arm2llvm {
   }
 
   CallInst *createFusedMultiplyAdd(Value *a, Value *b, Value *c) {
-    auto *decl =
-        Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::fma, a->getType());
+    auto *decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::fma,
+                                                   a->getType());
     return CallInst::Create(decl, {a, b, c}, nextName(), LLVMBB);
   }
 
   CallInst *createSQRT(Value *v) {
-    auto *decl =
-        Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::sqrt, v->getType());
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::sqrt, v->getType());
     return CallInst::Create(decl, {v}, nextName(), LLVMBB);
   }
 
@@ -2423,8 +2424,8 @@ class arm2llvm {
 
   Value *createMSL(Value *a, int b) {
     auto v = BinaryOperator::Create(Instruction::Shl, a,
-                                    getUnsignedIntConst(b, getBitWidth(a)), nextName(),
-                                    LLVMBB);
+                                    getUnsignedIntConst(b, getBitWidth(a)),
+                                    nextName(), LLVMBB);
     auto ones = getLowOnes(b, getBitWidth(a));
     return createOr(v, ones);
   }
@@ -2965,8 +2966,8 @@ class arm2llvm {
       // FIXME -- would be better to return the root symbol and the
       // offset separately, and let the caller do the pointer
       // arithmetic
-      globalVar =
-          createGEP(getIntTy(8), globalVar, {getUnsignedIntConst(offset, 64)}, "");
+      globalVar = createGEP(getIntTy(8), globalVar,
+                            {getUnsignedIntConst(offset, 64)}, "");
     }
     return make_pair(globalVar, storePtr);
   }
@@ -3404,8 +3405,9 @@ class arm2llvm {
           }
           *out << "vector parameter going on stack with size = " << sz << "\n";
           auto SP = readPtrFromReg(AArch64::SP);
-          auto addr = createGEP(getIntTy(64), SP, {getUnsignedIntConst(stackSlot, 64)},
-                                nextName());
+          auto addr =
+              createGEP(getIntTy(64), SP, {getUnsignedIntConst(stackSlot, 64)},
+                        nextName());
           param = createBitCast(createLoad(getIntTy(sz), addr), argTy);
           ++stackSlot;
           if (sz > 64)
@@ -3418,8 +3420,9 @@ class arm2llvm {
           ++scalarArgNum;
         } else {
           auto SP = readPtrFromReg(AArch64::SP);
-          auto addr = createGEP(getIntTy(64), SP, {getUnsignedIntConst(stackSlot, 64)},
-                                nextName());
+          auto addr =
+              createGEP(getIntTy(64), SP, {getUnsignedIntConst(stackSlot, 64)},
+                        nextName());
           param = createLoad(getIntTy(64), addr);
           ++stackSlot;
         }
@@ -3480,9 +3483,9 @@ class arm2llvm {
     auto calledFn = llvmCI->getCalledFunction();
     if (calledFn) {
       if (calledFn->hasRetAttribute(Attribute::SExt))
-	sext = true;
+        sext = true;
       if (calledFn->hasRetAttribute(Attribute::ZExt))
-	zext = true;
+        zext = true;
     }
 
     auto RV = enforceSExtZExt(CI, sext, zext);
@@ -3537,7 +3540,8 @@ class arm2llvm {
         *out << "oops, debuginfo gave us something that's not a callinst\n";
     }
     if (!llvmCI) {
-      *out << "error: can't locate corresponding source-side call instruction\n";
+      *out
+          << "error: can't locate corresponding source-side call instruction\n";
       exit(-1);
     }
 
@@ -3584,7 +3588,8 @@ class arm2llvm {
       // FIXME: check FP and LR?
       assertSame(initialSP, readFromRegTyped(AArch64::SP, getIntTy(64)));
       for (unsigned r = 19; r <= 28; ++r)
-        assertSame(initialReg[r], readFromRegTyped(AArch64::X0 + r, getIntTy(64)));
+        assertSame(initialReg[r],
+                   readFromRegTyped(AArch64::X0 + r, getIntTy(64)));
     }
 
     CallInst::Create(myFree, {stackMem}, "", LLVMBB);
@@ -4773,8 +4778,10 @@ public:
       auto mul_rhs = readFromOperand(2);
       auto addend = readFromOperand(3);
 
-      auto lhs_masked = createAnd(mul_lhs, getUnsignedIntConst(0xffffffffUL, size));
-      auto rhs_masked = createAnd(mul_rhs, getUnsignedIntConst(0xffffffffUL, size));
+      auto lhs_masked =
+          createAnd(mul_lhs, getUnsignedIntConst(0xffffffffUL, size));
+      auto rhs_masked =
+          createAnd(mul_rhs, getUnsignedIntConst(0xffffffffUL, size));
       auto mul = createMul(lhs_masked, rhs_masked);
       auto add = createAdd(mul, addend);
       updateOutputReg(add);
@@ -4927,10 +4934,12 @@ public:
         auto bitfield_mask = (uint64_t)1 << (width - 1);
 
         auto masked = createAnd(src, getUnsignedIntConst(mask, size));
-        auto bitfield_lsb = createAnd(src, getUnsignedIntConst(bitfield_mask, size));
+        auto bitfield_lsb =
+            createAnd(src, getUnsignedIntConst(bitfield_mask, size));
         auto insert_ones = createOr(masked, getUnsignedIntConst(~mask, size));
-        auto bitfield_lsb_set = createICmp(ICmpInst::Predicate::ICMP_NE,
-                                           bitfield_lsb, getUnsignedIntConst(0, size));
+        auto bitfield_lsb_set =
+            createICmp(ICmpInst::Predicate::ICMP_NE, bitfield_lsb,
+                       getUnsignedIntConst(0, size));
         auto res = createSelect(bitfield_lsb_set, insert_ones, masked);
         auto shifted_res = createMaskedShl(res, getUnsignedIntConst(pos, size));
         updateOutputReg(shifted_res);
@@ -4948,9 +4957,10 @@ public:
       //*out << "pos = " << pos << "\n";
 
       auto masked = createAnd(src, getUnsignedIntConst(mask, size));
-      auto l_shifted = createRawShl(masked, getUnsignedIntConst(size - width, size));
-      auto shifted_res =
-          createRawAShr(l_shifted, getUnsignedIntConst(size - width + pos, size));
+      auto l_shifted =
+          createRawShl(masked, getUnsignedIntConst(size - width, size));
+      auto shifted_res = createRawAShr(
+          l_shifted, getUnsignedIntConst(size - width + pos, size));
       updateOutputReg(shifted_res);
       break;
     }
@@ -5005,8 +5015,9 @@ public:
 
       auto a = readFromOperand(1);
       auto [wmask, _] = decodeBitMasks(getImm(2), size);
-      auto imm_val = getUnsignedIntConst(wmask,
-                                 size); // FIXME, need to decode immediate val
+      auto imm_val =
+          getUnsignedIntConst(wmask,
+                              size); // FIXME, need to decode immediate val
       if (!a || !imm_val)
         visitError();
 
@@ -5155,7 +5166,7 @@ public:
       auto rhs = readFromOperand(2);
       rhs = regShift(rhs, getImm(3));
 
-      auto neg_one = getUnsignedIntConst(-1, size);
+      auto neg_one = getSignedIntConst(-1, size);
       auto not_rhs = createXor(rhs, neg_one);
       auto ident = createOr(lhs, not_rhs);
       updateOutputReg(ident);
@@ -5252,7 +5263,8 @@ public:
       auto pos = immr;
 
       auto masked = createAnd(src, getUnsignedIntConst(mask, size));
-      auto shifted_res = createMaskedLShr(masked, getUnsignedIntConst(pos, size));
+      auto shifted_res =
+          createMaskedLShr(masked, getUnsignedIntConst(pos, size));
       updateOutputReg(shifted_res);
       break;
     }
@@ -5279,8 +5291,7 @@ public:
 
         auto masked = createAnd(src, getUnsignedIntConst(mask, size));
         auto shifted = createMaskedLShr(masked, getUnsignedIntConst(pos, size));
-        auto cleared =
-            createAnd(dst, getUnsignedIntConst((uint64_t)(-1) << bits, size));
+        auto cleared = createAnd(dst, getSignedIntConst(-1 << bits, size));
         auto res = createOr(cleared, shifted);
         updateOutputReg(res);
       } else {
@@ -5337,11 +5348,12 @@ public:
       auto Size = getInstSize(opcode);
       auto Zero = getUnsignedIntConst(0, Size);
       auto AllOnes = createSub(Zero, getUnsignedIntConst(1, Size));
-      auto IntMin =
-          createMaskedShl(getUnsignedIntConst(1, Size), getUnsignedIntConst(Size - 1, Size));
+      auto IntMin = createMaskedShl(getUnsignedIntConst(1, Size),
+                                    getUnsignedIntConst(Size - 1, Size));
       auto LHS = readFromOperand(1);
       auto RHS = readFromOperand(2);
-      auto ResMem = createAlloca(getIntTy(Size), getUnsignedIntConst(1, 64), "");
+      auto ResMem =
+          createAlloca(getIntTy(Size), getUnsignedIntConst(1, 64), "");
       createStore(Zero, ResMem);
       auto RHSIsZero = createICmp(ICmpInst::Predicate::ICMP_EQ, RHS, Zero);
       auto LHSIsIntMin = createICmp(ICmpInst::Predicate::ICMP_EQ, LHS, IntMin);
@@ -5487,11 +5499,11 @@ public:
       auto size = getInstSize(opcode);
       auto val = readFromOperand(1);
       auto first_part = createMaskedShl(val, getUnsignedIntConst(8, size));
-      auto first_part_and =
-          createAnd(first_part, getUnsignedIntConst(0xFF00FF00FF00FF00UL, size));
+      auto first_part_and = createAnd(
+          first_part, getUnsignedIntConst(0xFF00FF00FF00FF00UL, size));
       auto second_part = createMaskedLShr(val, getUnsignedIntConst(8, size));
-      auto second_part_and =
-          createAnd(second_part, getUnsignedIntConst(0x00FF00FF00FF00FFUL, size));
+      auto second_part_and = createAnd(
+          second_part, getUnsignedIntConst(0x00FF00FF00FF00FFUL, size));
       auto combined_val = createOr(first_part_and, second_part_and);
       updateOutputReg(combined_val);
       break;
@@ -5508,8 +5520,8 @@ public:
       // width reverses bytes in 16-bit halfwords for a 32 bit int and reverses
       // bytes in a 32-bit word for a 64 bit int
       auto reverse_val = createBSwap(val);
-      auto ret =
-          createFShr(reverse_val, reverse_val, getUnsignedIntConst(size / 2, size));
+      auto ret = createFShr(reverse_val, reverse_val,
+                            getUnsignedIntConst(size / 2, size));
       updateOutputReg(ret);
       break;
     }
@@ -6589,7 +6601,7 @@ public:
       auto baseAddr = createPtrToInt(base, i64);
 
       *out << "here1\n";
-      
+
       unsigned size;
       Value *loaded = nullptr;
       switch (opcode) {
@@ -6635,7 +6647,7 @@ public:
 
       *out << "here2\n";
       *out << "imm = " << imm << "\n";
-      
+
       // Start offset as a 9-bit signed integer
       assert(imm <= 255 && imm >= -256);
       auto offset = getSignedIntConst(imm, 9);
@@ -6643,7 +6655,7 @@ public:
       Value *zeroVal = getUnsignedIntConst(0, 64);
 
       *out << "here3\n";
-      
+
       bool isPre = opcode == AArch64::STRBBpre || opcode == AArch64::STRBpre ||
                    opcode == AArch64::STRHHpre || opcode == AArch64::STRHpre ||
                    opcode == AArch64::STRWpre || opcode == AArch64::STRSpre ||
@@ -6653,7 +6665,7 @@ public:
       storeToMemoryValOffset(base, isPre ? offsetVal : zeroVal, size, loaded);
 
       *out << "here4\n";
-      
+
       auto added = createAdd(baseAddr, offsetVal);
       updateOutputReg(added);
       break;
@@ -7448,8 +7460,8 @@ public:
       // Start offset as 7-bit signed integer
       assert(imm <= 63 && imm >= -64);
       auto offset = getUnsignedIntConst(imm, 7);
-      Value *offsetVal1 =
-          createMaskedShl(createSExt(offset, i64), getUnsignedIntConst(scale, 64));
+      Value *offsetVal1 = createMaskedShl(createSExt(offset, i64),
+                                          getUnsignedIntConst(scale, 64));
       Value *offsetVal2 = createAdd(offsetVal1, getUnsignedIntConst(size, 64));
       auto zeroVal = getUnsignedIntConst(0, 64);
 
@@ -7546,8 +7558,8 @@ public:
       // Start offset as 7-bit signed integer
       assert(imm <= 63 && imm >= -64);
       auto offset = getUnsignedIntConst(imm, 7);
-      Value *offsetVal1 =
-          createMaskedShl(createSExt(offset, i64), getUnsignedIntConst(scale, 64));
+      Value *offsetVal1 = createMaskedShl(createSExt(offset, i64),
+                                          getUnsignedIntConst(scale, 64));
       Value *offsetVal2 = createAdd(offsetVal1, getUnsignedIntConst(size, 64));
       auto zeroVal = getUnsignedIntConst(0, 64);
 
@@ -7560,7 +7572,8 @@ public:
         storeToMemoryValOffset(base, offsetVal2, size, loaded2);
       } else {
         storeToMemoryValOffset(base, zeroVal, size, loaded1);
-        storeToMemoryValOffset(base, getUnsignedIntConst(size, 64), size, loaded2);
+        storeToMemoryValOffset(base, getUnsignedIntConst(size, 64), size,
+                               loaded2);
       }
 
       auto added = createAdd(baseAddr, offsetVal1);
@@ -7634,7 +7647,8 @@ public:
       auto operand = readFromOperand(0);
       assert(operand != nullptr && "operand is null");
       auto bit_pos = getImm(1);
-      auto shift = createMaskedLShr(operand, getUnsignedIntConst(bit_pos, size));
+      auto shift =
+          createMaskedLShr(operand, getUnsignedIntConst(bit_pos, size));
       auto cond_val = createTrunc(shift, i1);
 
       auto &jmp_tgt_op = CurInst->getOperand(2);
@@ -8987,7 +9001,8 @@ public:
       case AArch64::CMTSTv8i16:
       case AArch64::CMTSTv8i8: {
         auto *tmp = createAnd(a, b);
-        auto *zero = createBitCast(getUnsignedIntConst(0, getInstSize(opcode)), vTy);
+        auto *zero =
+            createBitCast(getUnsignedIntConst(0, getInstSize(opcode)), vTy);
         res = createICmp(ICmpInst::Predicate::ICMP_NE, tmp, zero);
         break;
       }
@@ -12247,10 +12262,10 @@ public:
     {
       long insts = 0;
       for (auto &mbb : MF.BBs) {
-	for (auto &inst [[maybe_unused]] : mbb.getInstrs())
-	  ++insts;
-	auto bb = BasicBlock::Create(Ctx, mbb.getName(), liftedFn);
-	BBs.push_back(make_pair(bb, &mbb));
+        for (auto &inst [[maybe_unused]] : mbb.getInstrs())
+          ++insts;
+        auto bb = BasicBlock::Create(Ctx, mbb.getName(), liftedFn);
+        BBs.push_back(make_pair(bb, &mbb));
       }
       *out << insts << " AArch64 instructions\n";
       out->flush();
@@ -12286,11 +12301,11 @@ public:
     myFree->addParamAttr(0, Attribute::AllocatedPointer);
     myFree->addFnAttr("alloc-family", "arm-tv-alloc");
 
-    stackMem =
-        CallInst::Create(myAlloc,
-                         {getUnsignedIntConst(stackBytes + (8 * numStackSlots), 64),
-                          getUnsignedIntConst(16, 64)},
-                         "stack", LLVMBB);
+    stackMem = CallInst::Create(
+        myAlloc,
+        {getUnsignedIntConst(stackBytes + (8 * numStackSlots), 64),
+         getUnsignedIntConst(16, 64)},
+        "stack", LLVMBB);
 
     // allocate storage for the main register file
     for (unsigned Reg = AArch64::X0; Reg <= AArch64::X28; ++Reg) {
@@ -12312,7 +12327,8 @@ public:
     // load the base address for the stack memory; FIXME: this works
     // for accessing parameters but it doesn't support the general
     // case
-    auto paramBase = createGEP(i8, stackMem, {getUnsignedIntConst(stackBytes, 64)}, "");
+    auto paramBase =
+        createGEP(i8, stackMem, {getUnsignedIntConst(stackBytes, 64)}, "");
     createStore(paramBase, RegFile[AArch64::SP]);
     initialSP = readFromRegOld(AArch64::SP);
 
@@ -12385,7 +12401,8 @@ public:
           exit(-1);
         }
 
-        auto addr = createGEP(i64, paramBase, {getUnsignedIntConst(stackSlot, 64)}, "");
+        auto addr =
+            createGEP(i64, paramBase, {getUnsignedIntConst(stackSlot, 64)}, "");
         createStore(val, addr);
 
         if (getBitWidth(val) == 64) {
@@ -12404,7 +12421,8 @@ public:
     *out << "done with callee-side ABI stuff\n";
 
     // initialize the frame pointer
-    auto initFP = createGEP(i64, paramBase, {getUnsignedIntConst(stackSlot, 64)}, "");
+    auto initFP =
+        createGEP(i64, paramBase, {getUnsignedIntConst(stackSlot, 64)}, "");
     createStore(initFP, RegFile[AArch64::FP]);
 
     *out << "\n\nlifting ARM instructions to LLVM\n";
@@ -12416,7 +12434,8 @@ public:
 
       for (auto &inst : mc_instrs) {
         llvmInstNum = 0;
-	*out << armInstNum << " : about to lift " << (string)InstPrinter->getOpcodeName(inst.getOpcode()) << "\n";
+        *out << armInstNum << " : about to lift "
+             << (string)InstPrinter->getOpcodeName(inst.getOpcode()) << "\n";
         liftInst(inst);
         *out << "    lifted\n";
         ++armInstNum;
@@ -12464,8 +12483,8 @@ public:
   MCFunction MF;
   unsigned cnt{0};
 
-  MCStreamerWrapper(MCContext &Context, MCInstrAnalysis *IA, MCInstPrinter *InstPrinter,
-                    MCRegisterInfo *MRI)
+  MCStreamerWrapper(MCContext &Context, MCInstrAnalysis *IA,
+                    MCInstPrinter *InstPrinter, MCRegisterInfo *MRI)
       : MCStreamer(Context), IA(IA) {
     MF.IA = IA;
     MF.InstPrinter = InstPrinter;
