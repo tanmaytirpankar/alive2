@@ -4930,13 +4930,19 @@ public:
       if (imms < immr) {
         auto pos = size - immr;
         auto width = imms + 1;
+        assert(width != 64);
+        *out << "sbfiz with size = " << size << ", width = " << width << "\n";
         auto mask = ((uint64_t)1 << (width)) - 1;
+        auto mask_comp = ~mask;
+        if (size == 32)
+          mask_comp &= 0xffffffff;
         auto bitfield_mask = (uint64_t)1 << (width - 1);
 
         auto masked = createAnd(src, getUnsignedIntConst(mask, size));
         auto bitfield_lsb =
             createAnd(src, getUnsignedIntConst(bitfield_mask, size));
-        auto insert_ones = createOr(masked, getUnsignedIntConst(~mask, size));
+        auto insert_ones =
+            createOr(masked, getUnsignedIntConst(mask_comp, size));
         auto bitfield_lsb_set =
             createICmp(ICmpInst::Predicate::ICMP_NE, bitfield_lsb,
                        getUnsignedIntConst(0, size));
@@ -4945,16 +4951,12 @@ public:
         updateOutputReg(shifted_res);
         break;
       }
+
       // FIXME: this requires checking if SBFX is preferred.
       // For now, assume this is always SBFX
       auto width = imms + 1;
       auto mask = ((uint64_t)1 << (width)) - 1;
       auto pos = immr;
-
-      //*out << "SBFX:\n";
-      //*out << "size = " << size << "\n";
-      //*out << "width = " << width << "\n";
-      //*out << "pos = " << pos << "\n";
 
       auto masked = createAnd(src, getUnsignedIntConst(mask, size));
       auto l_shifted =
@@ -5079,7 +5081,7 @@ public:
       auto cond_val_imm = getImm(3);
       auto cond_val = conditionHolds(cond_val_imm);
 
-      auto neg_one = getUnsignedIntConst(-1, size);
+      auto neg_one = getSignedIntConst(-1, size);
       auto inverted_b = createXor(b, neg_one);
 
       if (opcode == AArch64::CSNEGWr || opcode == AArch64::CSNEGXr) {
@@ -6600,8 +6602,6 @@ public:
       auto base = readPtrFromReg(baseReg);
       auto baseAddr = createPtrToInt(base, i64);
 
-      *out << "here1\n";
-
       unsigned size;
       Value *loaded = nullptr;
       switch (opcode) {
@@ -6645,16 +6645,11 @@ public:
         assert(false);
       }
 
-      *out << "here2\n";
-      *out << "imm = " << imm << "\n";
-
       // Start offset as a 9-bit signed integer
       assert(imm <= 255 && imm >= -256);
       auto offset = getSignedIntConst(imm, 9);
       Value *offsetVal = createSExt(offset, i64);
       Value *zeroVal = getUnsignedIntConst(0, 64);
-
-      *out << "here3\n";
 
       bool isPre = opcode == AArch64::STRBBpre || opcode == AArch64::STRBpre ||
                    opcode == AArch64::STRHHpre || opcode == AArch64::STRHpre ||
@@ -6663,8 +6658,6 @@ public:
                    opcode == AArch64::STRQpre;
 
       storeToMemoryValOffset(base, isPre ? offsetVal : zeroVal, size, loaded);
-
-      *out << "here4\n";
 
       auto added = createAdd(baseAddr, offsetVal);
       updateOutputReg(added);
