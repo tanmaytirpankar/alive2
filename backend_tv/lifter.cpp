@@ -3461,11 +3461,9 @@ class arm2llvm {
     // ugh -- these functions have an LLVM "immediate" as their last
     // argument; this is not present in the assembly at all, we have
     // to provide it by hand
-    if (calleeName == "llvm.memset.p0.i64")
-      args[3] = getBoolConst(false);
-    if (calleeName == "llvm.memcpy.p0.p0.i64")
-      args[3] = getBoolConst(false);
-    if (calleeName == "llvm.memmove.p0.p0.i64")
+    if (calleeName == "llvm.memset.p0.i64" ||
+        calleeName == "llvm.memcpy.p0.p0.i64" ||
+        calleeName == "llvm.memmove.p0.p0.i64")
       args[3] = getBoolConst(false);
 
     auto CI = CallInst::Create(FC, args, "", LLVMBB);
@@ -7456,11 +7454,10 @@ public:
 
       // Start offset as 7-bit signed integer
       assert(imm <= 63 && imm >= -64);
-      auto offset = getUnsignedIntConst(imm, 7);
+      auto offset = getSignedIntConst(imm, 7);
       Value *offsetVal1 = createMaskedShl(createSExt(offset, i64),
                                           getUnsignedIntConst(scale, 64));
       Value *offsetVal2 = createAdd(offsetVal1, getUnsignedIntConst(size, 64));
-      auto zeroVal = getUnsignedIntConst(0, 64);
 
       bool isPre = opcode == AArch64::LDPWpre || opcode == AArch64::LDPSpre ||
                    opcode == AArch64::LDPXpre || opcode == AArch64::LDPDpre ||
@@ -7471,7 +7468,7 @@ public:
         loaded1 = makeLoadWithOffset(base, offsetVal1, size);
         loaded2 = makeLoadWithOffset(base, offsetVal2, size);
       } else {
-        loaded1 = makeLoadWithOffset(base, zeroVal, size);
+        loaded1 = makeLoadWithOffset(base, getUnsignedIntConst(0, 64), size);
         loaded2 = makeLoadWithOffset(base, getUnsignedIntConst(size, 64), size);
       }
       updateReg(loaded1, destReg1, sExt);
@@ -7554,11 +7551,10 @@ public:
 
       // Start offset as 7-bit signed integer
       assert(imm <= 63 && imm >= -64);
-      auto offset = getUnsignedIntConst(imm, 7);
+      auto offset = getSignedIntConst(imm, 7);
       Value *offsetVal1 = createMaskedShl(createSExt(offset, i64),
                                           getUnsignedIntConst(scale, 64));
       Value *offsetVal2 = createAdd(offsetVal1, getUnsignedIntConst(size, 64));
-      auto zeroVal = getUnsignedIntConst(0, 64);
 
       bool isPre = opcode == AArch64::STPWpre || opcode == AArch64::STPSpre ||
                    opcode == AArch64::STPXpre || opcode == AArch64::STPDpre ||
@@ -7568,7 +7564,7 @@ public:
         storeToMemoryValOffset(base, offsetVal1, size, loaded1);
         storeToMemoryValOffset(base, offsetVal2, size, loaded2);
       } else {
-        storeToMemoryValOffset(base, zeroVal, size, loaded1);
+        storeToMemoryValOffset(base, getUnsignedIntConst(0, 64), size, loaded1);
         storeToMemoryValOffset(base, getUnsignedIntConst(size, 64), size,
                                loaded2);
       }
@@ -11575,10 +11571,10 @@ public:
     case AArch64::XTNv16i8: {
       auto &op0 = CurInst->getOperand(0);
       uint64_t srcReg = opcode == AArch64::XTNv2i32 ||
-                                 opcode == AArch64::XTNv4i16 ||
-                                 opcode == AArch64::XTNv8i8
-                             ? 1
-                             : 2;
+                                opcode == AArch64::XTNv4i16 ||
+                                opcode == AArch64::XTNv8i8
+                            ? 1
+                            : 2;
       auto &op1 = CurInst->getOperand(srcReg);
       assert(isSIMDandFPRegOperand(op0) && isSIMDandFPRegOperand(op0));
 
