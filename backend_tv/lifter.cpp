@@ -436,6 +436,25 @@ class arm2llvm {
     return ConstantInt::get(Ctx, llvm::APInt::getAllOnes(bits));
   }
 
+  Constant *getSignedMaxConst(uint64_t bits) {
+    return ConstantInt::get(Ctx, llvm::APInt::getSignedMaxValue(bits));
+  }
+
+  Constant *getSignedMinConst(uint64_t bits) {
+    return ConstantInt::get(Ctx, llvm::APInt::getSignedMinValue(bits));
+  }
+
+  Constant *getAllOnesConst(Type *t) {
+    int w = -1;
+    if (auto *vTy = dyn_cast<VectorType>(t)) {
+      auto *eTy = vTy->getElementType();
+      w = getBitWidth(eTy);
+    } else {
+      w = getBitWidth(t);
+    }
+    return ConstantInt::get(t, llvm::APInt::getAllOnes(w));
+  }
+
   Constant *getBoolConst(bool val) {
     return ConstantInt::get(Ctx, llvm::APInt(1, val ? 1 : 0));
   }
@@ -2004,7 +2023,7 @@ class arm2llvm {
     assert((regSize == 64 || N == 0) && "undefined logical immediate encoding");
     int len = 31 - llvm::countl_zero((N << 6) | (~imms & 0x3f));
     assert(len >= 0 && len <= 6 && "undefined logical immediate encoding");
-    unsigned size = (1 << len);
+    unsigned size = (uint64_t)1 << len;
     unsigned R = immr & (size - 1);
     unsigned S = imms & (size - 1);
     unsigned d = ((S - R) & (size - 1));
@@ -2447,8 +2466,7 @@ class arm2llvm {
   }
 
   BinaryOperator *createNot(Value *a) {
-    auto W = getBitWidth(a);
-    auto NegOne = getAllOnesConst(W);
+    auto NegOne = getAllOnesConst(a->getType());
     return BinaryOperator::Create(Instruction::Xor, a, NegOne, nextName(),
                                   LLVMBB);
   }
@@ -3200,12 +3218,10 @@ class arm2llvm {
   tuple<Value *, bool> SignedSatQ(Value *i, unsigned bitWidth) {
     auto W = getBitWidth(i);
     assert(bitWidth < W);
-    auto max = getUnsignedIntConst((1 << (bitWidth - 1)) - 1, W);
-    auto min = getUnsignedIntConst(-(1 << (bitWidth - 1)), W);
-    Value *max_bitWidth =
-        ConstantInt::get(Ctx, APInt::getSignedMaxValue(bitWidth));
-    Value *min_bitWidth =
-        ConstantInt::get(Ctx, APInt::getSignedMinValue(bitWidth));
+    auto max = getSignedIntConst(((uint64_t)1 << (bitWidth - 1)) - 1, W);
+    auto min = getSignedIntConst(-((uint64_t)1 << (bitWidth - 1)), W);
+    auto *max_bitWidth = getSignedMaxConst(bitWidth);
+    auto *min_bitWidth = getSignedMinConst(bitWidth);
     Value *i_bitWidth = createTrunc(i, getIntTy(bitWidth));
 
     auto sat = createOr(createICmp(ICmpInst::Predicate::ICMP_SGT, i, max),
@@ -3222,7 +3238,7 @@ class arm2llvm {
   tuple<Value *, bool> UnsignedSatQ(Value *i, unsigned bitWidth) {
     auto W = getBitWidth(i);
     assert(bitWidth < W);
-    auto max = getUnsignedIntConst((1 << bitWidth) - 1, W);
+    auto max = getUnsignedIntConst(((uint64_t)1 << bitWidth) - 1, W);
     auto min = getUnsignedIntConst(0, W);
     Value *max_bitWidth = ConstantInt::get(Ctx, APInt::getMaxValue(bitWidth));
     Value *min_bitWidth = ConstantInt::get(Ctx, APInt::getMinValue(bitWidth));
@@ -4931,7 +4947,7 @@ public:
         auto width = imms + 1;
         assert(width != 64);
         *out << "sbfiz with size = " << size << ", width = " << width << "\n";
-        auto mask = ((uint64_t)1 << (width)) - 1;
+        auto mask = ((uint64_t)1 << width) - 1;
         auto mask_comp = ~mask;
         if (size == 32)
           mask_comp &= 0xffffffff;
@@ -4954,7 +4970,7 @@ public:
       // FIXME: this requires checking if SBFX is preferred.
       // For now, assume this is always SBFX
       auto width = imms + 1;
-      auto mask = ((uint64_t)1 << (width)) - 1;
+      auto mask = ((uint64_t)1 << width) - 1;
       auto pos = immr;
 
       auto masked = createAnd(src, getUnsignedIntConst(mask, size));
@@ -5227,7 +5243,7 @@ public:
       if (imms < immr) {
         auto pos = size - immr;
         auto width = imms + 1;
-        auto mask = ((uint64_t)1 << (width)) - 1;
+        auto mask = ((uint64_t)1 << width) - 1;
         auto masked = createAnd(src, getUnsignedIntConst(mask, size));
         auto shifted = createMaskedShl(masked, getUnsignedIntConst(pos, size));
         updateOutputReg(shifted);
@@ -5255,7 +5271,7 @@ public:
       // For now, assume this is always UBFX
       // we mask from lsb to lsb + width and then perform a logical shift right
       auto width = imms + 1;
-      auto mask = ((uint64_t)1 << (width)) - 1;
+      auto mask = ((uint64_t)1 << width) - 1;
       auto pos = immr;
 
       auto masked = createAnd(src, getUnsignedIntConst(mask, size));
@@ -5286,7 +5302,8 @@ public:
 
         auto masked = createAnd(src, getUnsignedIntConst(mask, size));
         auto shifted = createMaskedLShr(masked, getUnsignedIntConst(pos, size));
-        auto cleared = createAnd(dst, getSignedIntConst((uint64_t)-1 << bits, size));
+        auto cleared =
+            createAnd(dst, getSignedIntConst((uint64_t)-1 << bits, size));
         auto res = createOr(cleared, shifted);
         updateOutputReg(res);
       } else {
@@ -5472,8 +5489,6 @@ public:
         assert(false && "missed case in EON/BIC");
       }
 
-      // FIXME: it might be better to have EON instruction separate since there
-      //    no "S" instructions for EON
       if (has_s(opcode)) {
         setNUsingResult(ret);
         setZUsingResult(ret);
@@ -9194,7 +9209,7 @@ public:
 
       if (addRoundingConst) {
         auto roundingConst =
-            getElemSplat(numElts, 2 * eltSize, 1 << (eltSize - 1));
+            getElemSplat(numElts, 2 * eltSize, (uint64_t)1 << (eltSize - 1));
         res = createBinop(res, roundingConst, Instruction::BinaryOps::Add);
       }
 
@@ -10449,12 +10464,12 @@ public:
         numElts /= 2;
         a = readFromVecOperand(2, eltSize * 2, numElts);
         roundingConst =
-            getElemSplat(numElts, eltSize * 2, 1 << (getImm(3) - 1));
+            getElemSplat(numElts, eltSize * 2, (uint64_t)1 << (getImm(3) - 1));
         b = getElemSplat(numElts, eltSize * 2, getImm(3));
       } else {
         a = readFromVecOperand(1, eltSize * 2, numElts);
         roundingConst =
-            getElemSplat(numElts, eltSize * 2, 1 << (getImm(2) - 1));
+            getElemSplat(numElts, eltSize * 2, (uint64_t)1 << (getImm(2) - 1));
         b = getElemSplat(numElts, eltSize * 2, getImm(2));
       }
 
@@ -12063,8 +12078,7 @@ public:
       case AArch64::NOTv8i8:
       case AArch64::NOTv16i8: {
         auto src_vector = createBitCast(src, vTy);
-        auto neg_one = ConstantInt::get(vTy, APInt::getAllOnes(eltSize));
-        updateOutputReg(createXor(src_vector, neg_one));
+        updateOutputReg(createNot(src_vector));
         break;
       }
       case AArch64::RBITv8i8:
