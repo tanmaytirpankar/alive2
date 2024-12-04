@@ -2447,11 +2447,8 @@ class arm2llvm {
   }
 
   BinaryOperator *createNot(Value *a) {
-    auto *ty = a->getType();
-    auto Zero = ConstantInt::get(ty, 0);
-    auto One = ConstantInt::get(ty, 1);
-    auto NegOne =
-        BinaryOperator::Create(Instruction::Sub, Zero, One, nextName(), LLVMBB);
+    auto W = getBitWidth(a);
+    auto NegOne = getAllOnesConst(W);
     return BinaryOperator::Create(Instruction::Xor, a, NegOne, nextName(),
                                   LLVMBB);
   }
@@ -3123,7 +3120,7 @@ class arm2llvm {
     assert(res != nullptr && "condition code was not generated");
 
     if (invert_bit)
-      res = createXor(res, trueVal);
+      res = createNot(res);
 
     return res;
   }
@@ -5083,8 +5080,7 @@ public:
       auto cond_val_imm = getImm(3);
       auto cond_val = conditionHolds(cond_val_imm);
 
-      auto neg_one = getSignedIntConst(-1, size);
-      auto inverted_b = createXor(b, neg_one);
+      auto inverted_b = createNot(b);
 
       if (opcode == AArch64::CSNEGWr || opcode == AArch64::CSNEGXr) {
         auto negated_b = createAdd(inverted_b, getUnsignedIntConst(1, size));
@@ -5131,15 +5127,13 @@ public:
 
     case AArch64::MOVNWi:
     case AArch64::MOVNXi: {
-      auto size = getInstSize(opcode);
       assert(CurInst->getOperand(0).isReg());
       assert(CurInst->getOperand(1).isImm());
       assert(CurInst->getOperand(2).isImm());
 
       auto lhs = readFromOperand(1);
       lhs = regShift(lhs, getImm(2));
-      auto neg_one = getAllOnesConst(size);
-      auto not_lhs = createXor(lhs, neg_one);
+      auto not_lhs = createNot(lhs);
 
       updateOutputReg(not_lhs);
       break;
@@ -5165,13 +5159,11 @@ public:
 
     case AArch64::ORNWrs:
     case AArch64::ORNXrs: {
-      auto size = getInstSize(opcode);
       auto lhs = readFromOperand(1);
       auto rhs = readFromOperand(2);
       rhs = regShift(rhs, getImm(3));
 
-      auto neg_one = getSignedIntConst(-1, size);
-      auto not_rhs = createXor(rhs, neg_one);
+      auto not_rhs = createNot(rhs);
       auto ident = createOr(lhs, not_rhs);
       updateOutputReg(ident);
       break;
@@ -5290,12 +5282,11 @@ public:
 
         auto bits = (imms - immr + 1);
         auto pos = immr;
-
         auto mask = (((uint64_t)1 << bits) - 1) << pos;
 
         auto masked = createAnd(src, getUnsignedIntConst(mask, size));
         auto shifted = createMaskedLShr(masked, getUnsignedIntConst(pos, size));
-        auto cleared = createAnd(dst, getSignedIntConst(-1 << bits, size));
+        auto cleared = createAnd(dst, getSignedIntConst((uint64_t)-1 << bits, size));
         auto res = createOr(cleared, shifted);
         updateOutputReg(res);
       } else {
@@ -5351,7 +5342,6 @@ public:
     case AArch64::SDIVXr: {
       auto Size = getInstSize(opcode);
       auto Zero = getUnsignedIntConst(0, Size);
-      auto AllOnes = createSub(Zero, getUnsignedIntConst(1, Size));
       auto IntMin = createMaskedShl(getUnsignedIntConst(1, Size),
                                     getUnsignedIntConst(Size - 1, Size));
       auto LHS = readFromOperand(1);
@@ -5362,7 +5352,7 @@ public:
       auto RHSIsZero = createICmp(ICmpInst::Predicate::ICMP_EQ, RHS, Zero);
       auto LHSIsIntMin = createICmp(ICmpInst::Predicate::ICMP_EQ, LHS, IntMin);
       auto RHSIsAllOnes =
-          createICmp(ICmpInst::Predicate::ICMP_EQ, RHS, AllOnes);
+          createICmp(ICmpInst::Predicate::ICMP_EQ, RHS, getAllOnesConst(Size));
       auto IsOverflow = createAnd(LHSIsIntMin, RHSIsAllOnes);
       auto Cond = createOr(RHSIsZero, IsOverflow);
       auto DivBB = BasicBlock::Create(Ctx, "", liftedFn);
@@ -5448,7 +5438,6 @@ public:
     case AArch64::BICXrs:
     case AArch64::BICSWrs:
     case AArch64::BICSXrs: {
-      auto size = getInstSize(opcode);
       // BIC:
       // return = op1 AND NOT (optional shift) op2
       // EON:
@@ -5464,9 +5453,7 @@ public:
         op2 = regShift(op2, getImm(3));
       }
 
-      // Perform NOT
-      auto neg_one = getAllOnesConst(size);
-      auto inverted_op2 = createXor(op2, neg_one);
+      auto inverted_op2 = createNot(op2);
 
       // Perform final Op: AND for BIC, XOR for EON
       Value *ret = nullptr;
@@ -5635,7 +5622,7 @@ public:
       auto [base, imm] = getParamsLoadImmed();
       // Start offset as a 9-bit signed integer
       assert(imm <= 255 && imm >= -256);
-      auto offset = getUnsignedIntConst(imm, 9);
+      auto offset = getSignedIntConst(imm, 9);
       Value *offsetVal = createSExt(offset, i64);
       auto loaded = makeLoadWithOffset(base, offsetVal, size);
       updateOutputReg(loaded, sExt);
@@ -5739,7 +5726,7 @@ public:
 
       // Start offset as a 9-bit signed integer
       assert(imm <= 255 && imm >= -256);
-      auto offset = getUnsignedIntConst(imm, 9);
+      auto offset = getSignedIntConst(imm, 9);
       Value *offsetVal = createSExt(offset, i64);
       Value *zeroVal = getUnsignedIntConst(0, 64);
 
