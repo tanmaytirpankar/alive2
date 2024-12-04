@@ -428,15 +428,19 @@ class arm2llvm {
            (reg >= AArch64::S0 && reg <= AArch64::S31);
   }
 
-  Constant *getUnsignedIntConst(uint64_t val, u_int64_t bits) {
+  Constant *getUnsignedIntConst(uint64_t val, uint64_t bits) {
     return ConstantInt::get(Ctx, llvm::APInt(bits, val));
+  }
+
+  Constant *getAllOnesConst(uint64_t bits) {
+    return ConstantInt::get(Ctx, llvm::APInt::getAllOnes(bits));
   }
 
   Constant *getBoolConst(bool val) {
     return ConstantInt::get(Ctx, llvm::APInt(1, val ? 1 : 0));
   }
 
-  Constant *getSignedIntConst(int64_t val, u_int64_t bits) {
+  Constant *getSignedIntConst(int64_t val, uint64_t bits) {
     return ConstantInt::get(Ctx, llvm::APInt(bits, val, /*signed=*/true));
   }
 
@@ -2720,7 +2724,7 @@ class arm2llvm {
     return createLoad(PointerType::get(Ctx, 0), RegAddr);
   }
 
-  void updateReg(Value *V, u_int64_t reg, bool SExt = false) {
+  void updateReg(Value *V, uint64_t reg, bool SExt = false) {
     // important -- squash updates to the zero register
     if (reg == AArch64::WZR || reg == AArch64::XZR)
       return;
@@ -4233,7 +4237,7 @@ class arm2llvm {
     return make_tuple(baseAddr, offset, readFromRegOld(op0.getReg()));
   }
 
-  void storeToMemoryValOffset(Value *base, Value *offset, u_int64_t size,
+  void storeToMemoryValOffset(Value *base, Value *offset, uint64_t size,
                               Value *val) {
     // Create a GEP instruction based on a byte addressing basis (8 bits)
     // returning pointer to base + offset
@@ -4266,7 +4270,7 @@ class arm2llvm {
 
   // Creates instructions to store val in memory pointed by base + offset
   // offset and size are in bytes
-  void storeToMemoryImmOffset(Value *base, u_int64_t offset, u_int64_t size,
+  void storeToMemoryImmOffset(Value *base, uint64_t offset, uint64_t size,
                               Value *val) {
     // Get offset as a 64-bit LLVM constant
     auto offsetVal = getUnsignedIntConst(offset, 64);
@@ -5136,7 +5140,7 @@ public:
 
       auto lhs = readFromOperand(1);
       lhs = regShift(lhs, getImm(2));
-      auto neg_one = getUnsignedIntConst(-1, size);
+      auto neg_one = getAllOnesConst(size);
       auto not_lhs = createXor(lhs, neg_one);
 
       updateOutputReg(not_lhs);
@@ -5463,7 +5467,7 @@ public:
       }
 
       // Perform NOT
-      auto neg_one = getUnsignedIntConst(-1, size);
+      auto neg_one = getAllOnesConst(size);
       auto inverted_op2 = createXor(op2, neg_one);
 
       // Perform final Op: AND for BIC, XOR for EON
@@ -7343,7 +7347,7 @@ public:
 
       auto imm = op3.getImm();
 
-      u_int64_t size = 0;
+      uint64_t size = 0;
       switch (opcode) {
       case AArch64::STPWi:
       case AArch64::STPSi: {
@@ -10554,7 +10558,7 @@ public:
       auto a = readFromVecOperand(2, eltSize, numElts);
       auto shiftVec = getElemSplat(numElts, eltSize, shiftAmt);
       Value *shifted_a;
-      u_int64_t maskAmt;
+      uint64_t maskAmt;
       switch (opcode) {
       case AArch64::SLIv8i8_shift:
       case AArch64::SLIv16i8_shift:
@@ -11570,7 +11574,7 @@ public:
     case AArch64::XTNv8i8:
     case AArch64::XTNv16i8: {
       auto &op0 = CurInst->getOperand(0);
-      u_int64_t srcReg = opcode == AArch64::XTNv2i32 ||
+      uint64_t srcReg = opcode == AArch64::XTNv2i32 ||
                                  opcode == AArch64::XTNv4i16 ||
                                  opcode == AArch64::XTNv8i8
                              ? 1
@@ -11582,7 +11586,7 @@ public:
       assert(getBitWidth(src) == 128 &&
              "Source value is not a vector with 128 bits");
 
-      u_int64_t eltSize, numElts, part;
+      uint64_t eltSize, numElts, part;
       part = opcode == AArch64::XTNv2i32 || opcode == AArch64::XTNv4i16 ||
                      opcode == AArch64::XTNv8i8
                  ? 0
@@ -11653,7 +11657,7 @@ public:
     case AArch64::SQXTNv4i32: {
       auto &op0 = CurInst->getOperand(0);
 
-      u_int64_t srcReg, part;
+      uint64_t srcReg, part;
       switch (opcode) {
       case AArch64::UQXTNv1i8:
       case AArch64::UQXTNv1i16:
@@ -11692,7 +11696,7 @@ public:
       assert(getBitWidth(src) == 128 &&
              "Source value is not a vector with 128 bits");
 
-      u_int64_t eltSize, numElts;
+      uint64_t eltSize, numElts;
       switch (opcode) {
       case AArch64::UQXTNv1i8:
       case AArch64::UQXTNv16i8:
@@ -11848,7 +11852,7 @@ public:
     case AArch64::RBITv8i8:
     case AArch64::RBITv16i8: {
       auto src = readFromOperand(1);
-      u_int64_t eltSize, numElts;
+      uint64_t eltSize, numElts;
 
       switch (opcode) {
       case AArch64::ABSv1i64:
