@@ -2487,12 +2487,16 @@ class arm2llvm {
     return CastInst::Create(Instruction::SExt, v, t, nextName(), LLVMBB);
   }
 
-  CastInst *createFPToUI(Value *v, Type *t) {
-    return CastInst::Create(Instruction::FPToUI, v, t, nextName(), LLVMBB);
+  CallInst *createFPToUI_sat(Value *v, Type *t) {
+    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::fptoui_sat,
+                                                  {t, v->getType()});
+    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
   }
 
-  CastInst *createFPToSI(Value *v, Type *t) {
-    return CastInst::Create(Instruction::FPToSI, v, t, nextName(), LLVMBB);
+  CallInst *createFPToSI_sat(Value *v, Type *t) {
+    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::fptosi_sat,
+                                                  {t, v->getType()});
+    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
   }
 
   CastInst *createUIToFP(Value *v, Type *t) {
@@ -7801,8 +7805,8 @@ public:
       auto op1Size = getRegSize(op1.getReg());
 
       auto fp_val = readFromFPOperand(1, op1Size);
-      auto converted = isSigned ? createFPToSI(fp_val, getIntTy(op0Size))
-                                : createFPToUI(fp_val, getIntTy(op0Size));
+      auto converted = isSigned ? createFPToSI_sat(fp_val, getIntTy(op0Size))
+                                : createFPToUI_sat(fp_val, getIntTy(op0Size));
       updateOutputReg(converted);
       break;
     }
@@ -7820,8 +7824,8 @@ public:
       auto op1Size = getRegSize(op1.getReg());
 
       auto fp_val = readFromFPOperand(1, op1Size);
-      auto converted = isSigned ? createFPToSI(fp_val, getIntTy(op0Size))
-                                : createFPToUI(fp_val, getIntTy(op0Size));
+      auto converted = isSigned ? createFPToSI_sat(fp_val, getIntTy(op0Size))
+                                : createFPToUI_sat(fp_val, getIntTy(op0Size));
       updateOutputReg(converted);
       break;
     }
