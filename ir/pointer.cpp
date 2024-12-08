@@ -277,8 +277,8 @@ expr Pointer::getValue(const char *name, const FunctionExpr &local_fn,
   if (auto val = nonlocal_fn.lookup(bid))
     non_local = *val;
   else {
-    string uf = src_name ? local_name(m.state, name) : name;
-    non_local = expr::mkUF(uf.c_str(), { bid }, ret_type);
+    non_local = expr::mkUF(src_name ? local_name(m.state, name).c_str() : name,
+                           { bid }, ret_type);
   }
 
   if (auto local = local_fn(bid))
@@ -331,7 +331,11 @@ expr Pointer::blockSizeOffsetT() const {
 }
 
 expr Pointer::blockSizeAligned() const {
-  return blockSize().round_up_bits(blockAlignment().zextOrTrunc(bits_size_t));
+  auto size = blockSize();
+  // programs can't observe whether the size was increased up to alignment
+  if (!has_globals_diff_align)
+    return size;
+  return size.round_up_bits(blockAlignment().zextOrTrunc(bits_size_t));
 }
 
 expr Pointer::blockSizeAlignedOffsetT() const {
@@ -356,7 +360,7 @@ Pointer Pointer::operator+(const expr &bytes) const {
     );
 }
 
-Pointer Pointer::operator+(unsigned bytes) const {
+Pointer Pointer::operator+(uint64_t bytes) const {
   return *this + expr::mkUInt(bytes, bits_for_offset);
 }
 
@@ -456,7 +460,8 @@ expr Pointer::inbounds(bool simplify_ptr) {
 
 expr Pointer::blockAlignment() const {
   return getValue("blk_align", m.local_blk_align, m.non_local_blk_align,
-                   expr::mkUInt(0, Memory::bitsAlignmentInfo()), true);
+                   expr::mkUInt(0, Memory::bitsAlignmentInfo()),
+                   has_globals_diff_align);
 }
 
 expr Pointer::isBlockAligned(uint64_t align, bool exact) const {
@@ -773,9 +778,15 @@ expr Pointer::refined(const Pointer &other) const {
   //local &= block_refined(other);
 
   expr nonlocal = is_asm ? getAddress() == other.getAddress() : *this == other;
+  expr is_local = d1 && p1l.isLocal();
+
+  // short-circuit to avoid the constraint below:
+  // addr == 0 ? addr' == 0 : addr == addr'
+  if (is_asm && is_local.isFalse())
+    return nonlocal;
 
   return expr::mkIf(isNull(), other.isNull(),
-                    expr::mkIf(d1 && p1l.isLocal(), local, nonlocal));
+                    expr::mkIf(is_local, local, nonlocal));
 }
 
 expr Pointer::fninputRefined(const Pointer &other, set<expr> &undef,

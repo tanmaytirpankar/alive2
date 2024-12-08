@@ -1582,7 +1582,7 @@ void Memory::mkAxioms(const Memory &tgt) const {
     state->addAxiom(
       p.isHeapAllocated().implies(p_align == align && q_align == align));
     if (!p_align.isConst() || !q_align.isConst())
-      state->addAxiom(p_align.ule(q_align));
+      state->addAxiom(p_align == q_align);
   }
   for (unsigned bid = num_nonlocals_src; bid < num_nonlocals; ++bid) {
     if (skip_bid(bid))
@@ -2126,6 +2126,9 @@ Memory::alloc(const expr *size, uint64_t align, BlockKind blockKind,
   expr nooverflow = true;
   if (size) {
     size_zext  = size->zextOrTrunc(bits_size_t);
+    // we round up the size statically instead of creating a large expr later
+    if (!has_globals_diff_align)
+      size_zext = size_zext.round_up(expr::mkUInt(align, bits_size_t));
     nooverflow = size->bits() <= bits_size_t ? true :
                    size->extract(size->bits()-1, bits_size_t) == 0;
   }
