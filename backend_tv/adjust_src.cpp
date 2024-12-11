@@ -207,10 +207,8 @@ void checkVectorTy(VectorType *Ty) {
   int Width = -1;
   if (auto *IntTy = dyn_cast<IntegerType>(EltTy)) {
     Width = IntTy->getBitWidth();
-    if (Width != 8 && Width != 16 && Width != 32 && Width != 64) {
-      *out << "\nERROR: Only vectors of i8, i16, i32, i64 are supported\n\n";
-      exit(-1);
-    }
+    if (Width != 8 && Width != 16 && Width != 32 && Width != 64)
+      goto vec_error;
   } else if (EltTy->isFloatTy()) {
     Width = 32;
   } else if (EltTy->isDoubleTy()) {
@@ -219,14 +217,18 @@ void checkVectorTy(VectorType *Ty) {
     *out << "\nERROR: Only vectors of integer, f32, f64, supported for now\n\n";
     exit(-1);
   }
-  auto Count = Ty->getElementCount().getFixedValue();
-  auto VecSize = (Count * Width) / 8;
-  if (VecSize != 8 && VecSize != 16) {
-    *out << "\nERROR: Only short vectors 8 and 16 bytes long are supported, "
-      "in parameters and return values; please see Section 5.4 of "
-      "AAPCS64 for more details\n\n";
-    exit(-1);
+  {
+    auto Count = Ty->getElementCount().getFixedValue();
+    auto VecSize = (Count * Width) / 8;
+    if (VecSize != 8 && VecSize != 16)
+      goto vec_error;
+    return;
   }
+ vec_error:
+  *out << "\nERROR: Only short vectors 8 and 16 bytes long are supported, "
+    "in parameters and return values; please see Section 5.4 of "
+    "AAPCS64 for more details\n\n";
+  exit(-1);
 }
 
 std::unique_ptr<DIBuilder> DBuilder;
