@@ -7,8 +7,6 @@
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/SourceMgr.h"
 
-#include "ir/function.h"
-
 namespace llvm {
 class Function;
 class Module;
