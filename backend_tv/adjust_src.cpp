@@ -204,23 +204,27 @@ namespace lifter {
 
 void checkVectorTy(VectorType *Ty) {
   auto *EltTy = Ty->getElementType();
+  int Width = -1;
   if (auto *IntTy = dyn_cast<IntegerType>(EltTy)) {
-    auto Width = IntTy->getBitWidth();
+    Width = IntTy->getBitWidth();
     if (Width != 8 && Width != 16 && Width != 32 && Width != 64) {
       *out << "\nERROR: Only vectors of i8, i16, i32, i64 are supported\n\n";
       exit(-1);
     }
-    auto Count = Ty->getElementCount().getFixedValue();
-    auto VecSize = (Count * Width) / 8;
-    if (VecSize != 8 && VecSize != 16) {
-      *out << "\nERROR: Only short vectors 8 and 16 bytes long are supported, "
-              "in parameters and return values; please see Section 5.4 of "
-              "AAPCS64 for more details\n\n";
-      exit(-1);
-    }
+  } else if (EltTy->isFloatTy()) {
+    Width = 32;
+  } else if (EltTy->isDoubleTy()) {
+    Width = 64;
   } else {
-    // FIXME there's no reason for this restriction
-    *out << "\nERROR: Only vectors of integers supported for now\n\n";
+    *out << "\nERROR: Only vectors of integer, f32, f64, supported for now\n\n";
+    exit(-1);
+  }
+  auto Count = Ty->getElementCount().getFixedValue();
+  auto VecSize = (Count * Width) / 8;
+  if (VecSize != 8 && VecSize != 16) {
+    *out << "\nERROR: Only short vectors 8 and 16 bytes long are supported, "
+      "in parameters and return values; please see Section 5.4 of "
+      "AAPCS64 for more details\n\n";
     exit(-1);
   }
 }
