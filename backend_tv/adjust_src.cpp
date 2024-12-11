@@ -240,8 +240,8 @@ void addDebugInfo(Function *srcFn) {
   // start with a clean slate
   StripDebugInfo(M);
 
-  M.addModuleFlag(Module::Warning, "Dwarf Version", dwarf::DWARF_VERSION);
-  M.addModuleFlag(Module::Warning, "Debug Info Version",
+  M.setModuleFlag(Module::Warning, "Dwarf Version", dwarf::DWARF_VERSION);
+  M.setModuleFlag(Module::Warning, "Debug Info Version",
                   DEBUG_METADATA_VERSION);
 
   auto &Ctx = srcFn->getContext();
@@ -264,11 +264,14 @@ void addDebugInfo(Function *srcFn) {
     }
   }
 
+  if (false) {
+    M.dump();
+    *out << "\n\n\n";
+  }
+
   DBuilder->finalize();
   verifyModule(M);
   *out << "\n\n\n";
-  // M.dump();
-  //*out << "\n\n\n";
 }
 
 void checkSupport(Function *srcFn) {
