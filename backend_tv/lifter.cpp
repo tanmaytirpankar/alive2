@@ -779,6 +779,10 @@ class arm2llvm {
       AArch64::SQXTNv1i8,
       AArch64::SQXTNv1i16,
       AArch64::SQXTNv1i32,
+      AArch64::FMINSrr,
+      AArch64::FMINNMSrr,
+      AArch64::FMAXSrr,
+      AArch64::FMAXNMSrr,
   };
 
   const set<int> instrs_64 = {
@@ -1275,6 +1279,10 @@ class arm2llvm {
       AArch64::AUTIASP,
       AArch64::AUTIBSP,
       AArch64::HINT,
+      AArch64::FMINDrr,
+      AArch64::FMINNMDrr,
+      AArch64::FMAXDrr,
+      AArch64::FMAXNMDrr,
   };
 
   const set<int> instrs_128 = {
@@ -8006,6 +8014,52 @@ public:
       auto a =
           readFromFPOperand(1, getRegSize(CurInst->getOperand(1).getReg()));
       auto res = createFAbs(a);
+      updateOutputReg(res);
+      break;
+    }
+
+    case AArch64::FMINSrr:
+    case AArch64::FMINNMSrr:
+    case AArch64::FMAXSrr:
+    case AArch64::FMAXNMSrr:
+    case AArch64::FMINDrr:
+    case AArch64::FMINNMDrr:
+    case AArch64::FMAXDrr:
+    case AArch64::FMAXNMDrr: {
+
+      auto a =
+          readFromFPOperand(1, getRegSize(CurInst->getOperand(1).getReg()));
+      auto b =
+          readFromFPOperand(2, getRegSize(CurInst->getOperand(2).getReg()));
+
+      Function *decl{nullptr};
+      switch (opcode) {
+      case AArch64::FMINSrr:
+      case AArch64::FMINDrr:
+        decl = Intrinsic::getOrInsertDeclaration(
+            LiftedModule, Intrinsic::minimum, a->getType());
+        break;
+      case AArch64::FMINNMSrr:
+      case AArch64::FMINNMDrr:
+        decl = Intrinsic::getOrInsertDeclaration(
+            LiftedModule, Intrinsic::minimumnum, a->getType());
+        break;
+      case AArch64::FMAXSrr:
+      case AArch64::FMAXDrr:
+        decl = Intrinsic::getOrInsertDeclaration(
+            LiftedModule, Intrinsic::maximum, a->getType());
+        break;
+      case AArch64::FMAXNMSrr:
+      case AArch64::FMAXNMDrr:
+        decl = Intrinsic::getOrInsertDeclaration(
+            LiftedModule, Intrinsic::maximumnum, a->getType());
+        break;
+      default:
+        assert(false);
+      }
+      assert(decl);
+
+      Value *res = CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
       updateOutputReg(res);
       break;
     }
