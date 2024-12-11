@@ -2488,14 +2488,14 @@ class arm2llvm {
   }
 
   CallInst *createFPToUI_sat(Value *v, Type *t) {
-    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::fptoui_sat,
-                                                  {t, v->getType()});
+    auto decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::fptoui_sat, {t, v->getType()});
     return CallInst::Create(decl, {v}, nextName(), LLVMBB);
   }
 
   CallInst *createFPToSI_sat(Value *v, Type *t) {
-    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::fptosi_sat,
-                                                  {t, v->getType()});
+    auto decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::fptosi_sat, {t, v->getType()});
     return CallInst::Create(decl, {v}, nextName(), LLVMBB);
   }
 

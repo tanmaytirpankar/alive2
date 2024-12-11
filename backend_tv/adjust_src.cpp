@@ -224,10 +224,10 @@ void checkVectorTy(VectorType *Ty) {
       goto vec_error;
     return;
   }
- vec_error:
+vec_error:
   *out << "\nERROR: Only short vectors 8 and 16 bytes long are supported, "
-    "in parameters and return values; please see Section 5.4 of "
-    "AAPCS64 for more details\n\n";
+          "in parameters and return values; please see Section 5.4 of "
+          "AAPCS64 for more details\n\n";
   exit(-1);
 }
 
@@ -357,6 +357,16 @@ void checkSupport(Function *srcFn) {
   *out << llvmInstCount << " LLVM instructions in source function\n";
 }
 
+void nameGlobals(Module *M) {
+  int num = 0;
+  for (auto G = M->global_begin(); G != M->global_end(); ++G) {
+    if (G->hasName())
+      continue;
+    G->setName("g" + std::to_string(num));
+    ++num;
+  }
+}
+
 /*
  * a function that have the sext or zext attribute on its return value
  * is awkward: this obligates the function to sign- or zero-extend the
@@ -367,7 +377,7 @@ void checkSupport(Function *srcFn) {
  * test that sort of code, so we just unconditionally do that even
  * when we don't actually need to.
  */
-Function *adjustSrcReturn(Function *srcFn) {
+Function *adjustSrc(Function *srcFn) {
   auto *origRetTy = srcFn->getReturnType();
 
   if (!(origRetTy->isIntegerTy() || origRetTy->isVectorTy() ||
