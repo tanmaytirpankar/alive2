@@ -365,8 +365,13 @@ void nameGlobals(Module *M) {
   for (auto G = M->global_begin(); G != M->global_end(); ++G) {
     if (G->hasName())
       continue;
-    G->setName("g" + std::to_string(num));
-    ++num;
+    G->setName("g" + std::to_string(num++));
+  }
+  num = 0;
+  for (auto &F : *M) {
+    if (F.hasName())
+      continue;
+    F.setName("f" + std::to_string(num++));
   }
 }
 

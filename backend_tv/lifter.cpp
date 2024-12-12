@@ -224,7 +224,12 @@ class arm2llvm {
   Constant *lazyAddGlobal(string newGlobal) {
     *out << "  lazyAddGlobal '" << newGlobal << "'\n";
 
-    // these have been mangled opaquely to us, just hard code the mapping
+    // these have been mangled opaquely to us, all we can do is hard
+    // code the mappings
+    if (newGlobal == "powf")
+      newGlobal = "llvm.pow.f32";
+    if (newGlobal == "pow")
+      newGlobal = "llvm.pow.f64";
     if (newGlobal == "memcpy")
       newGlobal = "llvm.memcpy.p0.p0.i64";
     if (newGlobal == "memset")
@@ -8039,20 +8044,20 @@ public:
         decl = Intrinsic::getOrInsertDeclaration(
             LiftedModule, Intrinsic::minimum, a->getType());
         break;
-      case AArch64::FMINNMSrr:
-      case AArch64::FMINNMDrr:
-        decl = Intrinsic::getOrInsertDeclaration(
-            LiftedModule, Intrinsic::minimumnum, a->getType());
-        break;
       case AArch64::FMAXSrr:
       case AArch64::FMAXDrr:
         decl = Intrinsic::getOrInsertDeclaration(
             LiftedModule, Intrinsic::maximum, a->getType());
         break;
+      case AArch64::FMINNMSrr:
+      case AArch64::FMINNMDrr:
+        decl = Intrinsic::getOrInsertDeclaration(
+            LiftedModule, Intrinsic::minnum, a->getType());
+        break;
       case AArch64::FMAXNMSrr:
       case AArch64::FMAXNMDrr:
         decl = Intrinsic::getOrInsertDeclaration(
-            LiftedModule, Intrinsic::maximumnum, a->getType());
+            LiftedModule, Intrinsic::maxnum, a->getType());
         break;
       default:
         assert(false);
