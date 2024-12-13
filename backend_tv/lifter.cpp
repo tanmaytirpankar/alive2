@@ -1288,7 +1288,10 @@ class arm2llvm {
       AArch64::FMINNMDrr,
       AArch64::FMAXDrr,
       AArch64::FMAXNMDrr,
-  };
+      AArch64::FCMEQv2f32,
+      AArch64::FCMGTv2f32,
+      AArch64::FCMGEv2f32,
+  },
 
   const set<int> instrs_128 = {
       AArch64::DUPv8i8lane,
@@ -2015,6 +2018,12 @@ class arm2llvm {
       AArch64::SQXTNv4i32,
       AArch64::FNEGv4f32,
       AArch64::FNEGv2f64,
+      AArch64::FCMEQv4f32,
+      AArch64::FCMEQv2f64,
+      AArch64::FCMGTv4f32,
+      AArch64::FCMGTv2f64,
+      AArch64::FCMGEv4f32,
+      AArch64::FCMGEv2f64,
   };
 
   bool has_s(int instr) {
@@ -7846,8 +7855,13 @@ public:
     case AArch64::FCVTSHr:
     case AArch64::FCVTDHr:
     case AArch64::FCVTHSr:
+    case AArch64::FCVTHDr: {
+      *out << "\nERROR: only float and double supported (not  bfloat, half, "
+        "fp128, etc.)\n\n";
+      exit(-1);
+    }
+
     case AArch64::FCVTDSr:
-    case AArch64::FCVTHDr:
     case AArch64::FCVTSDr: {
       auto &op0 = CurInst->getOperand(0);
       auto &op1 = CurInst->getOperand(1);
@@ -7858,6 +7872,7 @@ public:
 
       auto fTy = getFPType(op0Size);
       auto fp_val = readFromFPOperand(1, op1Size);
+
       auto converted = op0Size < op1Size ? createFPTrunc(fp_val, fTy)
                                          : createFPExt(fp_val, fTy);
 
@@ -8669,6 +8684,46 @@ public:
       break;
     }
 
+      /*
+case AArch64::FCMEQ64:
+case AArch64::FCMGT64:
+case AArch64::FCMGE64:
+      */
+
+      /*
+case AArch64::FCMEQv2i32rz:
+case AArch64::FCMEQv2i64rz:
+case AArch64::FCMEQv4i32rz:
+
+case AArch64::FCMLEv2i64rz:
+case AArch64::FCMLEv4i32rz:
+case AArch64::FCMLEv2i32rz:
+
+case AArch64::FCMGEv2i32rz:
+case AArch64::FCMGEv4i32rz:
+case AArch64::FCMGEv2i64rz:
+  
+case AArch64::FCMLTv2i32rz:
+case AArch64::FCMLTv2i64rz:
+case AArch64::FCMLTv4i32rz:
+
+case AArch64::FCMGTv4i32rz:
+case AArch64::FCMGTv2i64rz:
+case AArch64::FCMGTv2i32rz:
+      */
+    
+    case AArch64::FCMEQv2f32:
+    case AArch64::FCMEQv4f32:
+    case AArch64::FCMEQv2f64:
+    case AArch64::FCMGTv2f32:
+    case AArch64::FCMGTv4f32:
+    case AArch64::FCMGTv2f64:
+    case AArch64::FCMGEv2f32:
+    case AArch64::FCMGEv4f32:
+    case AArch64::FCMGEv2f64: {
+      break;
+    }
+      
     case AArch64::CMGTv4i16rz:
     case AArch64::CMEQv1i64rz:
     case AArch64::CMGTv8i8rz:

@@ -406,8 +406,7 @@ Function *adjustSrc(Function *srcFn) {
     }
   } else {
     if (origRetWidth > 64) {
-      *out << "\nERROR: Unsupported Function Return: Only int/vec/ptr types 64 "
-              "bits or smaller supported for now\n\n";
+      *out << "\nERROR: Scalar return values larger than 64 bits are not supported\n\n";
       exit(-1);
     }
   }
