@@ -406,7 +406,8 @@ Function *adjustSrc(Function *srcFn) {
     }
   } else {
     if (origRetWidth > 64) {
-      *out << "\nERROR: Scalar return values larger than 64 bits are not supported\n\n";
+      *out << "\nERROR: Scalar return values larger than 64 bits are not "
+              "supported\n\n";
       exit(-1);
     }
   }

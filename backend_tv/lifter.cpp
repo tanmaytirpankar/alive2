@@ -4,8 +4,8 @@
 
 #include "backend_tv/lifter.h"
 
-#include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/StringExtras.h"
@@ -496,12 +496,11 @@ class arm2llvm {
   Constant *getZeroFPVec(unsigned numElts, unsigned eltSize) {
     assert(eltSize == 32 || eltSize == 64);
     auto ec = ElementCount::getFixed(numElts);
-    auto &sem = (eltSize == 64) ? APFloat::IEEEdouble() :
-      APFloat::IEEEsingle();
+    auto &sem = (eltSize == 64) ? APFloat::IEEEdouble() : APFloat::IEEEsingle();
     auto z = APFloat::getZero(sem);
     return ConstantVector::getSplat(ec, ConstantFP::get(Ctx, z));
   }
-  
+
   Constant *getZeroIntVec(unsigned numElts, unsigned eltSize) {
     return getElemSplat(numElts, eltSize, 0);
   }
@@ -1305,7 +1304,9 @@ class arm2llvm {
       AArch64::FCMGTv2i32rz,
       AArch64::FCMLTv2i32rz,
       AArch64::FCMLEv2i32rz,
-      AArch64::FCMGEv2i32rz,      
+      AArch64::FCMGEv2i32rz,
+      AArch64::FADDv2f32,
+      AArch64::FSUBv2f32,
   };
 
   const set<int> instrs_128 = {
@@ -2049,6 +2050,10 @@ class arm2llvm {
       AArch64::FCMGTv2i64rz,
       AArch64::FCMEQv2i64rz,
       AArch64::FCMEQv4i32rz,
+      AArch64::FADDv4f32,
+      AArch64::FADDv2f64,
+      AArch64::FSUBv4f32,
+      AArch64::FSUBv2f64,
   };
 
   bool has_s(int instr) {
@@ -2427,8 +2432,16 @@ class arm2llvm {
     return BinaryOperator::Create(Instruction::Add, a, b, nextName(), LLVMBB);
   }
 
+  BinaryOperator *createFAdd(Value *a, Value *b) {
+    return BinaryOperator::Create(Instruction::FAdd, a, b, nextName(), LLVMBB);
+  }
+
   BinaryOperator *createSub(Value *a, Value *b) {
     return BinaryOperator::Create(Instruction::Sub, a, b, nextName(), LLVMBB);
+  }
+
+  BinaryOperator *createFSub(Value *a, Value *b) {
+    return BinaryOperator::Create(Instruction::FSub, a, b, nextName(), LLVMBB);
   }
 
   Value *createRawLShr(Value *a, Value *b) {
@@ -2893,7 +2906,7 @@ class arm2llvm {
       auto casted = createBitCast(regVal, getVecTy(64, 2));
 
       regVal = createExtractElement(casted, 1);
-      ty = getVecTy(eltSize, numElts / 2);
+      ty = getVecTy(eltSize, numElts / 2, isFP);
     } else {
       ty = getVecTy(eltSize, numElts, isFP);
     }
@@ -7882,7 +7895,7 @@ public:
     case AArch64::FCVTHSr:
     case AArch64::FCVTHDr: {
       *out << "\nERROR: only float and double supported (not  bfloat, half, "
-        "fp128, etc.)\n\n";
+              "fp128, etc.)\n\n";
       exit(-1);
     }
 
@@ -8263,6 +8276,53 @@ public:
       auto operandSize = getRegSize(CurInst->getOperand(1).getReg());
       auto a = readFromFPOperand(1, operandSize);
       auto res = createSQRT(a);
+      updateOutputReg(res);
+      break;
+    }
+ 
+    case AArch64::FADDv2f32:
+    case AArch64::FADDv4f32:
+    case AArch64::FADDv2f64:
+    case AArch64::FSUBv2f32:
+    case AArch64::FSUBv4f32:
+    case AArch64::FSUBv2f64: {
+      int eltSize = -1, numElts = -1;
+      switch (opcode) {
+      case AArch64::FADDv2f32:
+      case AArch64::FSUBv2f32:
+        eltSize = 32;
+        numElts = 2;
+        break;
+      case AArch64::FADDv4f32:
+      case AArch64::FSUBv4f32:
+        eltSize = 32;
+        numElts = 4;
+        break;
+      case AArch64::FADDv2f64:
+      case AArch64::FSUBv2f64:
+        eltSize = 64;
+        numElts = 2;
+        break;
+      default:
+        assert(false);
+      }      
+      auto a = readFromVecOperand(1, eltSize, numElts, /*isUpperHalf=*/false, /*isFP=*/true);
+      auto b = readFromVecOperand(2, eltSize, numElts, /*isUpperHalf=*/false, /*isFP=*/true);
+      Value *res{nullptr};
+      switch (opcode) {
+      case AArch64::FADDv2f32:
+      case AArch64::FADDv4f32:
+      case AArch64::FADDv2f64:
+        res = createFAdd(a, b);
+        break;
+      case AArch64::FSUBv2f32:
+      case AArch64::FSUBv4f32:
+      case AArch64::FSUBv2f64:
+        res = createFSub(a, b);
+        break;
+      default:
+        assert(false);
+      };
       updateOutputReg(res);
       break;
     }
@@ -8715,21 +8775,21 @@ case AArch64::FCMGT64:
 case AArch64::FCMGE64:
       */
 
-      case AArch64::FCMLEv2i64rz:
-      case AArch64::FCMLEv4i32rz:
-      case AArch64::FCMLEv2i32rz:
-      case AArch64::FCMLTv2i32rz:
-      case AArch64::FCMLTv2i64rz:
-      case AArch64::FCMLTv4i32rz:
-      case AArch64::FCMEQv2i32rz:
-      case AArch64::FCMEQv2i64rz:
-      case AArch64::FCMEQv4i32rz:
-      case AArch64::FCMGTv4i32rz:
-      case AArch64::FCMGTv2i64rz:
-      case AArch64::FCMGTv2i32rz:
-      case AArch64::FCMGEv2i32rz:
-      case AArch64::FCMGEv4i32rz:
-      case AArch64::FCMGEv2i64rz:
+    case AArch64::FCMLEv2i64rz:
+    case AArch64::FCMLEv4i32rz:
+    case AArch64::FCMLEv2i32rz:
+    case AArch64::FCMLTv2i32rz:
+    case AArch64::FCMLTv2i64rz:
+    case AArch64::FCMLTv4i32rz:
+    case AArch64::FCMEQv2i32rz:
+    case AArch64::FCMEQv2i64rz:
+    case AArch64::FCMEQv4i32rz:
+    case AArch64::FCMGTv4i32rz:
+    case AArch64::FCMGTv2i64rz:
+    case AArch64::FCMGTv2i32rz:
+    case AArch64::FCMGEv2i32rz:
+    case AArch64::FCMGEv4i32rz:
+    case AArch64::FCMGEv2i64rz:
     case AArch64::FCMEQv2f32:
     case AArch64::FCMEQv4f32:
     case AArch64::FCMEQv2f64:
@@ -8740,83 +8800,83 @@ case AArch64::FCMGE64:
     case AArch64::FCMGEv4f32:
     case AArch64::FCMGEv2f64: {
       FCmpInst::Predicate pred;
-      switch (opcode) {	
+      switch (opcode) {
       case AArch64::FCMLEv2i64rz:
       case AArch64::FCMLEv4i32rz:
       case AArch64::FCMLEv2i32rz:
-	pred = FCmpInst::Predicate::FCMP_OLE;
-	break;
+        pred = FCmpInst::Predicate::FCMP_OLE;
+        break;
       case AArch64::FCMLTv2i32rz:
       case AArch64::FCMLTv2i64rz:
       case AArch64::FCMLTv4i32rz:
-	pred = FCmpInst::Predicate::FCMP_OLT;
-	break;
+        pred = FCmpInst::Predicate::FCMP_OLT;
+        break;
       case AArch64::FCMEQv2f32:
       case AArch64::FCMEQv4f32:
       case AArch64::FCMEQv2f64:
       case AArch64::FCMEQv2i32rz:
       case AArch64::FCMEQv2i64rz:
       case AArch64::FCMEQv4i32rz:
-	pred = FCmpInst::Predicate::FCMP_OEQ;
-	break;
+        pred = FCmpInst::Predicate::FCMP_OEQ;
+        break;
       case AArch64::FCMGTv2f32:
       case AArch64::FCMGTv4f32:
       case AArch64::FCMGTv2f64:
       case AArch64::FCMGTv4i32rz:
       case AArch64::FCMGTv2i64rz:
       case AArch64::FCMGTv2i32rz:
-	pred = FCmpInst::Predicate::FCMP_OGT;
-	break;
+        pred = FCmpInst::Predicate::FCMP_OGT;
+        break;
       case AArch64::FCMGEv2f32:
       case AArch64::FCMGEv4f32:
       case AArch64::FCMGEv2f64:
       case AArch64::FCMGEv2i32rz:
       case AArch64::FCMGEv4i32rz:
       case AArch64::FCMGEv2i64rz:
-	pred = FCmpInst::Predicate::FCMP_OGE;
-	break;
+        pred = FCmpInst::Predicate::FCMP_OGE;
+        break;
       default:
-	assert(false);
+        assert(false);
       }
 
-  int eltSize = -1;
+      int eltSize = -1;
       int numElts = -1;
       switch (opcode) {
-case AArch64::FCMEQv2i32rz:
-case AArch64::FCMLEv2i32rz:
-case AArch64::FCMGEv2i32rz:
-case AArch64::FCMLTv2i32rz:
-case AArch64::FCMGTv2i32rz:
+      case AArch64::FCMEQv2i32rz:
+      case AArch64::FCMLEv2i32rz:
+      case AArch64::FCMGEv2i32rz:
+      case AArch64::FCMLTv2i32rz:
+      case AArch64::FCMGTv2i32rz:
       case AArch64::FCMEQv2f32:
       case AArch64::FCMGTv2f32:
       case AArch64::FCMGEv2f32:
-	eltSize = 32;
-	numElts = 2;
-	break;
-case AArch64::FCMEQv4i32rz:
-case AArch64::FCMLEv4i32rz:
-case AArch64::FCMGEv4i32rz:
-case AArch64::FCMLTv4i32rz:
-case AArch64::FCMGTv4i32rz:
+        eltSize = 32;
+        numElts = 2;
+        break;
+      case AArch64::FCMEQv4i32rz:
+      case AArch64::FCMLEv4i32rz:
+      case AArch64::FCMGEv4i32rz:
+      case AArch64::FCMLTv4i32rz:
+      case AArch64::FCMGTv4i32rz:
       case AArch64::FCMEQv4f32:
       case AArch64::FCMGTv4f32:
       case AArch64::FCMGEv4f32:
-	eltSize = 32;
-	numElts = 4;
-	break;
+        eltSize = 32;
+        numElts = 4;
+        break;
       case AArch64::FCMEQv2f64:
       case AArch64::FCMGTv2f64:
       case AArch64::FCMGEv2f64:
-case AArch64::FCMEQv2i64rz:
-case AArch64::FCMLEv2i64rz:
-case AArch64::FCMGEv2i64rz:
-case AArch64::FCMLTv2i64rz:
-case AArch64::FCMGTv2i64rz:
-	eltSize = 64;
-	numElts = 2;
-	break;
+      case AArch64::FCMEQv2i64rz:
+      case AArch64::FCMLEv2i64rz:
+      case AArch64::FCMGEv2i64rz:
+      case AArch64::FCMLTv2i64rz:
+      case AArch64::FCMGTv2i64rz:
+        eltSize = 64;
+        numElts = 2;
+        break;
       default:
-	assert(false);
+        assert(false);
       }
       auto *vTy = getVecTy(eltSize, numElts, /*FP=*/true);
       auto *vIntTy = getVecTy(eltSize, numElts, /*FP=*/false);
@@ -8853,13 +8913,13 @@ case AArch64::FCMGTv2i64rz:
         break;
       default:
         assert(false);
-      }        
+      }
       auto res1 = createFCmp(pred, a, b);
       auto res2 = createSExt(res1, vIntTy);
       updateOutputReg(res2);
       break;
     }
-      
+
     case AArch64::CMGTv4i16rz:
     case AArch64::CMEQv1i64rz:
     case AArch64::CMGTv8i8rz:
