@@ -1291,7 +1291,7 @@ class arm2llvm {
       AArch64::FCMEQv2f32,
       AArch64::FCMGTv2f32,
       AArch64::FCMGEv2f32,
-  },
+  };
 
   const set<int> instrs_128 = {
       AArch64::DUPv8i8lane,
@@ -8721,6 +8721,54 @@ case AArch64::FCMGTv2i32rz:
     case AArch64::FCMGEv2f32:
     case AArch64::FCMGEv4f32:
     case AArch64::FCMGEv2f64: {
+      FCmpInst::Predicate pred;
+      switch (opcode) {	
+      case AArch64::FCMEQv2f32:
+      case AArch64::FCMEQv4f32:
+      case AArch64::FCMEQv2f64:
+	pred = FCmpInst::Predicate::FCMP_OEQ;
+	break;
+      case AArch64::FCMGTv2f32:
+      case AArch64::FCMGTv4f32:
+      case AArch64::FCMGTv2f64:
+	pred = FCmpInst::Predicate::FCMP_OGT;
+	break;
+      case AArch64::FCMGEv2f32:
+      case AArch64::FCMGEv4f32:
+      case AArch64::FCMGEv2f64:
+	pred = FCmpInst::Predicate::FCMP_OGE;
+	break;
+      default:
+	assert(false);
+      }      
+      int eltSize = -1;
+      int numElts = -1;
+      switch (opcode) {
+      case AArch64::FCMEQv2f32:
+      case AArch64::FCMGTv2f32:
+      case AArch64::FCMGEv2f32:
+	eltSize = 32;
+	numElts = 2;
+	break;
+      case AArch64::FCMEQv4f32:
+      case AArch64::FCMGTv4f32:
+      case AArch64::FCMGEv4f32:
+	eltSize = 32;
+	numElts = 4;
+	break;
+      case AArch64::FCMEQv2f64:
+      case AArch64::FCMGTv2f64:
+      case AArch64::FCMGEv2f64:
+	eltSize = 64;
+	numElts = 2;
+	break;
+      default:
+	assert(false);
+      }
+      auto a = readFromRegTyped(CurInst->getOperand(0).getReg(), getVecTy(eltSize, numElts, /*FP=*/true));
+      auto b = readFromRegTyped(CurInst->getOperand(1).getReg(), getVecTy(eltSize, numElts, /*FP=*/true));
+      auto res = createFCmp(pred, a, b);
+      updateOutputReg(res);
       break;
     }
       
