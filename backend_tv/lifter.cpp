@@ -1307,6 +1307,7 @@ class arm2llvm {
       AArch64::FCMGEv2i32rz,
       AArch64::FADDv2f32,
       AArch64::FSUBv2f32,
+      AArch64::FMULv2f32,
   };
 
   const set<int> instrs_128 = {
@@ -2054,6 +2055,8 @@ class arm2llvm {
       AArch64::FADDv2f64,
       AArch64::FSUBv4f32,
       AArch64::FSUBv2f64,
+      AArch64::FMULv4f32,
+      AArch64::FMULv2f64,
   };
 
   bool has_s(int instr) {
@@ -2442,6 +2445,10 @@ class arm2llvm {
 
   BinaryOperator *createFSub(Value *a, Value *b) {
     return BinaryOperator::Create(Instruction::FSub, a, b, nextName(), LLVMBB);
+  }
+
+  BinaryOperator *createFMul(Value *a, Value *b) {
+    return BinaryOperator::Create(Instruction::FMul, a, b, nextName(), LLVMBB);
   }
 
   Value *createRawLShr(Value *a, Value *b) {
@@ -8285,14 +8292,19 @@ public:
     case AArch64::FADDv2f64:
     case AArch64::FSUBv2f32:
     case AArch64::FSUBv4f32:
-    case AArch64::FSUBv2f64: {
+    case AArch64::FSUBv2f64:
+    case AArch64::FMULv2f32:
+    case AArch64::FMULv4f32:
+    case AArch64::FMULv2f64: {
       int eltSize = -1, numElts = -1;
       switch (opcode) {
+      case AArch64::FMULv2f32:
       case AArch64::FADDv2f32:
       case AArch64::FSUBv2f32:
         eltSize = 32;
         numElts = 2;
         break;
+      case AArch64::FMULv4f32:
       case AArch64::FADDv4f32:
       case AArch64::FSUBv4f32:
         eltSize = 32;
@@ -8300,6 +8312,7 @@ public:
         break;
       case AArch64::FADDv2f64:
       case AArch64::FSUBv2f64:
+      case AArch64::FMULv2f64:
         eltSize = 64;
         numElts = 2;
         break;
@@ -8319,6 +8332,11 @@ public:
       case AArch64::FSUBv4f32:
       case AArch64::FSUBv2f64:
         res = createFSub(a, b);
+        break;
+      case AArch64::FMULv2f32:
+      case AArch64::FMULv4f32:
+      case AArch64::FMULv2f64:
+        res = createFMul(a, b);
         break;
       default:
         assert(false);
