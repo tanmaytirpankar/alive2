@@ -8765,10 +8765,13 @@ case AArch64::FCMGTv2i32rz:
       default:
 	assert(false);
       }
-      auto a = readFromRegTyped(CurInst->getOperand(0).getReg(), getVecTy(eltSize, numElts, /*FP=*/true));
-      auto b = readFromRegTyped(CurInst->getOperand(1).getReg(), getVecTy(eltSize, numElts, /*FP=*/true));
-      auto res = createFCmp(pred, a, b);
-      updateOutputReg(res);
+      auto *vTy = getVecTy(eltSize, numElts, /*FP=*/true);
+      auto *vIntTy = getVecTy(eltSize, numElts, /*FP=*/false);
+      auto a = readFromRegTyped(CurInst->getOperand(1).getReg(), vTy);
+      auto b = readFromRegTyped(CurInst->getOperand(2).getReg(), vTy);
+      auto res1 = createFCmp(pred, a, b);
+      auto res2 = createSExt(res1, vIntTy);
+      updateOutputReg(res2);
       break;
     }
       
