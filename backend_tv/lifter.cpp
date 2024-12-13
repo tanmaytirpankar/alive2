@@ -5,6 +5,7 @@
 #include "backend_tv/lifter.h"
 
 #include "llvm/ADT/BitVector.h"
+#include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/StringExtras.h"
@@ -485,15 +486,24 @@ class arm2llvm {
     return ConstantVector::getSplat(ec, UndefValue::get(eTy));
   }
 
-  Constant *getZeroVec(unsigned numElts, unsigned eltSize) {
-    return getElemSplat(numElts, eltSize, 0);
-  }
-
   Constant *getElemSplat(unsigned numElts, unsigned eltSize, uint64_t val,
                          bool isSigned = false) {
     auto ec = ElementCount::getFixed(numElts);
     return ConstantVector::getSplat(
         ec, ConstantInt::get(Ctx, APInt(eltSize, val, isSigned)));
+  }
+
+  Constant *getZeroFPVec(unsigned numElts, unsigned eltSize) {
+    assert(eltSize == 32 || eltSize == 64);
+    auto ec = ElementCount::getFixed(numElts);
+    auto &sem = (eltSize == 64) ? APFloat::IEEEdouble() :
+      APFloat::IEEEsingle();
+    auto z = APFloat::getZero(sem);
+    return ConstantVector::getSplat(ec, ConstantFP::get(Ctx, z));
+  }
+  
+  Constant *getZeroIntVec(unsigned numElts, unsigned eltSize) {
+    return getElemSplat(numElts, eltSize, 0);
   }
 
   Type *getIntTy(unsigned bits) {
@@ -6088,7 +6098,7 @@ public:
       auto loaded = makeLoadWithOffset(base, 0, eltSize / 8);
       auto single_inserted = createInsertElement(dst, loaded, 0);
       auto shuffled =
-          createShuffleVector(single_inserted, getZeroVec(numElts, 32));
+          createShuffleVector(single_inserted, getZeroIntVec(numElts, 32));
 
       if (isPost) {
         updateReg(shuffled, CurInst->getOperand(1).getReg());
@@ -8705,9 +8715,21 @@ case AArch64::FCMGT64:
 case AArch64::FCMGE64:
       */
 
-      /*
-      */
-    
+      case AArch64::FCMLEv2i64rz:
+      case AArch64::FCMLEv4i32rz:
+      case AArch64::FCMLEv2i32rz:
+      case AArch64::FCMLTv2i32rz:
+      case AArch64::FCMLTv2i64rz:
+      case AArch64::FCMLTv4i32rz:
+      case AArch64::FCMEQv2i32rz:
+      case AArch64::FCMEQv2i64rz:
+      case AArch64::FCMEQv4i32rz:
+      case AArch64::FCMGTv4i32rz:
+      case AArch64::FCMGTv2i64rz:
+      case AArch64::FCMGTv2i32rz:
+      case AArch64::FCMGEv2i32rz:
+      case AArch64::FCMGEv4i32rz:
+      case AArch64::FCMGEv2i64rz:
     case AArch64::FCMEQv2f32:
     case AArch64::FCMEQv4f32:
     case AArch64::FCMEQv2f64:
@@ -8816,7 +8838,7 @@ case AArch64::FCMGTv2i64rz:
       case AArch64::FCMGTv4i32rz:
       case AArch64::FCMGTv2i64rz:
       case AArch64::FCMGTv2i32rz:
-        b = getZeroVec(numElts, eltSize);
+        b = getZeroFPVec(numElts, eltSize);
         break;
       case AArch64::FCMEQv2f32:
       case AArch64::FCMGTv2f32:
@@ -12220,7 +12242,7 @@ case AArch64::FCMGTv2i64rz:
           sum = createAdd(sum, elt);
         }
         // sum goes into the bottom lane, all others are zeroed out
-        auto zero = getZeroVec(numElts, eltSize);
+        auto zero = getZeroIntVec(numElts, eltSize);
         auto res = createInsertElement(zero, sum, 0);
         updateOutputReg(res);
         break;
