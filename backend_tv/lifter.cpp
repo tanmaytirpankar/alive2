@@ -194,6 +194,23 @@ public:
   }
 };
 
+// intrinsics get their names mangled by LLVM, we need to reverse
+// that, and there's no way to do it other than hard-coding this
+// mapping
+const unordered_map<string, string> intrinsic_names = {
+    {"powf", "llvm.pow.f32"},
+    {"pow", "llvm.pow.f64"},
+    {"memcpy", "llvm.memcpy.p0.p0.i64"},
+    {"memset", "llvm.memset.p0.i64"},
+    {"memmove", "llvm.memmove.p0.p0.i64"},
+    {"ldexpf", "llvm.ldexp.f32.i32"},
+    {"__llvm_memset_element_unordered_atomic_16",
+     "llvm.memset.element.unordered.atomic.p0.i32"}, // FIXME
+    {"cosf", "llvm.cos.f32"},
+    {"coshf", "llvm.cosh.f32"},
+    {"sincos", "llvm.cos.f64"},
+};
+
 class arm2llvm {
   Module *LiftedModule{nullptr};
   LLVMContext &Ctx = LiftedModule->getContext();
@@ -225,18 +242,9 @@ class arm2llvm {
   Constant *lazyAddGlobal(string newGlobal) {
     *out << "  lazyAddGlobal '" << newGlobal << "'\n";
 
-    // these have been mangled opaquely to us, all we can do is hard
-    // code the mappings
-    if (newGlobal == "powf")
-      newGlobal = "llvm.pow.f32";
-    if (newGlobal == "pow")
-      newGlobal = "llvm.pow.f64";
-    if (newGlobal == "memcpy")
-      newGlobal = "llvm.memcpy.p0.p0.i64";
-    if (newGlobal == "memset")
-      newGlobal = "llvm.memset.p0.i64";
-    if (newGlobal == "memmove")
-      newGlobal = "llvm.memmove.p0.p0.i64";
+    auto got = intrinsic_names.find(newGlobal);
+    if (got != intrinsic_names.end())
+      newGlobal = got->second;
 
     if (newGlobal == "__stack_chk_fail") {
       return new GlobalVariable(*LiftedModule, getIntTy(8), false,
@@ -367,7 +375,7 @@ class arm2llvm {
     }
 
     *out << "ERROR: symbol '" << newGlobal << "' not found\n";
-    assert(false);
+    exit(-1);
   }
 
   // create lifted globals only on demand -- saves time and clutter for
@@ -8286,7 +8294,7 @@ public:
       updateOutputReg(res);
       break;
     }
- 
+
     case AArch64::FADDv2f32:
     case AArch64::FADDv4f32:
     case AArch64::FADDv2f64:
@@ -8318,9 +8326,11 @@ public:
         break;
       default:
         assert(false);
-      }      
-      auto a = readFromVecOperand(1, eltSize, numElts, /*isUpperHalf=*/false, /*isFP=*/true);
-      auto b = readFromVecOperand(2, eltSize, numElts, /*isUpperHalf=*/false, /*isFP=*/true);
+      }
+      auto a = readFromVecOperand(1, eltSize, numElts, /*isUpperHalf=*/false,
+                                  /*isFP=*/true);
+      auto b = readFromVecOperand(2, eltSize, numElts, /*isUpperHalf=*/false,
+                                  /*isFP=*/true);
       Value *res{nullptr};
       switch (opcode) {
       case AArch64::FADDv2f32:
