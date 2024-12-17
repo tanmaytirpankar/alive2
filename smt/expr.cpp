@@ -28,11 +28,11 @@ using namespace util;
 
 // helpers to check if all input arguments are non-null
 #define C(...)                                                                 \
-  if (!isValid() || !expr::allValid( __VA_ARGS__))                             \
+  if (!isValid() || !expr::allValid( __VA_ARGS__)) [[unlikely]]                \
     return {}
 
 #define C2(...)                                                                \
-  if (!expr::allValid(__VA_ARGS__))                                            \
+  if (!expr::allValid(__VA_ARGS__)) [[unlikely]]                               \
     return {}
 
 
@@ -2075,7 +2075,7 @@ expr expr::load(const expr &idx, uint64_t max_idx) const {
 
   } else if (isConstArray(val)) {
     return val;
-  } else if (isLambda(val) && !hit_half_memory_limit()) {
+  } else if (isLambda(val)) {
     return val.subst_var(idx).foldTopLevel();
   }
 
