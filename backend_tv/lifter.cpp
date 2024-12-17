@@ -211,8 +211,8 @@ const unordered_map<string, string> intrinsic_names = {
   {"coshf", "llvm.cosh.f32"},
   {"powf", "llvm.pow.f32"},
   {"pow", "llvm.pow.f64"},
-  {"expf", "@llvm.exp.f32"},
-  {"exp", "@llvm.exp.f64"},
+  {"expf", "llvm.exp.f32"},
+  {"exp", "llvm.exp.f64"},
   {"exp10f", "llvm.exp10.f32"},
   {"exp10", "llvm.exp10.f64"},
   
@@ -251,6 +251,7 @@ class arm2llvm {
   Constant *lazyAddGlobal(string newGlobal) {
     *out << "  lazyAddGlobal '" << newGlobal << "'\n";
 
+    // FIXME -- in some cases we need to add the declaration
     auto got = intrinsic_names.find(newGlobal);
     if (got != intrinsic_names.end())
       newGlobal = got->second;
@@ -383,7 +384,7 @@ class arm2llvm {
       return glob;
     }
 
-    *out << "ERROR: symbol '" << newGlobal << "' not found\n";
+    *out << "ERROR: global symbol '" << newGlobal << "' not found\n";
     exit(-1);
   }
 
@@ -3565,6 +3566,7 @@ class arm2llvm {
     // argument; this is not present in the assembly at all, we have
     // to provide it by hand
     if (calleeName == "llvm.memset.p0.i64" ||
+        calleeName == "llvm.memset.p0.i32" ||
         calleeName == "llvm.memcpy.p0.p0.i64" ||
         calleeName == "llvm.memmove.p0.p0.i64")
       args[3] = getBoolConst(false);
