@@ -3743,7 +3743,7 @@ class arm2llvm {
     };
   }
 
-  tuple<Value *, Value *, Value *, Value *> splitImmNZVC(uint64_t imm_flags) {
+  tuple<Value *, Value *, Value *, Value *> splitImmNZCV(uint64_t imm_flags) {
     assert(imm_flags < 16);
     return {
       getBoolConst((imm_flags & 8) != 0),
@@ -4548,16 +4548,16 @@ public:
       auto C = createZExt(getC(), i64);
       auto V = createZExt(getV(), i64);
 
-      auto NS = createMaskedShl(N, getUnsignedIntConst(31, 64));
-      auto NZ = createMaskedShl(Z, getUnsignedIntConst(30, 64));
-      auto NC = createMaskedShl(C, getUnsignedIntConst(29, 64));
-      auto NV = createMaskedShl(V, getUnsignedIntConst(28, 64));
+      auto newN = createMaskedShl(N, getUnsignedIntConst(31, 64));
+      auto newZ = createMaskedShl(Z, getUnsignedIntConst(30, 64));
+      auto newC = createMaskedShl(C, getUnsignedIntConst(29, 64));
+      auto newV = createMaskedShl(V, getUnsignedIntConst(28, 64));
 
       Value *res = getUnsignedIntConst(0, 64);
-      res = createOr(res, NS);
-      res = createOr(res, NZ);
-      res = createOr(res, NC);
-      res = createOr(res, NV);
+      res = createOr(res, newN);
+      res = createOr(res, newZ);
+      res = createOr(res, newC);
+      res = createOr(res, newV);
       updateOutputReg(res);
       break;
     }
@@ -5103,7 +5103,7 @@ public:
       if (!lhs || !imm_rhs)
         visitError();
 
-      auto [imm_n, imm_z, imm_v, imm_c] = splitImmNZVC(getImm(2));
+      auto [imm_n, imm_z, imm_c, imm_v] = splitImmNZCV(getImm(2));
 
       auto cond_val_imm = getImm(3);
       auto cond_val = conditionHolds(cond_val_imm);
@@ -8412,7 +8412,7 @@ public:
       auto a = readFromFPOperand(0, operandSize);
       auto b = readFromFPOperand(1, operandSize);
 
-      auto [imm_n, imm_z, imm_c, imm_v] = splitImmNZVC(getImm(2));
+      auto [imm_n, imm_z, imm_c, imm_v] = splitImmNZCV(getImm(2));
       auto [n, z, c, v] = FPCompare(a, b);
 
       auto cond = conditionHolds(getImm(3));
