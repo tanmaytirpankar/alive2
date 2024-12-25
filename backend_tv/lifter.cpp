@@ -802,6 +802,7 @@ class arm2llvm {
       AArch64::SCVTFUWSri,
       AArch64::SCVTFUWDri,
       AArch64::SCVTFv1i32,
+      AArch64::FRINTXSr,
       AArch64::FRINTASr,
       AArch64::FRINTMSr,
       AArch64::FRINTPSr,
@@ -1299,6 +1300,7 @@ class arm2llvm {
       AArch64::SCVTFUXSri,
       AArch64::SCVTFUXDri,
       AArch64::SCVTFv1i64,
+      AArch64::FRINTXDr,
       AArch64::FRINTADr,
       AArch64::FRINTMDr,
       AArch64::FRINTPDr,
@@ -2400,6 +2402,13 @@ class arm2llvm {
     auto *decl = Intrinsic::getOrInsertDeclaration(
         LiftedModule, Intrinsic::sqrt, v->getType());
     return CallInst::Create(decl, {v}, nextName(), LLVMBB);
+  }
+
+  CallInst *createRound(Value *v) {
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::rint, v->getType());
+    return CallInst::Create(decl, {v},
+                            nextName(), LLVMBB);
   }
 
   CallInst *createConstrainedRound(Value *v, Metadata *md) {
@@ -7961,6 +7970,8 @@ public:
       break;
     }
 
+    case AArch64::FRINTXSr:
+    case AArch64::FRINTXDr:
     case AArch64::FRINTASr:
     case AArch64::FRINTADr:
     case AArch64::FRINTMSr:
@@ -7969,32 +7980,33 @@ public:
     case AArch64::FRINTPDr: {
       auto &op1 = CurInst->getOperand(1);
       assert(op1.isReg());
-
+      auto *v = readFromFPOperand(1, getRegSize(op1.getReg()));
       auto md = MDString::get(Ctx, "fpexcept.strict");
-      Value *converted;
+      Value *converted{nullptr};
       switch (opcode) {
+      case AArch64::FRINTXSr:
+      case AArch64::FRINTXDr: {
+        converted = createRound(v);
+        break;
+      }
       case AArch64::FRINTASr:
       case AArch64::FRINTADr: {
-        converted = createConstrainedRound(
-            readFromFPOperand(1, getRegSize(op1.getReg())), md);
+        converted = createConstrainedRound(v, md);
         break;
       }
       case AArch64::FRINTMSr:
       case AArch64::FRINTMDr: {
-        converted = createConstrainedFloor(
-            readFromFPOperand(1, getRegSize(op1.getReg())), md);
+        converted = createConstrainedFloor(v, md);
         break;
       }
       case AArch64::FRINTPSr:
       case AArch64::FRINTPDr: {
-        converted = createConstrainedCeil(
-            readFromFPOperand(1, getRegSize(op1.getReg())), md);
+        converted = createConstrainedCeil(v, md);
         break;
       }
       default:
         assert(false);
       }
-
       updateOutputReg(converted);
       break;
     }
