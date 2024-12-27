@@ -19,6 +19,7 @@ if (NOT LLVM_FOUND)
   message(FATAL_ERROR "LLVM not found. the aslp CMakeList should be imported by the root CMakeList with LLVM already located")
 else()
   message(STATUS "... LLVM already found: ${LLVM_DIR}")
+  message(STATUS "... inherited LLVM libs: ${llvm_libs}")
 endif()
 
 find_file(AARCH64_INSTR_INC "Target/AArch64/AArch64GenInstrInfo.inc" REQUIRED PATHS ${LLVM_BINARY_DIR}/lib ${LLVM_INCLUDE_DIRS})
@@ -67,6 +68,8 @@ target_include_directories(bridge PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/..")  # fo
 add_llvm_executable(bridge-bin "tools/aslp_main.cpp")
 target_link_libraries(bridge-bin PRIVATE bridge)
 target_include_directories(bridge-bin PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+
+target_link_libraries(bridge-bin PRIVATE ${llvm_libs})
 
 install(TARGETS bridge-bin DESTINATION bin)
 
