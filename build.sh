@@ -30,7 +30,7 @@ if [ "$USER" == "regehr" ]; then
 cmake -B build -DBUILD_TV=1 \
   -DCMAKE_PREFIX_PATH="$(realpath build/antlr-dev)" \
   -DANTLR4_JAR_LOCATION="$(realpath build/antlr-jar)" \
-  -DLLVM_DIR=/home/regehr/llvm-project/for-alive/lib/cmake/llvm/ \
+  -DLLVM_DIR=$HOME/llvm-project/for-alive/lib/cmake/llvm/ \
   -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   "$@"
