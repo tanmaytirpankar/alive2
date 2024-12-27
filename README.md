@@ -1,6 +1,9 @@
 Alive2
 ======
 
+**NOTE:** This is the arm-tv branch of Alive2. Specific instructions for building
+this branch can be found at: https://github.com/regehr/alive2/tree/arm-tv/backend_tv/aslp
+
 ![Alive2 logo](imgs/alive2.png)
 
 Alive2 consists of several libraries and tools for analysis and verification
