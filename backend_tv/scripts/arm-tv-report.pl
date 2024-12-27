@@ -109,6 +109,9 @@ sub classify($) {
         }
         return "[f] $ret";
     }
+    if ($data =~ /(Aslp assertion failure.*)$/m) {
+        return "[f] $1";
+    }
     if ($data =~ /(.*Assertion .*)$/m) {
         return "[f] $1";
     }

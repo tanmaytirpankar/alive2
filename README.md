@@ -1,8 +1,9 @@
 Alive2
 ======
 
-**NOTE:** This is the arm-tv branch of Alive2. Specific instructions for building
-this branch can be found at: https://github.com/regehr/alive2/tree/arm-tv/backend_tv/aslp
+NOTES:
+- **This is the arm-tv branch of Alive2.** Specific instructions for building and using this branch can be found at: https://github.com/regehr/alive2/tree/arm-tv/backend_tv/aslp
+- Don't forget to start aslp-server if you want to use this code in ASLP mode!
 
 ![Alive2 logo](imgs/alive2.png)
 
