@@ -535,7 +535,7 @@ static bool isFnReturnValue(const expr &e) {
 }
 
 int Memory::isInitialMemBlock(const expr &e, bool match_any_init) {
-  string name;
+  string_view name;
   expr load, blk, idx;
   unsigned hi, lo;
   if (e.isExtract(load, hi, lo) && load.isLoad(blk, idx))
@@ -938,7 +938,7 @@ bool Memory::mayalias(bool local, unsigned bid0, const expr &offset0,
     if ( write && always_nowrite(bid0)) return false;
   }
 
-  if (isUndef(offset0))
+  if (state->isUndef(offset0))
     return false;
 
   expr bid = expr::mkUInt(bid0, Pointer::bitsShortBid());
