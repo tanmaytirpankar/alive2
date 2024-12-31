@@ -20,8 +20,8 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/InitializePasses.h"
-#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCCodeEmitter.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInstBuilder.h"
 #include "llvm/MC/MCInstPrinter.h"
@@ -60,12 +60,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <format>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <ranges>
 #include <regex>
-#include <format>
-#include <iterator>
 #include <sstream>
 #include <unordered_map>
 #include <utility>
@@ -207,28 +207,27 @@ public:
 // that, and there's no way to do it other than hard-coding this
 // mapping
 const unordered_map<string, string> intrinsic_names = {
-  // memory
-  {"memcpy", "llvm.memcpy.p0.p0.i64"},
-  {"memset", "llvm.memset.p0.i32"},
-  {"memset", "llvm.memset.p0.i64"},
-  {"memmove", "llvm.memmove.p0.p0.i64"},
-  {"__llvm_memset_element_unordered_atomic_16",
-   "llvm.memset.element.unordered.atomic.p0.i32"}, // FIXME
-  
-  // FP
-  {"cosf", "llvm.cos.f32"},
-  {"coshf", "llvm.cosh.f32"},
-  {"powf", "llvm.pow.f32"},
-  {"pow", "llvm.pow.f64"},
-  {"expf", "llvm.exp.f32"},
-  {"exp", "llvm.exp.f64"},
-  {"exp10f", "llvm.exp10.f32"},
-  {"exp10", "llvm.exp10.f64"},
-  
-  {"ldexpf", "llvm.ldexp.f32.i32"},
-  {"sincos", "llvm.cos.f64"},  
-};
+    // memory
+    {"memcpy", "llvm.memcpy.p0.p0.i64"},
+    {"memset", "llvm.memset.p0.i32"},
+    {"memset", "llvm.memset.p0.i64"},
+    {"memmove", "llvm.memmove.p0.p0.i64"},
+    {"__llvm_memset_element_unordered_atomic_16",
+     "llvm.memset.element.unordered.atomic.p0.i32"}, // FIXME
 
+    // FP
+    {"cosf", "llvm.cos.f32"},
+    {"coshf", "llvm.cosh.f32"},
+    {"powf", "llvm.pow.f32"},
+    {"pow", "llvm.pow.f64"},
+    {"expf", "llvm.exp.f32"},
+    {"exp", "llvm.exp.f64"},
+    {"exp10f", "llvm.exp10.f32"},
+    {"exp10", "llvm.exp10.f64"},
+
+    {"ldexpf", "llvm.ldexp.f32.i32"},
+    {"sincos", "llvm.cos.f64"},
+};
 
 class arm2llvm : public aslp::lifter_interface_llvm {
   Module *LiftedModule{nullptr};
@@ -502,7 +501,8 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     return ConstantInt::get(Ctx, llvm::APInt(bits, val, /*signed=*/true));
   }
 
-  VectorType *getVecTy(unsigned eltSize, unsigned numElts, bool isFP = false) override {
+  VectorType *getVecTy(unsigned eltSize, unsigned numElts,
+                       bool isFP = false) override {
     Type *eTy;
     if (isFP) {
       eTy = getFPType(eltSize);
@@ -2175,7 +2175,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     }
   }
 
-  llvm::AllocaInst* get_reg(aslp::reg_t regtype, uint64_t num) override {
+  llvm::AllocaInst *get_reg(aslp::reg_t regtype, uint64_t num) override {
     using reg_t = aslp::reg_t;
     using pstate_t = aslp::pstate_t;
 
@@ -2194,27 +2194,30 @@ class arm2llvm : public aslp::lifter_interface_llvm {
 
     } else if (regtype == reg_t::PSTATE) {
 
-      if (num == (int)pstate_t::N) reg = llvm::AArch64::N;
-      else if (num == (int)pstate_t::Z) reg = llvm::AArch64::Z;
-      else if (num == (int)pstate_t::C) reg = llvm::AArch64::C;
-      else if (num == (int)pstate_t::V) reg = llvm::AArch64::V;
+      if (num == (int)pstate_t::N)
+        reg = llvm::AArch64::N;
+      else if (num == (int)pstate_t::Z)
+        reg = llvm::AArch64::Z;
+      else if (num == (int)pstate_t::C)
+        reg = llvm::AArch64::C;
+      else if (num == (int)pstate_t::V)
+        reg = llvm::AArch64::V;
 
     } else if (regtype == reg_t::V) {
       reg = llvm::AArch64::Q0 + num;
-
     }
 
     assert(reg && "register not mapped");
     return llvm::cast<llvm::AllocaInst>(RegFile.at(reg));
   }
 
-  void set_bb(llvm::BasicBlock * bb) override {
+  void set_bb(llvm::BasicBlock *bb) override {
     LLVMBB = bb;
   }
-  llvm::BasicBlock* get_bb() override {
+  llvm::BasicBlock *get_bb() override {
     return LLVMBB;
   }
-  llvm::Function& ll_function() override {
+  llvm::Function &ll_function() override {
     return *liftedFn;
   }
 
@@ -2226,7 +2229,8 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     return ss.str();
   }
 
-  AllocaInst *createAlloca(Type *ty, Value *sz, const string &NameStr) override {
+  AllocaInst *createAlloca(Type *ty, Value *sz,
+                           const string &NameStr) override {
     return new AllocaInst(ty, 0, sz, NameStr, LLVMBB);
   }
 
@@ -2240,7 +2244,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
   }
 
   void createBranch(Value *c, stmt_t t, stmt_t f) override {
-   createBranch(c, t.first, f.first);
+    createBranch(c, t.first, f.first);
   }
 
   void createBranch(BasicBlock *dst) {
@@ -2372,15 +2376,16 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     return new PtrToIntInst(v, ty, nextName(), LLVMBB);
   }
 
-  InsertElementInst *createInsertElement(Value *vec, Value *val, int idx) override {
+  InsertElementInst *createInsertElement(Value *vec, Value *val,
+                                         int idx) override {
     auto idxv = getUnsignedIntConst(idx, 32);
     return InsertElementInst::Create(vec, val, idxv, nextName(), LLVMBB);
   }
 
-  InsertElementInst *createInsertElement(Value *vec, Value *val, Value *idx) override {
+  InsertElementInst *createInsertElement(Value *vec, Value *val,
+                                         Value *idx) override {
     return InsertElementInst::Create(vec, val, idx, nextName(), LLVMBB);
   }
-
 
   ExtractElementInst *createExtractElement(Value *v, Value *idx) override {
     return ExtractElementInst::Create(v, idx, nextName(), LLVMBB);
@@ -2391,7 +2396,8 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     return ExtractElementInst::Create(v, idxv, nextName(), LLVMBB);
   }
 
-  ShuffleVectorInst *createShuffleVector(Value *v, ArrayRef<int> mask) override {
+  ShuffleVectorInst *createShuffleVector(Value *v,
+                                         ArrayRef<int> mask) override {
     return new ShuffleVectorInst(v, mask, nextName(), LLVMBB);
   }
 
@@ -2399,7 +2405,8 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     return new ShuffleVectorInst(v, mask, nextName(), LLVMBB);
   }
 
-  ShuffleVectorInst *createShuffleVector(Value *v, Value*x , ArrayRef<int> mask) override {
+  ShuffleVectorInst *createShuffleVector(Value *v, Value *x,
+                                         ArrayRef<int> mask) override {
     return new ShuffleVectorInst(v, x, mask, nextName(), LLVMBB);
   }
 
@@ -2407,7 +2414,8 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     return new ShuffleVectorInst(v1, v2, mask, nextName(), LLVMBB);
   }
 
-  Value *getIndexedElement(unsigned idx, unsigned eltSize, unsigned reg) override {
+  Value *getIndexedElement(unsigned idx, unsigned eltSize,
+                           unsigned reg) override {
     assert(getRegSize(reg) == 128 && "Expected 128-bit register");
     auto *ty = getVecTy(eltSize, 128 / eltSize);
     auto *r = readFromRegTyped(reg, ty);
@@ -2420,7 +2428,8 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     return createBitCast(element, getFPType(eltSize));
   }
 
-  ExtractValueInst *createExtractValue(Value *v, ArrayRef<unsigned> idxs) override {
+  ExtractValueInst *createExtractValue(Value *v,
+                                       ArrayRef<unsigned> idxs) override {
     return ExtractValueInst::Create(v, idxs, nextName(), LLVMBB);
   }
 
@@ -2485,8 +2494,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
   CallInst *createRound(Value *v) {
     auto *decl = Intrinsic::getOrInsertDeclaration(
         LiftedModule, Intrinsic::rint, v->getType());
-    return CallInst::Create(decl, {v},
-                            nextName(), LLVMBB);
+    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
   }
 
   CallInst *createConstrainedRound(Value *v, Metadata *md) {
@@ -2534,7 +2542,8 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     return new FCmpInst(LLVMBB, p, a, b, nextName());
   }
 
-  BinaryOperator *createBinop(Value *a, Value *b, Instruction::BinaryOps op) override {
+  BinaryOperator *createBinop(Value *a, Value *b,
+                              Instruction::BinaryOps op) override {
     return BinaryOperator::Create(op, a, b, nextName(), LLVMBB);
   }
 
@@ -3091,7 +3100,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     return name;
   }
 
-  llvm::Value *lookupExprVar(const llvm::MCExpr& expr) override {
+  llvm::Value *lookupExprVar(const llvm::MCExpr &expr) override {
     return lookupGlobal(mapExprVar(&expr));
   }
 
@@ -3405,7 +3414,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     auto n = createICmp(ICmpInst::Predicate::ICMP_SLT, V, zero);
     setN(n);
   }
-  
+
   void assertTrue(Value *cond) override {
     assert(cond->getType()->getIntegerBitWidth() == 1 && "assert requires i1");
     CallInst::Create(assertDecl, {cond}, "", LLVMBB);
@@ -3849,20 +3858,20 @@ class arm2llvm : public aslp::lifter_interface_llvm {
 
   tuple<Value *, Value *, Value *, Value *> FPCompare(Value *a, Value *b) {
     return {
-      createFCmp(FCmpInst::Predicate::FCMP_OLT, a, b),
-      createFCmp(FCmpInst::Predicate::FCMP_OEQ, a, b),
-      createFCmp(FCmpInst::Predicate::FCMP_UGT, a, b),
-      createFCmp(FCmpInst::Predicate::FCMP_UNO, a, b),
+        createFCmp(FCmpInst::Predicate::FCMP_OLT, a, b),
+        createFCmp(FCmpInst::Predicate::FCMP_OEQ, a, b),
+        createFCmp(FCmpInst::Predicate::FCMP_UGT, a, b),
+        createFCmp(FCmpInst::Predicate::FCMP_UNO, a, b),
     };
   }
 
   tuple<Value *, Value *, Value *, Value *> splitImmNZCV(uint64_t imm_flags) {
     assert(imm_flags < 16);
     return {
-      getBoolConst((imm_flags & 8) != 0),
-      getBoolConst((imm_flags & 4) != 0),
-      getBoolConst((imm_flags & 2) != 0),
-      getBoolConst((imm_flags & 1) != 0),
+        getBoolConst((imm_flags & 8) != 0),
+        getBoolConst((imm_flags & 4) != 0),
+        getBoolConst((imm_flags & 2) != 0),
+        getBoolConst((imm_flags & 1) != 0),
     };
   }
 
@@ -4520,7 +4529,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
 public:
   arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
            MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
-           const MCSubtargetInfo &STI, const MCInstrAnalysis& IA)
+           const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)
       : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
         InstPrinter(InstPrinter), MCE{MCE}, STI{STI}, IA{IA},
         DL(srcFn.getParent()->getDataLayout()) {
@@ -4549,8 +4558,8 @@ public:
 
     MCE.encodeInstruction(I, Code, Fixups, STI);
     for (auto x : Fixups) {
-      // std::cerr << "fixup: " << x.getKind() << ' ' << x.getTargetKind() << ' ' << x.getOffset() << ' ' << std::flush;
-      // x.getValue()->dump();
+      // std::cerr << "fixup: " << x.getKind() << ' ' << x.getTargetKind() << '
+      // ' << x.getOffset() << ' ' << std::flush; x.getValue()->dump();
       // std::cout << std::endl;
       (void)x;
     }
@@ -4561,7 +4570,7 @@ public:
 
     aslp::opcode_t ret;
     unsigned i = 0;
-    for (const char& x : Code) {
+    for (const char &x : Code) {
       ret.at(i++) = x;
     }
     return ret;
@@ -4601,36 +4610,30 @@ public:
         this->createBranch(stmts.first);
         LLVMBB = stmts.second;
 
-        *out 
-          << "... lifted via aslp: "
-          << encoding
-          << " - "
-          << InstPrinter->getOpcodeName(I.getOpcode()).str() 
-          << std::endl;
+        *out << "... lifted via aslp: " << encoding << " - "
+             << InstPrinter->getOpcodeName(I.getOpcode()).str() << std::endl;
         encodingCounts[encoding]++;
         return;
 
       } else {
         switch (std::get<aslp::err_t>(aslpResult)) {
-          case aslp::err_t::missing:
-            *out << "... aslp missing! "
-              << std::format("0x{:08x}", aslp::get_opnum(a64Opcode.value()))
-              << "  "
-              << aslp::format_opcode(a64Opcode.value())
-              << std::endl;
-            if (aslp::bridge::config().fail_if_missing) {
-              throw std::runtime_error("missing aslp instruction in debug mode is not allowed!");
-            }
-            break;
-          case aslp::err_t::banned:
-            *out << "... aslp banned\n";
-            break; // continue with classic.
+        case aslp::err_t::missing:
+          *out << "... aslp missing! "
+               << std::format("0x{:08x}", aslp::get_opnum(a64Opcode.value()))
+               << "  " << aslp::format_opcode(a64Opcode.value()) << std::endl;
+          if (aslp::bridge::config().fail_if_missing) {
+            throw std::runtime_error(
+                "missing aslp instruction in debug mode is not allowed!");
+          }
+          break;
+        case aslp::err_t::banned:
+          *out << "... aslp banned\n";
+          break; // continue with classic.
         }
       }
     } else {
       *out << "... arm opnum failed: "
-          << InstPrinter->getOpcodeName(I.getOpcode()).str() 
-          << '\n';
+           << InstPrinter->getOpcodeName(I.getOpcode()).str() << '\n';
       // arm opcode translation failed, possibly SEH_NOP. continue with classic.
     }
 
@@ -8618,7 +8621,7 @@ public:
       setV(v);
       break;
     }
-      
+
     case AArch64::FCCMPSrr:
     case AArch64::FCCMPDrr: {
       auto operandSize = getRegSize(CurInst->getOperand(0).getReg());
@@ -8641,7 +8644,7 @@ public:
       setV(new_v);
       break;
     }
-      
+
     case AArch64::SMOVvi8to32_idx0:
     case AArch64::SMOVvi8to32:
     case AArch64::SMOVvi16to32_idx0:
@@ -13059,7 +13062,7 @@ case AArch64::FCMGE64:
     *out << armInstNum << " AArch64 instructions\n";
 
     *out << "encoding counts: ";
-    for (auto& [enc, count] : encodingCounts) {
+    for (auto &[enc, count] : encodingCounts) {
       *out << enc << '=' << count << ',';
     }
     *out << '\n';
@@ -13501,11 +13504,11 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
   Str.checkEntryBlock();
   Str.generateSuccessors();
 
-
   unique_ptr<MCCodeEmitter> MCE{Targ->createMCCodeEmitter(*MCII.get(), Ctx)};
   assert(MCE && "createMCCodeEmitter failed.");
 
-  auto liftedFn = arm2llvm{LiftedModule, Str.MF, *srcFn, IP.get(), *MCE, *STI, *Ana}.run();
+  auto liftedFn =
+      arm2llvm{LiftedModule, Str.MF, *srcFn, IP.get(), *MCE, *STI, *Ana}.run();
   liftedFn->dump();
 
   std::string sss;

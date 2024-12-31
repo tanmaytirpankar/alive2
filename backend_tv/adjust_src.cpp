@@ -151,9 +151,17 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
           avoidArgMD(ci, "round.tonearestaway");
         }
       } else {
-        for (auto arg = callee->arg_begin(); arg != callee->arg_end(); ++arg)
+        for (auto arg = callee->arg_begin(); arg != callee->arg_end(); ++arg) {
+
           if (auto *vTy = dyn_cast<VectorType>(arg->getType()))
             checkVectorTy(vTy);
+
+          if (arg->hasByValAttr()) {
+            *out << "\nERROR: we don't support the byval parameter attribute "
+                    "yet\n\n";
+            exit(-1);
+          }
+        }
       }
 
       if (callee->isVarArg()) {
