@@ -408,7 +408,9 @@ expr State::strip_undef_and_add_ub(const Value &val, const expr &e,
   set<expr> qvars;
   for (auto &var : vars) {
     auto name = var.fn_name();
-    if (name.starts_with("isundef_") || name.starts_with("undef!"))
+    if (name.starts_with("isundef_") ||
+        name.starts_with("undef!") ||
+        var.isQVar())
       continue;
     qvars.emplace(var);
   }
@@ -1373,6 +1375,17 @@ void State::finishInitializer() {
     returned_input = (*this)[*ret];
     resetUndefVars(true);
   }
+}
+
+bool State::isImplied(const expr &e) {
+  if (domain.UB.contains(e))
+    return true;
+
+  if (check_expr(domain.UB().notImplies(e), "UB inference", true).isUnsat()) {
+    domain.UB.add(e);
+    return true;
+  }
+  return false;
 }
 
 expr State::sinkDomain(bool include_ub) const {
