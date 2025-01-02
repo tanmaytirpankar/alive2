@@ -12880,8 +12880,8 @@ case AArch64::FCMGE64:
 
     auto *allocTy =
         FunctionType::get(PointerType::get(Ctx, 0), {i64, i64}, false);
-    auto *myAlloc = Function::Create(allocTy, GlobalValue::ExternalLinkage, 0,
-                                     "myalloc", LiftedModule);
+    myAlloc = Function::Create(allocTy, GlobalValue::ExternalLinkage, 0,
+                               "myalloc", LiftedModule);
     myAlloc->addRetAttr(Attribute::NonNull);
     AttrBuilder B1(Ctx);
     B1.addAllocKindAttr(AllocFnKind::Alloc);
@@ -12890,12 +12890,10 @@ case AArch64::FCMGE64:
     myAlloc->addFnAttrs(B1);
     myAlloc->addParamAttr(1, Attribute::AllocAlign);
     myAlloc->addFnAttr("alloc-family", "arm-tv-alloc");
+    stackSize = getUnsignedIntConst(stackBytes + (8 * numStackSlots), 64);
 
     stackMem = CallInst::Create(
-        myAlloc,
-        {getUnsignedIntConst(stackBytes + (8 * numStackSlots), 64),
-         getUnsignedIntConst(16, 64)},
-        "stack", LLVMBB);
+        myAlloc, {stackSize, getUnsignedIntConst(16, 64)}, "stack", LLVMBB);
 
     // allocate storage for the main register file
     for (unsigned Reg = AArch64::X0; Reg <= AArch64::X28; ++Reg) {
@@ -13417,6 +13415,8 @@ std::ostream *out;
 unsigned int origRetWidth;
 bool has_ret_attr;
 const Target *Targ;
+Function *myAlloc;
+Constant *stackSize;
 
 void init() {
   static bool initialized = false;

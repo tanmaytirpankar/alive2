@@ -8,6 +8,7 @@
 #include "llvm/Support/SourceMgr.h"
 
 namespace llvm {
+class Constant;
 class Function;
 class Module;
 class VectorType;
@@ -43,6 +44,8 @@ inline std::string funcToString(llvm::Function *F) {
 extern unsigned origRetWidth;
 extern bool has_ret_attr;
 extern const llvm::Target *Targ;
+extern llvm::Function *myAlloc;
+extern llvm::Constant *stackSize;
 
 // TODO -- expose these to the command line
 inline const char *TripleName = "aarch64-unknown-linux-gnu";
@@ -52,15 +55,16 @@ extern std::unordered_map<unsigned, llvm::Instruction *> lineMap;
 
 void init();
 
-void nameGlobals(llvm::Module *M);
-llvm::Function *adjustSrc(llvm::Function *srcFn);
-void addDebugInfo(llvm::Function *srcFn);
-void checkSupport(llvm::Function *srcFn);
+void nameGlobals(llvm::Module *);
+llvm::Function *adjustSrc(llvm::Function *);
+void addDebugInfo(llvm::Function *);
+void checkSupport(llvm::Function *);
+void fixupOptimizedTgt(llvm::Function *);
 
-std::unique_ptr<llvm::MemoryBuffer> generateAsm(llvm::Module &OrigModule);
+std::unique_ptr<llvm::MemoryBuffer> generateAsm(llvm::Module &);
 
 std::pair<llvm::Function *, llvm::Function *>
-liftFunc(llvm::Module *OrigModule, llvm::Module *LiftedModule,
-         llvm::Function *srcFnLLVM, std::unique_ptr<llvm::MemoryBuffer> MB);
+liftFunc(llvm::Module *, llvm::Module *, llvm::Function *,
+         std::unique_ptr<llvm::MemoryBuffer>);
 
 } // namespace lifter
