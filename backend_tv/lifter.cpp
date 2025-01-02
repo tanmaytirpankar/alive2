@@ -234,7 +234,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
   LLVMContext &Ctx = LiftedModule->getContext();
   MCFunction &MF;
   Function &srcFn;
-  Function *liftedFn{nullptr}, *myFree{nullptr};
+  Function *liftedFn{nullptr};
   MCBasicBlock *MCBB{nullptr};
   BasicBlock *LLVMBB{nullptr};
   MCInstPrinter *InstPrinter{nullptr};
@@ -3818,8 +3818,6 @@ class arm2llvm : public aslp::lifter_interface_llvm {
         assertSame(initialReg[r],
                    readFromRegTyped(AArch64::X0 + r, getIntTy(64)));
     }
-
-    CallInst::Create(myFree, {stackMem}, "", LLVMBB);
 
     auto *retTyp = srcFn.getReturnType();
     if (retTyp->isVoidTy()) {
@@ -12892,17 +12890,6 @@ case AArch64::FCMGE64:
     myAlloc->addFnAttrs(B1);
     myAlloc->addParamAttr(1, Attribute::AllocAlign);
     myAlloc->addFnAttr("alloc-family", "arm-tv-alloc");
-
-    auto *freeTy = FunctionType::get(Type::getVoidTy(Ctx),
-                                     {PointerType::get(Ctx, 0)}, false);
-    myFree = Function::Create(freeTy, GlobalValue::ExternalLinkage, 0, "myfree",
-                              LiftedModule);
-    AttrBuilder B2(Ctx);
-    B2.addAllocKindAttr(AllocFnKind::Free);
-    B2.addAttribute(Attribute::WillReturn);
-    myFree->addFnAttrs(B2);
-    myFree->addParamAttr(0, Attribute::AllocatedPointer);
-    myFree->addFnAttr("alloc-family", "arm-tv-alloc");
 
     stackMem = CallInst::Create(
         myAlloc,
