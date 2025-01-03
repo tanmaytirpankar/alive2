@@ -168,3 +168,4 @@ Please contact us or submit a PR if something is missing or inaccurate.
 36. miscompile of non-canonical IR by AArch64 global isel backend (https://github.com/llvm/llvm-project/issues/90532)
 37. miscompile related to coalescing stores in AArch64 SDAG backend (https://github.com/llvm/llvm-project/issues/90936)
 38. arithmetic miscompile from AArch64 backend (https://github.com/llvm/llvm-project/issues/96366)
+39. vector miscompile from AArch64 backend (https://github.com/llvm/llvm-project/issues/121372)
