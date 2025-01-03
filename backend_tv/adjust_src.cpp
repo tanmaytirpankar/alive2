@@ -137,9 +137,10 @@ void checkSupportHelper(Instruction &i, const DataLayout &DL,
   }
   if (auto *ci = dyn_cast<CallInst>(&i)) {
 
-    // non-null as a call-site attribute is problematic for us and we
+    // non-null as a callsite attribute is problematic for us and we
     // don't think it happens much, just get rid of it
     ci->removeRetAttr(Attribute::NonNull);
+    ci->removeRetAttr(Attribute::NoAlias);
 
     if (auto callee = ci->getCalledFunction()) {
       checkCallingConv(callee);
