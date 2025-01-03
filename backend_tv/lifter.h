@@ -1,16 +1,9 @@
-#include <utility>
-#include <vector>
-
-// FIXME get rid of these eventually
-#include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
 #include "llvm/MC/TargetRegistry.h"
-#include "llvm/Support/SourceMgr.h"
 
 namespace llvm {
 class Constant;
 class Function;
-class Module;
 class VectorType;
 } // namespace llvm
 

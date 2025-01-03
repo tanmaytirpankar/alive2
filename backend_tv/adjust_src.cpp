@@ -1,22 +1,10 @@
-// include first to avoid ambiguity for comparison operator from
-// util/spaceship.h
-#include "llvm/MC/MCAsmInfo.h"
-
 #include "backend_tv/lifter.h"
-#include "util/sort.h"
 
-#include "llvm/ADT/BitVector.h"
-#include "llvm/ADT/DenseSet.h"
-#include "llvm/ADT/SetVector.h"
-#include "llvm/ADT/StringExtras.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
-#include "llvm/AsmParser/Parser.h"
-#include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/LegacyPassManager.h"
+//#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/IRReader/IRReader.h"
