@@ -1,10 +1,6 @@
-// include first to avoid ambiguity for comparison operator from
-// util/spaceship.h
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/MC/MCAsmInfo.h"
-
 #include "backend_tv/lifter.h"
 
+#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseSet.h"

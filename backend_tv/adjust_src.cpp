@@ -4,49 +4,9 @@
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/LLVMContext.h"
-//#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
-#include "llvm/IRReader/IRReader.h"
-#include "llvm/InitializePasses.h"
-#include "llvm/MC/MCContext.h"
-#include "llvm/MC/MCExpr.h"
-#include "llvm/MC/MCInstBuilder.h"
-#include "llvm/MC/MCInstPrinter.h"
-#include "llvm/MC/MCInstrAnalysis.h"
-#include "llvm/MC/MCInstrInfo.h"
-#include "llvm/MC/MCParser/MCAsmParser.h"
-#include "llvm/MC/MCParser/MCTargetAsmParser.h"
-#include "llvm/MC/MCRegisterInfo.h"
-#include "llvm/MC/MCStreamer.h"
-#include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/MC/MCSymbol.h"
-#include "llvm/MC/MCTargetOptions.h"
-#include "llvm/MC/MCTargetOptionsCommandFlags.h"
-#include "llvm/MC/TargetRegistry.h"
-#include "llvm/Pass.h"
-#include "llvm/Passes/PassBuilder.h"
-#include "llvm/Support/MathExtras.h"
-#include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/PrettyStackTrace.h"
-#include "llvm/Support/Signals.h"
-#include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/TargetSelect.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetOptions.h"
-#include "llvm/TargetParser/Triple.h"
-#include "llvm/Transforms/Utils/Cloning.h"
-
-#include <algorithm>
-#include <fstream>
-#include <iostream>
-#include <ranges>
-#include <set>
-#include <sstream>
-#include <unordered_map>
-#include <utility>
-#include <vector>
 
 using namespace std;
 using namespace llvm;
