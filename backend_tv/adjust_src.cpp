@@ -8,6 +8,8 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
 
+#include <iostream>
+
 using namespace std;
 using namespace llvm;
 using namespace lifter;
