@@ -24,17 +24,22 @@ These instructions will install all of the required dependencies and build the b
    ```bash
    printf '%s\n' "extra-trusted-users = $USER" | sudo tee -a /etc/nix/nix.conf
    ```
-3. Install dependencies and build the backend-tv tool:
+3. If Nix complains about experimental features geing disabled, you should
+   add this line to your nix.conf:
+   ```
+   experimental-features = nix-command flakes
+   ```
+4. Install dependencies and build the backend-tv tool:
    ```bash
    ./build.sh  # say 'y' if prompted for substituters or trusted keys
    ```
-4. Start aslp-server and leave running:
+5. Start aslp-server and leave running:
    ```bash
    ./aslp-server.sh
    ```
    This will run aslp-server behind a Varnish cache server, caching the ASLp semantics in memory.
    See the script for more details.
-5. Use backend-tv, for example:
+6. Use backend-tv, for example:
    ```bash
    ./build/backend-tv ./tests/arm-tv/cmp/sgt.aarch64.ll
    ```
