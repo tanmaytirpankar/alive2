@@ -1,6 +1,8 @@
 #include "aslt_visitor.h"
 #include "aslp/interface.h"
 #include "tree/TerminalNode.h"
+#include "llvm/Analysis/PostDominators.h"
+#include "llvm/IR/Dominators.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instruction.h"
@@ -13,11 +15,23 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/Support/Casting.h>
 
+#include <ostream>
 #include <ranges>
+#include <sstream>
 
 using namespace aslt;
 
 namespace {
+  std::string dump(llvm::Value* val) {
+    if (!val) {
+      return "(null)";
+    }
+    std::string s;
+    llvm::raw_string_ostream os{s};
+    val->print(os, true);
+    return s;
+  }
+
   void require(bool cond, const std::string_view& str, llvm::Value* val = nullptr) {
    if (cond)
      return;
@@ -25,10 +39,7 @@ namespace {
    std::string msg{"Aslp assertion failure! "};
    msg += str;
    if (val) {
-     std::string s;
-     llvm::raw_string_ostream os{s};
-     val->print(os, true);
-     std::cerr << '\n' << s << '\n' << std::endl;
+     std::cerr << '\n' << dump(val) << '\n' << std::endl;
    }
    std::cerr << std::flush;
    std::cout << std::flush;
@@ -53,6 +64,41 @@ namespace {
 #undef assert
 
 namespace aslp {
+
+/**
+ * Applies the FPRounding as defined in ASL.
+ */
+llvm::Value* apply_fprounding(lifter_interface_llvm& iface, llvm::Value* val, llvm::Value* fproundingval, llvm::Value* exactval) {
+  auto exactconst = llvm::cast<llvm::ConstantInt>(exactval);
+  bool exact = 1 == exactconst->getZExtValue();
+  // require(exact, "apply_fprounding only supports exact mode"); // all of the llvm functions may throw on inexact.
+  (void)exact;
+
+  auto roundingconst = llvm::dyn_cast<llvm::ConstantInt>(fproundingval);
+  if (!roundingconst) {
+    // XXX:if this is FPCR-dependent, we should use llvm.experimental.constrained.rint instead, but this is unsupported
+    val = iface.createRound(val); // actually rint
+  } else {
+    uint64_t rounding = roundingconst->getZExtValue();
+    if (rounding == 0) {
+      die("apply_fprounding tie-to-even unsupported", fproundingval); // tie-to-even
+    } else if (rounding == 1) {
+      val = iface.createConstrainedCeil(val); // ceiling to posinf
+    } else if (rounding == 2) {
+      val = iface.createConstrainedFloor(val); // flooring to neginf
+    } else if (rounding == 3) {
+      die("apply_fprounding towards zero unsupported", fproundingval); // towards zero
+    } else if (rounding == 4) {
+      val = iface.createConstrainedRound(val); // tie-away
+    } else if (rounding == 5) {
+      die("apply_fprounding tie-to-odd unsupported", fproundingval); // towards odd
+    } else {
+      die("unknown constant rounding mode", fproundingval);
+    }
+  }
+
+  return val;
+}
 
 /**
  * Wraps the shift operations to define shifts by >= bitwidth as zero. Supports scalars and vectors.
@@ -116,7 +162,7 @@ llvm::Value* safe_sdiv(aslt_visitor& vis, llvm::Value* numerator, llvm::Value* d
 
   llvm::BranchInst::Create(overflow_stmt.first, safe_stmt.first, any_overflowing, oldbb);
 
-  // if overflowing, replace numerator with int_min and denominator with 1 to force a int_min result. 
+  // if overflowing, replace numerator with int_min and denominator with 1 to force a int_min result.
   iface.set_bb(overflow_stmt.second);
   auto numerator2 = iface.createSelect(overflowing, int_min, numerator);
   auto denominator2 = iface.createSelect(overflowing, one, denominator);
@@ -135,57 +181,130 @@ llvm::Value* safe_sdiv(aslt_visitor& vis, llvm::Value* numerator, llvm::Value* d
   return static_cast<expr_t>(iface.createLoad(numty, result));
 }
 
-
-std::pair<expr_t, expr_t> aslt_visitor::ptr_expr(llvm::Value* x, llvm::Instruction* before) {
-  lexpr_t base = nullptr;
-  expr_t offset = iface.getUnsignedIntConst(0, x->getType()->getIntegerBitWidth());
+// coerce the given x into a pointer as best we can by examining its structure, recursively.
+// (similar to coerce(), which works on normal scalars and vectors).
+expr_t aslt_visitor::ptr_expr(llvm::Value* x) {
+  log() << "coercing to pointer: " << dump(x) << std::endl;
 
   // experimenting: this code does not convert via GEP and assumes dereferenceable.
   // x = new llvm::IntToPtrInst(x, llvm::PointerType::get(context, 0), "", iface.get_bb());
-  // llvm::cast<llvm::IntToPtrInst>(x)->setMetadata("dereferenceable", 
+  // llvm::cast<llvm::IntToPtrInst>(x)->setMetadata("dereferenceable",
   //     llvm::MDNode::get(context, {(llvm::ConstantAsMetadata::get(iface.getUnsignedIntConst(99, 64)))}));
   // x->dump();
   // return {x, offset};
 
+  if (x->getType()->isPointerTy()) {
+    return x;
+  }
+
   auto Add = llvm::BinaryOperator::BinaryOps::Add;
   if (auto add = llvm::dyn_cast<llvm::BinaryOperator>(x); add && add->getOpcode() == Add) {
     // undo the add instruction into a GEP operation
-    auto _base = add->getOperand(0);
-    offset = add->getOperand(1);
-
-    // add->eraseFromParent();
-    base = ref_expr(_base);
-    base = llvm::cast<llvm::AllocaInst>(coerce(base, llvm::PointerType::get(context, 0)));
+    auto base = ptr_expr(add->getOperand(0));
+    auto offset = add->getOperand(1);
+    return iface.createGEP(iface.getIntTy(8), base, {offset}, "");
 
   } else if (auto load = llvm::dyn_cast<llvm::LoadInst>(x); load) {
-    auto wd = load->getType()->getIntegerBitWidth();
-    base = ref_expr(load);
-    offset = iface.getUnsignedIntConst(0, wd);
+
+    // NOTE: if we loaded from a variable and it has a unique dominating store, then replace it.
+    // this happens often, e.g. in aslp-generated CSE constants.
+    if (auto alloc = llvm::dyn_cast<llvm::AllocaInst>(load->getPointerOperand()); alloc) {
+      // std::cerr << "USES of ALLOC ";
+      // alloc->dump();
+      // std::cerr << "=";
+
+      llvm::DominatorTree dt{iface.ll_function()};
+      llvm::PostDominatorTree postdt{iface.ll_function()};
+
+      llvm::StoreInst* uniqueStore{nullptr};
+      for (const auto& x : alloc->uses()) {
+        auto user = x.getUser();
+        log() << "user: " << dump(user);
+
+        if (llvm::isa<llvm::LoadInst>(user)) continue;
+
+        if (auto store = llvm::dyn_cast<llvm::StoreInst>(user); store) {
+
+          // NOTE: if this is a potential dominating store, record it
+          // if it post-dominates the existing recorded store.
+          if (dt.dominates(store, load)) {
+            if (uniqueStore != nullptr) {
+              if (postdt.dominates(store, uniqueStore)) {
+                uniqueStore = store;
+                continue;
+              } else if (postdt.dominates(uniqueStore, store)) {
+                continue;
+              }
+              uniqueStore = nullptr;
+              log() << "break, too many stores";
+              break;
+            }
+            uniqueStore = store;
+            log() << "set";
+            continue;
+          }
+          // NOTE: if this store occurs after the load, disregard it.
+          if (dt.dominates(load, store)) {
+            continue;
+          }
+          log() << "not dominated";
+        }
+        uniqueStore = nullptr;
+        break;
+      }
+
+      auto uniqueStoredValue = uniqueStore ? uniqueStore->getValueOperand() : nullptr;
+      log() << '\n';
+      log() << "unique stored value: " << dump(uniqueStoredValue) << std::endl;
+      if (uniqueStoredValue) {
+        return ptr_expr(uniqueStoredValue);
+      }
+    }
+
   }
 
-  require(base && offset, "unable to coerce to pointer", x);
-  auto load = iface.createLoad(base->getAllocatedType(), base);
-  auto ptr = coerce(load, llvm::PointerType::get(context, 0));
-  // llvm::outs() << "ASDF:" << '\n';
-  // base->dump();
-  // ptr->dump();
-  return {ptr, offset};
+  // die("unable to coerce to pointer", x);
+  log() << "FALLBACK POINTER coerce of " << dump(x) << '\n';
+  return new llvm::IntToPtrInst(x, llvm::PointerType::get(context, 0), iface.nextName(), iface.get_bb());
 }
 
-std::pair<llvm::Value*, llvm::Value*> aslt_visitor::unify_sizes(llvm::Value* x, llvm::Value* y, bool sign) {
-  auto ty1 = x->getType(), ty2 = y->getType();
-  auto wd1 = ty1->getIntegerBitWidth(), wd2 = ty2->getIntegerBitWidth();
+std::pair<llvm::Value*, llvm::Value*> aslt_visitor::unify_sizes(llvm::Value* x1, llvm::Value* x2, unify_mode mode) {
+  auto ty1 = x1->getType(), ty2 = x2->getType();
+  auto wd1 = ty1->getPrimitiveSizeInBits(), wd2 = ty2->getPrimitiveSizeInBits();
+
+  if (mode == unify_mode::EXACT || mode == unify_mode::EXACT_VECTOR) {
+    require(wd1 == wd2, "operands must have same size", x1);
+  }
+
+  auto vec1 = llvm::dyn_cast<llvm::VectorType>(ty1), vec2 = llvm::dyn_cast<llvm::VectorType>(ty2);
+  if ((vec1 || vec2) && mode == unify_mode::EXACT_VECTOR) {
+    if (vec1 && !vec2) {
+      x2 = coerce(x2, ty1);
+
+    } else if (!vec1 && vec2) {
+      x1 = coerce(x1, ty2);
+
+    } else if (vec1->getScalarSizeInBits() > vec2->getScalarSizeInBits()) {
+      x1 = coerce(x1, ty2); // it is probably easier to split vector elements than fuse them
+
+    } else if (vec1->getScalarSizeInBits() < vec2->getScalarSizeInBits()) {
+      x2 = coerce(x2, ty1);
+    }
+    return std::make_pair(x1, x2);
+  }
+
+  x1 = coerce_to_int(x1), x2 = coerce_to_int(x2);
 
   auto sext = &lifter_interface_llvm::createSExt;
   auto zext = &lifter_interface_llvm::createZExt;
-  const decltype(sext) extend = sign ? sext : zext;
+  const decltype(sext) extend = mode == unify_mode::SEXT ? sext : zext;
 
   if (wd1 < wd2) {
-    x = (iface.*extend)(x, ty2);
+    x1 = (iface.*extend)(x1, ty2);
   } else if (wd2 < wd1) {
-    y = (iface.*extend)(y, ty1);
+    x2 = (iface.*extend)(x2, ty1);
   }
-  return std::make_pair(x, y);
+  return std::make_pair(x1, x2);
 }
 
 std::any aslt_visitor::visitStmt(SemanticsParser::StmtContext *ctx) {
@@ -255,7 +374,9 @@ std::any aslt_visitor::visitConstDecl(SemanticsParser::ConstDeclContext *ctx) {
   v->setAlignment(llvm::Align(1));
   iface.createStore(rhs, v);
 
-  add_local(name, v);
+  require_(!constants.contains(name));
+  require_(!locals.contains(name));
+  constants.insert({name, rhs});
   return s;
 }
 
@@ -273,6 +394,7 @@ std::any aslt_visitor::visitVarDecl(SemanticsParser::VarDeclContext *ctx) {
   v->setAlignment(llvm::Align(1));
   iface.createStore(rhs, v);
 
+  require_(!constants.contains(name));
   add_local(name, v);
   return s;
 }
@@ -329,7 +451,8 @@ std::any aslt_visitor::visitCall_stmt(SemanticsParser::Call_stmtContext *ctx) {
       (void)acctype;
 
       auto size = llvm::cast<llvm::ConstantInt>(bytes)->getSExtValue();
-      auto [ptr, offset] = ptr_expr(addr);
+      auto ptr = ptr_expr(addr);
+      auto offset = iface.getUnsignedIntConst(0, 64);
       // iface.createStore(val, ptr);
       iface.storeToMemoryValOffset(ptr, offset, size, val);
       return s;
@@ -343,7 +466,7 @@ std::any aslt_visitor::visitConditionalStmt(SemanticsParser::ConditionalStmtCont
   log() << "visitConditional_stmt" << '\n';
 
   auto entry = new_stmt("conditional");
-  
+
   auto cond = expr(ctx->expr());
   require(cond->getType()->getIntegerBitWidth() == 1, "condition must have type i1", cond);
 
@@ -499,7 +622,9 @@ std::any aslt_visitor::visitExprVar(SemanticsParser::ExprVarContext *ctx) {
   auto name = ident(ctx->ident());
 
   expr_t var;
-  if (locals.contains(name))
+  if (constants.contains(name))
+    var = constants.at(name);
+  else if (locals.contains(name))
     var = locals.at(name);
   else if (name == "_R")
     var = xreg_sentinel; // return X0 as a sentinel for all X registers
@@ -517,17 +642,19 @@ std::any aslt_visitor::visitExprVar(SemanticsParser::ExprVarContext *ctx) {
   else if (name == "FPCR")
     // XXX do not support FPCR-dependent behaviour
     return static_cast<expr_t>(llvm::UndefValue::get(iface.getIntTy(32)));
-  else 
+  else
     die("unsupported or undefined variable: " + name);
 
-  auto ptr = llvm::cast<llvm::AllocaInst>(var);
-  return static_cast<expr_t>(iface.createLoad(ptr->getAllocatedType(), ptr));
+  if (auto ptr = llvm::dyn_cast<llvm::AllocaInst>(var); ptr) {
+    var = iface.createLoad(ptr->getAllocatedType(), ptr);
+  }
+  return var;
 }
 
 std::any aslt_visitor::visitExprTApply(SemanticsParser::ExprTApplyContext *ctx) {
   auto name = ident(ctx->ident());
-  log() 
-    << "visitExprTApply " 
+  log()
+    << "visitExprTApply "
     << std::format("{} [{} targs] ({} args)", name, ctx->targs().size(), ctx->expr().size())
     << std::endl;
 
@@ -546,15 +673,35 @@ std::any aslt_visitor::visitExprTApply(SemanticsParser::ExprTApplyContext *ctx) 
 
     } else if (name == "not_bits.0" || name == "not_bool.0") {
       return static_cast<expr_t>(iface.createNot(x));
-    } 
+    }
   } else if (args.size() == 2) {
     auto x = args[0], y = args[1];
     if (name == "SignExtend.0" && targs.size() == 2) {
+      x = coerce_to_int(x);
       type_t finalty = llvm::Type::getIntNTy(context, targs[1]);
       require_(finalty != x->getType()); // it is undef to sext to the same size
       return static_cast<expr_t>(iface.createSExt(x, finalty));
 
     } else if (name == "ZeroExtend.0" && targs.size() == 2) {
+      expr_t zero =
+          llvm::Constant::getNullValue(iface.getVecTy(x->getType()->getPrimitiveSizeInBits(), 1));
+      expr_t vector = x->getType()->isVectorTy() ? x :
+            iface.createInsertElement(zero, coerce_to_int(x), iface.getUnsignedIntConst(0, 2));
+      auto vty = llvm::cast<llvm::VectorType>(vector->getType());
+
+      auto elemty = vty->getElementType();
+      auto elemwd = elemty->getScalarSizeInBits();
+      auto elemcnt = vty->getElementCount().getFixedValue();
+      if (targs[1] % elemwd == 0) {
+        auto finalelemcnt = targs[1] / elemwd;
+        expr_t result = llvm::Constant::getNullValue(llvm::VectorType::get(elemty, finalelemcnt, false));
+        for (unsigned i = 0; i < elemcnt; i++) {
+          auto ii = iface.getUnsignedIntConst(i, 100);
+          auto val = iface.createExtractElement(vector, ii);
+          result = iface.createInsertElement(result, val, ii);
+        }
+        return result;
+      }
       type_t finalty = llvm::Type::getIntNTy(context, targs[1]);
       require_(finalty != x->getType());
       return static_cast<expr_t>(iface.createZExt(x, finalty));
@@ -565,51 +712,63 @@ std::any aslt_visitor::visitExprTApply(SemanticsParser::ExprTApplyContext *ctx) 
       return static_cast<expr_t>(iface.createTrunc(x, finalty));
 
     } else if (name == "eq_bits.0") {
+      std::tie(x, y) = unify_sizes(x, y, unify_mode::EXACT);
       return static_cast<expr_t>(iface.createICmp(llvm::CmpInst::Predicate::ICMP_EQ, x, y));
 
     } else if (name == "ne_bits.0") {
+      std::tie(x, y) = unify_sizes(x, y, unify_mode::EXACT);
       return static_cast<expr_t>(iface.createICmp(llvm::CmpInst::Predicate::ICMP_NE, x, y));
 
     } else if (name == "add_bits.0") {
+      std::tie(x, y) = unify_sizes(x, y, unify_mode::EXACT);
       return static_cast<expr_t>(iface.createAdd(x, y));
 
     } else if (name == "sub_bits.0") {
+      std::tie(x, y) = unify_sizes(x, y, unify_mode::EXACT);
       return static_cast<expr_t>(iface.createSub(x, y));
 
     } else if (name == "eor_bits.0") {
+      std::tie(x, y) = unify_sizes(x, y, unify_mode::EXACT_VECTOR);
       return static_cast<expr_t>(iface.createBinop(x, y, llvm::BinaryOperator::BinaryOps::Xor));
 
     } else if (name == "and_bits.0" || name == "and_bool.0") {
+      std::tie(x, y) = unify_sizes(x, y, unify_mode::EXACT_VECTOR);
       return static_cast<expr_t>(iface.createAnd(x, y));
 
     } else if (name == "or_bits.0" || name == "or_bool.0") {
+      std::tie(x, y) = unify_sizes(x, y, unify_mode::EXACT_VECTOR);
       return static_cast<expr_t>(iface.createOr(x, y));
 
     } else if (name == "mul_bits.0") {
+      std::tie(x, y) = unify_sizes(x, y, unify_mode::EXACT);
       return static_cast<expr_t>(iface.createMul(x, y));
 
     } else if (name == "sdiv_bits.0") {
+      std::tie(x, y) = unify_sizes(x, y, unify_mode::EXACT);
       return static_cast<expr_t>(safe_sdiv(*this, x, y));
 
     } else if (name == "slt_bits.0") {
+      std::tie(x, y) = unify_sizes(x, y, unify_mode::EXACT);
       return static_cast<expr_t>(iface.createICmp(llvm::ICmpInst::Predicate::ICMP_SLT, x, y));
 
     } else if (name == "sle_bits.0") {
+      std::tie(x, y) = unify_sizes(x, y, unify_mode::EXACT);
       return static_cast<expr_t>(iface.createICmp(llvm::ICmpInst::Predicate::ICMP_SLE, x, y));
 
     } else if (name == "lsl_bits.0") {
-      std::tie(x, y) = unify_sizes(x, y);
+      std::tie(x, y) = unify_sizes(x, y, unify_mode::ZEXT);
       return static_cast<expr_t>(safe_shift(iface, x, llvm::Instruction::BinaryOps::Shl, y));
 
     } else if (name == "lsr_bits.0") {
-      std::tie(x, y) = unify_sizes(x, y);
+      std::tie(x, y) = unify_sizes(x, y, unify_mode::ZEXT);
       return static_cast<expr_t>(safe_shift(iface, x, llvm::Instruction::BinaryOps::LShr, y));
 
     } else if (name == "asr_bits.0") {
-      std::tie(x, y) = unify_sizes(x, y);
+      std::tie(x, y) = unify_sizes(x, y, unify_mode::ZEXT);
       return static_cast<expr_t>(safe_shift(iface, x, llvm::Instruction::BinaryOps::AShr, y));
 
     } else if (name == "append_bits.0") {
+      x = coerce_to_int(x); y = coerce_to_int(y);
       auto upper = x, lower = y;
 
       auto upperwd = upper->getType()->getIntegerBitWidth();
@@ -621,7 +780,7 @@ std::any aslt_visitor::visitExprTApply(SemanticsParser::ExprTApplyContext *ctx) 
         auto valueToStore = iface.getUndefVec(2, upperwd);
         valueToStore = iface.createInsertElement(valueToStore, x, 1);
         valueToStore = iface.createInsertElement(valueToStore, y, 0);
-        return coerce(valueToStore, iface.getIntTy(upperwd * 2));
+        return valueToStore;
       }
 
       auto finalty = iface.getIntTy(upperwd + lowerwd);
@@ -635,7 +794,8 @@ std::any aslt_visitor::visitExprTApply(SemanticsParser::ExprTApplyContext *ctx) 
 
     } else if (name == "replicate_bits.0") {
       auto count = llvm::cast<llvm::ConstantInt>(y)->getSExtValue();
-      auto basewd = x->getType()->getIntegerBitWidth() ;
+      x = coerce_to_int(x);
+      auto basewd = x->getType()->getIntegerBitWidth();
       auto valueToStore = iface.getUndefVec(count, basewd);
       for (unsigned i = 0; i < count; ++i) {
         valueToStore = iface.createInsertElement(valueToStore, x, i);
@@ -675,7 +835,8 @@ std::any aslt_visitor::visitExprTApply(SemanticsParser::ExprTApplyContext *ctx) 
       // bits(size*8) Mem[bits(64) address, integer size, AccType acctype]
 
       auto size = llvm::cast<llvm::ConstantInt>(y);
-      auto [ptr, offset] = ptr_expr(x);
+      auto ptr = ptr_expr(x);
+      auto offset = iface.getUnsignedIntConst(0, 64);
       auto load = iface.makeLoadWithOffset(ptr, offset, size->getSExtValue());
       return static_cast<expr_t>(load);
 
@@ -692,85 +853,85 @@ std::any aslt_visitor::visitExprTApply(SemanticsParser::ExprTApplyContext *ctx) 
       auto x_vector = coerce(x, iface.getVecTy(targs[1], targs[0]));
       auto y_vector = coerce(y, iface.getVecTy(targs[1], targs[0]));
       auto cast = iface.createAdd(x_vector, y_vector);
-      return coerce(cast, x->getType());
+      return cast;
 
     } else if (name == "sub_vec.0") {
       // bits(W * N) sub_vec (N, W) (bits(W * N) x, bits(W * N) y, integer N)
       auto x_vector = coerce(x, iface.getVecTy(targs[1], targs[0]));
       auto y_vector = coerce(y, iface.getVecTy(targs[1], targs[0]));
       auto cast = iface.createSub(x_vector, y_vector);
-      return coerce(cast, x->getType());
+      return cast;
 
     } else if (name == "mul_vec.0") {
       // bits(W * N) mul_vec (N, W) (bits(W * N) x, bits(W * N) y, integer N)
       auto x_vector = coerce(x, iface.getVecTy(targs[1], targs[0]));
       auto y_vector = coerce(y, iface.getVecTy(targs[1], targs[0]));
       auto cast = iface.createMul(x_vector, y_vector);
-      return coerce(cast, x->getType());
+      return cast;
 
     } else if (name == "sdiv_vec.0") {
       // bits(W * N) sdiv_vec (N, W) (bits(W * N) x, bits(W * N) y, integer N)
       auto x_vector = coerce(x, iface.getVecTy(targs[1], targs[0]));
       auto y_vector = coerce(y, iface.getVecTy(targs[1], targs[0]));
       auto cast = safe_sdiv(*this, x_vector, y_vector);
-      return coerce(cast, x->getType());
+      return cast;
 
     } else if (name == "scast_vec.0") {
       // bits(NW * N) scast_vec (N, NW, W) (bits(W * N) x, integer N, integer NW)
       auto x_vector = coerce(x, iface.getVecTy(targs[2], targs[0]));
       auto cast = iface.createSExt(x_vector, iface.getVecTy(targs[1], targs[0]));
-      return coerce(cast, iface.getIntTy(targs[1] * targs[0]));
+      return cast;
 
     } else if (name == "zcast_vec.0") {
       // bits(NW * N) zcast_vec (N, NW, W) (bits(W * N) x, integer N, integer NW)
       auto x_vector = coerce(x, iface.getVecTy(targs[2], targs[0]));
       auto cast = iface.createZExt(x_vector, iface.getVecTy(targs[1], targs[0]));
-      return coerce(cast, iface.getIntTy(targs[1] * targs[0]));
+      return cast;
 
     } else if (name == "trunc_vec.0") {
       // bits(NW * N) trunc_vec (N, NW, W) (bits(W * N) x, integer N, integer NW)
       auto x_vector = coerce(args[0], iface.getVecTy(targs[2], targs[0]));
       auto trunced = iface.createTrunc(x_vector, iface.getVecTy(targs[1], targs[0]));
-      return coerce(trunced, iface.getIntTy(targs[1] * targs[0]));
+      return trunced;
 
     } else if (name == "asr_vec.0") {
       // bits(W * N) asr_vec (N, W) (bits(W * N) x, bits(W * N) y, integer N)
       auto x_vector = coerce(x, iface.getVecTy(targs[1], targs[0]));
       auto y_vector = coerce(y, iface.getVecTy(targs[1], targs[0]));
-      return coerce(safe_shift(iface, x_vector, llvm::Instruction::BinaryOps::AShr, y_vector), iface.getIntTy(targs[1] * targs[0]));
+      return safe_shift(iface, x_vector, llvm::Instruction::BinaryOps::AShr, y_vector);
 
     } else if (name == "lsr_vec.0") {
       // bits(W * N) lsr_vec (N, W) (bits(W * N) x, bits(W * N) y, integer N)
       auto x_vector = coerce(x, iface.getVecTy(targs[1], targs[0]));
       auto y_vector = coerce(y, iface.getVecTy(targs[1], targs[0]));
-      return coerce(safe_shift(iface, x_vector, llvm::Instruction::BinaryOps::LShr, y_vector), iface.getIntTy(targs[1] * targs[0]));
+      return safe_shift(iface, x_vector, llvm::Instruction::BinaryOps::LShr, y_vector);
 
     } else if (name == "lsl_vec.0") {
       // bits(W * N) lsr_vec (N, W) (bits(W * N) x, bits(W * N) y, integer N)
       auto x_vector = coerce(x, iface.getVecTy(targs[1], targs[0]));
       auto y_vector = coerce(y, iface.getVecTy(targs[1], targs[0]));
-      return coerce(safe_shift(iface, x_vector, llvm::Instruction::BinaryOps::Shl, y_vector), iface.getIntTy(targs[1] * targs[0]));
+      return safe_shift(iface, x_vector, llvm::Instruction::BinaryOps::Shl, y_vector);
 
     } else if (name == "sle_vec.0") {
       // bits(N) sle_vec (N, W) (bits(W * N) x, bits(W * N) y, integer N)
       auto x_vector = coerce(x, iface.getVecTy(targs[1], targs[0]));
       auto y_vector = coerce(y, iface.getVecTy(targs[1], targs[0]));
       auto cmp = iface.createICmp(llvm::ICmpInst::Predicate::ICMP_SLE, x_vector, y_vector);
-      return coerce(cmp, iface.getIntTy(targs[0]));
+      return cmp;
 
     } else if (name == "slt_vec.0") {
       // bits(N) slt_vec (N, W) (bits(W * N) x, bits(W * N) y, integer N)
       auto x_vector = coerce(x, iface.getVecTy(targs[1], targs[0]));
       auto y_vector = coerce(y, iface.getVecTy(targs[1], targs[0]));
       auto cmp = iface.createICmp(llvm::ICmpInst::Predicate::ICMP_SLT, x_vector, y_vector);
-      return coerce(cmp, iface.getIntTy(targs[0]));
+      return cmp;
 
     } else if (name == "eq_vec.0") {
       // bits(N) eq_vec (N, W) (bits(W * N) x, bits(W * N) y, integer N)
       auto x_vector = coerce(x, iface.getVecTy(targs[1], targs[0]));
       auto y_vector = coerce(y, iface.getVecTy(targs[1], targs[0]));
       auto cmp = iface.createICmp(llvm::ICmpInst::Predicate::ICMP_EQ, x_vector, y_vector);
-      return coerce(cmp, iface.getIntTy(targs[0]));
+      return cmp;
 
     } else if (name == "shuffle_vec.0") {
       // bits(W * N) shuffle_vec (M, N, W) (bits(W * M) x, bits(W * M) y, bits(32 * N) sel)
@@ -783,7 +944,7 @@ std::any aslt_visitor::visitExprTApply(SemanticsParser::ExprTApplyContext *ctx) 
         mask.at(i) = sel.extractBitsAsZExtValue(32, i * 32);
       }
       auto res = iface.createShuffleVector(y_vector, x_vector, {mask}) ;
-      return coerce(res, iface.getIntTy(count * targs[2]));
+      return res;
 
     } else if (name == "FPAdd.0" || name == "FPSub.0" || name == "FPMul.0" || name == "FPDiv.0") {
       // bits(N) FPAdd(bits(N) op1, bits(N) op2, FPCRType fpcr)
@@ -800,6 +961,41 @@ std::any aslt_visitor::visitExprTApply(SemanticsParser::ExprTApplyContext *ctx) 
       else if (name == "FPDiv.0")
         op = llvm::BinaryOperator::BinaryOps::FDiv;
       return static_cast<expr_t>(iface.createBinop(x, y, op));
+
+    } else if (name == "FPCompareEQ.0" || name == "FPCompareGE.0" || name == "FPCompareGT.0") {
+      // boolean FPCompareEQ(bits(N) op1, bits(N) op2, FPCRType fpcr)
+      x = coerce(x, iface.getFPType(x->getType()->getIntegerBitWidth()));
+      y = coerce(y, iface.getFPType(y->getType()->getIntegerBitWidth()));
+
+      auto op = llvm::FCmpInst::Predicate::BAD_FCMP_PREDICATE;
+      if (name == "FPCompareEQ.0")
+        op = llvm::FCmpInst::Predicate::FCMP_OEQ;
+      else if (name == "FPCompareGT.0")
+        op = llvm::FCmpInst::Predicate::FCMP_OGT;
+      else if (name == "FPCompareGE.0")
+        op = llvm::FCmpInst::Predicate::FCMP_OGE;
+      return static_cast<expr_t>(iface.createFCmp(op, x, y));
+
+    } else if (name == "FPMax.0" || name == "FPMin.0" || name == "FPMaxNum.0" || name == "FPMinNum.0") {
+      // bits(N) FPMax(bits(N) op1, bits(N) op2, FPCRType fpcr)
+      // bits(N) FPMaxNum(bits(N) op1, bits(N) op2, FPCRType fpcr)
+      x = coerce(x, iface.getFPType(x->getType()->getIntegerBitWidth()));
+      y = coerce(y, iface.getFPType(y->getType()->getIntegerBitWidth()));
+
+      auto module = iface.ll_function().getParent();
+      auto op = llvm::Intrinsic::num_intrinsics;
+      if (name == "FPMax.0")
+        op = llvm::Intrinsic::maximum;
+      else if (name == "FPMin.0")
+        op = llvm::Intrinsic::minimum;
+      else if (name == "FPMaxNum.0")
+        op = llvm::Intrinsic::maxnum;
+      else if (name == "FPMinNum.0")
+        op = llvm::Intrinsic::minnum;
+
+      auto decl = llvm::Intrinsic::getOrInsertDeclaration(module, op, x->getType());
+      expr_t res = llvm::CallInst::Create(decl, {x, y}, iface.nextName(), iface.get_bb());
+      return res;
 
     } else if (name == "FPConvert.0") {
       // Convert floating point OP with N-bit precision to M-bit precision,
@@ -830,12 +1026,18 @@ std::any aslt_visitor::visitExprTApply(SemanticsParser::ExprTApplyContext *ctx) 
   } else if (args.size() == 4) {
     if (name == "Elem.set.0") {
       // bits(N) Elem[bits(N) vector, integer e, integer size, bits(size) value]
-      auto bv_size = args[0]->getType()->getIntegerBitWidth();
-      auto elem_size = llvm::cast<llvm::ConstantInt>(args[2])->getSExtValue();
-      auto elems = bv_size / elem_size;
-      auto vector = coerce(args[0], iface.getVecTy(elem_size, elems));
-      auto insert = iface.createInsertElement(vector, args[3], args[1]);
-      return coerce(insert, iface.getIntTy(bv_size));
+      expr_t vector;
+      if (args[0]->getType()->isVectorTy()) {
+        vector = args[0];
+      } else {
+        auto bv_size = args[0]->getType()->getIntegerBitWidth();
+        auto elem_size = llvm::cast<llvm::ConstantInt>(args[2])->getSExtValue();
+        auto elems = bv_size / elem_size;
+        vector = coerce(args[0], iface.getVecTy(elem_size, elems));
+      }
+      auto val = coerce(args[3], vector->getType()->getScalarType());
+      auto insert = iface.createInsertElement(vector, val, args[1]);
+      return insert;
 
     } else if (name == "ite_vec.0") {
       // bits(W * N) ite_vec ( N , W ) (bits(N) c, bits(W * N) x, bits(W * N) y, integer N)
@@ -843,11 +1045,11 @@ std::any aslt_visitor::visitExprTApply(SemanticsParser::ExprTApplyContext *ctx) 
       auto x_vec = coerce(args[1], iface.getVecTy(targs[1], targs[0]));
       auto y_vec = coerce(args[2], iface.getVecTy(targs[1], targs[0]));
       auto res = iface.createSelect(cond, x_vec, y_vec);
-      return coerce(res, iface.getIntTy(targs[1] * targs[0]));
+      return res;
 
     } else if (name == "FPCompare.0") {
       // bits(4) FPCompare(bits(N) op1, bits(N) op2, boolean signal_nans, FPCRType fpcr)
-      
+
       // return value:
       // PSTATE . V = result [ 0 +: 1 ] ;
       // PSTATE . C = result [ 1 +: 1 ] ;
@@ -898,24 +1100,9 @@ std::any aslt_visitor::visitExprTApply(SemanticsParser::ExprTApplyContext *ctx) 
       auto a = args[0], fpcr = args[1], fprounding = args[2], exact = args[3];
       (void)fpcr;
 
-      iface.assertTrue(iface.createICmp(llvm::ICmpInst::Predicate::ICMP_EQ, exact, iface.getUnsignedIntConst(0, 1)));
-
       a = coerce(a, iface.getFPType(a->getType()->getIntegerBitWidth()));
 
-      auto roundingconst = llvm::dyn_cast<llvm::ConstantInt>(fprounding);
-      require(roundingconst, "FPRoundInt: dynamic fprounding parameter unsupported", fprounding);
-
-      uint64_t rounding = roundingconst->getZExtValue();
-      if (rounding == 1) {
-        return iface.createConstrainedCeil(a); // ceiling to posinf
-      } else if (rounding == 2) {
-        return iface.createConstrainedFloor(a); // flooring to neginf
-      } else if (rounding == 4) {
-        return iface.createConstrainedRound(a); // tie-away
-      } else {
-        require(false, "FPRoundInt: unsupported rounding mode", fprounding);
-      }
-
+      return apply_fprounding(iface, a, fprounding, exact);
     }
 
   } else if (args.size() == 5) {
@@ -939,50 +1126,67 @@ std::any aslt_visitor::visitExprTApply(SemanticsParser::ExprTApplyContext *ctx) 
     } if (name == "FPToFixed.0" && targs.size() == 2) {
       // bits(M) FPToFixed(bits(N) op, integer fbits, boolean unsigned, FPCRType fpcr, FPRounding rounding)
       auto wdout = targs[0], wdin = targs[1];
-      auto val = args[0], fbits = args[1], unsign = args[2], fpcr = args[3], rounding = args[4];
-      (void)fpcr, (void)rounding;
+      auto val = args[0], fbits = args[1], unsign = args[2], fpcr = args[3], fprounding = args[4];
+      (void)fpcr, (void)fprounding;
       // XXX same problems as FixedToFP.
       iface.assertTrue(iface.createICmp(llvm::ICmpInst::Predicate::ICMP_EQ, fbits, llvm::ConstantInt::get(fbits->getType(), 0)));
 
       val = coerce(val, iface.getFPType(wdin));
+
+      auto roundingconst = llvm::dyn_cast<llvm::ConstantInt>(fprounding);
+      if (roundingconst && roundingconst->getZExtValue() == 3) {
+        // rounding towards zero is handled by the FPToUI instructions.
+        ;
+      } else {
+        val = apply_fprounding(iface, val, fprounding, iface.getUnsignedIntConst(1, 1));
+      }
+
       return static_cast<expr_t>(
           iface.createSelect(
             unsign,
-            iface.createConvertFPToUI(val, iface.getIntTy(wdout)),
-            iface.createConvertFPToSI(val, iface.getIntTy(wdout))));
+            iface.createFPToUI_sat(val, iface.getIntTy(wdout)),
+            iface.createFPToSI_sat(val, iface.getIntTy(wdout))));
     }
   }
 
-  die("unsupported TAPPLY: " + name);
+  std::ostringstream ss;
+  ss << "unsupported TAPPLY: " << name << " with " << args.size() << " args, " << targs.size() << " targs";
+  die(ss.view());
 }
 
 std::any aslt_visitor::visitExprSlices(SemanticsParser::ExprSlicesContext *ctx) {
   log() << "visitExprSlices" << '\n';
   auto base = expr(ctx->expr());
   auto sl = slice(ctx->slice_expr());
-  // a slice is done by right shifting by the "low" value,
-  // then, truncating to the "width" value
-  auto lo = llvm::ConstantInt::get(base->getType(), sl.lo);
-  auto wdty = llvm::Type::getIntNTy(context, sl.wd);
-  auto vec_size = base->getType()->getIntegerBitWidth();
+  auto vec_size = base->getType()->getPrimitiveSizeInBits();
 
-
-  if (lo->isZeroValue()) {
-    // Just trunc
-    auto trunced = iface.createTrunc(base, wdty);
-    return static_cast<expr_t>(trunced);
-  } else if (sl.lo % sl.wd == 0 && vec_size % sl.wd == 0) {
+  if (sl.lo % sl.wd == 0 && vec_size % sl.wd == 0) {
     // Vector access
     auto elem_size = sl.wd;
     auto elems = vec_size / elem_size;
     auto vector = coerce(base, iface.getVecTy(elem_size, elems));
-    auto pos = llvm::ConstantInt::get(base->getType(), sl.lo / sl.wd);
+    auto pos = iface.getUnsignedIntConst(sl.lo / sl.wd, 100);
     return iface.createExtractElement(vector, pos);
+
   } else {
-    // raw shift ok, since slice must be within bounds.
-    auto shifted = !lo->isZeroValue() ? iface.createRawLShr(base, lo) : base;
-    auto trunced = iface.createTrunc(shifted, wdty);
-    return static_cast<expr_t>(trunced);
+    // fallback to slice of scalar
+    base = coerce_to_int(base);
+
+    // a slice is done by right shifting by the "low" value,
+    // then, truncating to the "width" value
+    auto lo = llvm::ConstantInt::get(base->getType(), sl.lo);
+    auto wdty = llvm::Type::getIntNTy(context, sl.wd);
+    if (lo->isZeroValue()) {
+      // Just trunc
+      auto trunced = iface.createTrunc(base, wdty);
+      return static_cast<expr_t>(trunced);
+    } else {
+      // raw shift ok, since slice must be within bounds.
+      auto shifted = !lo->isZeroValue() ? iface.createRawLShr(base, lo) : base;
+      auto trunced = iface.createTrunc(shifted, wdty);
+      return static_cast<expr_t>(trunced);
+    }
+
   }
 }
 
@@ -990,7 +1194,7 @@ std::any aslt_visitor::visitExprField(SemanticsParser::ExprFieldContext *ctx) {
   log() << "visitExprField" << '\n';
 
   const static std::map<uint8_t, pstate_t> pstate_map{
-    {'N', pstate_t::N}, {'Z', pstate_t::Z}, {'C', pstate_t::C}, {'V', pstate_t::V}, 
+    {'N', pstate_t::N}, {'Z', pstate_t::Z}, {'C', pstate_t::C}, {'V', pstate_t::V},
   };
 
   auto base = expr_var(ctx->expr());

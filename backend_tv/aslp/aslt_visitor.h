@@ -15,6 +15,7 @@
 
 #include "SemanticsParser.h"
 #include "interface.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
 
 namespace aslp {
@@ -24,10 +25,12 @@ using expr_t = lifter_interface_llvm::expr_t;
 using lexpr_t = lifter_interface_llvm::lexpr_t;
 using stmt_t = lifter_interface_llvm::stmt_t;
 
-class aslt_visitor : public aslt::SemanticsBaseVisitor { 
+class aslt_visitor : public aslt::SemanticsBaseVisitor {
 public:
   using super = aslt::SemanticsBaseVisitor;
   lifter_interface_llvm &iface;
+
+  enum class unify_mode { SEXT, ZEXT, EXACT, EXACT_VECTOR };
 
 private:
   bool debug;
@@ -41,6 +44,7 @@ private:
   uint64_t depth = 0;
 
   std::map<std::string, lexpr_t> locals{};
+  std::map<std::string, expr_t> constants{};
   std::map<lexpr_t, lexpr_t> ptrs{};
   std::map<unsigned, unsigned> stmt_counts{};
 
@@ -50,7 +54,7 @@ private:
   // }
 
 public:
-  aslt_visitor(lifter_interface_llvm &iface, bool debug) : 
+  aslt_visitor(lifter_interface_llvm &iface, bool debug) :
     iface{iface},
     debug{debug},
     func{iface.ll_function()},
@@ -82,7 +86,12 @@ public:
     depth++;
     auto x = ctx->accept(this);
     depth--;
-    return std::any_cast<expr_t>(x);
+    auto result = std::any_cast<expr_t>(x);
+    if (auto inst = llvm::dyn_cast<llvm::Instruction>(result); inst) {
+      inst->setMetadata("aslp.expr",
+        llvm::MDTuple::get(context, {llvm::MDString::get(context, ctx->getText())}));
+    }
+    return result;
   }
 
   virtual lexpr_t lexpr(aslt::SemanticsParser::LexprContext* ctx) {
@@ -122,6 +131,8 @@ public:
     if (e->getType() == ty) return e;
     if (auto load = llvm::dyn_cast<llvm::LoadInst>(e)) {
       return iface.createLoad(ty, load->getPointerOperand());
+    } else if (auto bcast = llvm::dyn_cast<llvm::BitCastInst>(e)) {
+      return coerce(bcast->getOperand(0), ty);
     }
     // } else if (auto trunc = llvm::dyn_cast<llvm::TruncInst>(e)) {
     //   return coerce(trunc->getOperand(0), ty);  // XXX: are truncs always guaranteed to obtain the lowest bytes?? seems susipcious
@@ -138,8 +149,16 @@ public:
     return iface.createBitCast(e, ty);
   }
 
-  virtual std::pair<expr_t, expr_t> ptr_expr(expr_t x, llvm::Instruction* before = nullptr);
-  virtual std::pair<expr_t, expr_t> unify_sizes(expr_t x, expr_t y, bool sign = true);
+  virtual expr_t coerce_to_int(expr_t e) {
+    if (e->getType()->isIntegerTy()) {
+      return e;
+    }
+    auto intty = iface.getIntTy(e->getType()->getPrimitiveSizeInBits());
+    return iface.createBitCast(e, intty);
+  }
+
+  virtual expr_t ptr_expr(expr_t x);
+  virtual std::pair<expr_t, expr_t> unify_sizes(expr_t x, expr_t y, unify_mode mode = unify_mode::EXACT);
 
   virtual lexpr_t ref_expr(expr_t expr) {
     // XXX: HACK! since ExprVar are realised as LoadInst, this is incorrect in an array.
@@ -167,7 +186,10 @@ public:
     auto x = visitStmt(ctx);
     depth--;
     // std::cout << "stmt cast" << '\n';
-    return std::any_cast<stmt_t>(x);
+    auto result = std::any_cast<stmt_t>(x);
+    result.first->begin()->setMetadata("aslp.stmt",
+      llvm::MDTuple::get(context, {llvm::MDString::get(context, ctx->getText())}));
+    return result;
   }
 
   virtual stmt_t new_stmt(const std::string_view& name) {
@@ -188,12 +210,8 @@ public:
     return {head.first, tail.second};
   }
 
-  virtual lexpr_t get_local(std::string s) const& {
-    return locals.at(s);
-  }
-
   virtual void add_local(std::string s, lexpr_t v) {
-    // assert(!locals.contains(s) && "local variable already exists in aslt!");
+    assert(!locals.contains(s) && "local variable already exists in aslt!");
     // XXX aslp will emit duplicated local variable names when a variable is declared within
     // a for loop.  https://github.com/UQ-PAC/aslp/issues/43
     locals.insert_or_assign(s, v);
