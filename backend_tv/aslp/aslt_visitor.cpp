@@ -22,10 +22,17 @@
 using namespace aslt;
 
 namespace {
-  std::string dump(llvm::Value* val) {
-    if (!val) {
-      return "(null)";
-    }
+
+   [[maybe_unused]] std::string dump(llvm::Value* val) {
+    if (!val) return "(null)";
+    std::string s;
+    llvm::raw_string_ostream os{s};
+    val->print(os, true);
+    return s;
+  }
+
+  [[maybe_unused]] std::string dump(llvm::Type* val) {
+    if (!val) return "(null)";
     std::string s;
     llvm::raw_string_ostream os{s};
     val->print(os, true);
@@ -294,6 +301,7 @@ std::pair<llvm::Value*, llvm::Value*> aslt_visitor::unify_sizes(llvm::Value* x1,
   }
 
   x1 = coerce_to_int(x1), x2 = coerce_to_int(x2);
+  ty1 = x1->getType(), ty2 = x2->getType();
 
   auto sext = &lifter_interface_llvm::createSExt;
   auto zext = &lifter_interface_llvm::createZExt;
@@ -764,7 +772,8 @@ std::any aslt_visitor::visitExprTApply(SemanticsParser::ExprTApplyContext *ctx) 
       return static_cast<expr_t>(safe_shift(iface, x, llvm::Instruction::BinaryOps::LShr, y));
 
     } else if (name == "asr_bits.0") {
-      std::tie(x, y) = unify_sizes(x, y, unify_mode::ZEXT);
+      // XXX: should this be a sext in the value argument and zext in the shift argument?
+      std::tie(x, y) = unify_sizes(x, y, unify_mode::SEXT);
       return static_cast<expr_t>(safe_shift(iface, x, llvm::Instruction::BinaryOps::AShr, y));
 
     } else if (name == "append_bits.0") {
