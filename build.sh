@@ -58,3 +58,10 @@ cmake -B build -DBUILD_TV=1 \
 cmake --build build -j12
 fi
 
+# HACK: when building with LLVM from Nix, the alivecc/alive++ will be non-functional,
+# due to an incorrect clang path.
+# simply remove it to prevent test failure.
+if ! build/alivecc --version; then
+  echo 'build.sh: removing incorrectly-built alivecc/alive++...' >&2
+  rm -f build/alivecc build/alive++
+fi
