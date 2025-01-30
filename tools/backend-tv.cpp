@@ -296,7 +296,6 @@ version )EOF";
   llvm_util::initializer llvm_util_init(*out, DL);
   smt::smt_initializer smt_init;
   Verifier verifier(TLI, smt_init, *out);
-  verifier.quiet = opt_quiet;
   verifier.always_verify = opt_always_verify;
   verifier.print_dot = opt_print_dot;
   verifier.bidirectional = opt_bidirectional;
