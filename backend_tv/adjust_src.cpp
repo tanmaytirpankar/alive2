@@ -445,7 +445,7 @@ void fixupOptimizedTgt(llvm::Function *tgt) {
    * since they cause spurious TV failures in ASM memory mode
    */
   for (auto arg = tgt->arg_begin(); arg != tgt->arg_end(); ++arg) {
-    arg->removeAttr(llvm::Attribute::NoCapture);
+    arg->removeAttr(llvm::Attribute::Captures);
     arg->removeAttr(llvm::Attribute::ReadNone);
     arg->removeAttr(llvm::Attribute::ReadOnly);
     arg->removeAttr(llvm::Attribute::WriteOnly);
