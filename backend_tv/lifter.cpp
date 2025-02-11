@@ -2828,7 +2828,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
         (Reg >= AArch64::S0 && Reg <= AArch64::S31) || Reg == AArch64::WZR ||
         Reg == AArch64::WSP)
       return 32;
-    if ((Reg >= AArch64::X0 && Reg <= AArch64::X30) ||
+    if ((Reg >= AArch64::X0 && Reg <= AArch64::X28) ||
         (Reg >= AArch64::D0 && Reg <= AArch64::D31) || Reg == AArch64::XZR ||
         Reg == AArch64::SP || Reg == AArch64::FP || Reg == AArch64::LR)
       return 64;
@@ -2849,7 +2849,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
       return AArch64::SP;
     else if (Reg >= AArch64::W0 && Reg <= AArch64::W30)
       return Reg - AArch64::W0 + AArch64::X0;
-    else if (Reg >= AArch64::X0 && Reg <= AArch64::X30)
+    else if (Reg >= AArch64::X0 && Reg <= AArch64::X28)
       return Reg - AArch64::X0 + AArch64::X0;
     // Dealias rules for NEON SIMD/floating-point registers
     // https://developer.arm.com/documentation/den0024/a/AArch64-Floating-point-and-NEON/NEON-and-Floating-Point-architecture/Floating-point
@@ -3888,10 +3888,10 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     auto extendTypeVal = op3.getImm();
     auto shiftAmtVal = op4.getImm();
 
-    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X30) ||
+    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
            (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
            (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
-    assert((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X30) ||
+    assert((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
            (offsetReg == AArch64::FP) || (offsetReg == AArch64::SP) ||
            (offsetReg == AArch64::XZR) ||
            (offsetReg >= AArch64::W0 && offsetReg <= AArch64::W30) ||
@@ -3901,7 +3901,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     if ((offsetReg >= AArch64::W0 && offsetReg <= AArch64::W29) ||
         offsetReg == AArch64::WZR) {
       extTyp = extendTypeVal ? SXTW : UXTW;
-    } else if ((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X30) ||
+    } else if ((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
                offsetReg == AArch64::FP || offsetReg == AArch64::XZR) {
       // The manual assigns a value LSL to extTyp if extendTypeVal is 1
       // which for a value of 64 bits, is the same as UXTX
@@ -4313,7 +4313,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     assert(op0.isReg() && op1.isReg());
     assert(op2.isImm());
     auto baseReg = op1.getReg();
-    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X30) ||
+    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
            (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
            (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
     auto baseAddr = readPtrFromReg(baseReg);
@@ -4370,10 +4370,10 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     auto extendTypeVal = op3.getImm();
     auto shiftAmtVal = op4.getImm();
 
-    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X30) ||
+    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
            (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
            (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
-    assert((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X30) ||
+    assert((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
            (offsetReg == AArch64::FP) || (offsetReg == AArch64::XZR) ||
            (offsetReg >= AArch64::W0 && offsetReg <= AArch64::W30) ||
            (offsetReg == AArch64::WZR));
@@ -4382,7 +4382,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     if ((offsetReg >= AArch64::W0 && offsetReg <= AArch64::W30) ||
         offsetReg == AArch64::WZR) {
       extTyp = extendTypeVal ? SXTW : UXTW;
-    } else if ((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X30) ||
+    } else if ((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
                offsetReg == AArch64::FP || offsetReg == AArch64::XZR) {
       // The manual assigns a value LSL to extTyp if extendTypeVal is 1
       // which for a value of 64 bits, is the same as UXTX
@@ -4449,7 +4449,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
 
     if (op2.isImm()) {
       auto baseReg = op1.getReg();
-      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X30) ||
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
              (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
              (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
       auto baseAddr = readPtrFromReg(baseReg);
@@ -6008,7 +6008,7 @@ public:
       auto destReg = op1.getReg();
       auto baseReg = op2.getReg();
       auto imm = op3.getImm();
-      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X30) ||
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
              (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
              (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
       auto base = readPtrFromReg(baseReg);
@@ -6185,7 +6185,7 @@ public:
           decodeRegSet(CurInst->getOperand(isPost ? 2 : 1).getReg());
       auto index = getImm(isPost ? 3 : 2);
       auto baseReg = CurInst->getOperand(isPost ? 4 : 3).getReg();
-      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X30) ||
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
              (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
              (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
       assert((regCounter >= AArch64::Q0 && regCounter <= AArch64::Q31));
@@ -6303,7 +6303,7 @@ public:
       }
       auto dst = readFromVecOperand(isPost ? 1 : 0, eltSize, numElts);
       auto baseReg = CurInst->getOperand(isPost ? 2 : 1).getReg();
-      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X30) ||
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
              (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
              (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
 
@@ -6717,7 +6717,7 @@ public:
       auto regCounter =
           decodeRegSet(CurInst->getOperand(isPost ? 1 : 0).getReg());
       auto baseReg = CurInst->getOperand(isPost ? 2 : 1).getReg();
-      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X30) ||
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
              (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
              (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
       assert((regCounter >= AArch64::Q0 && regCounter <= AArch64::Q31) ||
@@ -6875,7 +6875,7 @@ public:
       auto srcReg = op1.getReg();
       auto baseReg = op2.getReg();
       auto imm = op3.getImm();
-      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X30) ||
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
              (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
              (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
       auto base = readPtrFromReg(baseReg);
@@ -7062,7 +7062,7 @@ public:
           decodeRegSet(CurInst->getOperand(isPost ? 1 : 0).getReg());
       auto index = getImm(isPost ? 2 : 1);
       auto baseReg = CurInst->getOperand(isPost ? 3 : 2).getReg();
-      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X30) ||
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
              (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
              (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
       assert((regCounter >= AArch64::Q0 && regCounter <= AArch64::Q31));
@@ -7487,7 +7487,7 @@ public:
       auto regCounter =
           decodeRegSet(CurInst->getOperand(isPost ? 1 : 0).getReg());
       auto baseReg = CurInst->getOperand(isPost ? 2 : 1).getReg();
-      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X30) ||
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
              (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
              (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
       assert((regCounter >= AArch64::Q0 && regCounter <= AArch64::Q31) ||
@@ -7559,7 +7559,7 @@ public:
       assert(op3.isImm());
 
       auto baseReg = op2.getReg();
-      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X30) ||
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
              (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
              (baseReg == AArch64::XZR) || (baseReg == AArch64::FP));
       auto baseAddr = readPtrFromReg(baseReg);
@@ -7613,7 +7613,7 @@ public:
       assert(op3.isImm());
 
       auto baseReg = op2.getReg();
-      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X30) ||
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
              (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
              (baseReg == AArch64::FP));
       auto baseAddr = readPtrFromReg(baseReg);
@@ -7723,7 +7723,7 @@ public:
       auto destReg2 = op2.getReg();
       auto baseReg = op3.getReg();
       auto imm = op4.getImm();
-      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X30) ||
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
              (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
              (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
       auto base = readPtrFromReg(baseReg);
@@ -7779,7 +7779,7 @@ public:
       auto srcReg2 = op2.getReg();
       auto baseReg = op3.getReg();
       auto imm = op4.getImm();
-      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X30) ||
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
              (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
              (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
       auto base = readPtrFromReg(baseReg);
