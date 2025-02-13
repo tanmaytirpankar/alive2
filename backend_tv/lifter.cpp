@@ -369,6 +369,11 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     }
 
     {
+      /*
+       * sometimes an intrinsic appears in tgt, but not src. there's
+       * no principled way to deal with these, we'll special case them
+       * here
+       */
       auto got = implicit_intrinsics.find(newGlobal);
       if (got != implicit_intrinsics.end()) {
         auto newF = Function::Create(got->second,

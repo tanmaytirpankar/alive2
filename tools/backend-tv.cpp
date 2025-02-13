@@ -17,6 +17,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/InitializePasses.h"
@@ -120,6 +121,16 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
 
   {
     // let's not even bother if Alive2 can't process our function
+
+    auto Pred = [](unsigned MDKind, llvm::MDNode *Node) {
+      return MDKind == llvm::LLVMContext::MD_alias_scope ||
+             MDKind == llvm::LLVMContext::MD_noalias ||
+             MDKind == llvm::LLVMContext::MD_tbaa;
+    };
+    for (auto &bb : *srcFn)
+      for (auto &i : bb)
+        i.eraseMetadataIf(Pred);
+
     auto fn = llvm2alive(*srcFn, TLI.getTLI(*srcFn), /*isSrc=*/true);
     if (!fn) {
       *out << "Fatal error, exiting\n";
@@ -193,7 +204,8 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   // tgtModule->setDataLayout(srcModule->getDataLayout());
   // tgtModule->setTargetTriple(srcModule->getTargetTriple());
 
-  auto [F1, F2] = lifter::liftFunc(srcModule, tgtModule.get(), srcFn, std::move(AsmBuffer));
+  auto [F1, F2] =
+      lifter::liftFunc(srcModule, tgtModule.get(), srcFn, std::move(AsmBuffer));
 
   *out << "\n\nabout to optimize lifted code:\n\n";
   *out << lifter::moduleToString(tgtModule.get()) << std::endl;
@@ -205,7 +217,7 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   }
 
   lifter::fixupOptimizedTgt(F2);
-  
+
   auto lifted = lifter::moduleToString(tgtModule.get());
   if (save_lifted_ir) {
     std::filesystem::path p{(string)opt_file};
