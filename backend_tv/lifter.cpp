@@ -156,32 +156,6 @@ public:
   }
 };
 
-// intrinsics get their names mangled by LLVM, we need to reverse
-// that, and there's no way to do it other than hard-coding this
-// mapping
-const unordered_map<string, string> intrinsic_names = {
-    // memory
-    {"memcpy", "llvm.memcpy.p0.p0.i64"},
-    {"memset", "llvm.memset.p0.i64"},
-    {"memset", "llvm.memset.p0.i64"},
-    {"memmove", "llvm.memmove.p0.p0.i64"},
-    {"__llvm_memset_element_unordered_atomic_16",
-     "llvm.memset.element.unordered.atomic.p0.i32"}, // FIXME
-
-    // FP
-    {"cosf", "llvm.cos.f32"},
-    {"coshf", "llvm.cosh.f32"},
-    {"powf", "llvm.pow.f32"},
-    {"pow", "llvm.pow.f64"},
-    {"expf", "llvm.exp.f32"},
-    {"exp", "llvm.exp.f64"},
-    {"exp10f", "llvm.exp10.f32"},
-    {"exp10", "llvm.exp10.f64"},
-
-    {"ldexpf", "llvm.ldexp.f32.i32"},
-    {"sincos", "llvm.cos.f64"},
-};
-
 class arm2llvm : public aslp::lifter_interface_llvm {
   Module *LiftedModule{nullptr};
   LLVMContext &Ctx = LiftedModule->getContext();
@@ -201,6 +175,42 @@ class arm2llvm : public aslp::lifter_interface_llvm {
   const MCCodeEmitter &MCE;
   const MCSubtargetInfo &STI;
   const MCInstrAnalysis &IA;
+
+  // these are ones that the backend adds to tgt, even when they don't
+  // appear at all in src
+  const unordered_map<string, FunctionType *> implicit_intrinsics = {
+    { "llvm.memset.p0.i64", FunctionType::get(Type::getVoidTy(Ctx), {
+          PointerType::get(Ctx, 0), Type::getInt8Ty(Ctx),
+          Type::getInt64Ty(Ctx), Type::getInt1Ty(Ctx),
+        }, false) },
+  };
+
+  // declare void @llvm.memset.p0.i64(ptr nocapture, i8, i64, i1)
+  
+  // intrinsics get their names mangled by LLVM, we need to reverse
+  // that, and there's no way to do it other than hard-coding this
+  // mapping
+  const unordered_map<string, string> intrinsic_names = {
+    // memory
+    {"memcpy", "llvm.memcpy.p0.p0.i64"},
+    {"memset", "llvm.memset.p0.i64"},
+    {"memmove", "llvm.memmove.p0.p0.i64"},
+    {"__llvm_memset_element_unordered_atomic_16",
+     "llvm.memset.element.unordered.atomic.p0.i32"}, // FIXME
+    
+    // FP
+    {"cosf", "llvm.cos.f32"},
+    {"coshf", "llvm.cosh.f32"},
+    {"powf", "llvm.pow.f32"},
+    {"pow", "llvm.pow.f64"},
+    {"expf", "llvm.exp.f32"},
+    {"exp", "llvm.exp.f64"},
+    {"exp10f", "llvm.exp10.f32"},
+    {"exp10", "llvm.exp10.f64"},
+    
+    {"ldexpf", "llvm.ldexp.f32.i32"},
+    {"sincos", "llvm.cos.f64"},
+  };
 
   std::map<std::string, unsigned int> encodingCounts;
 
