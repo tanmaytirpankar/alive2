@@ -179,37 +179,39 @@ class arm2llvm : public aslp::lifter_interface_llvm {
   // these are ones that the backend adds to tgt, even when they don't
   // appear at all in src
   const unordered_map<string, FunctionType *> implicit_intrinsics = {
-    { "llvm.memset.p0.i64", FunctionType::get(Type::getVoidTy(Ctx), {
-          PointerType::get(Ctx, 0), Type::getInt8Ty(Ctx),
-          Type::getInt64Ty(Ctx), Type::getInt1Ty(Ctx),
-        }, false) },
+      {"llvm.memset.p0.i64", FunctionType::get(Type::getVoidTy(Ctx),
+                                               {
+                                                   PointerType::get(Ctx, 0),
+                                                   Type::getInt8Ty(Ctx),
+                                                   Type::getInt64Ty(Ctx),
+                                                   Type::getInt1Ty(Ctx),
+                                               },
+                                               false)},
   };
 
-  // declare void @llvm.memset.p0.i64(ptr nocapture, i8, i64, i1)
-  
   // intrinsics get their names mangled by LLVM, we need to reverse
   // that, and there's no way to do it other than hard-coding this
   // mapping
   const unordered_map<string, string> intrinsic_names = {
-    // memory
-    {"memcpy", "llvm.memcpy.p0.p0.i64"},
-    {"memset", "llvm.memset.p0.i64"},
-    {"memmove", "llvm.memmove.p0.p0.i64"},
-    {"__llvm_memset_element_unordered_atomic_16",
-     "llvm.memset.element.unordered.atomic.p0.i32"}, // FIXME
-    
-    // FP
-    {"cosf", "llvm.cos.f32"},
-    {"coshf", "llvm.cosh.f32"},
-    {"powf", "llvm.pow.f32"},
-    {"pow", "llvm.pow.f64"},
-    {"expf", "llvm.exp.f32"},
-    {"exp", "llvm.exp.f64"},
-    {"exp10f", "llvm.exp10.f32"},
-    {"exp10", "llvm.exp10.f64"},
-    
-    {"ldexpf", "llvm.ldexp.f32.i32"},
-    {"sincos", "llvm.cos.f64"},
+      // memory
+      {"memcpy", "llvm.memcpy.p0.p0.i64"},
+      {"memset", "llvm.memset.p0.i64"},
+      {"memmove", "llvm.memmove.p0.p0.i64"},
+      {"__llvm_memset_element_unordered_atomic_16",
+       "llvm.memset.element.unordered.atomic.p0.i32"}, // FIXME
+
+      // FP
+      {"cosf", "llvm.cos.f32"},
+      {"coshf", "llvm.cosh.f32"},
+      {"powf", "llvm.pow.f32"},
+      {"pow", "llvm.pow.f64"},
+      {"expf", "llvm.exp.f32"},
+      {"exp", "llvm.exp.f64"},
+      {"exp10f", "llvm.exp10.f32"},
+      {"exp10", "llvm.exp10.f64"},
+
+      {"ldexpf", "llvm.ldexp.f32.i32"},
+      {"sincos", "llvm.cos.f64"},
   };
 
   std::map<std::string, unsigned int> encodingCounts;
@@ -248,9 +250,11 @@ class arm2llvm : public aslp::lifter_interface_llvm {
   Constant *lazyAddGlobal(string newGlobal) {
     *out << "  lazyAddGlobal '" << newGlobal << "'\n";
 
-    auto got = intrinsic_names.find(newGlobal);
-    if (got != intrinsic_names.end())
-      newGlobal = got->second;
+    {
+      auto got = intrinsic_names.find(newGlobal);
+      if (got != intrinsic_names.end())
+        newGlobal = got->second;
+    }
 
     if (newGlobal == "__stack_chk_fail") {
       return new GlobalVariable(*LiftedModule, getIntTy(8), false,
@@ -362,6 +366,16 @@ class arm2llvm : public aslp::lifter_interface_llvm {
           /*initializer=*/nullptr, name);
       glob->setAlignment(srcFnGlobal.getAlign());
       return glob;
+    }
+
+    {
+      auto got = implicit_intrinsics.find(newGlobal);
+      if (got != implicit_intrinsics.end()) {
+        auto newF = Function::Create(got->second,
+                                     GlobalValue::LinkageTypes::ExternalLinkage,
+                                     newGlobal, LiftedModule);
+        return newF;
+      }
     }
 
     *out << "ERROR: global symbol '" << newGlobal << "' not found\n";
@@ -3905,9 +3919,8 @@ class arm2llvm : public aslp::lifter_interface_llvm {
            (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
            (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
     assert((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
-	   (offsetReg == AArch64::LR) ||
-           (offsetReg == AArch64::FP) || (offsetReg == AArch64::SP) ||
-           (offsetReg == AArch64::XZR) ||
+           (offsetReg == AArch64::LR) || (offsetReg == AArch64::FP) ||
+           (offsetReg == AArch64::SP) || (offsetReg == AArch64::XZR) ||
            (offsetReg >= AArch64::W0 && offsetReg <= AArch64::W30) ||
            (offsetReg == AArch64::WZR));
 
@@ -4388,8 +4401,8 @@ class arm2llvm : public aslp::lifter_interface_llvm {
            (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
            (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
     assert((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
-	   (offsetReg == AArch64::LR) ||
-           (offsetReg == AArch64::FP) || (offsetReg == AArch64::XZR) ||
+           (offsetReg == AArch64::LR) || (offsetReg == AArch64::FP) ||
+           (offsetReg == AArch64::XZR) ||
            (offsetReg >= AArch64::W0 && offsetReg <= AArch64::W30) ||
            (offsetReg == AArch64::WZR));
 
@@ -4576,11 +4589,12 @@ public:
         auto [encoding, stmts] = *result;
         this->createBranch(stmts.first);
         LLVMBB = stmts.second;
-        stmts.first->begin()->setMetadata("asm.aslp",
-          llvm::MDTuple::get(Ctx, {llvm::MDString::get(Ctx, instStr)}));
+        stmts.first->begin()->setMetadata(
+            "asm.aslp",
+            llvm::MDTuple::get(Ctx, {llvm::MDString::get(Ctx, instStr)}));
 
-        *out << "... lifted via aslp: " << encoding << " - "
-             << instStr.str() << std::endl;
+        *out << "... lifted via aslp: " << encoding << " - " << instStr.str()
+             << std::endl;
         encodingCounts[encoding]++;
         return;
 
@@ -4612,8 +4626,9 @@ public:
     // always create new bb per instruction, to match aslp
     auto newbb = BasicBlock::Create(Ctx, "lifter_" + nextName(), liftedFn);
     createBranch(newbb);
-    LLVMBB->getTerminator()->setMetadata("asm.classic",
-      llvm::MDTuple::get(Ctx, {llvm::MDString::get(Ctx, instStr)}));
+    LLVMBB->getTerminator()->setMetadata(
+        "asm.classic",
+        llvm::MDTuple::get(Ctx, {llvm::MDString::get(Ctx, instStr)}));
 
     LLVMBB = newbb;
 
