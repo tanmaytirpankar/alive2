@@ -162,7 +162,7 @@ public:
 const unordered_map<string, string> intrinsic_names = {
     // memory
     {"memcpy", "llvm.memcpy.p0.p0.i64"},
-    {"memset", "llvm.memset.p0.i32"},
+    {"memset", "llvm.memset.p0.i64"},
     {"memset", "llvm.memset.p0.i64"},
     {"memmove", "llvm.memmove.p0.p0.i64"},
     {"__llvm_memset_element_unordered_atomic_16",
@@ -215,10 +215,29 @@ class arm2llvm : public aslp::lifter_interface_llvm {
   };
   vector<deferredGlobal> deferredGlobs;
 
+  Function *copyFunctionToTarget(Function *f, const Twine &name) {
+    auto newF = Function::Create(f->getFunctionType(),
+                                 GlobalValue::LinkageTypes::ExternalLinkage,
+                                 name, LiftedModule);
+    if (f->hasFnAttribute(Attribute::NoReturn))
+      newF->addFnAttr(Attribute::NoReturn);
+    if (f->hasFnAttribute(Attribute::WillReturn))
+      newF->addFnAttr(Attribute::WillReturn);
+    if (f->hasRetAttribute(Attribute::NoAlias))
+      newF->addRetAttr(Attribute::NoAlias);
+    if (f->hasRetAttribute(Attribute::SExt))
+      newF->addRetAttr(Attribute::SExt);
+    if (f->hasRetAttribute(Attribute::ZExt))
+      newF->addRetAttr(Attribute::ZExt);
+    auto attr = f->getFnAttribute(Attribute::Memory);
+    if (attr.hasAttribute(Attribute::Memory))
+      newF->addFnAttr(attr);
+    return newF;
+  }
+
   Constant *lazyAddGlobal(string newGlobal) {
     *out << "  lazyAddGlobal '" << newGlobal << "'\n";
 
-    // FIXME -- in some cases we need to add the declaration
     auto got = intrinsic_names.find(newGlobal);
     if (got != intrinsic_names.end())
       newGlobal = got->second;
@@ -240,23 +259,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
       if (name != newGlobal)
         continue;
       *out << "  creating function '" << newGlobal << "'\n";
-      auto newF = Function::Create(f.getFunctionType(),
-                                   GlobalValue::LinkageTypes::ExternalLinkage,
-                                   name, LiftedModule);
-      if (f.hasFnAttribute(Attribute::NoReturn))
-        newF->addFnAttr(Attribute::NoReturn);
-      if (f.hasFnAttribute(Attribute::WillReturn))
-        newF->addFnAttr(Attribute::WillReturn);
-      if (f.hasRetAttribute(Attribute::NoAlias))
-        newF->addRetAttr(Attribute::NoAlias);
-      if (f.hasRetAttribute(Attribute::SExt))
-        newF->addRetAttr(Attribute::SExt);
-      if (f.hasRetAttribute(Attribute::ZExt))
-        newF->addRetAttr(Attribute::ZExt);
-      auto attr = f.getFnAttribute(Attribute::Memory);
-      if (attr.hasAttribute(Attribute::Memory))
-        newF->addFnAttr(attr);
-      return newF;
+      return copyFunctionToTarget(&f, newGlobal);
     }
 
     // globals that are definitions in the assembly can be lifted
