@@ -4380,7 +4380,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
            (offsetReg >= AArch64::W0 && offsetReg <= AArch64::W30) ||
            (offsetReg == AArch64::WZR));
 
-    int extTyp, shiftAmt;
+    int extTyp = 0, shiftAmt;
     if ((offsetReg >= AArch64::W0 && offsetReg <= AArch64::W30) ||
         offsetReg == AArch64::WZR) {
       extTyp = extendTypeVal ? SXTW : UXTW;
