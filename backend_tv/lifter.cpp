@@ -2847,7 +2847,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
       return AArch64::LR;
     else if (Reg == AArch64::WSP)
       return AArch64::SP;
-    else if (Reg >= AArch64::W0 && Reg <= AArch64::W28)
+    else if (Reg >= AArch64::W0 && Reg <= AArch64::W30)
       return Reg - AArch64::W0 + AArch64::X0;
     else if (Reg >= AArch64::X0 && Reg <= AArch64::X28)
       return Reg - AArch64::X0 + AArch64::X0;
@@ -3892,9 +3892,10 @@ class arm2llvm : public aslp::lifter_interface_llvm {
            (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
            (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
     assert((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
+	   (offsetReg == AArch64::LR) ||
            (offsetReg == AArch64::FP) || (offsetReg == AArch64::SP) ||
            (offsetReg == AArch64::XZR) ||
-           (offsetReg >= AArch64::W0 && offsetReg <= AArch64::W29) ||
+           (offsetReg >= AArch64::W0 && offsetReg <= AArch64::W30) ||
            (offsetReg == AArch64::WZR));
 
     int extTyp = -1, shiftAmt;
@@ -4374,12 +4375,13 @@ class arm2llvm : public aslp::lifter_interface_llvm {
            (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
            (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
     assert((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
+	   (offsetReg == AArch64::LR) ||
            (offsetReg == AArch64::FP) || (offsetReg == AArch64::XZR) ||
-           (offsetReg >= AArch64::W0 && offsetReg <= AArch64::W28) ||
+           (offsetReg >= AArch64::W0 && offsetReg <= AArch64::W30) ||
            (offsetReg == AArch64::WZR));
 
     int extTyp, shiftAmt;
-    if ((offsetReg >= AArch64::W0 && offsetReg <= AArch64::W28) ||
+    if ((offsetReg >= AArch64::W0 && offsetReg <= AArch64::W30) ||
         offsetReg == AArch64::WZR) {
       extTyp = extendTypeVal ? SXTW : UXTW;
     } else if ((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
