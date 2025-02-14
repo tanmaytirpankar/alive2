@@ -6196,26 +6196,17 @@ public:
         visitError();
         break;
       }
-      unsigned nregs;
-      switch (opcode) {
-      case AArch64::LD1i8:
-      case AArch64::LD1i16:
-      case AArch64::LD1i32:
-      case AArch64::LD1i64:
-      case AArch64::LD1i8_POST:
-      case AArch64::LD1i16_POST:
-      case AArch64::LD1i32_POST:
-      case AArch64::LD1i64_POST:
-        nregs = 1;
-        break;
-      default:
-        assert(false);
-        break;
-      }
+      unsigned nregs = 1;
       bool isPost =
           opcode == AArch64::LD1i8_POST || opcode == AArch64::LD1i16_POST ||
           opcode == AArch64::LD1i32_POST || opcode == AArch64::LD1i64_POST;
 
+      // LD1i32_POST <MCOperand Reg:248> <MCOperand Reg:145> <MCOperand Reg:145> <MCOperand Imm:1> <MCOperand Reg:248> <MCOperand Reg:247>>
+      // ld1	{ v1.s }[1], [x9], x8
+
+      // LD1i8_POST <MCOperand Reg:239> <MCOperand Reg:144> <MCOperand Reg:144> <MCOperand Imm:0> <MCOperand Reg:239> <MCOperand Reg:14>>
+      // ld1	{ v0.b }[0], [x0], #1
+       
       auto regCounter =
           decodeRegSet(CurInst->getOperand(isPost ? 2 : 1).getReg());
       auto index = getImm(isPost ? 3 : 2);
@@ -6228,7 +6219,7 @@ public:
       if (isPost) {
         if (CurInst->getOperand(5).isReg() &&
             CurInst->getOperand(5).getReg() != AArch64::XZR) {
-          totalOffset = readFromRegOld(CurInst->getOperand(3).getReg());
+          totalOffset = readFromRegOld(CurInst->getOperand(4).getReg());
         } else {
           totalOffset = getUnsignedIntConst(nregs * (eltSize / 8), 64);
         }
