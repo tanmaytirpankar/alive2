@@ -6192,21 +6192,13 @@ public:
         eltSize = 64;
         break;
       default:
-        *out << "\nError Unknown opcode\n";
-        visitError();
-        break;
+        assert(false);
       }
       unsigned nregs = 1;
       bool isPost =
           opcode == AArch64::LD1i8_POST || opcode == AArch64::LD1i16_POST ||
           opcode == AArch64::LD1i32_POST || opcode == AArch64::LD1i64_POST;
 
-      // LD1i32_POST <MCOperand Reg:248> <MCOperand Reg:145> <MCOperand Reg:145> <MCOperand Imm:1> <MCOperand Reg:248> <MCOperand Reg:247>>
-      // ld1	{ v1.s }[1], [x9], x8
-
-      // LD1i8_POST <MCOperand Reg:239> <MCOperand Reg:144> <MCOperand Reg:144> <MCOperand Imm:0> <MCOperand Reg:239> <MCOperand Reg:14>>
-      // ld1	{ v0.b }[0], [x0], #1
-       
       auto regCounter =
           decodeRegSet(CurInst->getOperand(isPost ? 2 : 1).getReg());
       auto index = getImm(isPost ? 3 : 2);
@@ -7920,18 +7912,22 @@ public:
 
       auto dst_true = getBB(CurInst->getOperand(1));
       assert(dst_true);
-      assert(MCBB->getSuccs().size() == 2 && "expected 2 successors");
+      auto succs = MCBB->getSuccs().size();
 
-      const string *dst_false_name = nullptr;
-      for (auto &succ : MCBB->getSuccs()) {
-        if (succ->getName() != dst_true->getName()) {
-          dst_false_name = &succ->getName();
-          break;
+      if (succs == 2) {
+        const string *dst_false_name = nullptr;
+        for (auto &succ : MCBB->getSuccs()) {
+          if (succ->getName() != dst_true->getName()) {
+            dst_false_name = &succ->getName();
+            break;
+          }
         }
+        assert(dst_false_name != nullptr);
+        auto *dst_false = getBBByName(*dst_false_name);
+        createBranch(cond_val, dst_true, dst_false);
+      } else {
+        assert(succs == 1);
       }
-      assert(dst_false_name != nullptr);
-      auto *dst_false = getBBByName(*dst_false_name);
-      createBranch(cond_val, dst_true, dst_false);
       break;
     }
 
