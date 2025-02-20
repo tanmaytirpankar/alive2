@@ -1609,6 +1609,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
       AArch64::SRIv8i16_shift,
       AArch64::SRIv4i32_shift,
       AArch64::SRIv2i64_shift,
+      AArch64::DUPi8,
       AArch64::DUPi16,
       AArch64::DUPi64,
       AArch64::DUPi32,
@@ -8899,6 +8900,13 @@ public:
     case AArch64::REV32v16i8: {
       auto v = rev(readFromOperand(1), 8, 32);
       updateOutputReg(v);
+      break;
+    }
+
+    case AArch64::DUPi8: {
+      auto in = readFromVecOperand(1, 8, 16);
+      auto ext = createExtractElement(in, getImm(2));
+      updateOutputReg(ext);
       break;
     }
 
