@@ -7182,6 +7182,7 @@ public:
     case AArch64::ST4Fourv8h:
     case AArch64::ST4Fourv2s:
     case AArch64::ST4Fourv4s:
+    case AArch64::ST1Fourv1d:
     case AArch64::ST4Fourv2d:
     case AArch64::ST4Fourv8b_POST:
     case AArch64::ST4Fourv16b_POST:
