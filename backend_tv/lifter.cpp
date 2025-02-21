@@ -6370,7 +6370,10 @@ public:
     case AArch64::LD1Onev4s_POST:
     case AArch64::LD1Onev1d_POST:
     case AArch64::LD1Onev2d_POST:
+    case AArch64::LD1Twov1d:
     case AArch64::LD1Twov2d:
+    case AArch64::LD1Threev1d:
+    case AArch64::LD1Threev2d:
     case AArch64::LD1Fourv2d:
     case AArch64::LD2Twov8b:
     case AArch64::LD2Twov16b:
@@ -7140,6 +7143,9 @@ public:
     case AArch64::ST1Onev4s_POST:
     case AArch64::ST1Onev1d_POST:
     case AArch64::ST1Onev2d_POST:
+    case AArch64::ST1Twov1d:
+    case AArch64::ST1Threev1d:
+    case AArch64::ST1Threev2d:
     case AArch64::ST1Twov2d:
     case AArch64::ST1Fourv2d:
     case AArch64::ST2Twov8b:
