@@ -6374,6 +6374,7 @@ public:
     case AArch64::LD1Twov2d:
     case AArch64::LD1Threev1d:
     case AArch64::LD1Threev2d:
+    case AArch64::LD1Fourv1d:
     case AArch64::LD1Fourv2d:
     case AArch64::LD2Twov8b:
     case AArch64::LD2Twov16b:
@@ -7147,6 +7148,7 @@ public:
     case AArch64::ST1Threev1d:
     case AArch64::ST1Threev2d:
     case AArch64::ST1Twov2d:
+    case AArch64::ST1Fourv1d:
     case AArch64::ST1Fourv2d:
     case AArch64::ST2Twov8b:
     case AArch64::ST2Twov16b:
@@ -7182,7 +7184,6 @@ public:
     case AArch64::ST4Fourv8h:
     case AArch64::ST4Fourv2s:
     case AArch64::ST4Fourv4s:
-    case AArch64::ST1Fourv1d:
     case AArch64::ST4Fourv2d:
     case AArch64::ST4Fourv8b_POST:
     case AArch64::ST4Fourv16b_POST:
