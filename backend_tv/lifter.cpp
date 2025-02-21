@@ -1909,6 +1909,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
       AArch64::UMOVvi32,
       AArch64::UMOVvi8,
       AArch64::UMOVvi8_idx0,
+      AArch64::UMOVvi32_idx0,
       AArch64::MOVIv16b_ns,
       AArch64::UMOVvi64,
       AArch64::UMOVvi16,
@@ -8681,6 +8682,7 @@ public:
     case AArch64::UMOVvi16:
     case AArch64::UMOVvi16_idx0:
     case AArch64::UMOVvi32:
+    case AArch64::UMOVvi32_idx0:
     case AArch64::UMOVvi64: {
       unsigned sz;
       if (opcode == AArch64::UMOVvi8 || opcode == AArch64::UMOVvi8_idx0) {
@@ -8688,7 +8690,8 @@ public:
       } else if (opcode == AArch64::UMOVvi16 ||
                  opcode == AArch64::UMOVvi16_idx0) {
         sz = 16;
-      } else if (opcode == AArch64::UMOVvi32) {
+      } else if (opcode == AArch64::UMOVvi32 ||
+                 opcode == AArch64::UMOVvi32_idx0) {
         sz = 32;
       } else if (opcode == AArch64::UMOVvi64) {
         sz = 64;
@@ -8696,7 +8699,8 @@ public:
         assert(false);
       }
       unsigned idx;
-      if (opcode == AArch64::UMOVvi8_idx0 || opcode == AArch64::UMOVvi16_idx0) {
+      if (opcode == AArch64::UMOVvi8_idx0 || opcode == AArch64::UMOVvi16_idx0 ||
+          opcode == AArch64::UMOVvi32_idx0) {
         idx = 0;
       } else {
         idx = getImm(2);
