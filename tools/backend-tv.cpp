@@ -176,8 +176,6 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   }
 
   lifter::init();
-  lifter::checkSupport(srcFn);
-  lifter::nameGlobals(srcModule);
 
   if (opt_use_debuginfo)
     lifter::addDebugInfo(srcFn);
@@ -197,6 +195,8 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   if (opt_asm_only)
     exit(0);
 
+  lifter::checkSupport(srcFn);
+  lifter::nameGlobals(srcModule);
   srcFn = lifter::adjustSrc(srcFn);
 
   std::unique_ptr<llvm::Module> tgtModule =
