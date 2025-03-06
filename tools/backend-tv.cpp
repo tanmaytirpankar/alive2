@@ -295,7 +295,7 @@ version )EOF";
   config::disable_poison_input = true;
 
   // FIXME: we should avoid hard-coding these
-  srcModule.get()->setTargetTriple("aarch64-linux-gnu");
+  srcModule.get()->setTargetTriple(llvm::Triple("aarch64-linux-gnu"));
   srcModule.get()->setDataLayout(
       "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128-Fn32");
 

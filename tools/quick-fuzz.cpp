@@ -972,7 +972,7 @@ reduced using llvm-reduce.
     DL.emplace(DLStr);
     TT.emplace(TTStr);
     M1->setDataLayout(DLStr);
-    M1->setTargetTriple(TTStr);
+    M1->setTargetTriple(llvm::Triple(TTStr));
   } else {
     DL.emplace(M1->getDataLayout());
     TT.emplace(M1->getTargetTriple());
