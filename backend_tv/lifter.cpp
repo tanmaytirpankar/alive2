@@ -13231,18 +13231,6 @@ public:
     addConstant();
   }
 
-  virtual void emitDTPRel64Value(const MCExpr *Value) override {
-    *out << "[emitDTPRel64Value]\n";
-  }
-
-  virtual void emitTPRel64Value(const MCExpr *Value) override {
-    *out << "[emitTPRel64Value]\n";
-  }
-
-  virtual void emitGPRel64Value(const MCExpr *Value) override {
-    *out << "[emitGPRel64Value]\n";
-  }
-
   // FIXME -- we probably need a proper recursive descent parser for
   // MCExprs here
   virtual void emitValueImpl(const MCExpr *Value, unsigned Size,
