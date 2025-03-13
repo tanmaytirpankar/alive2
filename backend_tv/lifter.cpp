@@ -13284,7 +13284,7 @@ public:
   virtual void emitDwarfLocDirective(unsigned FileNo, unsigned Line,
                                      unsigned Column, unsigned Flags,
                                      unsigned Isa, unsigned Discriminator,
-                                     StringRef FileName) override {
+                                     StringRef FileName, StringRef Comment) override {
     *out << "[dwarf loc directive: line = " << Line << "]\n";
     curDebugLine = Line;
   }
