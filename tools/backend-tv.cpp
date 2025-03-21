@@ -22,7 +22,9 @@
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Passes/PassBuilder.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/InitLLVM.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/TargetParser/Triple.h"
@@ -94,6 +96,12 @@ llvm::cl::opt<bool> opt_asm_only(
     llvm::cl::desc("Only generate assembly and exit (default=false)"),
     llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
 
+llvm::cl::opt<string> opt_asm_output(
+    "asm-output",
+    llvm::cl::desc("Save assembly to file "
+                   "(default=no asm output)"),
+    llvm::cl::cat(alive_cmdargs));
+  
 llvm::cl::opt<bool> save_lifted_ir(
     "save-lifted-ir",
     llvm::cl::desc("Save lifted LLVM IR to file (default=false)"),
@@ -184,6 +192,17 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
                        ? ExitOnErr(llvm::errorOrToExpected(
                              llvm::MemoryBuffer::getFile(opt_asm_input)))
                        : lifter::generateAsm(*srcModule);
+
+  if (opt_asm_output != "") {
+    std::error_code EC;
+    llvm::raw_fd_ostream asm_file(opt_asm_output, EC);
+    if (EC)
+      llvm::report_fatal_error("Couldn't open output file, exiting");
+    for (auto it = AsmBuffer->getBuffer().begin();
+         it != AsmBuffer->getBuffer().end(); ++it) {
+      asm_file << *it;
+    }
+  }
 
   *out << "\n\n------------ AArch64 Assembly: ------------\n\n";
   for (auto it = AsmBuffer->getBuffer().begin();
