@@ -13284,7 +13284,8 @@ public:
   virtual void emitDwarfLocDirective(unsigned FileNo, unsigned Line,
                                      unsigned Column, unsigned Flags,
                                      unsigned Isa, unsigned Discriminator,
-                                     StringRef FileName, StringRef Comment) override {
+                                     StringRef FileName,
+                                     StringRef Comment) override {
     *out << "[dwarf loc directive: line = " << Line << "]\n";
     curDebugLine = Line;
   }
@@ -13410,13 +13411,15 @@ Constant *stackSize;
 void init() {
   static bool initialized = false;
   assert(!initialized);
+  auto TripleStr = DefaultTT.getTriple();
+  assert(TripleStr == Triple::normalize(TripleStr));
   LLVMInitializeAArch64TargetInfo();
   LLVMInitializeAArch64Target();
   LLVMInitializeAArch64TargetMC();
   LLVMInitializeAArch64AsmParser();
   LLVMInitializeAArch64AsmPrinter();
   string Error;
-  Targ = TargetRegistry::lookupTarget(TripleName, Error);
+  Targ = TargetRegistry::lookupTarget(DefaultTT, Error);
   if (!Targ) {
     *out << Error;
     exit(-1);
@@ -13435,26 +13438,25 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
   unique_ptr<MCInstrInfo> MCII(Targ->createMCInstrInfo());
   assert(MCII && "Unable to create instruction info!");
 
-  Triple TheTriple(TripleName);
-
   auto MCOptions = mc::InitMCTargetOptionsFromFlags();
-  unique_ptr<MCRegisterInfo> MRI(Targ->createMCRegInfo(TripleName));
+  unique_ptr<MCRegisterInfo> MRI(Targ->createMCRegInfo(DefaultTT.getTriple()));
   assert(MRI && "Unable to create target register info!");
 
   unique_ptr<MCSubtargetInfo> STI(
-      Targ->createMCSubtargetInfo(TripleName, CPU, ""));
+      Targ->createMCSubtargetInfo(DefaultTT.getTriple(), CPU, ""));
   assert(STI && "Unable to create subtarget info!");
   assert(STI->isCPUStringValid(CPU) && "Invalid CPU!");
 
-  unique_ptr<MCAsmInfo> MAI(Targ->createMCAsmInfo(*MRI, TripleName, MCOptions));
+  unique_ptr<MCAsmInfo> MAI(
+      Targ->createMCAsmInfo(*MRI, DefaultTT.getTriple(), MCOptions));
   assert(MAI && "Unable to create MC asm info!");
   unique_ptr<MCInstPrinter> IP(
-      Targ->createMCInstPrinter(TheTriple, 0, *MAI, *MCII, *MRI));
+      Targ->createMCInstPrinter(DefaultTT, 0, *MAI, *MCII, *MRI));
   IP->setPrintImmHex(true);
 
   auto Ana = make_unique<MCInstrAnalysis>(MCII.get());
 
-  MCContext Ctx(TheTriple, MAI.get(), MRI.get(), STI.get(), &SrcMgr,
+  MCContext Ctx(DefaultTT, MAI.get(), MRI.get(), STI.get(), &SrcMgr,
                 &MCOptions);
   std::unique_ptr<MCObjectFileInfo> MCOFI(
       Targ->createMCObjectFileInfo(Ctx, false, false));
