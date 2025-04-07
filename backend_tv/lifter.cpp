@@ -6213,7 +6213,7 @@ public:
       if (isPost) {
         if (CurInst->getOperand(5).isReg() &&
             CurInst->getOperand(5).getReg() != AArch64::XZR) {
-          totalOffset = readFromRegOld(CurInst->getOperand(4).getReg());
+          totalOffset = readFromRegOld(CurInst->getOperand(5).getReg());
         } else {
           totalOffset = getUnsignedIntConst(nregs * (eltSize / 8), 64);
         }
