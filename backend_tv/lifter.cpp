@@ -8026,8 +8026,8 @@ public:
       if (w < 32)
         val = createTrunc(val, getIntTy(w));
       auto lane = getImm(2);
-      auto orig = readFromRegOld(CurInst->getOperand(1).getReg());
-      auto vec = createBitCast(orig, getVecTy(w, 128 / w));
+      auto ty = getVecTy(w, 128 / w);
+      auto vec = readFromRegTyped(CurInst->getOperand(1).getReg(), ty);
       auto inserted = createInsertElement(vec, val, lane);
       updateOutputReg(inserted);
       break;
