@@ -73,7 +73,7 @@ add_custom_target(
 )
 
 find_package(ZLIB)
-find_package(Z3 4.8.5 REQUIRED)
+find_package(Z3 4.8.12 REQUIRED)
 include_directories(${Z3_INCLUDE_DIR})
 
 find_program(RE2C re2c)

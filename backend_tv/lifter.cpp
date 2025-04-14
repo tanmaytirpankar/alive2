@@ -1099,6 +1099,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
       AArch64::CMEQv8i8,
       AArch64::CMEQv8i8rz,
       AArch64::CMGEv2i32,
+      AArch64::CMGEv1i64,
       AArch64::CMGEv4i16,
       AArch64::CMGEv8i8,
       AArch64::CMGTv2i32,
@@ -9253,6 +9254,7 @@ case AArch64::FCMGE64:
     case AArch64::CMEQv8i8rz:
     case AArch64::CMGEv16i8:
     case AArch64::CMGEv2i32:
+    case AArch64::CMGEv1i64:
     case AArch64::CMGEv2i64:
     case AArch64::CMGEv4i16:
     case AArch64::CMGEv4i32:
@@ -9348,6 +9350,7 @@ case AArch64::FCMGE64:
       case AArch64::CMEQv8i8:
       case AArch64::CMGEv16i8:
       case AArch64::CMGEv2i32:
+      case AArch64::CMGEv1i64:
       case AArch64::CMGEv2i64:
       case AArch64::CMGEv4i16:
       case AArch64::CMGEv4i32:
@@ -9396,6 +9399,7 @@ case AArch64::FCMGE64:
       case AArch64::CMHIv1i64:
       case AArch64::CMGTv1i64:
       case AArch64::CMEQv1i64:
+      case AArch64::CMGEv1i64:
         numElts = 1;
         eltSize = 64;
         break;
@@ -9543,6 +9547,7 @@ case AArch64::FCMGE64:
       case AArch64::CMGEv8i8rz:
       case AArch64::CMGEv16i8:
       case AArch64::CMGEv2i32:
+      case AArch64::CMGEv1i64:
       case AArch64::CMGEv2i64:
       case AArch64::CMGEv4i16:
       case AArch64::CMGEv4i32:
