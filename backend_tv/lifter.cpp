@@ -1090,6 +1090,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
       AArch64::CMEQv2i32,
       AArch64::CMHIv8i8,
       AArch64::CMHIv4i16,
+      AArch64::CMHIv1i64,
       AArch64::CMHIv2i32,
       AArch64::CMHIv1i64,
       AArch64::CMGTv1i64,
@@ -1105,6 +1106,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
       AArch64::CMGTv2i32,
       AArch64::CMGTv4i16,
       AArch64::CMGTv8i8,
+      AArch64::CMHSv1i64,
       AArch64::CMHSv2i32,
       AArch64::CMHSv4i16,
       AArch64::CMHSv8i8,
@@ -9269,8 +9271,8 @@ case AArch64::FCMGE64:
     case AArch64::CMGTv8i16:
     case AArch64::CMGTv8i8:
     case AArch64::CMHIv16i8:
-    case AArch64::CMHIv1i64:
     case AArch64::CMGTv1i64:
+    case AArch64::CMHIv1i64:
     case AArch64::CMHIv2i32:
     case AArch64::CMHIv2i64:
     case AArch64::CMHIv4i16:
@@ -9278,6 +9280,7 @@ case AArch64::FCMGE64:
     case AArch64::CMHIv8i16:
     case AArch64::CMHIv8i8:
     case AArch64::CMHSv16i8:
+    case AArch64::CMHSv1i64:
     case AArch64::CMHSv2i32:
     case AArch64::CMHSv2i64:
     case AArch64::CMHSv4i16:
@@ -9373,6 +9376,7 @@ case AArch64::FCMGE64:
       case AArch64::CMHIv8i16:
       case AArch64::CMHIv8i8:
       case AArch64::CMHSv16i8:
+      case AArch64::CMHSv1i64:
       case AArch64::CMHSv2i32:
       case AArch64::CMHSv2i64:
       case AArch64::CMHSv4i16:
@@ -9400,6 +9404,7 @@ case AArch64::FCMGE64:
       case AArch64::CMGTv1i64:
       case AArch64::CMEQv1i64:
       case AArch64::CMGEv1i64:
+      case AArch64::CMHSv1i64:
         numElts = 1;
         eltSize = 64;
         break;
@@ -9583,6 +9588,7 @@ case AArch64::FCMGE64:
         res = createICmp(ICmpInst::Predicate::ICMP_UGT, a, b);
         break;
       case AArch64::CMHSv16i8:
+      case AArch64::CMHSv1i64:
       case AArch64::CMHSv2i32:
       case AArch64::CMHSv2i64:
       case AArch64::CMHSv4i16:
