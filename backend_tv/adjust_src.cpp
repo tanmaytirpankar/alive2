@@ -423,6 +423,9 @@ Function *adjustSrc(Function *srcFn) {
   Function *NF =
       Function::Create(NFTy, srcFn->getLinkage(), srcFn->getAddressSpace(),
                        srcFn->getName(), srcFn->getParent());
+
+  // TODO -- it's probably not ok to copy all flags this way, we need
+  // to be picky and think hard about this
   NF->copyAttributesFrom(srcFn);
 
   NF->splice(NF->begin(), srcFn);
