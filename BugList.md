@@ -173,3 +173,4 @@ Please contact us or submit a PR if something is missing or inaccurate.
 40. vector miscompile from AArch64 backend (https://github.com/llvm/llvm-project/issues/125989)
 41. miscompile from AArch64 backend (https://github.com/llvm/llvm-project/issues/133928)
 42. fshr-related miscompile by AArch64 backend (https://github.com/llvm/llvm-project/issues/136746)
+43. integer math miscompile from AArch64 global isel backend (https://github.com/llvm/llvm-project/issues/137254)
