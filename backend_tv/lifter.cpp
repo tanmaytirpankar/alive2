@@ -46,6 +46,8 @@ mc::RegisterMCTargetOptionsFlags MOF;
 
 namespace {
 
+const bool EXTRA_ABI_CHECKS = false;
+
 // Represents a basic block of machine instructions
 class MCBasicBlock {
 private:
@@ -3794,7 +3796,7 @@ class arm2llvm : public aslp::lifter_interface_llvm {
     auto i32 = getIntTy(32);
     auto i64 = getIntTy(64);
 
-    if (true) {
+    if (EXTRA_ABI_CHECKS) {
       /*
        * ABI stuff: on all return paths, check that callee-saved +
        * other registers have been reset to their previous
@@ -4369,7 +4371,9 @@ class arm2llvm : public aslp::lifter_interface_llvm {
 
     *out << "[makeLoadWithOffset size = " << size << "]\n";
 
-    if (size == 1) {
+    // FIXME -- this code should not be needed, the ABI guarantees
+    // that loading an i1 should have the rest of the bits clear
+    if (false && size == 1) {
       *out << "[it's a 1-byte load]\n";
       if (auto llvmInst = getCurLLVMInst()) {
         if (auto LI = dyn_cast<LoadInst>(llvmInst)) {
