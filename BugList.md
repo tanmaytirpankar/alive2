@@ -174,3 +174,4 @@ Please contact us or submit a PR if something is missing or inaccurate.
 41. miscompile from AArch64 backend (https://github.com/llvm/llvm-project/issues/133928)
 42. fshr-related miscompile by AArch64 backend (https://github.com/llvm/llvm-project/issues/136746)
 43. integer math miscompile from AArch64 global isel backend (https://github.com/llvm/llvm-project/issues/137254)
+44. AArch64 backend folds fcmp nnan nsz + select to fminnm, causing confusion between +0.0 and -0.0 (https://github.com/llvm/llvm-project/issues/137998#issuecomment-2842824393)
