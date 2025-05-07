@@ -938,8 +938,7 @@ StateValue FpBinOp::toSMT(State &s) const {
   }
 
   auto scalar = [&](const auto &a, const auto &b, const Type &ty) {
-    return fm_poison(s, a.value, a.non_poison, b.value, b.non_poison,
-                     [&](auto &a, auto &b, auto &rm){ return fn(a, b, rm); },
+    return fm_poison(s, a.value, a.non_poison, b.value, b.non_poison, fn,
                      ty, fmath, rm, bitwise);
   };
 
@@ -967,7 +966,7 @@ expr FpBinOp::getTypeConstraints(const Function &f) const {
 
 unique_ptr<Instr> FpBinOp::dup(Function &f, const string &suffix) const {
   return make_unique<FpBinOp>(getType(), getName()+suffix, *lhs, *rhs, op,
-                              fmath);
+                              fmath, rm, ex);
 }
 
 
@@ -1195,9 +1194,8 @@ StateValue FpUnaryOp::toSMT(State &s) const {
   }
 
   auto scalar = [&](const StateValue &v, const Type &ty) {
-    return fm_poison(s, v.value, v.non_poison,
-                     [fn](auto &v, auto &rm) {return fn(v, rm);}, ty, fmath, rm,
-                     bitwise, false);
+    return
+      fm_poison(s, v.value, v.non_poison, fn, ty, fmath, rm, bitwise, false);
   };
 
   auto &v = s[*val];
@@ -1220,8 +1218,103 @@ expr FpUnaryOp::getTypeConstraints(const Function &f) const {
 }
 
 unique_ptr<Instr> FpUnaryOp::dup(Function &f, const string &suffix) const {
+  return make_unique<FpUnaryOp>(getType(), getName() + suffix, *val, op, fmath,
+                                rm, ex);
+}
+
+
+vector<Value*> FpUnaryOpVerticalZip::operands() const {
+  return { val };
+}
+
+bool FpUnaryOpVerticalZip::propagatesPoison() const {
+  return true;
+}
+
+bool FpUnaryOpVerticalZip::hasSideEffects() const {
+  return false;
+}
+
+void FpUnaryOpVerticalZip::rauw(const Value &what, Value &with) {
+  RAUW(val);
+}
+
+void FpUnaryOpVerticalZip::print(ostream &os) const {
+  const char *str = nullptr;
+  switch (op) {
+  case FrExp: str = "frexp "; break;
+  }
+
+  os << getName() << " = " << str << *val;
+}
+
+StateValue FpUnaryOpVerticalZip::toSMT(State &s) const {
+  function<pair<expr, expr>(const expr&)> fn;
+
+  switch (op) {
+  case FrExp:
+    fn = [&](const expr &v) {
+      auto frexp = v.frexp();
+      expr cond = v.isNaN() || v.isInf();
+      expr nondet = s.getFreshNondetVar("frexp", frexp.second);
+      return make_pair(expr::mkIf(cond, v, frexp.first),
+                       expr::mkIf(cond, nondet, frexp.second));
+    };
+    break;
+  }
+
+  auto &v = s[*val];
+  vector<StateValue> vals;
+
+  auto scalar = [&](const StateValue &v, const Type &ty) {
+    expr val2;
+    auto fn2 = [&](auto &v, auto &rm){
+      auto [v1, v2] = fn(v);
+      val2 = std::move(v2);
+      return v1;
+    };
+    auto v1 = fm_poison(s, v.value, v.non_poison, fn2, ty, {}, {}, false);
+    return make_pair(std::move(v1),
+                     StateValue(std::move(val2), expr(v.non_poison) ));
+  };
+
+  if (getType().isVectorType()) {
+    vector<StateValue> v1s, v2s;
+    auto ty = val->getType().getAsAggregateType();
+    for (unsigned i = 0, e = ty->numElementsConst(); i != e; ++i) {
+      auto [v1, v2] = scalar(ty->extract(v, i), ty->getChild(i));
+      v1s.emplace_back(std::move(v1));
+      v2s.emplace_back(std::move(v2));
+    }
+    auto retty = getType().getAsAggregateType();
+    vals.emplace_back(
+      retty->getChild(0).getAsAggregateType()->aggregateVals(v1s));
+    vals.emplace_back(
+      retty->getChild(1).getAsAggregateType()->aggregateVals(v2s));
+  } else {
+    auto [v1, v2] = scalar(v, val->getType());
+    vals.emplace_back(std::move(v1));
+    vals.emplace_back(std::move(v2));
+  }
+  return getType().getAsAggregateType()->aggregateVals(vals);
+}
+
+expr FpUnaryOpVerticalZip::getTypeConstraints(const Function &f) const {
+  auto c = Value::getTypeConstraints() &&
+           val->getType().enforceFloatOrVectorType() &&
+           getType().enforceStructType();
+  if (auto ty = getType().getAsStructType()) {
+    c &= ty->numElementsExcludingPadding() == 2 &&
+         ty->getChild(0) == val->getType() &&
+         ty->getChild(1).enforceIntOrVectorType(32);
+  }
+  return c;
+}
+
+unique_ptr<Instr>
+FpUnaryOpVerticalZip::dup(Function &f, const string &suffix) const {
   return
-    make_unique<FpUnaryOp>(getType(), getName() + suffix, *val, op, fmath, rm);
+    make_unique<FpUnaryOpVerticalZip>(getType(), getName() + suffix, *val, op);
 }
 
 
@@ -1496,7 +1589,7 @@ expr FpTernaryOp::getTypeConstraints(const Function &f) const {
 
 unique_ptr<Instr> FpTernaryOp::dup(Function &f, const string &suffix) const {
   return make_unique<FpTernaryOp>(getType(), getName() + suffix, *a, *b, *c, op,
-                                  fmath, rm);
+                                  fmath, rm, ex);
 }
 
 
@@ -2037,7 +2130,8 @@ expr Select::getTypeConstraints(const Function &f) const {
 }
 
 unique_ptr<Instr> Select::dup(Function &f, const string &suffix) const {
-  return make_unique<Select>(getType(), getName() + suffix, *cond, *a, *b);
+  return
+    make_unique<Select>(getType(), getName() + suffix, *cond, *a, *b, fmath);
 }
 
 
@@ -2929,7 +3023,8 @@ expr FCmp::getTypeConstraints(const Function &f) const {
 }
 
 unique_ptr<Instr> FCmp::dup(Function &f, const string &suffix) const {
-  return make_unique<FCmp>(getType(), getName() + suffix, cond, *a, *b, fmath);
+  return make_unique<FCmp>(getType(), getName() + suffix, cond, *a, *b, fmath,
+                           ex, signaling);
 }
 
 
