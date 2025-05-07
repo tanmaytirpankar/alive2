@@ -323,7 +323,16 @@ const State::ValTy& State::exec(const Value &v) {
     = values.try_emplace(&v, ValTy{std::move(val), domain.noreturn,
                                    std::move(value_ub), std::move(undef_vars)});
   assert(inserted);
-  analysis.unused_vars.insert(&v);
+
+  // As an optimization, record that this value has not yet been used, so
+  // we can use this undef variable (if any) on the first use
+  // This saves one rewrite per definition
+  // We cannot do this optimization in ASM mode because an undef value may
+  // trigger a poison value in the source, but since the target does not have
+  // poison values, it must be converted into a non-det value that must be
+  // able to range over the full domain, not just the non-poison domain.
+  if (!config::tgt_is_asm)
+    analysis.unused_vars.insert(&v);
 
   // cleanup potentially used temporary values due to undef rewriting
   while (i_tmp_values > 0) {
@@ -643,6 +652,25 @@ const StateValue& State::getVal(const Value &val, bool is_poison_ub) {
 
 const expr& State::getWellDefinedPtr(const Value &val) {
   return getAndAddPoisonUB(val, true, true).value;
+}
+
+StateValue State::freeze(const Type &ty, const StateValue &v) {
+  if (auto agg = ty.getAsAggregateType()) {
+    vector<StateValue> vals;
+    for (unsigned i = 0, e = agg->numElementsConst(); i != e; ++i) {
+      if (agg->isPadding(i))
+        continue;
+      vals.emplace_back(freeze(agg->getChild(i), agg->extract(v, i)));
+    }
+    return agg->aggregateVals(vals);
+  }
+
+  if (v.non_poison.isTrue())
+    return v;
+
+  expr nondet = expr::mkFreshVar("nondet", v.value);
+  addQuantVar(nondet);
+  return { expr::mkIf(v.non_poison, v.value, nondet), true };
 }
 
 const State::ValTy* State::at(const Value &val) const {
@@ -1401,8 +1429,14 @@ expr State::sinkDomain(bool include_ub) const {
 }
 
 const StateValue& State::returnValCached() {
-  if (auto *v = get_if<DisjointExpr<StateValue>>(&return_val))
+  if (auto *v = get_if<DisjointExpr<StateValue>>(&return_val)) {
     return_val = *std::move(*v)();
+    auto &val = get<StateValue>(return_val);
+    // there is no poison in asm mode
+    if (isAsmMode() && !val.non_poison.isTrue()) {
+      val = freeze(getFn().getType(), val);
+    }
+  }
   return get<StateValue>(return_val);
 }
 

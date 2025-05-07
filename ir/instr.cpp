@@ -1278,7 +1278,7 @@ StateValue FpUnaryOpVerticalZip::toSMT(State &s) const {
                      StateValue(std::move(val2), expr(v.non_poison) ));
   };
 
-  if (getType().isVectorType()) {
+  if (val->getType().isVectorType()) {
     vector<StateValue> v1s, v2s;
     auto ty = val->getType().getAsAggregateType();
     for (unsigned i = 0, e = ty->numElementsConst(); i != e; ++i) {
@@ -3048,31 +3048,10 @@ void Freeze::print(ostream &os) const {
   os << getName() << " = freeze " << print_type(getType()) << val->getName();
 }
 
-static StateValue freeze_elems(State &s, const Type &ty, const StateValue &v) {
-  if (auto agg = ty.getAsAggregateType()) {
-    vector<StateValue> vals;
-    for (unsigned i = 0, e = agg->numElementsConst(); i != e; ++i) {
-      if (agg->isPadding(i))
-        continue;
-      vals.emplace_back(freeze_elems(s, agg->getChild(i), agg->extract(v, i)));
-    }
-    return agg->aggregateVals(vals);
-  }
-
-  if (v.non_poison.isTrue())
-    return v;
-
-  StateValue ret_type = ty.getDummyValue(true);
-  expr nondet = expr::mkFreshVar("nondet", ret_type.value);
-  s.addQuantVar(nondet);
-  return { expr::mkIf(v.non_poison, v.value, nondet),
-           std::move(ret_type.non_poison) };
-}
-
 StateValue Freeze::toSMT(State &s) const {
   auto &v = s[*val];
   s.resetUndefVars();
-  return freeze_elems(s, getType(), v);
+  return s.freeze(getType(), v);
 }
 
 expr Freeze::getTypeConstraints(const Function &f) const {
