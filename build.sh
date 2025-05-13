@@ -37,25 +37,25 @@ if command -v clang++ &>/dev/null && [[ -z "$CXX" ]]; then
   export CXX=$(which clang++)
 fi
 
-if [ "$USER" == "regehr" ]; then
-cmake -B build -DBUILD_TV=1 \
-  -DCMAKE_PREFIX_PATH="$(realpath build/antlr-dev)" \
-  -DANTLR4_JAR_LOCATION="$(realpath build/antlr-jar)" \
-  -DLLVM_DIR=$HOME/llvm-project/for-alive/lib/cmake/llvm/ \
-  -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
-  "$@"
-cmake --build build
+if [ ! -z "$LOCAL_LLVM" ]; then
+  cmake -B build -DBUILD_TV=1 \
+    -DCMAKE_PREFIX_PATH="$(realpath build/antlr-dev)" \
+    -DANTLR4_JAR_LOCATION="$(realpath build/antlr-jar)" \
+    -DLLVM_DIR=$LOCAL_LLVM/lib/cmake/llvm/ \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    "$@"
+  cmake --build build
 else
   # -DCMAKE_BUILD_TYPE=Release \
-cmake -B build -DBUILD_TV=1 \
-  -DCMAKE_PREFIX_PATH="$(realpath build/antlr-dev);$(realpath build/llvm-dev)" \
-  -DANTLR4_JAR_LOCATION="$(realpath build/antlr-jar)" \
-  "$@"
-  # -DLLVM_DIR=~/progs/llvm-regehr/build/lib/cmake/llvm/ \
-  # -DFETCHCONTENT_SOURCE_DIR_ASLP-CPP=~/progs/aslp \
-  # -DCMAKE_VERBOSE_MAKEFILE=TRUE \
-cmake --build build -j12
+  cmake -B build -DBUILD_TV=1 \
+    -DCMAKE_PREFIX_PATH="$(realpath build/antlr-dev);$(realpath build/llvm-dev)" \
+    -DANTLR4_JAR_LOCATION="$(realpath build/antlr-jar)" \
+    "$@"
+    # -DLLVM_DIR=~/progs/llvm-regehr/build/lib/cmake/llvm/ \
+    # -DFETCHCONTENT_SOURCE_DIR_ASLP-CPP=~/progs/aslp \
+    # -DCMAKE_VERBOSE_MAKEFILE=TRUE \
+  cmake --build build -j12
 fi
 
 # HACK: when building with LLVM from Nix, the alivecc/alive++ will be non-functional,
