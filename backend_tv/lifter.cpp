@@ -11395,81 +11395,102 @@ case AArch64::FCMGE64:
       break;
     }
 
-      /*
-      case AArch64::UMLALv4i16_indexed:
-      case AArch64::UMLALv8i16_indexed:
+    case AArch64::UMLALv4i16_indexed:
+    case AArch64::UMLALv8i16_indexed:
+    case AArch64::UMLALv2i32_indexed:
+    case AArch64::UMLALv4i32_indexed:
+    case AArch64::UMLSLv4i16_indexed:
+    case AArch64::UMLSLv8i16_indexed:
+    case AArch64::UMLSLv2i32_indexed:
+    case AArch64::UMLSLv4i32_indexed:
+    case AArch64::SMLALv4i16_indexed:
+    case AArch64::SMLALv8i16_indexed:
+    case AArch64::SMLALv2i32_indexed:
+    case AArch64::SMLALv4i32_indexed:
+    case AArch64::SMLSLv4i16_indexed:
+    case AArch64::SMLSLv8i16_indexed:
+    case AArch64::SMLSLv2i32_indexed:
+    case AArch64::SMLSLv4i32_indexed: {
+      unsigned numElts, eltSize;
+      switch (opcode) {
       case AArch64::UMLALv2i32_indexed:
-      case AArch64::UMLALv4i32_indexed:
-      case AArch64::UMLSLv4i16_indexed:
-      case AArch64::UMLSLv8i16_indexed:
       case AArch64::UMLSLv2i32_indexed:
-      case AArch64::UMLSLv4i32_indexed:
-      case AArch64::SMLALv4i16_indexed:
-      case AArch64::SMLALv8i16_indexed:
       case AArch64::SMLALv2i32_indexed:
-      case AArch64::SMLALv4i32_indexed:
-      case AArch64::SMLSLv4i16_indexed:
-      case AArch64::SMLSLv8i16_indexed:
       case AArch64::SMLSLv2i32_indexed:
-      case AArch64::SMLSLv4i32_indexed: {
-        unsigned numElts, eltSize;
-        GET_SIZES4(SMLAL, _indexed);
-        auto isUpper = opcode == AArch64::UMLALv8i16_indexed ||
-                       opcode == AArch64::UMLSLv8i16_indexed ||
-                       opcode == AArch64::SMLALv8i16_indexed ||
-                       opcode == AArch64::SMLSLv8i16_indexed ||
-                       opcode == AArch64::UMLALv4i32_indexed ||
-                       opcode == AArch64::UMLSLv4i32_indexed ||
-                       opcode == AArch64::SMLALv4i32_indexed ||
-                       opcode == AArch64::SMLSLv4i32_indexed;
-        auto isSigned = opcode == AArch64::SMLALv4i16_indexed ||
-                        opcode == AArch64::SMLSLv4i16_indexed ||
-                        opcode == AArch64::SMLALv8i16_indexed ||
-                        opcode == AArch64::SMLSLv8i16_indexed ||
-                        opcode == AArch64::SMLALv2i32_indexed ||
-                        opcode == AArch64::SMLSLv2i32_indexed ||
-                        opcode == AArch64::SMLALv4i32_indexed ||
-                        opcode == AArch64::SMLSLv4i32_indexed;
-        auto isSub = opcode == AArch64::UMLSLv4i16_indexed ||
-                     opcode == AArch64::UMLSLv8i16_indexed ||
-                     opcode == AArch64::UMLSLv2i32_indexed ||
-                     opcode == AArch64::UMLSLv4i32_indexed ||
-                     opcode == AArch64::SMLSLv4i16_indexed ||
-                     opcode == AArch64::SMLSLv8i16_indexed ||
-                     opcode == AArch64::SMLSLv2i32_indexed ||
-                     opcode == AArch64::SMLSLv4i32_indexed;
-        assert(isSIMDandFPRegOperand(CurInst->getOperand(0)) &&
-               isSIMDandFPRegOperand(CurInst->getOperand(1)) &&
-               CurInst->getOperand(0).getReg() ==
-                   CurInst->getOperand(1).getReg());
-        assert(CurInst->getOperand(4).isImm());
-
-        auto destReg =
-            readFromVecOperand(1, 2 * eltSize, isUpper ? numElts / 2 : numElts);
-        auto a = readFromVecOperand(2, eltSize, numElts, isUpper);
-        auto element = getIndexedElement(getImm(4), eltSize,
-                                         CurInst->getOperand(3).getReg());
-        auto splatElement = splat(element, numElts, eltSize);
-
-        auto extended_a =
-            isSigned ? createSExt(a, getVecTy(2 * eltSize,
-                                              isUpper ? numElts / 2 : numElts))
-                     : createZExt(a, getVecTy(2 * eltSize,
-                                              isUpper ? numElts / 2 : numElts));
-        auto extended_b =
-            isSigned ? createSExt(
-                           splatElement,
-                           getVecTy(2 * eltSize, isUpper ? numElts / 2 :
-      numElts)) : createZExt(splatElement, getVecTy(2 * eltSize, isUpper ?
-      numElts / 2 : numElts));
-
-        auto mul = createMul(extended_a, extended_b);
-        auto sum = isSub ? createSub(destReg, mul) : createAdd(destReg, mul);
-
-        updateOutputReg(sum);
+        numElts = 2;
+        eltSize = 32;
         break;
+      case AArch64::UMLALv4i16_indexed:
+      case AArch64::UMLSLv4i16_indexed:
+      case AArch64::SMLALv4i16_indexed:
+      case AArch64::SMLSLv4i16_indexed:
+        numElts = 4;
+        eltSize = 16;
+        break;
+      case AArch64::UMLALv4i32_indexed:
+      case AArch64::UMLSLv4i32_indexed:
+      case AArch64::SMLALv4i32_indexed:
+      case AArch64::SMLSLv4i32_indexed:
+        numElts = 4;
+        eltSize = 32;
+        break;
+      case AArch64::UMLALv8i16_indexed:
+      case AArch64::UMLSLv8i16_indexed:
+      case AArch64::SMLALv8i16_indexed:
+      case AArch64::SMLSLv8i16_indexed:
+        numElts = 8;
+        eltSize = 16;
+        break;
+      default:
+        assert(false);
       }
-      */
+      auto isUpper = opcode == AArch64::UMLALv8i16_indexed ||
+                     opcode == AArch64::UMLSLv8i16_indexed ||
+                     opcode == AArch64::SMLALv8i16_indexed ||
+                     opcode == AArch64::SMLSLv8i16_indexed ||
+                     opcode == AArch64::UMLALv4i32_indexed ||
+                     opcode == AArch64::UMLSLv4i32_indexed ||
+                     opcode == AArch64::SMLALv4i32_indexed ||
+                     opcode == AArch64::SMLSLv4i32_indexed;
+      auto isSigned = opcode == AArch64::SMLALv4i16_indexed ||
+                      opcode == AArch64::SMLSLv4i16_indexed ||
+                      opcode == AArch64::SMLALv8i16_indexed ||
+                      opcode == AArch64::SMLSLv8i16_indexed ||
+                      opcode == AArch64::SMLALv2i32_indexed ||
+                      opcode == AArch64::SMLSLv2i32_indexed ||
+                      opcode == AArch64::SMLALv4i32_indexed ||
+                      opcode == AArch64::SMLSLv4i32_indexed;
+      auto isSub = opcode == AArch64::UMLSLv4i16_indexed ||
+                   opcode == AArch64::UMLSLv8i16_indexed ||
+                   opcode == AArch64::UMLSLv2i32_indexed ||
+                   opcode == AArch64::UMLSLv4i32_indexed ||
+                   opcode == AArch64::SMLSLv4i16_indexed ||
+                   opcode == AArch64::SMLSLv8i16_indexed ||
+                   opcode == AArch64::SMLSLv2i32_indexed ||
+                   opcode == AArch64::SMLSLv4i32_indexed;
+      assert(isSIMDandFPRegOperand(CurInst->getOperand(0)) &&
+             isSIMDandFPRegOperand(CurInst->getOperand(1)) &&
+             CurInst->getOperand(0).getReg() ==
+                 CurInst->getOperand(1).getReg());
+      assert(CurInst->getOperand(4).isImm());
+
+      auto numEltsAdj = isUpper ? numElts / 2 : numElts;
+
+      auto destReg = readFromVecOperand(1, 2 * eltSize, numEltsAdj);
+      auto a = readFromVecOperand(2, eltSize, numElts, isUpper);
+      auto element = getIndexedElement(getImm(4), eltSize,
+                                       CurInst->getOperand(3).getReg());
+      auto splatElement = splat(element, numEltsAdj, eltSize);
+      auto *eTy = getVecTy(2 * eltSize, numEltsAdj);
+      auto extended_a = isSigned ? createSExt(a, eTy) : createZExt(a, eTy);
+      auto extended_b = isSigned ? createSExt(splatElement, eTy)
+                                 : createZExt(splatElement, eTy);
+      auto mul = createMul(extended_a, extended_b);
+      auto sum = isSub ? createSub(destReg, mul) : createAdd(destReg, mul);
+
+      updateOutputReg(sum);
+      break;
+    }
 
     case AArch64::UMLALv8i8_v8i16:
     case AArch64::UMLALv16i8_v8i16:
