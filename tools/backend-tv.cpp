@@ -24,9 +24,9 @@
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/InitLLVM.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/TargetParser/Triple.h"
 #include "llvm/Transforms/IPO/GlobalDCE.h"
 #include "llvm/Transforms/IPO/Internalize.h"
@@ -60,6 +60,11 @@ llvm::cl::opt<std::string>
            llvm::cl::desc("Name of function to verify, without @ (default "
                           "= first function in the module)"),
            llvm::cl::cat(alive_cmdargs));
+
+llvm::cl::opt<string>
+    opt_backend(LLVM_ARGS_PREFIX "backend",
+                llvm::cl::desc("Backend to validate (default=aarch64)"),
+                llvm::cl::cat(alive_cmdargs), llvm::cl::init("aarch64"));
 
 llvm::cl::opt<string> opt_optimize_tgt(
     LLVM_ARGS_PREFIX "optimize-tgt",
@@ -96,12 +101,11 @@ llvm::cl::opt<bool> opt_asm_only(
     llvm::cl::desc("Only generate assembly and exit (default=false)"),
     llvm::cl::init(false), llvm::cl::cat(alive_cmdargs));
 
-llvm::cl::opt<string> opt_asm_output(
-    "asm-output",
-    llvm::cl::desc("Save assembly to file "
-                   "(default=no asm output)"),
-    llvm::cl::cat(alive_cmdargs));
-  
+llvm::cl::opt<string> opt_asm_output("asm-output",
+                                     llvm::cl::desc("Save assembly to file "
+                                                    "(default=no asm output)"),
+                                     llvm::cl::cat(alive_cmdargs));
+
 llvm::cl::opt<bool> save_lifted_ir(
     "save-lifted-ir",
     llvm::cl::desc("Save lifted LLVM IR to file (default=false)"),
@@ -204,7 +208,7 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
     }
   }
 
-  *out << "\n\n------------ AArch64 Assembly: ------------\n\n";
+  *out << "\n\n------------ Assembly: ------------\n\n";
   for (auto it = AsmBuffer->getBuffer().begin();
        it != AsmBuffer->getBuffer().end(); ++it) {
     *out << *it;
@@ -276,7 +280,7 @@ int main(int argc, char **argv) {
   llvm::LLVMContext Context;
 
   std::string Usage =
-      R"EOF(Alive2 stand-alone translation validator for the AArch64 backend:
+      R"EOF(Alive2-based backednd translation validator:
 version )EOF";
   Usage += alive_version;
 
@@ -314,9 +318,17 @@ version )EOF";
   config::disable_poison_input = true;
 
   // FIXME: we should avoid hard-coding these
-  srcModule.get()->setTargetTriple(llvm::Triple("aarch64-linux-gnu"));
-  srcModule.get()->setDataLayout(
-      "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128-Fn32");
+  if (opt_backend == "aarch64") {
+    srcModule.get()->setTargetTriple(llvm::Triple("aarch64-linux-gnu"));
+    srcModule.get()->setDataLayout(
+        "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128-Fn32");
+  } else if (opt_backend == "riscv64") {
+    srcModule.get()->setTargetTriple(llvm::Triple("riscv64-unknown-linux-gnu"));
+    srcModule.get()->setDataLayout("e-m:e-p:64:64-i64:64-i128:128-n32:64-S128");
+  } else {
+    *out << "ERROR: Only aarch64 or riscv64 are supported\n";
+    exit(-1);
+  }
 
   lifter::out = out;
 
