@@ -275,7 +275,7 @@ install(TARGETS alive alive-jobserver)
 #add_library(alive2 SHARED ${IR_SRCS} ${SMT_SRCS} ${TOOLS_SRCS} ${UTIL_SRCS} ${LLVM_UTIL_SRCS})
 
 if (BUILD_LLVM_UTILS OR BUILD_TV)
-  llvm_map_components_to_libnames(llvm_libs support core irreader bitwriter analysis passes transformutils ipo asmparser asmprinter target mc mcparser mcdisassembler aarch64asmparser aarch64codegen aarch64desc aarch64disassembler aarch64info aarch64utils)
+  llvm_map_components_to_libnames(llvm_libs support core irreader bitwriter analysis passes transformutils ipo asmparser asmprinter target mc mcparser mcdisassembler aarch64asmparser aarch64codegen aarch64desc aarch64disassembler aarch64info aarch64utils riscvasmparser riscvcodegen riscvdesc riscvdisassembler riscvinfo )
 
   add_subdirectory(backend_tv/aslp)
   target_link_libraries(backend_tv PUBLIC bridge)

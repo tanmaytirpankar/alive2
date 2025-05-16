@@ -262,7 +262,7 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   out->flush();
 }
 
-} // namespace
+} // anonymous namespace
 
 unique_ptr<Cache> cache;
 
@@ -319,16 +319,22 @@ version )EOF";
 
   // FIXME: we should avoid hard-coding these
   if (opt_backend == "aarch64") {
-    srcModule.get()->setTargetTriple(llvm::Triple("aarch64-linux-gnu"));
-    srcModule.get()->setDataLayout(
-        "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128-Fn32");
+    lifter::DefaultTT = llvm::Triple("aarch64-unknown-linux-gnu");
+    lifter::DefaultDL =
+        "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128-Fn32";
+    lifter::DefaultCPU = "generic";
   } else if (opt_backend == "riscv64") {
-    srcModule.get()->setTargetTriple(llvm::Triple("riscv64-unknown-linux-gnu"));
-    srcModule.get()->setDataLayout("e-m:e-p:64:64-i64:64-i128:128-n32:64-S128");
+    lifter::DefaultTT = llvm::Triple("riscv64-unknown-linux-gnu");
+    lifter::DefaultDL = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128";
+    lifter::DefaultCPU = "generic";
   } else {
     *out << "ERROR: Only aarch64 or riscv64 are supported\n";
     exit(-1);
   }
+
+  lifter::DefaultBackend = opt_backend;
+  srcModule.get()->setTargetTriple(lifter::DefaultTT);
+  srcModule.get()->setDataLayout(lifter::DefaultDL);
 
   lifter::out = out;
 

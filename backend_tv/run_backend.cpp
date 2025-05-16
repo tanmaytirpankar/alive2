@@ -23,7 +23,7 @@ unique_ptr<MemoryBuffer> generateAsm(Module &M) {
   TargetOptions Opt;
   auto RM = optional<Reloc::Model>();
   unique_ptr<TargetMachine> TM(
-      Targ->createTargetMachine(DefaultTT, CPU, "", Opt, RM));
+      Targ->createTargetMachine(DefaultTT, DefaultCPU, "", Opt, RM));
 
   Asm = "";
   raw_svector_ostream os(Asm);

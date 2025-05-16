@@ -1,3 +1,5 @@
+#include <string>
+
 #include "llvm/IR/Module.h"
 #include "llvm/MC/TargetRegistry.h"
 
@@ -40,9 +42,11 @@ extern const llvm::Target *Targ;
 extern llvm::Function *myAlloc;
 extern llvm::Constant *stackSize;
 
-// TODO -- expose these to the command line
-inline const llvm::Triple DefaultTT("aarch64-unknown-linux-gnu");
-inline const char *CPU = "generic";
+extern std::string DefaultBackend;
+// TODO -- let users change these?
+extern llvm::Triple DefaultTT;
+extern const char *DefaultDL;
+extern const char *DefaultCPU;
 
 extern std::unordered_map<unsigned, llvm::Instruction *> lineMap;
 

@@ -44,6 +44,11 @@ const unsigned V = 100000003;
 // do not delete this line
 mc::RegisterMCTargetOptionsFlags MOF;
 
+std::string lifter::DefaultBackend;
+llvm::Triple lifter::DefaultTT;
+const char *lifter::DefaultDL;
+const char *lifter::DefaultCPU;
+
 namespace {
 
 const bool EXTRA_ABI_CHECKS = false;
@@ -13450,11 +13455,21 @@ void init() {
   assert(!initialized);
   auto TripleStr = DefaultTT.getTriple();
   assert(TripleStr == Triple::normalize(TripleStr));
-  LLVMInitializeAArch64TargetInfo();
-  LLVMInitializeAArch64Target();
-  LLVMInitializeAArch64TargetMC();
-  LLVMInitializeAArch64AsmParser();
-  LLVMInitializeAArch64AsmPrinter();
+  if (DefaultBackend == "aarch64") {
+    LLVMInitializeAArch64TargetInfo();
+    LLVMInitializeAArch64Target();
+    LLVMInitializeAArch64TargetMC();
+    LLVMInitializeAArch64AsmParser();
+    LLVMInitializeAArch64AsmPrinter();
+  } else if (DefaultBackend == "riscv64") {
+    LLVMInitializeRISCVTargetInfo();
+    LLVMInitializeRISCVTarget();
+    LLVMInitializeRISCVTargetMC();
+    LLVMInitializeRISCVAsmParser();
+    LLVMInitializeRISCVAsmPrinter();
+  } else {
+    assert(false);
+  }
   string Error;
   Targ = TargetRegistry::lookupTarget(DefaultTT, Error);
   if (!Targ) {
@@ -13480,9 +13495,9 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
   assert(MRI && "Unable to create target register info!");
 
   unique_ptr<MCSubtargetInfo> STI(
-      Targ->createMCSubtargetInfo(DefaultTT.getTriple(), CPU, ""));
+      Targ->createMCSubtargetInfo(DefaultTT.getTriple(), DefaultCPU, ""));
   assert(STI && "Unable to create subtarget info!");
-  assert(STI->isCPUStringValid(CPU) && "Invalid CPU!");
+  assert(STI->isCPUStringValid(DefaultCPU) && "Invalid CPU!");
 
   unique_ptr<MCAsmInfo> MAI(
       Targ->createMCAsmInfo(*MRI, DefaultTT.getTriple(), MCOptions));
