@@ -44,7 +44,6 @@ const unsigned V = 100000003;
 // do not delete this line
 mc::RegisterMCTargetOptionsFlags MOF;
 
-std::string lifter::DefaultBackend;
 llvm::Triple lifter::DefaultTT;
 const char *lifter::DefaultDL;
 const char *lifter::DefaultCPU;
@@ -13439,6 +13438,22 @@ public:
   }
 };
 
+class arm2llvm : public mc2llvm {
+public:
+  arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
+           MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
+           const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)
+      : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA) {}
+};
+
+class riscv2llvm : public mc2llvm {
+public:
+  riscv2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
+             MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
+             const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)
+      : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA) {}
+};
+
 } // namespace
 
 namespace lifter {
@@ -13449,8 +13464,10 @@ bool has_ret_attr;
 const Target *Targ;
 Function *myAlloc;
 Constant *stackSize;
+std::string DefaultBackend;
 
-void init() {
+void init(std::string &backend) {
+  DefaultBackend = backend;
   static bool initialized = false;
   assert(!initialized);
   auto TripleStr = DefaultTT.getTriple();
@@ -13541,8 +13558,19 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
   unique_ptr<MCCodeEmitter> MCE{Targ->createMCCodeEmitter(*MCII.get(), Ctx)};
   assert(MCE && "createMCCodeEmitter failed.");
 
-  auto liftedFn =
-      mc2llvm{LiftedModule, Str.MF, *srcFn, IP.get(), *MCE, *STI, *Ana}.run();
+  Function *liftedFn;
+  if (DefaultBackend == "aarch64") {
+    liftedFn =
+        arm2llvm{LiftedModule, Str.MF, *srcFn, IP.get(), *MCE, *STI, *Ana}
+            .run();
+  } else if (DefaultBackend == "riscv64") {
+    liftedFn =
+        riscv2llvm{LiftedModule, Str.MF, *srcFn, IP.get(), *MCE, *STI, *Ana}
+            .run();
+  } else {
+    *out << "ERROR: Nonexistent backend\n";
+    exit(-1);
+  }
 
   std::string sss;
   llvm::raw_string_ostream ss(sss);

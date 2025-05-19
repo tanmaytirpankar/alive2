@@ -94,6 +94,11 @@ cl::opt<string>
                         "(default=value)"),
                cl::cat(alive_cmdargs), cl::init("value"));
 
+llvm::cl::opt<string>
+    opt_backend(LLVM_ARGS_PREFIX "backend",
+                llvm::cl::desc("Backend to validate (default=aarch64)"),
+                llvm::cl::cat(alive_cmdargs), llvm::cl::init("aarch64"));
+
 cl::opt<string>
     optPass(LLVM_ARGS_PREFIX "passes", cl::value_desc("optimization passes"),
             cl::desc("Specify which LLVM passes to run (default=O2). "
@@ -893,7 +898,7 @@ void BBFuzzer::go() {
 }
 
 void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
-  lifter::init();
+  lifter::init(opt_backend);
   lifter::checkSupport(srcFn);
   lifter::nameGlobals(M1);
 

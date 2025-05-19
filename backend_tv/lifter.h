@@ -42,7 +42,6 @@ extern const llvm::Target *Targ;
 extern llvm::Function *myAlloc;
 extern llvm::Constant *stackSize;
 
-extern std::string DefaultBackend;
 // TODO -- let users change these?
 extern llvm::Triple DefaultTT;
 extern const char *DefaultDL;
@@ -50,7 +49,7 @@ extern const char *DefaultCPU;
 
 extern std::unordered_map<unsigned, llvm::Instruction *> lineMap;
 
-void init();
+void init(std::string &backend);
 
 void nameGlobals(llvm::Module *);
 llvm::Function *adjustSrc(llvm::Function *);

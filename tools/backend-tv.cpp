@@ -187,7 +187,7 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
     MPM.run(*srcModule, MAM);
   }
 
-  lifter::init();
+  lifter::init(opt_backend);
 
   if (opt_use_debuginfo)
     lifter::addDebugInfo(srcFn);
@@ -330,7 +330,6 @@ version )EOF";
     exit(-1);
   }
 
-  lifter::DefaultBackend = opt_backend;
   srcModule.get()->setTargetTriple(lifter::DefaultTT);
   srcModule.get()->setDataLayout(lifter::DefaultDL);
 
