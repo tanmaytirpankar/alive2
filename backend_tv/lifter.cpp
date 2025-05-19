@@ -4530,22 +4530,7 @@ public:
           const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)
       : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
         InstPrinter(InstPrinter), MCE{MCE}, STI{STI}, IA{IA},
-        DL(srcFn.getParent()->getDataLayout()) {
-
-    // sanity checking
-    assert(disjoint(instrs_32, instrs_64));
-    assert(disjoint(instrs_32, instrs_128));
-    assert(disjoint(instrs_64, instrs_128));
-    *out << (instrs_32.size() + instrs_64.size() + instrs_128.size())
-         << " instructions supported\n";
-
-    // we'll want this later
-    vector<Type *> args{getIntTy(1)};
-    FunctionType *assertTy =
-        FunctionType::get(Type::getVoidTy(Ctx), args, false);
-    assertDecl = Function::Create(assertTy, Function::ExternalLinkage,
-                                  "llvm.assert", LiftedModule);
-  }
+        DL(srcFn.getParent()->getDataLayout()) {}
 
   std::optional<aslp::opcode_t> getArmOpcode(const MCInst &I) {
     SmallVector<MCFixup> Fixups{};
@@ -12890,8 +12875,20 @@ case AArch64::FCMGE64:
   }
 
   Function *run() {
+    // sanity checking
+    assert(disjoint(instrs_32, instrs_64));
+    assert(disjoint(instrs_32, instrs_128));
+    assert(disjoint(instrs_64, instrs_128));
+    *out << (instrs_32.size() + instrs_64.size() + instrs_128.size())
+         << " instructions supported\n";
+
+    // we'll want this later
+    vector<Type *> args{getIntTy(1)};
+    FunctionType *assertTy =
+        FunctionType::get(Type::getVoidTy(Ctx), args, false);
+    assertDecl = Function::Create(assertTy, Function::ExternalLinkage,
+                                  "llvm.assert", LiftedModule);
     auto i8 = getIntTy(8);
-    // auto i32 = getIntTy(32);
     auto i64 = getIntTy(64);
 
     // create a fresh function
@@ -12910,7 +12907,7 @@ case AArch64::FCMGE64:
         auto bb = BasicBlock::Create(Ctx, mbb.getName(), liftedFn);
         BBs.push_back(make_pair(bb, &mbb));
       }
-      *out << insts << " AArch64 instructions\n";
+      *out << insts << " assembly instructions\n";
       out->flush();
     }
 
@@ -13438,6 +13435,8 @@ public:
   }
 };
 
+// FIXME -- these need to go into their own files
+  
 class arm2llvm : public mc2llvm {
 public:
   arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
