@@ -13517,6 +13517,10 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
   MCStreamerWrapper Str(Ctx, Ana.get(), IP.get(), MRI.get());
   Str.setUseAssemblerInfoForParsing(true);
 
+  raw_ostream &OSRef = nulls();
+  formatted_raw_ostream FOSRef(OSRef);
+  Targ->createAsmTargetStreamer(Str, FOSRef, IP.get());
+
   unique_ptr<MCAsmParser> Parser(createMCAsmParser(SrcMgr, Ctx, Str, *MAI));
   assert(Parser);
 
@@ -13539,7 +13543,6 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
 
   auto liftedFn =
       arm2llvm{LiftedModule, Str.MF, *srcFn, IP.get(), *MCE, *STI, *Ana}.run();
-  liftedFn->dump();
 
   std::string sss;
   llvm::raw_string_ostream ss(sss);
