@@ -164,7 +164,7 @@ public:
   }
 };
 
-class arm2llvm : public aslp::lifter_interface_llvm {
+class mc2llvm : public aslp::lifter_interface_llvm {
   Module *LiftedModule{nullptr};
   LLVMContext &Ctx = LiftedModule->getContext();
   MCFunction &MF;
@@ -4526,9 +4526,9 @@ class arm2llvm : public aslp::lifter_interface_llvm {
   }
 
 public:
-  arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
-           MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
-           const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)
+  mc2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
+          MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
+          const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)
       : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
         InstPrinter(InstPrinter), MCE{MCE}, STI{STI}, IA{IA},
         DL(srcFn.getParent()->getDataLayout()) {
@@ -13542,7 +13542,7 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
   assert(MCE && "createMCCodeEmitter failed.");
 
   auto liftedFn =
-      arm2llvm{LiftedModule, Str.MF, *srcFn, IP.get(), *MCE, *STI, *Ana}.run();
+      mc2llvm{LiftedModule, Str.MF, *srcFn, IP.get(), *MCE, *STI, *Ana}.run();
 
   std::string sss;
   llvm::raw_string_ostream ss(sss);
