@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cstdint>
 
 uint64_t replicate8to64(uint64_t v);

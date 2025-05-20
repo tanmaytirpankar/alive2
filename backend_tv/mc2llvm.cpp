@@ -9,6 +9,12 @@ using namespace std;
 using namespace llvm;
 using namespace lifter;
 
+#define GET_INSTRINFO_ENUM
+#include "Target/AArch64/AArch64GenInstrInfo.inc"
+
+#define GET_REGINFO_ENUM
+#include "Target/AArch64/AArch64GenRegisterInfo.inc"
+
 Function *mc2llvm::copyFunctionToTarget(Function *f, const Twine &name) {
   auto newF = Function::Create(f->getFunctionType(),
                                GlobalValue::LinkageTypes::ExternalLinkage, name,

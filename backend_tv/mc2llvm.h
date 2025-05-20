@@ -1,3 +1,5 @@
+#pragma once
+
 #include "backend_tv/bitutils.h"
 #include "backend_tv/lifter.h"
 
@@ -15,12 +17,6 @@
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Target/TargetMachine.h"
-
-#define GET_INSTRINFO_ENUM
-#include "Target/AArch64/AArch64GenInstrInfo.inc"
-
-#define GET_REGINFO_ENUM
-#include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
 #include "aslp/aslp_bridge.h"
 
