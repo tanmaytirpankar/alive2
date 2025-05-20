@@ -186,7 +186,6 @@ public:
   const MCSubtargetInfo &STI;
   const MCInstrAnalysis &IA;
 
-public:
   mc2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
           MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
           const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)
@@ -459,14 +458,6 @@ public:
         return &bb;
     }
     assert(false && "basic block not found in getBBByName()");
-  }
-
-  static bool isSIMDandFPRegOperand(MCOperand &op) {
-    assert(op.isReg() && "[isSIMDandFPRegOperand] expected register operand");
-    unsigned reg = op.getReg();
-    return (reg >= AArch64::Q0 && reg <= AArch64::Q31) ||
-           (reg >= AArch64::D0 && reg <= AArch64::D31) ||
-           (reg >= AArch64::S0 && reg <= AArch64::S31);
   }
 
   Constant *getUnsignedIntConst(uint64_t val, uint64_t bits) override {
@@ -1125,7 +1116,7 @@ public:
     return res;
   }
 
-  static unsigned int getBitWidth(Type *ty) {
+  unsigned int getBitWidth(Type *ty) {
     if (auto vTy = dyn_cast<VectorType>(ty)) {
       return vTy->getScalarSizeInBits() *
              vTy->getElementCount().getFixedValue();
@@ -1145,7 +1136,7 @@ public:
     }
   }
 
-  static unsigned int getBitWidth(Value *V) {
+  unsigned int getBitWidth(Value *V) {
     return getBitWidth(V->getType());
   }
 
@@ -1210,7 +1201,42 @@ public:
 
   // Reads an Expr and gets the global variable corresponding the containing
   // string variable. Assuming the Expr consists of a single global variable.
-  pair<Value *, bool> getExprVar(const MCExpr *expr) {
+  pair<Value *, bool> getExprVar(const MCExpr *expr);
+  // negative shift exponents go the other direction
+  Value *createUSHL(Value *a, Value *b);
+  // negative shift exponents go the other direction
+  Value *createSSHL(Value *a, Value *b);
+  Value *rev(Value *in, unsigned eltSize, unsigned amt);
+  Value *dupElts(Value *v, unsigned numElts, unsigned eltSize);
+  Value *concat(Value *a, Value *b);
+  void assertSame(Value *a, Value *b);
+  void doDirectCall();
+  Instruction *getCurLLVMInst();
+  std::optional<aslp::opcode_t> getArmOpcode(const MCInst &I);
+  void liftInst(MCInst &I);
+  void invalidateReg(unsigned Reg, unsigned Width);
+  void createRegStorage(unsigned Reg, unsigned Width, const string &Name);
+  Function *run();
+
+  /*
+   * shared with the aslp lifter
+   */
+  void assertTrue(Value *cond) override;
+  void storeToMemoryValOffset(Value *base, Value *offset, uint64_t size,
+                              Value *val) override;
+
+  /*
+   * per-backend functionality goes here
+   */
+  virtual void doCall(FunctionCallee FC, CallInst *llvmCI,
+                      const string &calleeName) = 0;
+  virtual void lift(MCInst &I) = 0;
+  virtual Value *enforceSExtZExt(Value *V, bool isSExt, bool isZExt) = 0;
+  virtual Value *createRegFileAndStack() = 0;
+  virtual void doReturn() = 0;
+};
+
+  pair<Value *, bool> mc2llvm::getExprVar(const MCExpr *expr) {
     Value *globalVar;
     // Default to true meaning store the ptr global value rather than loading
     // the value from the global
@@ -1291,8 +1317,7 @@ public:
     return make_pair(globalVar, storePtr);
   }
 
-  // negative shift exponents go the other direction
-  Value *createUSHL(Value *a, Value *b) {
+  Value *mc2llvm::createUSHL(Value *a, Value *b) {
     auto zero = getUnsignedIntConst(0, getBitWidth(b));
     auto c = createICmp(ICmpInst::Predicate::ICMP_SGT, b, zero);
     auto neg = createSub(zero, b);
@@ -1301,8 +1326,7 @@ public:
     return createSelect(c, posRes, negRes);
   }
 
-  // negative shift exponents go the other direction
-  Value *createSSHL(Value *a, Value *b) {
+  Value *mc2llvm::createSSHL(Value *a, Value *b) {
     auto zero = getUnsignedIntConst(0, getBitWidth(b));
     auto c = createICmp(ICmpInst::Predicate::ICMP_SGT, b, zero);
     auto neg = createSub(zero, b);
@@ -1311,7 +1335,7 @@ public:
     return createSelect(c, posRes, negRes);
   }
 
-  Value *rev(Value *in, unsigned eltSize, unsigned amt) {
+  Value *mc2llvm::rev(Value *in, unsigned eltSize, unsigned amt) {
     assert(eltSize == 8 || eltSize == 16 || eltSize == 32);
     assert(getBitWidth(in) == 64 || getBitWidth(in) == 128);
     if (getBitWidth(in) == 64)
@@ -1329,7 +1353,7 @@ public:
     return rev;
   }
 
-  Value *dupElts(Value *v, unsigned numElts, unsigned eltSize) {
+  Value *mc2llvm::dupElts(Value *v, unsigned numElts, unsigned eltSize) {
     unsigned w = numElts * eltSize;
     assert(w == 64 || w == 128);
     assert(getBitWidth(v) == eltSize);
@@ -1339,7 +1363,7 @@ public:
     return res;
   }
 
-  Value *concat(Value *a, Value *b) {
+  Value *mc2llvm::concat(Value *a, Value *b) {
     int wa = getBitWidth(a);
     int wb = getBitWidth(b);
     auto wide_a = createZExt(a, getIntTy(wa + wb));
@@ -1348,89 +1372,16 @@ public:
     return createOr(shifted_a, wide_b);
   }
 
-  void assertTrue(Value *cond) override {
+  void mc2llvm::assertTrue(Value *cond) {
     assert(cond->getType()->getIntegerBitWidth() == 1 && "assert requires i1");
     CallInst::Create(assertDecl, {cond}, "", LLVMBB);
   }
 
-  void assertSame(Value *a, Value *b) {
+  void mc2llvm::assertSame(Value *a, Value *b) {
     auto *c = createICmp(ICmpInst::Predicate::ICMP_EQ, a, b);
     assertTrue(c);
   }
-
-  // Implemented library pseudocode for signed satuaration from A64 ISA manual
-  tuple<Value *, bool> SignedSatQ(Value *i, unsigned bitWidth) {
-    auto W = getBitWidth(i);
-    assert(bitWidth < W);
-    auto max = getSignedIntConst(((uint64_t)1 << (bitWidth - 1)) - 1, W);
-    auto min = getSignedIntConst(-((uint64_t)1 << (bitWidth - 1)), W);
-    auto *max_bitWidth = getSignedMaxConst(bitWidth);
-    auto *min_bitWidth = getSignedMinConst(bitWidth);
-    Value *i_bitWidth = createTrunc(i, getIntTy(bitWidth));
-
-    auto sat = createOr(createICmp(ICmpInst::Predicate::ICMP_SGT, i, max),
-                        createICmp(ICmpInst::Predicate::ICMP_SLT, i, min));
-    auto max_or_min =
-        createSelect(createICmp(ICmpInst::Predicate::ICMP_SGT, i, max),
-                     max_bitWidth, min_bitWidth);
-
-    auto res = createSelect(sat, max_or_min, i_bitWidth);
-    return make_pair(res, sat);
-  }
-
-  // Implemented library pseudocode for unsigned satuaration from A64 ISA manual
-  tuple<Value *, bool> UnsignedSatQ(Value *i, unsigned bitWidth) {
-    auto W = getBitWidth(i);
-    assert(bitWidth < W);
-    auto max = getUnsignedIntConst(((uint64_t)1 << bitWidth) - 1, W);
-    auto min = getUnsignedIntConst(0, W);
-    Value *max_bitWidth = ConstantInt::get(Ctx, APInt::getMaxValue(bitWidth));
-    Value *min_bitWidth = ConstantInt::get(Ctx, APInt::getMinValue(bitWidth));
-    Value *i_bitWidth = createTrunc(i, getIntTy(bitWidth));
-
-    auto sat = createOr(createICmp(ICmpInst::Predicate::ICMP_UGT, i, max),
-                        createICmp(ICmpInst::Predicate::ICMP_ULT, i, min));
-    auto max_or_min =
-        createSelect(createICmp(ICmpInst::Predicate::ICMP_UGT, i, max),
-                     max_bitWidth, min_bitWidth);
-
-    auto res = createSelect(sat, max_or_min, i_bitWidth);
-    return make_pair(res, sat);
-  }
-
-  // Implemented library pseudocode for satuaration from A64 ISA manual
-  tuple<Value *, bool> SatQ(Value *i, unsigned bitWidth, bool isSigned) {
-    auto [result, sat] =
-        isSigned ? SignedSatQ(i, bitWidth) : UnsignedSatQ(i, bitWidth);
-
-    return make_pair(result, sat);
-  }
-
-  void doDirectCall();
-  Instruction *getCurLLVMInst();
-  std::optional<aslp::opcode_t> getArmOpcode(const MCInst &I);
-  void liftInst(MCInst &I);
-  void invalidateReg(unsigned Reg, unsigned Width);
-  void createRegStorage(unsigned Reg, unsigned Width, const string &Name);
-  Function *run();
-
-  /*
-   * shared with the aslp lifter
-   */
-  void storeToMemoryValOffset(Value *base, Value *offset, uint64_t size,
-                              Value *val) override;
-
-  /*
-   * per-backend functionality goes here
-   */
-  virtual void doCall(FunctionCallee FC, CallInst *llvmCI,
-                      const string &calleeName) = 0;
-  virtual void lift(MCInst &I) = 0;
-  virtual Value *enforceSExtZExt(Value *V, bool isSExt, bool isZExt) = 0;
-  virtual Value *createRegFileAndStack() = 0;
-  virtual void doReturn() = 0;
-};
-
+  
 void mc2llvm::doDirectCall() {
   auto &op0 = CurInst->getOperand(0);
   assert(op0.isExpr());
@@ -1711,7 +1662,6 @@ Function *mc2llvm::run() {
     *out << enc << '=' << count << ',';
   }
   *out << '\n';
-  // liftedFn->dump();
   return liftedFn;
 }
 
@@ -2058,6 +2008,62 @@ public:
 // FIXME -- these next 2 clases need to go into their own files
 
 class arm2llvm : public mc2llvm {
+  // Implemented library pseudocode for signed satuaration from A64 ISA manual
+  tuple<Value *, bool> SignedSatQ(Value *i, unsigned bitWidth) {
+    auto W = getBitWidth(i);
+    assert(bitWidth < W);
+    auto max = getSignedIntConst(((uint64_t)1 << (bitWidth - 1)) - 1, W);
+    auto min = getSignedIntConst(-((uint64_t)1 << (bitWidth - 1)), W);
+    auto *max_bitWidth = getSignedMaxConst(bitWidth);
+    auto *min_bitWidth = getSignedMinConst(bitWidth);
+    Value *i_bitWidth = createTrunc(i, getIntTy(bitWidth));
+
+    auto sat = createOr(createICmp(ICmpInst::Predicate::ICMP_SGT, i, max),
+                        createICmp(ICmpInst::Predicate::ICMP_SLT, i, min));
+    auto max_or_min =
+        createSelect(createICmp(ICmpInst::Predicate::ICMP_SGT, i, max),
+                     max_bitWidth, min_bitWidth);
+
+    auto res = createSelect(sat, max_or_min, i_bitWidth);
+    return make_pair(res, sat);
+  }
+
+  // Implemented library pseudocode for unsigned satuaration from A64 ISA manual
+  tuple<Value *, bool> UnsignedSatQ(Value *i, unsigned bitWidth) {
+    auto W = getBitWidth(i);
+    assert(bitWidth < W);
+    auto max = getUnsignedIntConst(((uint64_t)1 << bitWidth) - 1, W);
+    auto min = getUnsignedIntConst(0, W);
+    Value *max_bitWidth = ConstantInt::get(Ctx, APInt::getMaxValue(bitWidth));
+    Value *min_bitWidth = ConstantInt::get(Ctx, APInt::getMinValue(bitWidth));
+    Value *i_bitWidth = createTrunc(i, getIntTy(bitWidth));
+
+    auto sat = createOr(createICmp(ICmpInst::Predicate::ICMP_UGT, i, max),
+                        createICmp(ICmpInst::Predicate::ICMP_ULT, i, min));
+    auto max_or_min =
+        createSelect(createICmp(ICmpInst::Predicate::ICMP_UGT, i, max),
+                     max_bitWidth, min_bitWidth);
+
+    auto res = createSelect(sat, max_or_min, i_bitWidth);
+    return make_pair(res, sat);
+  }
+
+  // Implemented library pseudocode for satuaration from A64 ISA manual
+  tuple<Value *, bool> SatQ(Value *i, unsigned bitWidth, bool isSigned) {
+    auto [result, sat] =
+        isSigned ? SignedSatQ(i, bitWidth) : UnsignedSatQ(i, bitWidth);
+
+    return make_pair(result, sat);
+  }
+
+  bool isSIMDandFPRegOperand(MCOperand &op) {
+    assert(op.isReg() && "[isSIMDandFPRegOperand] expected register operand");
+    unsigned reg = op.getReg();
+    return (reg >= AArch64::Q0 && reg <= AArch64::Q31) ||
+           (reg >= AArch64::D0 && reg <= AArch64::D31) ||
+           (reg >= AArch64::S0 && reg <= AArch64::S31);
+  }
+
   /*
    * the idea here is that if a parameter to the lifted function, or
    * the return value from the lifted function is, for example, 8
@@ -13468,8 +13474,6 @@ std::string DefaultBackend;
 
 void init(std::string &backend) {
   DefaultBackend = backend;
-  static bool initialized = false;
-  assert(!initialized);
   auto TripleStr = DefaultTT.getTriple();
   assert(TripleStr == Triple::normalize(TripleStr));
   if (DefaultBackend == "aarch64") {
@@ -13495,7 +13499,6 @@ void init(std::string &backend) {
   }
   origRetWidth = 64;
   has_ret_attr = false;
-  initialized = true;
 }
 
 pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
