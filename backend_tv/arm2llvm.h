@@ -15,12 +15,12 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Target/TargetMachine.h"
 
+#include "backend_tv/arm2llvm.h"
 #include "backend_tv/bitutils.h"
 #include "backend_tv/lifter.h"
 #include "backend_tv/mc2llvm.h"
 #include "backend_tv/mcutils.h"
 #include "backend_tv/riscv2llvm.h"
-#include "backend_tv/arm2llvm.h"
 #include "backend_tv/streamerwrapper.h"
 
 #include <cmath>
@@ -35,18 +35,18 @@ public:
   arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
            MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
            const MCSubtargetInfo &STI, const MCInstrAnalysis &IA);
-  
+
   // Implemented library pseudocode for signed satuaration from A64 ISA manual
   tuple<Value *, bool> SignedSatQ(Value *i, unsigned bitWidth);
 
   // Implemented library pseudocode for unsigned satuaration from A64 ISA manual
   tuple<Value *, bool> UnsignedSatQ(Value *i, unsigned bitWidth);
-  
+
   // Implemented library pseudocode for satuaration from A64 ISA manual
   tuple<Value *, bool> SatQ(Value *i, unsigned bitWidth, bool isSigned);
-  
+
   bool isSIMDandFPRegOperand(MCOperand &op);
-  
+
   /*
    * the idea here is that if a parameter to the lifted function, or
    * the return value from the lifted function is, for example, 8
@@ -75,9 +75,9 @@ public:
   unsigned decodeRegSet(unsigned r);
 
   Value *tblHelper2(vector<Value *> &tbl, Value *idx, unsigned i);
-  
+
   Value *tblHelper(vector<Value *> &tbl, Value *idx);
-  
+
   tuple<Value *, int> getParamsLoadImmed();
 
   Value *makeLoadWithOffset(Value *base, Value *offset, int size) override;
@@ -103,8 +103,7 @@ public:
   // Follows the "Library pseudocode for aarch64/instrs/extendreg/ExtendReg"
   // from ARM manual
   // val is always 64 bits and shiftAmt is always 0-4
-  Value *extendAndShiftValue(Value *val, enum ExtendType extType,
-                             int shiftAmt);
+  Value *extendAndShiftValue(Value *val, enum ExtendType extType, int shiftAmt);
 
   tuple<Value *, Value *> getParamsLoadReg();
 
@@ -120,7 +119,7 @@ public:
 
   void doCall(FunctionCallee FC, CallInst *llvmCI,
               const string &calleeName) override;
-  
+
   Value *conditionHolds(uint64_t cond);
 
   tuple<Value *, tuple<Value *, Value *, Value *, Value *>>
@@ -155,7 +154,7 @@ public:
                         Value *b, unsigned eltSize, unsigned numElts,
                         bool elementWise, extKind ext, bool splatImm2,
                         bool immShift, bool isUpper, bool operandTypesDiffer);
-  
+
   Value *getIndexedElement(unsigned idx, unsigned eltSize,
                            unsigned reg) override;
 
@@ -183,7 +182,7 @@ public:
   void updateReg(Value *V, uint64_t reg, bool SExt = false);
 
   Value *readInputReg(int idx);
-  
+
   // FIXME: stop using this -- instructions should know what they're loading
   // FIXME: then remove getInstSize!
   // TODO: make it so that lshr generates code on register lookups
@@ -219,7 +218,7 @@ public:
   pair<uint64_t, uint64_t> decodeBitMasks(uint64_t val, unsigned regSize);
 
   unsigned getInstSize(int instr);
-  
+
   // from getShiftType/getShiftValue:
   // https://github.com/llvm/llvm-project/blob/93d1a623cecb6f732db7900baf230a13e6ac6c6a/llvm/lib/Target/AArch64/MCTargetDesc/AArch64AddressingModes.h#L74
   Value *regShift(Value *value, int encodedShift);
@@ -230,4 +229,3 @@ public:
 
   Value *createRegFileAndStack() override;
 };
-

@@ -559,8 +559,7 @@ tuple<Value *, int> arm2llvm::getParamsLoadImmed() {
   return make_pair(baseAddr, op2.getImm());
 }
 
-Value *arm2llvm::makeLoadWithOffset(Value *base, Value *offset,
-                                    int size) {
+Value *arm2llvm::makeLoadWithOffset(Value *base, Value *offset, int size) {
   // Create a GEP instruction based on a byte addressing basis (8 bits)
   // returning pointer to base + offset
   assert(base);
@@ -1552,7 +1551,7 @@ Value *arm2llvm::readFromFPOperand(int idx, unsigned size) {
 }
 
 Value *arm2llvm::readFromVecOperand(int idx, unsigned eltSize, unsigned numElts,
-                          bool isUpperHalf, bool isFP) {
+                                    bool isUpperHalf, bool isFP) {
   VectorType *ty;
   auto regVal = readFromOperand(idx);
   if (eltSize * numElts < getBitWidth(regVal)) {
@@ -1577,7 +1576,8 @@ void arm2llvm::updateOutputReg(Value *V, bool SExt) {
   updateReg(V, destReg, SExt);
 }
 
-Value *arm2llvm::splatImm(Value *v, unsigned numElts, unsigned eltSize, bool shift) {
+Value *arm2llvm::splatImm(Value *v, unsigned numElts, unsigned eltSize,
+                          bool shift) {
   if (shift) {
     assert(CurInst->getOperand(3).isImm());
     v = regShift(v, getImm(3));
@@ -3102,7 +3102,8 @@ bool arm2llvm::has_s(int instr) {
 // DecodeBitMasks function from the ARMv8 manual.
 //
 // WARNING: tmask is untested
-pair<uint64_t, uint64_t> arm2llvm::decodeBitMasks(uint64_t val, unsigned regSize) {
+pair<uint64_t, uint64_t> arm2llvm::decodeBitMasks(uint64_t val,
+                                                  unsigned regSize) {
   // Extract the N, imms, and immr fields.
   unsigned N = (val >> 12) & 1;
   unsigned immr = (val >> 6) & 0x3f;
