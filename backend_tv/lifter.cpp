@@ -1,4 +1,5 @@
 #include "backend_tv/lifter.h"
+#include "backend_tv/bitutils.h"
 
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Function.h"
@@ -184,6 +185,14 @@ public:
   const MCCodeEmitter &MCE;
   const MCSubtargetInfo &STI;
   const MCInstrAnalysis &IA;
+
+public:
+  mc2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
+          MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
+          const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)
+      : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
+        InstPrinter(InstPrinter), MCE{MCE}, STI{STI}, IA{IA},
+        DL(srcFn.getParent()->getDataLayout()) {}
 
   // these are ones that the backend adds to tgt, even when they don't
   // appear at all in src
@@ -1282,18 +1291,6 @@ public:
     return make_pair(globalVar, storePtr);
   }
 
-  uint64_t replicate8to64(uint64_t v) {
-    uint64_t ret = 0;
-    for (int i = 0; i < 8; ++i) {
-      bool b = (v & 128) != 0;
-      ret <<= 8;
-      if (b)
-        ret |= 0xff;
-      v <<= 1;
-    }
-    return ret;
-  }
-
   // negative shift exponents go the other direction
   Value *createUSHL(Value *a, Value *b) {
     auto zero = getUnsignedIntConst(0, getBitWidth(b));
@@ -1409,437 +1406,314 @@ public:
     return make_pair(result, sat);
   }
 
-  // From https://github.com/agustingianni/retools
-  inline uint64_t Replicate(uint64_t bit, int N) {
-    if (!bit)
-      return 0;
-    if (N == 64)
-      return 0xffffffffffffffffLL;
-    return (1ULL << N) - 1;
-  }
-
-  // From https://github.com/agustingianni/retools
-  inline uint64_t Replicate32x2(uint64_t bits32) {
-    return (bits32 << 32) | bits32;
-  }
-
-  // From https://github.com/agustingianni/retools
-  inline uint64_t Replicate16x4(uint64_t bits16) {
-    return Replicate32x2((bits16 << 16) | bits16);
-  }
-
-  // From https://github.com/agustingianni/retools
-  inline uint64_t Replicate8x8(uint64_t bits8) {
-    return Replicate16x4((bits8 << 8) | bits8);
-  }
-
-  virtual void doCall(FunctionCallee FC, CallInst *llvmCI, const string &calleeName) = 0;
-  
-  void doDirectCall() {
-    auto &op0 = CurInst->getOperand(0);
-    assert(op0.isExpr());
-    auto [expr, _] = getExprVar(op0.getExpr());
-    assert(expr);
-    string calleeName = (string)expr->getName();
-
-    if (calleeName == "__stack_chk_fail") {
-      createTrap();
-      return;
-    }
-
-    *out << "lifting a direct call, callee is: '" << calleeName << "'\n";
-    auto *callee = dyn_cast<Function>(expr);
-    assert(callee);
-
-    if (false && callee == liftedFn) {
-      *out << "Recursion currently not supported\n\n";
-      exit(-1);
-    }
-
-    auto llvmInst = getCurLLVMInst();
-    CallInst *llvmCI{nullptr};
-    if (!llvmInst) {
-      *out << "oops, no debuginfo mapping exists\n";
-    } else {
-      llvmCI = dyn_cast<CallInst>(llvmInst);
-      if (!llvmCI)
-        *out << "oops, debuginfo gave us something that's not a callinst\n";
-    }
-    if (!llvmCI) {
-      *out
-          << "error: can't locate corresponding source-side call instruction\n";
-      exit(-1);
-    }
-
-    FunctionCallee FC{callee};
-    doCall(FC, llvmCI, calleeName);
-  }
-
-  Instruction *getCurLLVMInst() {
-    return (Instruction *)(CurInst->getLoc().getPointer());
-  }
-
-  void storeToMemoryValOffset(Value *base, Value *offset, uint64_t size,
-                              Value *val) override {
-    // Create a GEP instruction based on a byte addressing basis (8 bits)
-    // returning pointer to base + offset
-    assert(base);
-    auto ptr = createGEP(getIntTy(8), base, {offset}, "");
-
-    // Store Value val in the pointer returned by the GEP instruction
-    createStore(val, ptr);
-  }
-
-public:
-  mc2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
-          MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
-          const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)
-      : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
-        InstPrinter(InstPrinter), MCE{MCE}, STI{STI}, IA{IA},
-        DL(srcFn.getParent()->getDataLayout()) {}
-
-  std::optional<aslp::opcode_t> getArmOpcode(const MCInst &I) {
-    SmallVector<MCFixup> Fixups{};
-    SmallVector<char> Code{};
-
-    if (I.getOpcode() == AArch64::SEH_Nop)
-      return std::nullopt;
-
-    MCE.encodeInstruction(I, Code, Fixups, STI);
-    for (auto x : Fixups) {
-      // std::cerr << "fixup: " << x.getKind() << ' ' << x.getTargetKind() << '
-      // ' << x.getOffset() << ' ' << std::flush; x.getValue()->dump();
-      // std::cout << std::endl;
-      (void)x;
-    }
-
-    // do not hand any instructions with relocation fixups to aslp
-    if (Fixups.size() != 0)
-      return std::nullopt;
-
-    aslp::opcode_t ret;
-    unsigned i = 0;
-    for (const char &x : Code) {
-      ret.at(i++) = x;
-    }
-    return ret;
-  }
-
-  virtual void lift(MCInst &I) = 0;
-  
-  void liftInst(MCInst &I) {
-    *out << "mcinst: " << I.getOpcode() << " = ";
-    PrevInst = CurInst;
-    CurInst = &I;
-
-    std::string sss;
-    llvm::raw_string_ostream ss{sss};
-    I.dump_pretty(ss, InstPrinter);
-    *out << sss << " = " << std::flush;
-    if (I.getOpcode() != AArch64::SEH_Nop) {
-      InstPrinter->printInst(&I, 100, "", STI, outs());
-      outs().flush();
-    }
-    *out << std::endl;
-
-    lift(I);
-  }    
-
-  void invalidateReg(unsigned Reg, unsigned Width) {
-    auto F = createFreeze(PoisonValue::get(getIntTy(Width)));
-    createStore(F, RegFile[Reg]);
-  }
-
-  // create the actual storage associated with a register -- all of its
-  // asm-level aliases will get redirected here
-  void createRegStorage(unsigned Reg, unsigned Width, const string &Name) {
-    auto A = createAlloca(getIntTy(Width), getUnsignedIntConst(1, 64), Name);
-    auto F = createFreeze(PoisonValue::get(getIntTy(Width)));
-    createStore(F, A);
-    RegFile[Reg] = A;
-  }
+  void doDirectCall();
+  Instruction *getCurLLVMInst();
+  std::optional<aslp::opcode_t> getArmOpcode(const MCInst &I);
+  void liftInst(MCInst &I);
+  void invalidateReg(unsigned Reg, unsigned Width);
+  void createRegStorage(unsigned Reg, unsigned Width, const string &Name);
+  Function *run();
 
   /*
-   * the idea here is that if a parameter to the lifted function, or
-   * the return value from the lifted function is, for example, 8
-   * bits, then we only want to initialize the lower 8 bits of the
-   * register or stack slot, with the remaining bits containing junk,
-   * in order to detect cases where the compiler incorrectly emits
-   * code depending on that junk. on the other hand, if a parameter is
-   * signext or zeroext then we have to actually initialize those
-   * higher bits.
-   *
-   * FIXME -- this code was originally developed for scalar parameters
-   * and we're mostly sort of hoping it also works for vectors. this
-   * should work fine as long as the only vectors we accept are 64 and
-   * 128 bits, which seemed (as of Nov 2023) to be the only ones with
-   * a stable ABI
+   * shared with the aslp lifter
    */
-  Value *enforceSExtZExt(Value *V, bool isSExt, bool isZExt) {
-    auto i8 = getIntTy(8);
-    auto i32 = getIntTy(32);
-    auto argTy = V->getType();
-    unsigned targetWidth;
+  void storeToMemoryValOffset(Value *base, Value *offset, uint64_t size,
+                              Value *val) override;
 
-    // no work needed
-    if (argTy->isPointerTy() || argTy->isVoidTy())
-      return V;
-
-    if (argTy->isVectorTy() || argTy->isFloatingPointTy()) {
-      auto W = getBitWidth(V);
-      argTy = getIntTy(W);
-      V = createBitCast(V, argTy);
-      if (W <= 64)
-        targetWidth = 64;
-      else
-        targetWidth = 128;
-    } else {
-      targetWidth = 64;
-    }
-
-    assert(argTy->isIntegerTy());
-
-    /*
-     * i1 has special two ABI rules. first, by default, an i1 is
-     * implicitly zero-extended to i8. this is from AAPCS64. second,
-     * if the i1 is a signext parameter, then this overrides the
-     * zero-extension rule. this is from the LLVM folks.
-     */
-    if (getBitWidth(V) == 1) {
-      if (isSExt)
-        V = createSExt(V, i32);
-      else
-        V = createZExt(V, i8);
-    }
-
-    if (isSExt) {
-      if (getBitWidth(V) < 32)
-        V = createSExt(V, i32);
-      else if (getBitWidth(V) > 32 && getBitWidth(V) < targetWidth)
-        V = createSExt(V, getIntTy(targetWidth));
-    }
-
-    if (isZExt && getBitWidth(V) < targetWidth)
-      V = createZExt(V, getIntTy(targetWidth));
-
-    // finally, pad out any remaining bits with junk (frozen poisons)
-    auto junkBits = targetWidth - getBitWidth(V);
-    if (junkBits > 0) {
-      auto junk = createFreeze(PoisonValue::get(getIntTy(junkBits)));
-      auto ext1 = createZExt(junk, getIntTy(targetWidth));
-      auto shifted =
-          createRawShl(ext1, getUnsignedIntConst(getBitWidth(V), targetWidth));
-      auto ext2 = createZExt(V, getIntTy(targetWidth));
-      V = createOr(shifted, ext2);
-    }
-
-    return V;
-  }
-
-  string linkageStr(GlobalValue::LinkageTypes linkage) {
-    switch (linkage) {
-    case GlobalValue::LinkageTypes::ExternalLinkage:
-      return "External";
-    case GlobalValue::LinkageTypes::AvailableExternallyLinkage:
-      return "AvailableExternally";
-    case GlobalValue::LinkageTypes::LinkOnceAnyLinkage:
-      return "LinkOnceAny";
-    case GlobalValue::LinkageTypes::LinkOnceODRLinkage:
-      return "LinkOnceODR";
-    case GlobalValue::LinkageTypes::WeakAnyLinkage:
-      return "WeakAny";
-    case GlobalValue::LinkageTypes::WeakODRLinkage:
-      return "WeakODR";
-    case GlobalValue::LinkageTypes::AppendingLinkage:
-      return "Appending";
-    case GlobalValue::LinkageTypes::InternalLinkage:
-      return "Internal";
-    case GlobalValue::LinkageTypes::PrivateLinkage:
-      return "Private";
-    case GlobalValue::LinkageTypes::ExternalWeakLinkage:
-      return "ExternalWeak";
-    case GlobalValue::LinkageTypes::CommonLinkage:
-      return "Common";
-    default:
-      assert(false);
-    }
-  }
-
+  /*
+   * per-backend functionality goes here
+   */
+  virtual void doCall(FunctionCallee FC, CallInst *llvmCI,
+                      const string &calleeName) = 0;
+  virtual void lift(MCInst &I) = 0;
+  virtual Value *enforceSExtZExt(Value *V, bool isSExt, bool isZExt) = 0;
   virtual Value *createRegFileAndStack() = 0;
   virtual void doReturn() = 0;
-    
-  Function *run() {
-    // we'll want this later
-    vector<Type *> args{getIntTy(1)};
-    FunctionType *assertTy =
-        FunctionType::get(Type::getVoidTy(Ctx), args, false);
-    assertDecl = Function::Create(assertTy, Function::ExternalLinkage,
-                                  "llvm.assert", LiftedModule);
-    auto i64 = getIntTy(64);
-
-    // create a fresh function
-    liftedFn =
-        Function::Create(srcFn.getFunctionType(), GlobalValue::ExternalLinkage,
-                         0, srcFn.getName(), LiftedModule);
-    liftedFn->copyAttributesFrom(&srcFn);
-
-    // create LLVM-side basic blocks
-    vector<pair<BasicBlock *, MCBasicBlock *>> BBs;
-    {
-      long insts = 0;
-      for (auto &mbb : MF.BBs) {
-        for (auto &inst [[maybe_unused]] : mbb.getInstrs())
-          ++insts;
-        auto bb = BasicBlock::Create(Ctx, mbb.getName(), liftedFn);
-        BBs.push_back(make_pair(bb, &mbb));
-      }
-      *out << insts << " assembly instructions\n";
-      out->flush();
-    }
-
-    // default to adding instructions to the entry block
-    LLVMBB = BBs[0].first;
-
-    // number of 8-byte stack slots for parameters
-    const int numStackSlots = 32;
-
-    auto *allocTy =
-        FunctionType::get(PointerType::get(Ctx, 0), {i64, i64}, false);
-    myAlloc = Function::Create(allocTy, GlobalValue::ExternalLinkage, 0,
-                               "myalloc", LiftedModule);
-    myAlloc->addRetAttr(Attribute::NonNull);
-    AttrBuilder B1(Ctx);
-    B1.addAllocKindAttr(AllocFnKind::Alloc);
-    B1.addAllocSizeAttr(0, {});
-    B1.addAttribute(Attribute::WillReturn);
-    myAlloc->addFnAttrs(B1);
-    myAlloc->addParamAttr(1, Attribute::AllocAlign);
-    myAlloc->addFnAttr("alloc-family", "backend-tv-alloc");
-    stackSize = getUnsignedIntConst(stackBytes + (8 * numStackSlots), 64);
-
-    stackMem = CallInst::Create(
-        myAlloc, {stackSize, getUnsignedIntConst(16, 64)}, "stack", LLVMBB);
-
-    auto paramBase = createRegFileAndStack();
-    
-    *out << "about to do callee-side ABI stuff\n";
-
-    // implement the callee side of the ABI; FIXME -- this code only
-    // supports integer parameters <= 64 bits and will require
-    // significant generalization to handle large parameters
-    unsigned vecArgNum = 0;
-    unsigned scalarArgNum = 0;
-    unsigned stackSlot = 0;
-
-    for (Function::arg_iterator arg = liftedFn->arg_begin(),
-                                E = liftedFn->arg_end(),
-                                srcArg = srcFn.arg_begin();
-         arg != E; ++arg, ++srcArg) {
-      *out << "  processing " << getBitWidth(arg)
-           << "-bit arg with vecArgNum = " << vecArgNum
-           << ", scalarArgNum = " << scalarArgNum
-           << ", stackSlot = " << stackSlot;
-      auto *argTy = arg->getType();
-      auto *val =
-          enforceSExtZExt(arg, srcArg->hasSExtAttr(), srcArg->hasZExtAttr());
-
-      // first 8 integer parameters go in the first 8 integer registers
-      if ((argTy->isIntegerTy() || argTy->isPointerTy()) && scalarArgNum < 8) {
-        auto Reg = AArch64::X0 + scalarArgNum;
-        createStore(val, RegFile[Reg]);
-        ++scalarArgNum;
-        goto end;
-      }
-
-      // first 8 vector/FP parameters go in the first 8 vector registers
-      if ((argTy->isVectorTy() || argTy->isFloatingPointTy()) &&
-          vecArgNum < 8) {
-        auto Reg = AArch64::Q0 + vecArgNum;
-        createStore(val, RegFile[Reg]);
-        ++vecArgNum;
-        goto end;
-      }
-
-      // anything else goes onto the stack
-      {
-        // 128-bit alignment required for 128-bit arguments
-        if ((getBitWidth(val) == 128) && ((stackSlot % 2) != 0)) {
-          ++stackSlot;
-          *out << " (actual stack slot = " << stackSlot << ")";
-        }
-
-        if (stackSlot >= numStackSlots) {
-          *out << "\nERROR: maximum stack slots for parameter values "
-                  "exceeded\n\n";
-          exit(-1);
-        }
-
-        auto addr =
-            createGEP(i64, paramBase, {getUnsignedIntConst(stackSlot, 64)}, "");
-        createStore(val, addr);
-
-        if (getBitWidth(val) == 64) {
-          stackSlot += 1;
-        } else if (getBitWidth(val) == 128) {
-          stackSlot += 2;
-        } else {
-          assert(false);
-        }
-      }
-
-    end:
-      *out << "\n";
-    }
-
-    *out << "done with callee-side ABI stuff\n";
-
-    // initialize the frame pointer
-    auto initFP =
-        createGEP(i64, paramBase, {getUnsignedIntConst(stackSlot, 64)}, "");
-    createStore(initFP, RegFile[AArch64::FP]);
-
-    *out << "\n\nlifting assembly instructions to LLVM\n";
-
-    for (auto &[llvm_bb, mc_bb] : BBs) {
-      LLVMBB = llvm_bb;
-      MCBB = mc_bb;
-      auto &mc_instrs = mc_bb->getInstrs();
-
-      for (auto &inst : mc_instrs) {
-        llvmInstNum = 0;
-        *out << armInstNum << " : about to lift "
-             << (string)InstPrinter->getOpcodeName(inst.getOpcode()) << "\n";
-        liftInst(inst);
-        *out << "    lifted\n";
-        ++armInstNum;
-      }
-
-      // machine code falls through but LLVM isn't allowed to
-      if (!LLVMBB->getTerminator()) {
-        auto succs = MCBB->getSuccs().size();
-        if (succs == 0) {
-          // this should only happen when we have a function with a
-          // single, empty basic block, which should only when we
-          // started with an LLVM function whose body is something
-          // like UNREACHABLE
-          doReturn();
-        } else if (succs == 1) {
-          auto *dst = getBBByName(MCBB->getSuccs()[0]->getName());
-          createBranch(dst);
-        }
-      }
-    }
-    *out << armInstNum << " assembly instructions\n";
-
-    *out << "encoding counts: ";
-    for (auto &[enc, count] : encodingCounts) {
-      *out << enc << '=' << count << ',';
-    }
-    *out << '\n';
-    // liftedFn->dump();
-    return liftedFn;
-  }
 };
+
+void mc2llvm::doDirectCall() {
+  auto &op0 = CurInst->getOperand(0);
+  assert(op0.isExpr());
+  auto [expr, _] = getExprVar(op0.getExpr());
+  assert(expr);
+  string calleeName = (string)expr->getName();
+
+  if (calleeName == "__stack_chk_fail") {
+    createTrap();
+    return;
+  }
+
+  *out << "lifting a direct call, callee is: '" << calleeName << "'\n";
+  auto *callee = dyn_cast<Function>(expr);
+  assert(callee);
+
+  if (false && callee == liftedFn) {
+    *out << "Recursion currently not supported\n\n";
+    exit(-1);
+  }
+
+  auto llvmInst = getCurLLVMInst();
+  CallInst *llvmCI{nullptr};
+  if (!llvmInst) {
+    *out << "oops, no debuginfo mapping exists\n";
+  } else {
+    llvmCI = dyn_cast<CallInst>(llvmInst);
+    if (!llvmCI)
+      *out << "oops, debuginfo gave us something that's not a callinst\n";
+  }
+  if (!llvmCI) {
+    *out << "error: can't locate corresponding source-side call instruction\n";
+    exit(-1);
+  }
+
+  FunctionCallee FC{callee};
+  doCall(FC, llvmCI, calleeName);
+}
+
+Instruction *mc2llvm::getCurLLVMInst() {
+  return (Instruction *)(CurInst->getLoc().getPointer());
+}
+
+void mc2llvm::storeToMemoryValOffset(Value *base, Value *offset, uint64_t size,
+                                     Value *val) {
+  // Create a GEP instruction based on a byte addressing basis (8 bits)
+  // returning pointer to base + offset
+  assert(base);
+  auto ptr = createGEP(getIntTy(8), base, {offset}, "");
+
+  // Store Value val in the pointer returned by the GEP instruction
+  createStore(val, ptr);
+}
+
+std::optional<aslp::opcode_t> mc2llvm::getArmOpcode(const MCInst &I) {
+  SmallVector<MCFixup> Fixups{};
+  SmallVector<char> Code{};
+
+  if (I.getOpcode() == AArch64::SEH_Nop)
+    return std::nullopt;
+
+  MCE.encodeInstruction(I, Code, Fixups, STI);
+  for (auto x : Fixups) {
+    // std::cerr << "fixup: " << x.getKind() << ' ' << x.getTargetKind() << '
+    // ' << x.getOffset() << ' ' << std::flush; x.getValue()->dump();
+    // std::cout << std::endl;
+    (void)x;
+  }
+
+  // do not hand any instructions with relocation fixups to aslp
+  if (Fixups.size() != 0)
+    return std::nullopt;
+
+  aslp::opcode_t ret;
+  unsigned i = 0;
+  for (const char &x : Code) {
+    ret.at(i++) = x;
+  }
+  return ret;
+}
+
+void mc2llvm::liftInst(MCInst &I) {
+  *out << "mcinst: " << I.getOpcode() << " = ";
+  PrevInst = CurInst;
+  CurInst = &I;
+
+  std::string sss;
+  llvm::raw_string_ostream ss{sss};
+  I.dump_pretty(ss, InstPrinter);
+  *out << sss << " = " << std::flush;
+  if (I.getOpcode() != AArch64::SEH_Nop) {
+    InstPrinter->printInst(&I, 100, "", STI, outs());
+    outs().flush();
+  }
+  *out << std::endl;
+
+  lift(I);
+}
+
+void mc2llvm::invalidateReg(unsigned Reg, unsigned Width) {
+  auto F = createFreeze(PoisonValue::get(getIntTy(Width)));
+  createStore(F, RegFile[Reg]);
+}
+
+// create the actual storage associated with a register -- all of its
+// asm-level aliases will get redirected here
+void mc2llvm::createRegStorage(unsigned Reg, unsigned Width,
+                               const string &Name) {
+  auto A = createAlloca(getIntTy(Width), getUnsignedIntConst(1, 64), Name);
+  auto F = createFreeze(PoisonValue::get(getIntTy(Width)));
+  createStore(F, A);
+  RegFile[Reg] = A;
+}
+
+Function *mc2llvm::run() {
+  // we'll want this later
+  vector<Type *> args{getIntTy(1)};
+  FunctionType *assertTy = FunctionType::get(Type::getVoidTy(Ctx), args, false);
+  assertDecl = Function::Create(assertTy, Function::ExternalLinkage,
+                                "llvm.assert", LiftedModule);
+  auto i64 = getIntTy(64);
+
+  // create a fresh function
+  liftedFn =
+      Function::Create(srcFn.getFunctionType(), GlobalValue::ExternalLinkage, 0,
+                       srcFn.getName(), LiftedModule);
+  liftedFn->copyAttributesFrom(&srcFn);
+
+  // create LLVM-side basic blocks
+  vector<pair<BasicBlock *, MCBasicBlock *>> BBs;
+  {
+    long insts = 0;
+    for (auto &mbb : MF.BBs) {
+      for (auto &inst [[maybe_unused]] : mbb.getInstrs())
+        ++insts;
+      auto bb = BasicBlock::Create(Ctx, mbb.getName(), liftedFn);
+      BBs.push_back(make_pair(bb, &mbb));
+    }
+    *out << insts << " assembly instructions\n";
+    out->flush();
+  }
+
+  // default to adding instructions to the entry block
+  LLVMBB = BBs[0].first;
+
+  // number of 8-byte stack slots for parameters
+  const int numStackSlots = 32;
+
+  auto *allocTy =
+      FunctionType::get(PointerType::get(Ctx, 0), {i64, i64}, false);
+  myAlloc = Function::Create(allocTy, GlobalValue::ExternalLinkage, 0,
+                             "myalloc", LiftedModule);
+  myAlloc->addRetAttr(Attribute::NonNull);
+  AttrBuilder B1(Ctx);
+  B1.addAllocKindAttr(AllocFnKind::Alloc);
+  B1.addAllocSizeAttr(0, {});
+  B1.addAttribute(Attribute::WillReturn);
+  myAlloc->addFnAttrs(B1);
+  myAlloc->addParamAttr(1, Attribute::AllocAlign);
+  myAlloc->addFnAttr("alloc-family", "backend-tv-alloc");
+  stackSize = getUnsignedIntConst(stackBytes + (8 * numStackSlots), 64);
+
+  stackMem = CallInst::Create(myAlloc, {stackSize, getUnsignedIntConst(16, 64)},
+                              "stack", LLVMBB);
+
+  auto paramBase = createRegFileAndStack();
+
+  *out << "about to do callee-side ABI stuff\n";
+
+  // implement the callee side of the ABI; FIXME -- this code only
+  // supports integer parameters <= 64 bits and will require
+  // significant generalization to handle large parameters
+  unsigned vecArgNum = 0;
+  unsigned scalarArgNum = 0;
+  unsigned stackSlot = 0;
+
+  for (Function::arg_iterator arg = liftedFn->arg_begin(),
+                              E = liftedFn->arg_end(),
+                              srcArg = srcFn.arg_begin();
+       arg != E; ++arg, ++srcArg) {
+    *out << "  processing " << getBitWidth(arg)
+         << "-bit arg with vecArgNum = " << vecArgNum
+         << ", scalarArgNum = " << scalarArgNum
+         << ", stackSlot = " << stackSlot;
+    auto *argTy = arg->getType();
+    auto *val =
+        enforceSExtZExt(arg, srcArg->hasSExtAttr(), srcArg->hasZExtAttr());
+
+    // first 8 integer parameters go in the first 8 integer registers
+    if ((argTy->isIntegerTy() || argTy->isPointerTy()) && scalarArgNum < 8) {
+      auto Reg = AArch64::X0 + scalarArgNum;
+      createStore(val, RegFile[Reg]);
+      ++scalarArgNum;
+      goto end;
+    }
+
+    // first 8 vector/FP parameters go in the first 8 vector registers
+    if ((argTy->isVectorTy() || argTy->isFloatingPointTy()) && vecArgNum < 8) {
+      auto Reg = AArch64::Q0 + vecArgNum;
+      createStore(val, RegFile[Reg]);
+      ++vecArgNum;
+      goto end;
+    }
+
+    // anything else goes onto the stack
+    {
+      // 128-bit alignment required for 128-bit arguments
+      if ((getBitWidth(val) == 128) && ((stackSlot % 2) != 0)) {
+        ++stackSlot;
+        *out << " (actual stack slot = " << stackSlot << ")";
+      }
+
+      if (stackSlot >= numStackSlots) {
+        *out << "\nERROR: maximum stack slots for parameter values "
+                "exceeded\n\n";
+        exit(-1);
+      }
+
+      auto addr =
+          createGEP(i64, paramBase, {getUnsignedIntConst(stackSlot, 64)}, "");
+      createStore(val, addr);
+
+      if (getBitWidth(val) == 64) {
+        stackSlot += 1;
+      } else if (getBitWidth(val) == 128) {
+        stackSlot += 2;
+      } else {
+        assert(false);
+      }
+    }
+
+  end:
+    *out << "\n";
+  }
+
+  *out << "done with callee-side ABI stuff\n";
+
+  // initialize the frame pointer
+  auto initFP =
+      createGEP(i64, paramBase, {getUnsignedIntConst(stackSlot, 64)}, "");
+  createStore(initFP, RegFile[AArch64::FP]);
+
+  *out << "\n\nlifting assembly instructions to LLVM\n";
+
+  for (auto &[llvm_bb, mc_bb] : BBs) {
+    LLVMBB = llvm_bb;
+    MCBB = mc_bb;
+    auto &mc_instrs = mc_bb->getInstrs();
+
+    for (auto &inst : mc_instrs) {
+      llvmInstNum = 0;
+      *out << armInstNum << " : about to lift "
+           << (string)InstPrinter->getOpcodeName(inst.getOpcode()) << "\n";
+      liftInst(inst);
+      *out << "    lifted\n";
+      ++armInstNum;
+    }
+
+    // machine code falls through but LLVM isn't allowed to
+    if (!LLVMBB->getTerminator()) {
+      auto succs = MCBB->getSuccs().size();
+      if (succs == 0) {
+        // this should only happen when we have a function with a
+        // single, empty basic block, which should only when we
+        // started with an LLVM function whose body is something
+        // like UNREACHABLE
+        doReturn();
+      } else if (succs == 1) {
+        auto *dst = getBBByName(MCBB->getSuccs()[0]->getName());
+        createBranch(dst);
+      }
+    }
+  }
+  *out << armInstNum << " assembly instructions\n";
+
+  *out << "encoding counts: ";
+  for (auto &[enc, count] : encodingCounts) {
+    *out << enc << '=' << count << ',';
+  }
+  *out << '\n';
+  // liftedFn->dump();
+  return liftedFn;
+}
 
 // We're overriding MCStreamerWrapper to generate an MCFunction
 // from the arm assembly. MCStreamerWrapper provides callbacks to handle
@@ -2182,8 +2056,85 @@ public:
 };
 
 // FIXME -- these next 2 clases need to go into their own files
-  
+
 class arm2llvm : public mc2llvm {
+  /*
+   * the idea here is that if a parameter to the lifted function, or
+   * the return value from the lifted function is, for example, 8
+   * bits, then we only want to initialize the lower 8 bits of the
+   * register or stack slot, with the remaining bits containing junk,
+   * in order to detect cases where the compiler incorrectly emits
+   * code depending on that junk. on the other hand, if a parameter is
+   * signext or zeroext then we have to actually initialize those
+   * higher bits.
+   *
+   * FIXME -- this code was originally developed for scalar parameters
+   * and we're mostly sort of hoping it also works for vectors. this
+   * should work fine as long as the only vectors we accept are 64 and
+   * 128 bits, which seemed (as of Nov 2023) to be the only ones with
+   * a stable ABI
+   */
+  Value *enforceSExtZExt(Value *V, bool isSExt, bool isZExt) override {
+    auto i8 = getIntTy(8);
+    auto i32 = getIntTy(32);
+    auto argTy = V->getType();
+    unsigned targetWidth;
+
+    // no work needed
+    if (argTy->isPointerTy() || argTy->isVoidTy())
+      return V;
+
+    if (argTy->isVectorTy() || argTy->isFloatingPointTy()) {
+      auto W = getBitWidth(V);
+      argTy = getIntTy(W);
+      V = createBitCast(V, argTy);
+      if (W <= 64)
+        targetWidth = 64;
+      else
+        targetWidth = 128;
+    } else {
+      targetWidth = 64;
+    }
+
+    assert(argTy->isIntegerTy());
+
+    /*
+     * i1 has special two ABI rules. first, by default, an i1 is
+     * implicitly zero-extended to i8. this is from AAPCS64. second,
+     * if the i1 is a signext parameter, then this overrides the
+     * zero-extension rule. this is from the LLVM folks.
+     */
+    if (getBitWidth(V) == 1) {
+      if (isSExt)
+        V = createSExt(V, i32);
+      else
+        V = createZExt(V, i8);
+    }
+
+    if (isSExt) {
+      if (getBitWidth(V) < 32)
+        V = createSExt(V, i32);
+      else if (getBitWidth(V) > 32 && getBitWidth(V) < targetWidth)
+        V = createSExt(V, getIntTy(targetWidth));
+    }
+
+    if (isZExt && getBitWidth(V) < targetWidth)
+      V = createZExt(V, getIntTy(targetWidth));
+
+    // finally, pad out any remaining bits with junk (frozen poisons)
+    auto junkBits = targetWidth - getBitWidth(V);
+    if (junkBits > 0) {
+      auto junk = createFreeze(PoisonValue::get(getIntTy(junkBits)));
+      auto ext1 = createZExt(junk, getIntTy(targetWidth));
+      auto shifted =
+          createRawShl(ext1, getUnsignedIntConst(getBitWidth(V), targetWidth));
+      auto ext2 = createZExt(V, getIntTy(targetWidth));
+      V = createOr(shifted, ext2);
+    }
+
+    return V;
+  }
+
   tuple<Value *, int, Value *> getStoreParams() {
     auto &op0 = CurInst->getOperand(0);
     auto &op1 = CurInst->getOperand(1);
@@ -3093,7 +3044,8 @@ class arm2llvm : public mc2llvm {
     return args;
   }
 
-  void doCall(FunctionCallee FC, CallInst *llvmCI, const string &calleeName) override {
+  void doCall(FunctionCallee FC, CallInst *llvmCI,
+              const string &calleeName) override {
     *out << "entering doCall()\n";
 
     for (auto &arg : FC.getFunctionType()->params()) {
@@ -13402,7 +13354,7 @@ case AArch64::FCMGE64:
     }
   }
 
-  Value *createRegFileAndStack() override {   
+  Value *createRegFileAndStack() override {
     auto i8 = getIntTy(8);
 
     // allocate storage for the main register file
@@ -13465,12 +13417,15 @@ public:
 };
 
 class riscv2llvm : public mc2llvm {
+  Value *enforceSExtZExt(Value *V, bool isSExt, bool isZExt) override {
+    return nullptr;
+  }
+
   llvm::AllocaInst *get_reg(aslp::reg_t regtype, uint64_t num) override {
     return nullptr;
   }
-  
-  void updateOutputReg(Value *V, bool SExt = false) override {
-  }
+
+  void updateOutputReg(Value *V, bool SExt = false) override {}
 
   Value *makeLoadWithOffset(Value *base, Value *offset, int size) override {
     return nullptr;
@@ -13481,19 +13436,17 @@ class riscv2llvm : public mc2llvm {
     return nullptr;
   }
 
-  void doCall(FunctionCallee FC, CallInst *llvmCI, const string &calleeName) override {
-  }
+  void doCall(FunctionCallee FC, CallInst *llvmCI,
+              const string &calleeName) override {}
 
-  void lift(MCInst &I) override {
-  }
-  
+  void lift(MCInst &I) override {}
+
   Value *createRegFileAndStack() override {
     return nullptr;
   }
 
-  void doReturn() override {
-  }
-    
+  void doReturn() override {}
+
 public:
   riscv2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
              MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
