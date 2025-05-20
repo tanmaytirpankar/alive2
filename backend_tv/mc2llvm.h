@@ -22,8 +22,6 @@
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
-#define AARCH64_MAP_IMPL
-#include "aslp/aarch64_map.h"
 #include "aslp/aslp_bridge.h"
 
 using namespace std;
