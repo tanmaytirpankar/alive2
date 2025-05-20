@@ -1,3 +1,5 @@
+#pragma once
+
 class riscv2llvm : public mc2llvm {
   Value *enforceSExtZExt(Value *V, bool isSExt, bool isZExt) override {
     return nullptr;
