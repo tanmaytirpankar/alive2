@@ -12,26 +12,14 @@ class VectorType;
 namespace lifter {
 
 // amount of stack available for use by the lifted function, in bytes
-const int stackBytes = 1024;
+#define stackBytes 1024
 
 void checkArguments(llvm::CallInst *ci, llvm::Value *val);
 void checkVectorTy(llvm::VectorType *Ty);
+std::string funcToString(llvm::Function *F);
+std::string moduleToString(llvm::Module *M);
 
 extern std::ostream *out;
-
-inline std::string moduleToString(llvm::Module *M) {
-  std::string sss;
-  llvm::raw_string_ostream ss(sss);
-  M->print(ss, nullptr);
-  return sss;
-}
-
-inline std::string funcToString(llvm::Function *F) {
-  std::string sss;
-  llvm::raw_string_ostream ss(sss);
-  F->print(ss, nullptr);
-  return sss;
-}
 
 // FIXME we'd rather not have these globals shared across files
 

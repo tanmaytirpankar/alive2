@@ -202,6 +202,7 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
 
   set(BACKEND_TV_SRCS
     "backend_tv/adjust_src.cpp"
+    "backend_tv/bitutils.cpp"
     "backend_tv/lifter.cpp"
     "backend_tv/run_backend.cpp"
   )
