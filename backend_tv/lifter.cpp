@@ -164,6 +164,8 @@ public:
 };
 
 class mc2llvm : public aslp::lifter_interface_llvm {
+  // FIXME making everything public is a temporary hack
+public:
   Module *LiftedModule{nullptr};
   LLVMContext &Ctx = LiftedModule->getContext();
   MCFunction &MF;
@@ -589,6 +591,3020 @@ class mc2llvm : public aslp::lifter_interface_llvm {
     *out << "\nERROR: Unsupported AArch64 instruction: " << str << "\n";
     out->flush();
     exit(-1);
+  }
+
+  void set_bb(llvm::BasicBlock *bb) override {
+    LLVMBB = bb;
+  }
+
+  llvm::BasicBlock *get_bb() override {
+    return LLVMBB;
+  }
+
+  llvm::Function &ll_function() override {
+    return *liftedFn;
+  }
+
+  // lifted instructions are named using the number of the ARM
+  // instruction they come from
+  string nextName() override {
+    stringstream ss;
+    ss << "a" << armInstNum << "_" << llvmInstNum++;
+    return ss.str();
+  }
+
+  AllocaInst *createAlloca(Type *ty, Value *sz,
+                           const string &NameStr) override {
+    return new AllocaInst(ty, 0, sz, NameStr, LLVMBB);
+  }
+
+  GetElementPtrInst *createGEP(Type *ty, Value *v, ArrayRef<Value *> idxlist,
+                               const string &NameStr) override {
+    return GetElementPtrInst::Create(ty, v, idxlist, NameStr, LLVMBB);
+  }
+
+  void createBranch(Value *c, BasicBlock *t, BasicBlock *f) {
+    BranchInst::Create(t, f, c, LLVMBB);
+  }
+
+  void createBranch(Value *c, stmt_t t, stmt_t f) override {
+    createBranch(c, t.first, f.first);
+  }
+
+  void createBranch(BasicBlock *dst) {
+    BranchInst::Create(dst, LLVMBB);
+  }
+
+  void createBranch(stmt_t dst) override {
+    createBranch(dst.first);
+  }
+
+  LoadInst *createLoad(Type *ty, Value *ptr) override {
+    return new LoadInst(ty, ptr, nextName(), false, Align(1), LLVMBB);
+  }
+
+  void createStore(Value *v, Value *ptr) override {
+    new StoreInst(v, ptr, false, Align(1), LLVMBB);
+  }
+
+  Value *createTrap() override {
+    auto decl =
+        Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::trap);
+    return CallInst::Create(decl, "", LLVMBB);
+  }
+
+  Value *createSMin(Value *a, Value *b) override {
+    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::smin,
+                                                  a->getType());
+    return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  Value *createSMax(Value *a, Value *b) override {
+    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::smax,
+                                                  a->getType());
+    return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  Value *createUMin(Value *a, Value *b) override {
+    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::umin,
+                                                  a->getType());
+    return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  Value *createUMax(Value *a, Value *b) override {
+    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::umax,
+                                                  a->getType());
+    return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  Value *createFNeg(Value *v) override {
+    return UnaryOperator::CreateFNeg(v, nextName(), LLVMBB);
+  }
+
+  Value *createFAbs(Value *v) override {
+    auto fabs_decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::fabs, v->getType());
+    return CallInst::Create(fabs_decl, {v}, nextName(), LLVMBB);
+  }
+
+  CallInst *createSSubOverflow(Value *a, Value *b) override {
+    auto ssub_decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::ssub_with_overflow, a->getType());
+    return CallInst::Create(ssub_decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  CallInst *createSAddOverflow(Value *a, Value *b) override {
+    auto sadd_decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::sadd_with_overflow, a->getType());
+    return CallInst::Create(sadd_decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  CallInst *createUSubOverflow(Value *a, Value *b) override {
+    auto usub_decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::usub_with_overflow, a->getType());
+    return CallInst::Create(usub_decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  CallInst *createUAddOverflow(Value *a, Value *b) override {
+    auto uadd_decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::uadd_with_overflow, a->getType());
+    return CallInst::Create(uadd_decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  CallInst *createUAddSat(Value *a, Value *b) override {
+    auto uadd_decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::uadd_sat, a->getType());
+    return CallInst::Create(uadd_decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  CallInst *createUSubSat(Value *a, Value *b) override {
+    auto usub_decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::usub_sat, a->getType());
+    return CallInst::Create(usub_decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  CallInst *createSAddSat(Value *a, Value *b) override {
+    auto sadd_decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::sadd_sat, a->getType());
+    return CallInst::Create(sadd_decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  CallInst *createSSubSat(Value *a, Value *b) override {
+    auto ssub_decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::ssub_sat, a->getType());
+    return CallInst::Create(ssub_decl, {a, b}, nextName(), LLVMBB);
+  }
+
+  CallInst *createCtPop(Value *v) override {
+    auto decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::ctpop, v->getType());
+    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
+  }
+
+  // first argument is an i16
+  CallInst *createConvertFromFP16(Value *v, Type *ty) override {
+    auto cvt_decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::convert_from_fp16, ty);
+    return CallInst::Create(cvt_decl, {v}, nextName(), LLVMBB);
+  }
+
+  CastInst *createConvertFPToSI(Value *v, Type *ty) override {
+    return new FPToSIInst(v, ty, nextName(), LLVMBB);
+  }
+
+  CastInst *createConvertFPToUI(Value *v, Type *ty) override {
+    return new FPToUIInst(v, ty, nextName(), LLVMBB);
+  }
+
+  CastInst *createPtrToInt(Value *v, Type *ty) override {
+    return new PtrToIntInst(v, ty, nextName(), LLVMBB);
+  }
+
+  InsertElementInst *createInsertElement(Value *vec, Value *val,
+                                         int idx) override {
+    auto idxv = getUnsignedIntConst(idx, 32);
+    return InsertElementInst::Create(vec, val, idxv, nextName(), LLVMBB);
+  }
+
+  InsertElementInst *createInsertElement(Value *vec, Value *val,
+                                         Value *idx) override {
+    return InsertElementInst::Create(vec, val, idx, nextName(), LLVMBB);
+  }
+
+  ExtractElementInst *createExtractElement(Value *v, Value *idx) override {
+    return ExtractElementInst::Create(v, idx, nextName(), LLVMBB);
+  }
+
+  ExtractElementInst *createExtractElement(Value *v, int idx) override {
+    auto idxv = getUnsignedIntConst(idx, 32);
+    return ExtractElementInst::Create(v, idxv, nextName(), LLVMBB);
+  }
+
+  ShuffleVectorInst *createShuffleVector(Value *v,
+                                         ArrayRef<int> mask) override {
+    return new ShuffleVectorInst(v, mask, nextName(), LLVMBB);
+  }
+
+  ShuffleVectorInst *createShuffleVector(Value *v, Value *mask) {
+    return new ShuffleVectorInst(v, mask, nextName(), LLVMBB);
+  }
+
+  ShuffleVectorInst *createShuffleVector(Value *v, Value *x,
+                                         ArrayRef<int> mask) override {
+    return new ShuffleVectorInst(v, x, mask, nextName(), LLVMBB);
+  }
+
+  ShuffleVectorInst *createShuffleVector(Value *v1, Value *v2, Value *mask) {
+    return new ShuffleVectorInst(v1, v2, mask, nextName(), LLVMBB);
+  }
+
+  ExtractValueInst *createExtractValue(Value *v,
+                                       ArrayRef<unsigned> idxs) override {
+    return ExtractValueInst::Create(v, idxs, nextName(), LLVMBB);
+  }
+
+  ReturnInst *createReturn(Value *v) override {
+    return ReturnInst::Create(Ctx, v, LLVMBB);
+  }
+
+  CallInst *createFShr(Value *a, Value *b, Value *c) override {
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::fshr, a->getType());
+    return CallInst::Create(decl, {a, b, c}, nextName(), LLVMBB);
+  }
+
+  CallInst *createFShl(Value *a, Value *b, Value *c) override {
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::fshl, a->getType());
+    return CallInst::Create(decl, {a, b, c}, nextName(), LLVMBB);
+  }
+
+  CallInst *createBitReverse(Value *v) override {
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::bitreverse, v->getType());
+    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
+  }
+
+  CallInst *createAbs(Value *v) override {
+    auto *decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::abs,
+                                                   v->getType());
+    return CallInst::Create(decl, {v, getBoolConst(false)}, nextName(), LLVMBB);
+  }
+
+  CallInst *createCtlz(Value *v) override {
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::ctlz, v->getType());
+    return CallInst::Create(decl, {v, getBoolConst(false)}, nextName(), LLVMBB);
+  }
+
+  CallInst *createBSwap(Value *v) override {
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::bswap, v->getType());
+    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
+  }
+
+  CallInst *createVectorReduceAdd(Value *v) override {
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::vector_reduce_add, v->getType());
+    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
+  }
+
+  CallInst *createFusedMultiplyAdd(Value *a, Value *b, Value *c) override {
+    auto *decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::fma,
+                                                   a->getType());
+    return CallInst::Create(decl, {a, b, c}, nextName(), LLVMBB);
+  }
+
+  CallInst *createSQRT(Value *v) override {
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::sqrt, v->getType());
+    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
+  }
+
+  CallInst *createRound(Value *v) override {
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::rint, v->getType());
+    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
+  }
+
+  CallInst *createConstrainedRound(Value *v, Metadata *md) {
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::experimental_constrained_round, v->getType());
+    return CallInst::Create(decl, {v, MetadataAsValue::get(Ctx, md)},
+                            nextName(), LLVMBB);
+  }
+
+  CallInst *createConstrainedFloor(Value *v, Metadata *md) {
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::experimental_constrained_floor, v->getType());
+    return CallInst::Create(decl, {v, MetadataAsValue::get(Ctx, md)},
+                            nextName(), LLVMBB);
+  }
+
+  CallInst *createConstrainedCeil(Value *v, Metadata *md) {
+    auto *decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::experimental_constrained_ceil, v->getType());
+    return CallInst::Create(decl, {v, MetadataAsValue::get(Ctx, md)},
+                            nextName(), LLVMBB);
+  }
+
+  CallInst *createConstrainedRound(Value *v) override {
+    return createConstrainedRound(v, MDString::get(Ctx, "fpexcept.strict"));
+  }
+
+  CallInst *createConstrainedFloor(Value *v) override {
+    return createConstrainedFloor(v, MDString::get(Ctx, "fpexcept.strict"));
+  }
+
+  CallInst *createConstrainedCeil(Value *v) override {
+    return createConstrainedCeil(v, MDString::get(Ctx, "fpexcept.strict"));
+  }
+
+  SelectInst *createSelect(Value *cond, Value *a, Value *b) override {
+    return SelectInst::Create(cond, a, b, nextName(), LLVMBB);
+  }
+
+  ICmpInst *createICmp(ICmpInst::Predicate p, Value *a, Value *b) override {
+    return new ICmpInst(LLVMBB, p, a, b, nextName());
+  }
+
+  FCmpInst *createFCmp(FCmpInst::Predicate p, Value *a, Value *b) override {
+    return new FCmpInst(LLVMBB, p, a, b, nextName());
+  }
+
+  BinaryOperator *createBinop(Value *a, Value *b,
+                              Instruction::BinaryOps op) override {
+    return BinaryOperator::Create(op, a, b, nextName(), LLVMBB);
+  }
+
+  BinaryOperator *createUDiv(Value *a, Value *b) override {
+    return BinaryOperator::Create(Instruction::UDiv, a, b, nextName(), LLVMBB);
+  }
+
+  BinaryOperator *createSDiv(Value *a, Value *b) override {
+    return BinaryOperator::Create(Instruction::SDiv, a, b, nextName(), LLVMBB);
+  }
+
+  BinaryOperator *createMul(Value *a, Value *b) override {
+    return BinaryOperator::Create(Instruction::Mul, a, b, nextName(), LLVMBB);
+  }
+
+  BinaryOperator *createAdd(Value *a, Value *b) override {
+    return BinaryOperator::Create(Instruction::Add, a, b, nextName(), LLVMBB);
+  }
+
+  BinaryOperator *createFAdd(Value *a, Value *b) {
+    return BinaryOperator::Create(Instruction::FAdd, a, b, nextName(), LLVMBB);
+  }
+
+  BinaryOperator *createSub(Value *a, Value *b) override {
+    return BinaryOperator::Create(Instruction::Sub, a, b, nextName(), LLVMBB);
+  }
+
+  BinaryOperator *createFSub(Value *a, Value *b) {
+    return BinaryOperator::Create(Instruction::FSub, a, b, nextName(), LLVMBB);
+  }
+
+  BinaryOperator *createFMul(Value *a, Value *b) {
+    return BinaryOperator::Create(Instruction::FMul, a, b, nextName(), LLVMBB);
+  }
+
+  Value *createRawLShr(Value *a, Value *b) override {
+    return BinaryOperator::Create(Instruction::LShr, a, b, nextName(), LLVMBB);
+  }
+
+  Value *createMaskedLShr(Value *a, Value *b) override {
+    assert(a->getType() == b->getType() && "Expected values of same type");
+
+    // Get an LLVM mask for b to get shift value less than bit width of a
+    // In LLVM shift >= bitwidth -> poison
+    auto mask = getMaskByType(a->getType());
+    assert(a->getType() == mask->getType() && "Expected values of same type");
+
+    auto masked =
+        BinaryOperator::Create(Instruction::And, mask, b, nextName(), LLVMBB);
+    return BinaryOperator::Create(Instruction::LShr, a, masked, nextName(),
+                                  LLVMBB);
+  }
+
+  Value *createRawAShr(Value *a, Value *b) override {
+    return BinaryOperator::Create(Instruction::AShr, a, b, nextName(), LLVMBB);
+  }
+
+  Value *createMaskedAShr(Value *a, Value *b) override {
+    assert(a->getType() == b->getType() && "Expected values of same type");
+
+    // Get an LLVM mask for b to get shift value less than bit width of a
+    // In LLVM shift >= bitwidth -> poison
+    auto mask = getMaskByType(a->getType());
+    assert(a->getType() == mask->getType() && "Expected values of same type");
+
+    auto masked =
+        BinaryOperator::Create(Instruction::And, mask, b, nextName(), LLVMBB);
+    return BinaryOperator::Create(Instruction::AShr, a, masked, nextName(),
+                                  LLVMBB);
+  }
+
+  Value *createRawShl(Value *a, Value *b) override {
+    return BinaryOperator::Create(Instruction::Shl, a, b, nextName(), LLVMBB);
+  }
+
+  Value *createMaskedShl(Value *a, Value *b) override {
+    assert(a->getType() == b->getType() && "Expected values of same type");
+
+    // Get an LLVM mask for b to get shift value less than bit width of a
+    // In LLVM shift >= bitwidth -> poison
+    auto mask = getMaskByType(a->getType());
+    assert(a->getType() == mask->getType() && "Expected values of same type");
+
+    auto masked =
+        BinaryOperator::Create(Instruction::And, mask, b, nextName(), LLVMBB);
+    return BinaryOperator::Create(Instruction::Shl, a, masked, nextName(),
+                                  LLVMBB);
+  }
+
+  Value *getLowOnes(int ones, int w) override {
+    auto zero = getUnsignedIntConst(0, ones);
+    auto one = getUnsignedIntConst(1, ones);
+    auto minusOne = createSub(zero, one);
+    return createZExt(minusOne, getIntTy(w));
+  }
+
+  Value *createMSL(Value *a, int b) override {
+    auto v = BinaryOperator::Create(Instruction::Shl, a,
+                                    getUnsignedIntConst(b, getBitWidth(a)),
+                                    nextName(), LLVMBB);
+    auto ones = getLowOnes(b, getBitWidth(a));
+    return createOr(v, ones);
+  }
+
+  BinaryOperator *createAnd(Value *a, Value *b) override {
+    return BinaryOperator::Create(Instruction::And, a, b, nextName(), LLVMBB);
+  }
+
+  BinaryOperator *createOr(Value *a, Value *b) override {
+    return BinaryOperator::Create(Instruction::Or, a, b, nextName(), LLVMBB);
+  }
+
+  BinaryOperator *createXor(Value *a, Value *b) override {
+    return BinaryOperator::Create(Instruction::Xor, a, b, nextName(), LLVMBB);
+  }
+
+  BinaryOperator *createNot(Value *a) override {
+    auto NegOne = getAllOnesConst(a->getType());
+    return BinaryOperator::Create(Instruction::Xor, a, NegOne, nextName(),
+                                  LLVMBB);
+  }
+
+  FreezeInst *createFreeze(Value *v) override {
+    return new FreezeInst(v, nextName(), LLVMBB);
+  }
+
+  Value *createTrunc(Value *v, Type *t) override {
+    if (v->getType() == t)
+      return v;
+    return CastInst::Create(Instruction::Trunc, v, t, nextName(), LLVMBB);
+  }
+
+  CastInst *createSExt(Value *v, Type *t) override {
+    return CastInst::Create(Instruction::SExt, v, t, nextName(), LLVMBB);
+  }
+
+  CastInst *createZExt(Value *v, Type *t) override {
+    return CastInst::Create(Instruction::ZExt, v, t, nextName(), LLVMBB);
+  }
+
+  CallInst *createFPToUI_sat(Value *v, Type *t) override {
+    auto decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::fptoui_sat, {t, v->getType()});
+    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
+  }
+
+  CallInst *createFPToSI_sat(Value *v, Type *t) override {
+    auto decl = Intrinsic::getOrInsertDeclaration(
+        LiftedModule, Intrinsic::fptosi_sat, {t, v->getType()});
+    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
+  }
+
+  CastInst *createUIToFP(Value *v, Type *t) override {
+    return CastInst::Create(Instruction::UIToFP, v, t, nextName(), LLVMBB);
+  }
+
+  CastInst *createSIToFP(Value *v, Type *t) override {
+    return CastInst::Create(Instruction::SIToFP, v, t, nextName(), LLVMBB);
+  }
+
+  CastInst *createFPTrunc(Value *v, Type *t) override {
+    return CastInst::Create(Instruction::FPTrunc, v, t, nextName(), LLVMBB);
+  }
+
+  CastInst *createFPExt(Value *v, Type *t) override {
+    return CastInst::Create(Instruction::FPExt, v, t, nextName(), LLVMBB);
+  }
+
+  CastInst *createBitCast(Value *v, Type *t) override {
+    return CastInst::Create(Instruction::BitCast, v, t, nextName(), LLVMBB);
+  }
+
+  CastInst *createCast(Value *v, Type *t, Instruction::CastOps op) override {
+    return CastInst::Create(op, v, t, nextName(), LLVMBB);
+  }
+
+  Value *splat(Value *v, unsigned numElts, unsigned eltSize) {
+    assert(getBitWidth(v) == eltSize);
+    Value *res = getUndefVec(numElts, eltSize);
+    for (unsigned i = 0; i < numElts; ++i)
+      res = createInsertElement(res, v, i);
+    return res;
+  }
+
+  enum class extKind { SExt, ZExt, None };
+
+  Value *addPairs(Value *src, unsigned eltSize, unsigned numElts, extKind ext) {
+    auto bigEltTy = getIntTy(2 * eltSize);
+    Value *res = getUndefVec(numElts / 2, 2 * eltSize);
+    for (unsigned i = 0; i < numElts; i += 2) {
+      auto elt1 = createExtractElement(src, i);
+      auto elt2 = createExtractElement(src, i + 1);
+      auto ext1 = ext == extKind::SExt ? createSExt(elt1, bigEltTy)
+                                       : createZExt(elt1, bigEltTy);
+      auto ext2 = ext == extKind::SExt ? createSExt(elt2, bigEltTy)
+                                       : createZExt(elt2, bigEltTy);
+      auto sum = createAdd(ext1, ext2);
+      res = createInsertElement(res, sum, i / 2);
+    }
+    return res;
+  }
+
+  static unsigned int getBitWidth(Type *ty) {
+    if (auto vTy = dyn_cast<VectorType>(ty)) {
+      return vTy->getScalarSizeInBits() *
+             vTy->getElementCount().getFixedValue();
+    } else if (ty->isIntegerTy()) {
+      return ty->getIntegerBitWidth();
+    } else if (ty->isHalfTy()) {
+      return 16;
+    } else if (ty->isFloatTy()) {
+      return 32;
+    } else if (ty->isDoubleTy()) {
+      return 64;
+    } else if (ty->isPointerTy()) {
+      return 64;
+    } else {
+      ty->dump();
+      assert(false && "Unhandled type");
+    }
+  }
+
+  static unsigned int getBitWidth(Value *V) {
+    return getBitWidth(V->getType());
+  }
+
+  std::tuple<string, long> getOffset(const string &var) {
+    std::smatch m;
+    std::regex offset("^(.*)\\+([0-9]+)$");
+    if (std::regex_search(var, m, offset)) {
+      auto root = m[1];
+      auto offset = m[2];
+      *out << "  root = " << root << "\n";
+      *out << "  offset = " << offset << "\n";
+      return make_tuple(root, stol(offset));
+    } else {
+      return make_tuple(var, 0);
+    }
+  }
+
+  // Reads an Expr and maps containing string variable to a global variable
+  std::string mapExprVar(const MCExpr *expr) {
+    std::string name;
+    llvm::raw_string_ostream ss(name);
+    expr->print(ss, nullptr);
+
+    // If the expression starts with a relocation specifier, strip it and map
+    // the rest to a string name of the global variable. Assuming there is only
+    // one relocation specifier, and it is at the beginning
+    // (std::regex_constants::match_continuous).
+    // eg: ":lo12:a" becomes  "a"
+    std::smatch sm1;
+    std::regex reloc("^:[a-z0-9_]+:");
+    if (std::regex_search(name, sm1, reloc)) {
+      name = sm1.suffix();
+    }
+
+    name = demangle(name);
+    auto [root, offset] = getOffset(name);
+    name = root;
+
+    if (!lookupGlobal(name)) {
+      *out << "\ncan't find global '" << name << "'\n";
+      *out << "ERROR: Unknown global in ADRP\n\n";
+      exit(-1);
+    }
+
+    instExprVarMap[CurInst] = name;
+    return name;
+  }
+
+  llvm::Value *lookupExprVar(const llvm::MCExpr &expr) override {
+    return lookupGlobal(mapExprVar(&expr));
+  }
+
+  string demangle(const string &name) {
+    if (name.rfind(".L.", 0) == 0) {
+      // the assembler has mangled local symbols, which start with a
+      // dot, by prefixing them with ".L"; here we demangle
+      return name.substr(2);
+    } else {
+      return name;
+    }
+  }
+
+  // Reads an Expr and gets the global variable corresponding the containing
+  // string variable. Assuming the Expr consists of a single global variable.
+  pair<Value *, bool> getExprVar(const MCExpr *expr) {
+    Value *globalVar;
+    // Default to true meaning store the ptr global value rather than loading
+    // the value from the global
+    bool storePtr = true;
+    std::string sss;
+
+    // Matched strings
+    std::smatch sm;
+
+    // Regex to match relocation specifiers
+    std::regex re(":[a-z0-9_]+:");
+
+    llvm::raw_string_ostream ss(sss);
+    expr->print(ss, nullptr);
+
+    auto [root, offset] = getOffset(sss);
+    sss = root;
+
+    // If the expression starts with a relocation specifier, strip it and look
+    // for the rest (variable in the Expr) in the instExprVarMap and globals.
+    // Assuming there is only one relocation specifier, and it is at the
+    // beginning (std::regex_constants::match_continuous).
+    if (std::regex_search(sss, sm, re,
+                          std::regex_constants::match_continuous)) {
+      string stringVar = sm.suffix();
+      // Check the relocation specifiers to determine whether to store ptr
+      // global value in the register or load the value from the global
+      if (!sm.empty() && (sm[0] == ":lo12:")) {
+        storePtr = false;
+      }
+
+      stringVar = demangle(stringVar);
+
+      if (!lookupGlobal(stringVar)) {
+        *out << "\nERROR: instruction mentions '" << stringVar << "'\n";
+        *out << "which is not a global variable we know about\n\n";
+        exit(-1);
+      }
+
+      // Look through all visited ADRP instructions to find one in which
+      // stringVar was the operand used.
+      bool foundStringVar = false;
+      for (const auto &exprVar : instExprVarMap) {
+        if (exprVar.second == stringVar) {
+          foundStringVar = true;
+          break;
+        }
+      }
+
+      if (!foundStringVar) {
+        *out << "\nERROR: Did not use \"" << stringVar
+             << "\" in an ADRP "
+                "instruction\n\n";
+        exit(-1);
+      }
+
+      globalVar = lookupGlobal(stringVar);
+      if (!globalVar) {
+        *out << "\nERROR: global not found\n\n";
+        exit(-1);
+      }
+    } else {
+      globalVar = lookupGlobal(demangle(sss));
+      if (!globalVar) {
+        *out << "\nERROR: global not found\n\n";
+        exit(-1);
+      }
+    }
+
+    assert(globalVar);
+    if (offset != 0) {
+      // FIXME -- would be better to return the root symbol and the
+      // offset separately, and let the caller do the pointer
+      // arithmetic
+      globalVar = createGEP(getIntTy(8), globalVar,
+                            {getUnsignedIntConst(offset, 64)}, "");
+    }
+    return make_pair(globalVar, storePtr);
+  }
+
+  uint64_t replicate8to64(uint64_t v) {
+    uint64_t ret = 0;
+    for (int i = 0; i < 8; ++i) {
+      bool b = (v & 128) != 0;
+      ret <<= 8;
+      if (b)
+        ret |= 0xff;
+      v <<= 1;
+    }
+    return ret;
+  }
+
+  // negative shift exponents go the other direction
+  Value *createUSHL(Value *a, Value *b) {
+    auto zero = getUnsignedIntConst(0, getBitWidth(b));
+    auto c = createICmp(ICmpInst::Predicate::ICMP_SGT, b, zero);
+    auto neg = createSub(zero, b);
+    auto posRes = createMaskedShl(a, b);
+    auto negRes = createMaskedLShr(a, neg);
+    return createSelect(c, posRes, negRes);
+  }
+
+  // negative shift exponents go the other direction
+  Value *createSSHL(Value *a, Value *b) {
+    auto zero = getUnsignedIntConst(0, getBitWidth(b));
+    auto c = createICmp(ICmpInst::Predicate::ICMP_SGT, b, zero);
+    auto neg = createSub(zero, b);
+    auto posRes = createMaskedShl(a, b);
+    auto negRes = createMaskedAShr(a, neg);
+    return createSelect(c, posRes, negRes);
+  }
+
+  Value *rev(Value *in, unsigned eltSize, unsigned amt) {
+    assert(eltSize == 8 || eltSize == 16 || eltSize == 32);
+    assert(getBitWidth(in) == 64 || getBitWidth(in) == 128);
+    if (getBitWidth(in) == 64)
+      in = createZExt(in, getIntTy(128));
+    Value *rev = getUndefVec(128 / eltSize, eltSize);
+    in = createBitCast(in, getVecTy(eltSize, 128 / eltSize));
+    for (unsigned i = 0; i < (128 / amt); ++i) {
+      auto innerCount = amt / eltSize;
+      for (unsigned j = 0; j < innerCount; j++) {
+        auto elt = createExtractElement(in, (i * innerCount) + j);
+        rev = createInsertElement(rev, elt,
+                                  (i * innerCount) + innerCount - j - 1);
+      }
+    }
+    return rev;
+  }
+
+  Value *dupElts(Value *v, unsigned numElts, unsigned eltSize) {
+    unsigned w = numElts * eltSize;
+    assert(w == 64 || w == 128);
+    assert(getBitWidth(v) == eltSize);
+    Value *res = getUndefVec(numElts, eltSize);
+    for (unsigned i = 0; i < numElts; i++)
+      res = createInsertElement(res, v, i);
+    return res;
+  }
+
+  Value *concat(Value *a, Value *b) {
+    int wa = getBitWidth(a);
+    int wb = getBitWidth(b);
+    auto wide_a = createZExt(a, getIntTy(wa + wb));
+    auto wide_b = createZExt(b, getIntTy(wa + wb));
+    auto shifted_a = createRawShl(wide_a, getUnsignedIntConst(wb, wa + wb));
+    return createOr(shifted_a, wide_b);
+  }
+
+  void assertTrue(Value *cond) override {
+    assert(cond->getType()->getIntegerBitWidth() == 1 && "assert requires i1");
+    CallInst::Create(assertDecl, {cond}, "", LLVMBB);
+  }
+
+  void assertSame(Value *a, Value *b) {
+    auto *c = createICmp(ICmpInst::Predicate::ICMP_EQ, a, b);
+    assertTrue(c);
+  }
+
+  // Implemented library pseudocode for signed satuaration from A64 ISA manual
+  tuple<Value *, bool> SignedSatQ(Value *i, unsigned bitWidth) {
+    auto W = getBitWidth(i);
+    assert(bitWidth < W);
+    auto max = getSignedIntConst(((uint64_t)1 << (bitWidth - 1)) - 1, W);
+    auto min = getSignedIntConst(-((uint64_t)1 << (bitWidth - 1)), W);
+    auto *max_bitWidth = getSignedMaxConst(bitWidth);
+    auto *min_bitWidth = getSignedMinConst(bitWidth);
+    Value *i_bitWidth = createTrunc(i, getIntTy(bitWidth));
+
+    auto sat = createOr(createICmp(ICmpInst::Predicate::ICMP_SGT, i, max),
+                        createICmp(ICmpInst::Predicate::ICMP_SLT, i, min));
+    auto max_or_min =
+        createSelect(createICmp(ICmpInst::Predicate::ICMP_SGT, i, max),
+                     max_bitWidth, min_bitWidth);
+
+    auto res = createSelect(sat, max_or_min, i_bitWidth);
+    return make_pair(res, sat);
+  }
+
+  // Implemented library pseudocode for unsigned satuaration from A64 ISA manual
+  tuple<Value *, bool> UnsignedSatQ(Value *i, unsigned bitWidth) {
+    auto W = getBitWidth(i);
+    assert(bitWidth < W);
+    auto max = getUnsignedIntConst(((uint64_t)1 << bitWidth) - 1, W);
+    auto min = getUnsignedIntConst(0, W);
+    Value *max_bitWidth = ConstantInt::get(Ctx, APInt::getMaxValue(bitWidth));
+    Value *min_bitWidth = ConstantInt::get(Ctx, APInt::getMinValue(bitWidth));
+    Value *i_bitWidth = createTrunc(i, getIntTy(bitWidth));
+
+    auto sat = createOr(createICmp(ICmpInst::Predicate::ICMP_UGT, i, max),
+                        createICmp(ICmpInst::Predicate::ICMP_ULT, i, min));
+    auto max_or_min =
+        createSelect(createICmp(ICmpInst::Predicate::ICMP_UGT, i, max),
+                     max_bitWidth, min_bitWidth);
+
+    auto res = createSelect(sat, max_or_min, i_bitWidth);
+    return make_pair(res, sat);
+  }
+
+  // Implemented library pseudocode for satuaration from A64 ISA manual
+  tuple<Value *, bool> SatQ(Value *i, unsigned bitWidth, bool isSigned) {
+    auto [result, sat] =
+        isSigned ? SignedSatQ(i, bitWidth) : UnsignedSatQ(i, bitWidth);
+
+    return make_pair(result, sat);
+  }
+
+  // From https://github.com/agustingianni/retools
+  inline uint64_t Replicate(uint64_t bit, int N) {
+    if (!bit)
+      return 0;
+    if (N == 64)
+      return 0xffffffffffffffffLL;
+    return (1ULL << N) - 1;
+  }
+
+  // From https://github.com/agustingianni/retools
+  inline uint64_t Replicate32x2(uint64_t bits32) {
+    return (bits32 << 32) | bits32;
+  }
+
+  // From https://github.com/agustingianni/retools
+  inline uint64_t Replicate16x4(uint64_t bits16) {
+    return Replicate32x2((bits16 << 16) | bits16);
+  }
+
+  // From https://github.com/agustingianni/retools
+  inline uint64_t Replicate8x8(uint64_t bits8) {
+    return Replicate16x4((bits8 << 8) | bits8);
+  }
+
+  virtual void doCall(FunctionCallee FC, CallInst *llvmCI, const string &calleeName) = 0;
+  
+  void doDirectCall() {
+    auto &op0 = CurInst->getOperand(0);
+    assert(op0.isExpr());
+    auto [expr, _] = getExprVar(op0.getExpr());
+    assert(expr);
+    string calleeName = (string)expr->getName();
+
+    if (calleeName == "__stack_chk_fail") {
+      createTrap();
+      return;
+    }
+
+    *out << "lifting a direct call, callee is: '" << calleeName << "'\n";
+    auto *callee = dyn_cast<Function>(expr);
+    assert(callee);
+
+    if (false && callee == liftedFn) {
+      *out << "Recursion currently not supported\n\n";
+      exit(-1);
+    }
+
+    auto llvmInst = getCurLLVMInst();
+    CallInst *llvmCI{nullptr};
+    if (!llvmInst) {
+      *out << "oops, no debuginfo mapping exists\n";
+    } else {
+      llvmCI = dyn_cast<CallInst>(llvmInst);
+      if (!llvmCI)
+        *out << "oops, debuginfo gave us something that's not a callinst\n";
+    }
+    if (!llvmCI) {
+      *out
+          << "error: can't locate corresponding source-side call instruction\n";
+      exit(-1);
+    }
+
+    FunctionCallee FC{callee};
+    doCall(FC, llvmCI, calleeName);
+  }
+
+  Instruction *getCurLLVMInst() {
+    return (Instruction *)(CurInst->getLoc().getPointer());
+  }
+
+  void storeToMemoryValOffset(Value *base, Value *offset, uint64_t size,
+                              Value *val) override {
+    // Create a GEP instruction based on a byte addressing basis (8 bits)
+    // returning pointer to base + offset
+    assert(base);
+    auto ptr = createGEP(getIntTy(8), base, {offset}, "");
+
+    // Store Value val in the pointer returned by the GEP instruction
+    createStore(val, ptr);
+  }
+
+public:
+  mc2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
+          MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
+          const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)
+      : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
+        InstPrinter(InstPrinter), MCE{MCE}, STI{STI}, IA{IA},
+        DL(srcFn.getParent()->getDataLayout()) {}
+
+  std::optional<aslp::opcode_t> getArmOpcode(const MCInst &I) {
+    SmallVector<MCFixup> Fixups{};
+    SmallVector<char> Code{};
+
+    if (I.getOpcode() == AArch64::SEH_Nop)
+      return std::nullopt;
+
+    MCE.encodeInstruction(I, Code, Fixups, STI);
+    for (auto x : Fixups) {
+      // std::cerr << "fixup: " << x.getKind() << ' ' << x.getTargetKind() << '
+      // ' << x.getOffset() << ' ' << std::flush; x.getValue()->dump();
+      // std::cout << std::endl;
+      (void)x;
+    }
+
+    // do not hand any instructions with relocation fixups to aslp
+    if (Fixups.size() != 0)
+      return std::nullopt;
+
+    aslp::opcode_t ret;
+    unsigned i = 0;
+    for (const char &x : Code) {
+      ret.at(i++) = x;
+    }
+    return ret;
+  }
+
+  virtual void lift(MCInst &I) = 0;
+  
+  void liftInst(MCInst &I) {
+    *out << "mcinst: " << I.getOpcode() << " = ";
+    PrevInst = CurInst;
+    CurInst = &I;
+
+    std::string sss;
+    llvm::raw_string_ostream ss{sss};
+    I.dump_pretty(ss, InstPrinter);
+    *out << sss << " = " << std::flush;
+    if (I.getOpcode() != AArch64::SEH_Nop) {
+      InstPrinter->printInst(&I, 100, "", STI, outs());
+      outs().flush();
+    }
+    *out << std::endl;
+
+    lift(I);
+  }    
+
+  void invalidateReg(unsigned Reg, unsigned Width) {
+    auto F = createFreeze(PoisonValue::get(getIntTy(Width)));
+    createStore(F, RegFile[Reg]);
+  }
+
+  // create the actual storage associated with a register -- all of its
+  // asm-level aliases will get redirected here
+  void createRegStorage(unsigned Reg, unsigned Width, const string &Name) {
+    auto A = createAlloca(getIntTy(Width), getUnsignedIntConst(1, 64), Name);
+    auto F = createFreeze(PoisonValue::get(getIntTy(Width)));
+    createStore(F, A);
+    RegFile[Reg] = A;
+  }
+
+  /*
+   * the idea here is that if a parameter to the lifted function, or
+   * the return value from the lifted function is, for example, 8
+   * bits, then we only want to initialize the lower 8 bits of the
+   * register or stack slot, with the remaining bits containing junk,
+   * in order to detect cases where the compiler incorrectly emits
+   * code depending on that junk. on the other hand, if a parameter is
+   * signext or zeroext then we have to actually initialize those
+   * higher bits.
+   *
+   * FIXME -- this code was originally developed for scalar parameters
+   * and we're mostly sort of hoping it also works for vectors. this
+   * should work fine as long as the only vectors we accept are 64 and
+   * 128 bits, which seemed (as of Nov 2023) to be the only ones with
+   * a stable ABI
+   */
+  Value *enforceSExtZExt(Value *V, bool isSExt, bool isZExt) {
+    auto i8 = getIntTy(8);
+    auto i32 = getIntTy(32);
+    auto argTy = V->getType();
+    unsigned targetWidth;
+
+    // no work needed
+    if (argTy->isPointerTy() || argTy->isVoidTy())
+      return V;
+
+    if (argTy->isVectorTy() || argTy->isFloatingPointTy()) {
+      auto W = getBitWidth(V);
+      argTy = getIntTy(W);
+      V = createBitCast(V, argTy);
+      if (W <= 64)
+        targetWidth = 64;
+      else
+        targetWidth = 128;
+    } else {
+      targetWidth = 64;
+    }
+
+    assert(argTy->isIntegerTy());
+
+    /*
+     * i1 has special two ABI rules. first, by default, an i1 is
+     * implicitly zero-extended to i8. this is from AAPCS64. second,
+     * if the i1 is a signext parameter, then this overrides the
+     * zero-extension rule. this is from the LLVM folks.
+     */
+    if (getBitWidth(V) == 1) {
+      if (isSExt)
+        V = createSExt(V, i32);
+      else
+        V = createZExt(V, i8);
+    }
+
+    if (isSExt) {
+      if (getBitWidth(V) < 32)
+        V = createSExt(V, i32);
+      else if (getBitWidth(V) > 32 && getBitWidth(V) < targetWidth)
+        V = createSExt(V, getIntTy(targetWidth));
+    }
+
+    if (isZExt && getBitWidth(V) < targetWidth)
+      V = createZExt(V, getIntTy(targetWidth));
+
+    // finally, pad out any remaining bits with junk (frozen poisons)
+    auto junkBits = targetWidth - getBitWidth(V);
+    if (junkBits > 0) {
+      auto junk = createFreeze(PoisonValue::get(getIntTy(junkBits)));
+      auto ext1 = createZExt(junk, getIntTy(targetWidth));
+      auto shifted =
+          createRawShl(ext1, getUnsignedIntConst(getBitWidth(V), targetWidth));
+      auto ext2 = createZExt(V, getIntTy(targetWidth));
+      V = createOr(shifted, ext2);
+    }
+
+    return V;
+  }
+
+  string linkageStr(GlobalValue::LinkageTypes linkage) {
+    switch (linkage) {
+    case GlobalValue::LinkageTypes::ExternalLinkage:
+      return "External";
+    case GlobalValue::LinkageTypes::AvailableExternallyLinkage:
+      return "AvailableExternally";
+    case GlobalValue::LinkageTypes::LinkOnceAnyLinkage:
+      return "LinkOnceAny";
+    case GlobalValue::LinkageTypes::LinkOnceODRLinkage:
+      return "LinkOnceODR";
+    case GlobalValue::LinkageTypes::WeakAnyLinkage:
+      return "WeakAny";
+    case GlobalValue::LinkageTypes::WeakODRLinkage:
+      return "WeakODR";
+    case GlobalValue::LinkageTypes::AppendingLinkage:
+      return "Appending";
+    case GlobalValue::LinkageTypes::InternalLinkage:
+      return "Internal";
+    case GlobalValue::LinkageTypes::PrivateLinkage:
+      return "Private";
+    case GlobalValue::LinkageTypes::ExternalWeakLinkage:
+      return "ExternalWeak";
+    case GlobalValue::LinkageTypes::CommonLinkage:
+      return "Common";
+    default:
+      assert(false);
+    }
+  }
+
+  virtual Value *createRegFileAndStack() = 0;
+  virtual void doReturn() = 0;
+    
+  Function *run() {
+    // we'll want this later
+    vector<Type *> args{getIntTy(1)};
+    FunctionType *assertTy =
+        FunctionType::get(Type::getVoidTy(Ctx), args, false);
+    assertDecl = Function::Create(assertTy, Function::ExternalLinkage,
+                                  "llvm.assert", LiftedModule);
+    auto i64 = getIntTy(64);
+
+    // create a fresh function
+    liftedFn =
+        Function::Create(srcFn.getFunctionType(), GlobalValue::ExternalLinkage,
+                         0, srcFn.getName(), LiftedModule);
+    liftedFn->copyAttributesFrom(&srcFn);
+
+    // create LLVM-side basic blocks
+    vector<pair<BasicBlock *, MCBasicBlock *>> BBs;
+    {
+      long insts = 0;
+      for (auto &mbb : MF.BBs) {
+        for (auto &inst [[maybe_unused]] : mbb.getInstrs())
+          ++insts;
+        auto bb = BasicBlock::Create(Ctx, mbb.getName(), liftedFn);
+        BBs.push_back(make_pair(bb, &mbb));
+      }
+      *out << insts << " assembly instructions\n";
+      out->flush();
+    }
+
+    // default to adding instructions to the entry block
+    LLVMBB = BBs[0].first;
+
+    // number of 8-byte stack slots for parameters
+    const int numStackSlots = 32;
+
+    auto *allocTy =
+        FunctionType::get(PointerType::get(Ctx, 0), {i64, i64}, false);
+    myAlloc = Function::Create(allocTy, GlobalValue::ExternalLinkage, 0,
+                               "myalloc", LiftedModule);
+    myAlloc->addRetAttr(Attribute::NonNull);
+    AttrBuilder B1(Ctx);
+    B1.addAllocKindAttr(AllocFnKind::Alloc);
+    B1.addAllocSizeAttr(0, {});
+    B1.addAttribute(Attribute::WillReturn);
+    myAlloc->addFnAttrs(B1);
+    myAlloc->addParamAttr(1, Attribute::AllocAlign);
+    myAlloc->addFnAttr("alloc-family", "backend-tv-alloc");
+    stackSize = getUnsignedIntConst(stackBytes + (8 * numStackSlots), 64);
+
+    stackMem = CallInst::Create(
+        myAlloc, {stackSize, getUnsignedIntConst(16, 64)}, "stack", LLVMBB);
+
+    auto paramBase = createRegFileAndStack();
+    
+    *out << "about to do callee-side ABI stuff\n";
+
+    // implement the callee side of the ABI; FIXME -- this code only
+    // supports integer parameters <= 64 bits and will require
+    // significant generalization to handle large parameters
+    unsigned vecArgNum = 0;
+    unsigned scalarArgNum = 0;
+    unsigned stackSlot = 0;
+
+    for (Function::arg_iterator arg = liftedFn->arg_begin(),
+                                E = liftedFn->arg_end(),
+                                srcArg = srcFn.arg_begin();
+         arg != E; ++arg, ++srcArg) {
+      *out << "  processing " << getBitWidth(arg)
+           << "-bit arg with vecArgNum = " << vecArgNum
+           << ", scalarArgNum = " << scalarArgNum
+           << ", stackSlot = " << stackSlot;
+      auto *argTy = arg->getType();
+      auto *val =
+          enforceSExtZExt(arg, srcArg->hasSExtAttr(), srcArg->hasZExtAttr());
+
+      // first 8 integer parameters go in the first 8 integer registers
+      if ((argTy->isIntegerTy() || argTy->isPointerTy()) && scalarArgNum < 8) {
+        auto Reg = AArch64::X0 + scalarArgNum;
+        createStore(val, RegFile[Reg]);
+        ++scalarArgNum;
+        goto end;
+      }
+
+      // first 8 vector/FP parameters go in the first 8 vector registers
+      if ((argTy->isVectorTy() || argTy->isFloatingPointTy()) &&
+          vecArgNum < 8) {
+        auto Reg = AArch64::Q0 + vecArgNum;
+        createStore(val, RegFile[Reg]);
+        ++vecArgNum;
+        goto end;
+      }
+
+      // anything else goes onto the stack
+      {
+        // 128-bit alignment required for 128-bit arguments
+        if ((getBitWidth(val) == 128) && ((stackSlot % 2) != 0)) {
+          ++stackSlot;
+          *out << " (actual stack slot = " << stackSlot << ")";
+        }
+
+        if (stackSlot >= numStackSlots) {
+          *out << "\nERROR: maximum stack slots for parameter values "
+                  "exceeded\n\n";
+          exit(-1);
+        }
+
+        auto addr =
+            createGEP(i64, paramBase, {getUnsignedIntConst(stackSlot, 64)}, "");
+        createStore(val, addr);
+
+        if (getBitWidth(val) == 64) {
+          stackSlot += 1;
+        } else if (getBitWidth(val) == 128) {
+          stackSlot += 2;
+        } else {
+          assert(false);
+        }
+      }
+
+    end:
+      *out << "\n";
+    }
+
+    *out << "done with callee-side ABI stuff\n";
+
+    // initialize the frame pointer
+    auto initFP =
+        createGEP(i64, paramBase, {getUnsignedIntConst(stackSlot, 64)}, "");
+    createStore(initFP, RegFile[AArch64::FP]);
+
+    *out << "\n\nlifting assembly instructions to LLVM\n";
+
+    for (auto &[llvm_bb, mc_bb] : BBs) {
+      LLVMBB = llvm_bb;
+      MCBB = mc_bb;
+      auto &mc_instrs = mc_bb->getInstrs();
+
+      for (auto &inst : mc_instrs) {
+        llvmInstNum = 0;
+        *out << armInstNum << " : about to lift "
+             << (string)InstPrinter->getOpcodeName(inst.getOpcode()) << "\n";
+        liftInst(inst);
+        *out << "    lifted\n";
+        ++armInstNum;
+      }
+
+      // machine code falls through but LLVM isn't allowed to
+      if (!LLVMBB->getTerminator()) {
+        auto succs = MCBB->getSuccs().size();
+        if (succs == 0) {
+          // this should only happen when we have a function with a
+          // single, empty basic block, which should only when we
+          // started with an LLVM function whose body is something
+          // like UNREACHABLE
+          doReturn();
+        } else if (succs == 1) {
+          auto *dst = getBBByName(MCBB->getSuccs()[0]->getName());
+          createBranch(dst);
+        }
+      }
+    }
+    *out << armInstNum << " assembly instructions\n";
+
+    *out << "encoding counts: ";
+    for (auto &[enc, count] : encodingCounts) {
+      *out << enc << '=' << count << ',';
+    }
+    *out << '\n';
+    // liftedFn->dump();
+    return liftedFn;
+  }
+};
+
+// We're overriding MCStreamerWrapper to generate an MCFunction
+// from the arm assembly. MCStreamerWrapper provides callbacks to handle
+// different parts of the assembly file. The callbacks that we're
+// using right now are all emit* functions.
+class MCStreamerWrapper final : public MCStreamer {
+  enum ASMLine { none = 0, label = 1, non_term_instr = 2, terminator = 3 };
+
+private:
+  MCInstrAnalysis *IA;
+  MCBasicBlock *curBB{nullptr};
+  unsigned prev_line{0};
+  Align curAlign;
+  string curSym;
+  string curSec;
+  bool FunctionEnded = false;
+  unsigned curDebugLine = 0;
+
+  vector<RODataItem> curROData;
+
+public:
+  MCFunction MF;
+  unsigned cnt{0};
+
+  MCStreamerWrapper(MCContext &Context, MCInstrAnalysis *IA,
+                    MCInstPrinter *InstPrinter, MCRegisterInfo *MRI)
+      : MCStreamer(Context), IA(IA) {
+    MF.IA = IA;
+    MF.InstPrinter = InstPrinter;
+    MF.MRI = MRI;
+  }
+
+  void addConstant() {
+    if (curROData.empty())
+      return;
+
+    MCGlobal g{
+        .name = curSym,
+        .align = curAlign,
+        .section = curSec,
+        .data = curROData,
+    };
+    MF.MCglobals.emplace_back(g);
+    curROData.clear();
+    *out << "created constant: " << curSym << "\n";
+  }
+
+  // We only want to intercept the emission of new instructions.
+  virtual void emitInstruction(const MCInst &Inst,
+                               const MCSubtargetInfo & /* unused */) override {
+
+    assert(prev_line != ASMLine::none);
+
+    if (prev_line == ASMLine::terminator)
+      curBB = MF.addBlock(MF.getLabel());
+
+    Instruction *LLVMInst = lineMap[curDebugLine];
+    SMLoc Loc = SMLoc::getFromPointer((char *)LLVMInst);
+    MCInst i(Inst);
+    i.setLoc(Loc);
+    curBB->addInst(i);
+
+    prev_line =
+        IA->isTerminator(Inst) ? ASMLine::terminator : ASMLine::non_term_instr;
+    auto num_operands = i.getNumOperands();
+    for (unsigned idx = 0; idx < num_operands; ++idx) {
+      auto op = i.getOperand(idx);
+      if (op.isExpr()) {
+        auto expr = op.getExpr();
+        if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
+          const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*expr);
+          const MCSymbol &Sym = SRE.getSymbol();
+          *out << "target label : " << (string)Sym.getName()
+               << ", offset=" << to_string(Sym.getOffset())
+               << '\n'; // FIXME remove when done
+        }
+      }
+    }
+
+    *out << cnt++ << "  : ";
+    std::string sss;
+    llvm::raw_string_ostream ss(sss);
+    // Inst.dump_pretty(ss, IP, " ", MRI);
+    *out << sss;
+    if (IA->isBranch(Inst))
+      *out << ": branch ";
+    if (IA->isConditionalBranch(Inst))
+      *out << ": conditional branch ";
+    if (IA->isUnconditionalBranch(Inst))
+      *out << ": unconditional branch ";
+    if (IA->isTerminator(Inst))
+      *out << ": terminator ";
+    *out << "\n";
+  }
+
+  string attrName(MCSymbolAttr A) {
+    switch (A) {
+    case MCSA_ELF_TypeFunction:
+      return "ELF function";
+    case MCSA_ELF_TypeObject:
+      return "ELF object";
+    case MCSA_Global:
+      return "global";
+    default:
+      assert(false && "unknown symbol attribute");
+    }
+  }
+
+  virtual bool emitSymbolAttribute(MCSymbol *Symbol,
+                                   MCSymbolAttr Attribute) override {
+    *out << "[emitSymbolAttribute '" << Symbol->getName().str() << "']\n";
+    if (false) {
+      *out << "  Common? " << Symbol->isCommon() << "\n";
+      *out << "  Variable? " << Symbol->isVariable() << "\n";
+    }
+    return true;
+  }
+
+  virtual void emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override {
+    *out << "[emitSymbolDesc '" << Symbol->getName().str() << "']\n";
+  }
+
+  virtual void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
+                                Align ByteAlignment) override {
+    vector<RODataItem> data;
+    string name{Symbol->getName()};
+    for (uint64_t i = 0; i < Size; ++i)
+      data.push_back(RODataItem{'0'});
+    MCGlobal g{
+        .name = name,
+        .align = ByteAlignment,
+        .section = "common",
+        .data = data,
+    };
+    MF.MCglobals.emplace_back(g);
+    *out << "[emitCommonSymbol = " << name << "]\n";
+  }
+
+  virtual void emitBytes(StringRef Data) override {
+    auto len = Data.size();
+    *out << "[emitBytes " << len << " bytes]\n";
+    for (unsigned i = 0; i < len; ++i) {
+      auto rod = RODataItem{Data[i]};
+      curROData.push_back(rod);
+    }
+  }
+
+  virtual void emitFill(const MCExpr &NumBytes, uint64_t FillValue,
+                        SMLoc Loc) override {
+    auto ce = dyn_cast<MCConstantExpr>(&NumBytes);
+    if (ce) {
+      assert(FillValue < 256);
+      auto bytes = ce->getValue();
+      *out << "[emitFill value = " << FillValue << ", size = " << bytes
+           << "]\n";
+      for (int i = 0; i < bytes; ++i) {
+        auto rod = RODataItem{(char)FillValue};
+        curROData.push_back(rod);
+      }
+    } else {
+      *out << "[emitFill is unknown!]\n";
+    }
+  }
+
+  virtual void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
+                            uint64_t Size = 0, Align ByteAlignment = Align(1),
+                            SMLoc Loc = SMLoc()) override {
+    *out << "[emitZerofill " << Size << " bytes]\n";
+  }
+
+  virtual void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override {
+    *out << "[emitELFSize '" << Symbol->getName().str() << "']\n";
+    addConstant();
+  }
+
+  // FIXME -- we probably need a proper recursive descent parser for
+  // MCExprs here
+  virtual void emitValueImpl(const MCExpr *Value, unsigned Size,
+                             SMLoc Loc = SMLoc()) override {
+    if (curSec.starts_with(".debug")) {
+      *out << "skipping emitValue in debug section\n";
+      return;
+    }
+    if (auto SR = dyn_cast<MCSymbolRefExpr>(Value)) {
+      const MCSymbol &Sym = SR->getSymbol();
+      string name{Sym.getName()};
+      *out << "[emitValue MCSymbolRefExpr= " << name << "]\n";
+      OffsetSym s{name, 0};
+      curROData.push_back(RODataItem{s});
+    } else if (auto CE = dyn_cast<MCConstantExpr>(Value)) {
+      *out << "[emitValue MCConstantExpr]\n";
+      CE->dump();
+      assert(false && "handle this");
+    } else if (auto UE = dyn_cast<MCUnaryExpr>(Value)) {
+      *out << "[emitValue MCUnaryExpr]\n";
+      UE->dump();
+      assert(false && "handle this");
+    } else if (auto BE = dyn_cast<MCBinaryExpr>(Value)) {
+      *out << "[emitValue MCBinaryExpr]\n";
+      auto *LHS = dyn_cast<MCSymbolRefExpr>(BE->getLHS());
+      assert(LHS);
+      auto *RHS = dyn_cast<MCConstantExpr>(BE->getRHS());
+      assert(RHS);
+      OffsetSym s{(string)LHS->getSymbol().getName(), RHS->getValue()};
+      curROData.push_back(RODataItem{s});
+    } else if (auto TE = dyn_cast<MCTargetExpr>(Value)) {
+      *out << "[emitValue MCTargetExpr]\n";
+      TE->dump();
+      assert(false && "handle this");
+    } else {
+      assert(false && "unexpected MCExpr type");
+    }
+  }
+
+  virtual void emitValueToAlignment(Align Alignment, int64_t Value = 0,
+                                    unsigned int ValueSize = 1,
+                                    unsigned int MaxBytesToEmit = 0) override {
+    *out << "[emitValueToAlignment= " << Alignment.value() << "]\n";
+    curAlign = Alignment;
+  }
+
+  virtual void emitAssignment(MCSymbol *Symbol, const MCExpr *Value) override {
+    *out << "[emitAssignment]\n";
+  }
+
+  virtual void emitDwarfLocDirective(unsigned FileNo, unsigned Line,
+                                     unsigned Column, unsigned Flags,
+                                     unsigned Isa, unsigned Discriminator,
+                                     StringRef FileName,
+                                     StringRef Comment) override {
+    *out << "[dwarf loc directive: line = " << Line << "]\n";
+    curDebugLine = Line;
+  }
+
+  virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
+    auto sp = getCurrentSection();
+    string secName = sp.first->getName().str();
+    string lab = Symbol->getName().str();
+    *out << "[emitLabel '" << lab << "' in section '" << secName << "']\n";
+
+    if (secName.starts_with(".debug")) {
+      *out << "  skipping debug stuff\n";
+      curSec = (string)sp.first->getName();
+      return;
+    }
+
+    addConstant();
+
+    curSym = Symbol->getName().str();
+    curSec = (string)sp.first->getName();
+
+    if (lab == ".Lfunc_end0")
+      FunctionEnded = true;
+    if (!FunctionEnded) {
+      curBB = MF.addBlock(lab);
+      MCInst nop;
+      // subsequent logic can be a bit simpler if we assume each BB
+      // contains at least one instruction. might need to revisit this
+      // later on.
+      nop.setOpcode(AArch64::SEH_Nop);
+      curBB->addInstBegin(std::move(nop));
+      prev_line = ASMLine::label;
+    }
+  }
+
+  string findTargetLabel(MCInst &Inst) {
+    auto num_operands = Inst.getNumOperands();
+    for (unsigned i = 0; i < num_operands; ++i) {
+      auto op = Inst.getOperand(i);
+      if (op.isExpr()) {
+        auto expr = op.getExpr();
+        if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
+          const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*expr);
+          const MCSymbol &Sym = SRE.getSymbol();
+          return Sym.getName().str();
+        }
+      }
+    }
+    assert(false && "could not find target label in arm branch instruction");
+  }
+
+  // Make sure that we have an entry label with no predecessors
+  void checkEntryBlock() {
+    MF.checkEntryBlock();
+  }
+
+  // Fill in the CFG
+  void generateSuccessors() {
+    *out << "generating basic block successors" << '\n';
+    for (unsigned i = 0; i < MF.BBs.size(); ++i) {
+      auto &cur_bb = MF.BBs[i];
+      MCBasicBlock *next_bb_ptr = nullptr;
+      if (i < MF.BBs.size() - 1)
+        next_bb_ptr = &MF.BBs[i + 1];
+
+      if (cur_bb.empty()) {
+        *out
+            << "generateSuccessors, encountered basic block with 0 instructions"
+            << '\n';
+        continue;
+      }
+      auto &last_mc_instr = cur_bb.getInstrs().back();
+      // handle the special case of adding where we have added a new entry block
+      // with no predecessors. This is hacky because I don't know the API to
+      // create an MCExpr and have to create a branch with an immediate operand
+      // instead
+      if (i == 0 && (IA->isUnconditionalBranch(last_mc_instr)) &&
+          last_mc_instr.getOperand(0).isImm()) {
+        cur_bb.addSucc(next_bb_ptr);
+        continue;
+      }
+      if (IA->isConditionalBranch(last_mc_instr)) {
+        string target = findTargetLabel(last_mc_instr);
+        auto target_bb = MF.findBlockByName(target);
+        assert(target_bb);
+        cur_bb.addSucc(target_bb);
+        if (next_bb_ptr)
+          cur_bb.addSucc(next_bb_ptr);
+      } else if (IA->isUnconditionalBranch(last_mc_instr)) {
+        string target = findTargetLabel(last_mc_instr);
+        auto target_bb = MF.findBlockByName(target);
+        if (target_bb) {
+          cur_bb.addSucc(target_bb);
+        } else {
+          *out << "looks like a tail call to " << target << "\n";
+        }
+      } else if (IA->isReturn(last_mc_instr)) {
+        continue;
+      } else if (next_bb_ptr) {
+        // add edge to next block
+        cur_bb.addSucc(next_bb_ptr);
+      }
+    }
+  }
+
+  // Remove empty basic blocks, including .Lfunc_end
+  void removeEmptyBlocks() {
+    erase_if(MF.BBs, [](MCBasicBlock bb) { return bb.empty(); });
+  }
+};
+
+// FIXME -- these next 2 clases need to go into their own files
+  
+class arm2llvm : public mc2llvm {
+  tuple<Value *, int, Value *> getStoreParams() {
+    auto &op0 = CurInst->getOperand(0);
+    auto &op1 = CurInst->getOperand(1);
+    auto &op2 = CurInst->getOperand(2);
+    assert(op0.isReg() && op1.isReg());
+
+    if (op2.isImm()) {
+      auto baseReg = op1.getReg();
+      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
+             (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
+             (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
+      auto baseAddr = readPtrFromReg(baseReg);
+      return make_tuple(baseAddr, op2.getImm(), readFromRegOld(op0.getReg()));
+    } else {
+      assert(op2.isExpr());
+      auto [globalVar, _] = getExprVar(op2.getExpr());
+      return make_tuple(globalVar, 0, readFromRegOld(op0.getReg()));
+    }
+  }
+
+  // Creates instructions to store val in memory pointed by base + offset
+  // offset and size are in bytes
+  void storeToMemoryImmOffset(Value *base, uint64_t offset, uint64_t size,
+                              Value *val) {
+    // Get offset as a 64-bit LLVM constant
+    auto offsetVal = getUnsignedIntConst(offset, 64);
+
+    // Create a GEP instruction based on a byte addressing basis (8 bits)
+    // returning pointer to base + offset
+    assert(base);
+    auto ptr = createGEP(getIntTy(8), base, {offsetVal}, "");
+
+    // Store Value val in the pointer returned by the GEP instruction
+    createStore(val, ptr);
+  }
+
+  unsigned decodeRegSet(unsigned r) {
+    switch (r) {
+    case AArch64::D0:
+    case AArch64::D0_D1:
+    case AArch64::D0_D1_D2:
+    case AArch64::D0_D1_D2_D3:
+      return AArch64::D0;
+    case AArch64::D1:
+    case AArch64::D1_D2:
+    case AArch64::D1_D2_D3:
+    case AArch64::D1_D2_D3_D4:
+      return AArch64::D1;
+    case AArch64::D2:
+    case AArch64::D2_D3:
+    case AArch64::D2_D3_D4:
+    case AArch64::D2_D3_D4_D5:
+      return AArch64::D2;
+    case AArch64::D3:
+    case AArch64::D3_D4:
+    case AArch64::D3_D4_D5:
+    case AArch64::D3_D4_D5_D6:
+      return AArch64::D3;
+    case AArch64::D4:
+    case AArch64::D4_D5:
+    case AArch64::D4_D5_D6:
+    case AArch64::D4_D5_D6_D7:
+      return AArch64::D4;
+    case AArch64::D5:
+    case AArch64::D5_D6:
+    case AArch64::D5_D6_D7:
+    case AArch64::D5_D6_D7_D8:
+      return AArch64::D5;
+    case AArch64::D6:
+    case AArch64::D6_D7:
+    case AArch64::D6_D7_D8:
+    case AArch64::D6_D7_D8_D9:
+      return AArch64::D6;
+    case AArch64::D7:
+    case AArch64::D7_D8:
+    case AArch64::D7_D8_D9:
+    case AArch64::D7_D8_D9_D10:
+      return AArch64::D7;
+    case AArch64::D8:
+    case AArch64::D8_D9:
+    case AArch64::D8_D9_D10:
+    case AArch64::D8_D9_D10_D11:
+      return AArch64::D8;
+    case AArch64::D9:
+    case AArch64::D9_D10:
+    case AArch64::D9_D10_D11:
+    case AArch64::D9_D10_D11_D12:
+      return AArch64::D9;
+    case AArch64::D10:
+    case AArch64::D10_D11:
+    case AArch64::D10_D11_D12:
+    case AArch64::D10_D11_D12_D13:
+      return AArch64::D10;
+    case AArch64::D11:
+    case AArch64::D11_D12:
+    case AArch64::D11_D12_D13:
+    case AArch64::D11_D12_D13_D14:
+      return AArch64::D11;
+    case AArch64::D12:
+    case AArch64::D12_D13:
+    case AArch64::D12_D13_D14:
+    case AArch64::D12_D13_D14_D15:
+      return AArch64::D12;
+    case AArch64::D13:
+    case AArch64::D13_D14:
+    case AArch64::D13_D14_D15:
+    case AArch64::D13_D14_D15_D16:
+      return AArch64::D13;
+    case AArch64::D14:
+    case AArch64::D14_D15:
+    case AArch64::D14_D15_D16:
+    case AArch64::D14_D15_D16_D17:
+      return AArch64::D14;
+    case AArch64::D15:
+    case AArch64::D15_D16:
+    case AArch64::D15_D16_D17:
+    case AArch64::D15_D16_D17_D18:
+      return AArch64::D15;
+    case AArch64::D16:
+    case AArch64::D16_D17:
+    case AArch64::D16_D17_D18:
+    case AArch64::D16_D17_D18_D19:
+      return AArch64::D16;
+    case AArch64::D17:
+    case AArch64::D17_D18:
+    case AArch64::D17_D18_D19:
+    case AArch64::D17_D18_D19_D20:
+      return AArch64::D17;
+    case AArch64::D18:
+    case AArch64::D18_D19:
+    case AArch64::D18_D19_D20:
+    case AArch64::D18_D19_D20_D21:
+      return AArch64::D18;
+    case AArch64::D19:
+    case AArch64::D19_D20:
+    case AArch64::D19_D20_D21:
+    case AArch64::D19_D20_D21_D22:
+      return AArch64::D19;
+    case AArch64::D20:
+    case AArch64::D20_D21:
+    case AArch64::D20_D21_D22:
+    case AArch64::D20_D21_D22_D23:
+      return AArch64::D20;
+    case AArch64::D21:
+    case AArch64::D21_D22:
+    case AArch64::D21_D22_D23:
+    case AArch64::D21_D22_D23_D24:
+      return AArch64::D21;
+    case AArch64::D22:
+    case AArch64::D22_D23:
+    case AArch64::D22_D23_D24:
+    case AArch64::D22_D23_D24_D25:
+      return AArch64::D22;
+    case AArch64::D23:
+    case AArch64::D23_D24:
+    case AArch64::D23_D24_D25:
+    case AArch64::D23_D24_D25_D26:
+      return AArch64::D23;
+    case AArch64::D24:
+    case AArch64::D24_D25:
+    case AArch64::D24_D25_D26:
+    case AArch64::D24_D25_D26_D27:
+      return AArch64::D24;
+    case AArch64::D25:
+    case AArch64::D25_D26:
+    case AArch64::D25_D26_D27:
+    case AArch64::D25_D26_D27_D28:
+      return AArch64::D25;
+    case AArch64::D26:
+    case AArch64::D26_D27:
+    case AArch64::D26_D27_D28:
+    case AArch64::D26_D27_D28_D29:
+      return AArch64::D26;
+    case AArch64::D27:
+    case AArch64::D27_D28:
+    case AArch64::D27_D28_D29:
+    case AArch64::D27_D28_D29_D30:
+      return AArch64::D27;
+    case AArch64::D28:
+    case AArch64::D28_D29:
+    case AArch64::D28_D29_D30:
+    case AArch64::D28_D29_D30_D31:
+      return AArch64::D28;
+    case AArch64::D29:
+    case AArch64::D29_D30:
+    case AArch64::D29_D30_D31:
+    case AArch64::D29_D30_D31_D0:
+      return AArch64::D29;
+    case AArch64::D30:
+    case AArch64::D30_D31:
+    case AArch64::D30_D31_D0:
+    case AArch64::D30_D31_D0_D1:
+      return AArch64::D30;
+    case AArch64::D31:
+    case AArch64::D31_D0:
+    case AArch64::D31_D0_D1:
+    case AArch64::D31_D0_D1_D2:
+      return AArch64::D31;
+    case AArch64::Q0:
+    case AArch64::Q0_Q1:
+    case AArch64::Q0_Q1_Q2:
+    case AArch64::Q0_Q1_Q2_Q3:
+      return AArch64::Q0;
+    case AArch64::Q1:
+    case AArch64::Q1_Q2:
+    case AArch64::Q1_Q2_Q3:
+    case AArch64::Q1_Q2_Q3_Q4:
+      return AArch64::Q1;
+    case AArch64::Q2:
+    case AArch64::Q2_Q3:
+    case AArch64::Q2_Q3_Q4:
+    case AArch64::Q2_Q3_Q4_Q5:
+      return AArch64::Q2;
+    case AArch64::Q3:
+    case AArch64::Q3_Q4:
+    case AArch64::Q3_Q4_Q5:
+    case AArch64::Q3_Q4_Q5_Q6:
+      return AArch64::Q3;
+    case AArch64::Q4:
+    case AArch64::Q4_Q5:
+    case AArch64::Q4_Q5_Q6:
+    case AArch64::Q4_Q5_Q6_Q7:
+      return AArch64::Q4;
+    case AArch64::Q5:
+    case AArch64::Q5_Q6:
+    case AArch64::Q5_Q6_Q7:
+    case AArch64::Q5_Q6_Q7_Q8:
+      return AArch64::Q5;
+    case AArch64::Q6:
+    case AArch64::Q6_Q7:
+    case AArch64::Q6_Q7_Q8:
+    case AArch64::Q6_Q7_Q8_Q9:
+      return AArch64::Q6;
+    case AArch64::Q7:
+    case AArch64::Q7_Q8:
+    case AArch64::Q7_Q8_Q9:
+    case AArch64::Q7_Q8_Q9_Q10:
+      return AArch64::Q7;
+    case AArch64::Q8:
+    case AArch64::Q8_Q9:
+    case AArch64::Q8_Q9_Q10:
+    case AArch64::Q8_Q9_Q10_Q11:
+      return AArch64::Q8;
+    case AArch64::Q9:
+    case AArch64::Q9_Q10:
+    case AArch64::Q9_Q10_Q11:
+    case AArch64::Q9_Q10_Q11_Q12:
+      return AArch64::Q9;
+    case AArch64::Q10:
+    case AArch64::Q10_Q11:
+    case AArch64::Q10_Q11_Q12:
+    case AArch64::Q10_Q11_Q12_Q13:
+      return AArch64::Q10;
+    case AArch64::Q11:
+    case AArch64::Q11_Q12:
+    case AArch64::Q11_Q12_Q13:
+    case AArch64::Q11_Q12_Q13_Q14:
+      return AArch64::Q11;
+    case AArch64::Q12:
+    case AArch64::Q12_Q13:
+    case AArch64::Q12_Q13_Q14:
+    case AArch64::Q12_Q13_Q14_Q15:
+      return AArch64::Q12;
+    case AArch64::Q13:
+    case AArch64::Q13_Q14:
+    case AArch64::Q13_Q14_Q15:
+    case AArch64::Q13_Q14_Q15_Q16:
+      return AArch64::Q13;
+    case AArch64::Q14:
+    case AArch64::Q14_Q15:
+    case AArch64::Q14_Q15_Q16:
+    case AArch64::Q14_Q15_Q16_Q17:
+      return AArch64::Q14;
+    case AArch64::Q15:
+    case AArch64::Q15_Q16:
+    case AArch64::Q15_Q16_Q17:
+    case AArch64::Q15_Q16_Q17_Q18:
+      return AArch64::Q15;
+    case AArch64::Q16:
+    case AArch64::Q16_Q17:
+    case AArch64::Q16_Q17_Q18:
+    case AArch64::Q16_Q17_Q18_Q19:
+      return AArch64::Q16;
+    case AArch64::Q17:
+    case AArch64::Q17_Q18:
+    case AArch64::Q17_Q18_Q19:
+    case AArch64::Q17_Q18_Q19_Q20:
+      return AArch64::Q17;
+    case AArch64::Q18:
+    case AArch64::Q18_Q19:
+    case AArch64::Q18_Q19_Q20:
+    case AArch64::Q18_Q19_Q20_Q21:
+      return AArch64::Q18;
+    case AArch64::Q19:
+    case AArch64::Q19_Q20:
+    case AArch64::Q19_Q20_Q21:
+    case AArch64::Q19_Q20_Q21_Q22:
+      return AArch64::Q19;
+    case AArch64::Q20:
+    case AArch64::Q20_Q21:
+    case AArch64::Q20_Q21_Q22:
+    case AArch64::Q20_Q21_Q22_Q23:
+      return AArch64::Q20;
+    case AArch64::Q21:
+    case AArch64::Q21_Q22:
+    case AArch64::Q21_Q22_Q23:
+    case AArch64::Q21_Q22_Q23_Q24:
+      return AArch64::Q21;
+    case AArch64::Q22:
+    case AArch64::Q22_Q23:
+    case AArch64::Q22_Q23_Q24:
+    case AArch64::Q22_Q23_Q24_Q25:
+      return AArch64::Q22;
+    case AArch64::Q23:
+    case AArch64::Q23_Q24:
+    case AArch64::Q23_Q24_Q25:
+    case AArch64::Q23_Q24_Q25_Q26:
+      return AArch64::Q23;
+    case AArch64::Q24:
+    case AArch64::Q24_Q25:
+    case AArch64::Q24_Q25_Q26:
+    case AArch64::Q24_Q25_Q26_Q27:
+      return AArch64::Q24;
+    case AArch64::Q25:
+    case AArch64::Q25_Q26:
+    case AArch64::Q25_Q26_Q27:
+    case AArch64::Q25_Q26_Q27_Q28:
+      return AArch64::Q25;
+    case AArch64::Q26:
+    case AArch64::Q26_Q27:
+    case AArch64::Q26_Q27_Q28:
+    case AArch64::Q26_Q27_Q28_Q29:
+      return AArch64::Q26;
+    case AArch64::Q27:
+    case AArch64::Q27_Q28:
+    case AArch64::Q27_Q28_Q29:
+    case AArch64::Q27_Q28_Q29_Q30:
+      return AArch64::Q27;
+    case AArch64::Q28:
+    case AArch64::Q28_Q29:
+    case AArch64::Q28_Q29_Q30:
+    case AArch64::Q28_Q29_Q30_Q31:
+      return AArch64::Q28;
+    case AArch64::Q29:
+    case AArch64::Q29_Q30:
+    case AArch64::Q29_Q30_Q31:
+    case AArch64::Q29_Q30_Q31_Q0:
+      return AArch64::Q29;
+    case AArch64::Q30:
+    case AArch64::Q30_Q31:
+    case AArch64::Q30_Q31_Q0:
+    case AArch64::Q30_Q31_Q0_Q1:
+      return AArch64::Q30;
+    case AArch64::Q31:
+    case AArch64::Q31_Q0:
+    case AArch64::Q31_Q0_Q1:
+    case AArch64::Q31_Q0_Q1_Q2:
+      return AArch64::Q31;
+    default:
+      assert(false && "missing case in decodeRegSet");
+      break;
+    }
+  }
+
+  Value *tblHelper2(vector<Value *> &tbl, Value *idx, unsigned i) {
+    if (i == tbl.size())
+      return getUnsignedIntConst(0, 8);
+    auto cond = createICmp(ICmpInst::Predicate::ICMP_ULT, idx,
+                           getUnsignedIntConst((i + 1) * 16, 8));
+    auto adjIdx = createSub(idx, getUnsignedIntConst(i * 16, 8));
+    auto t = createExtractElement(tbl.at(i), adjIdx);
+    auto f = tblHelper2(tbl, idx, i + 1);
+    return createSelect(cond, t, f);
+  }
+
+  Value *tblHelper(vector<Value *> &tbl, Value *idx) {
+    return tblHelper2(tbl, idx, 0);
+  }
+
+  tuple<Value *, int> getParamsLoadImmed() {
+    auto &op0 = CurInst->getOperand(0);
+    auto &op1 = CurInst->getOperand(1);
+    auto &op2 = CurInst->getOperand(2);
+    assert(op0.isReg() && op1.isReg());
+    assert(op2.isImm());
+    auto baseReg = op1.getReg();
+    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
+           (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
+           (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
+    auto baseAddr = readPtrFromReg(baseReg);
+    return make_pair(baseAddr, op2.getImm());
+  }
+
+  Value *makeLoadWithOffset(Value *base, Value *offset, int size) override {
+    // Create a GEP instruction based on a byte addressing basis (8 bits)
+    // returning pointer to base + offset
+    assert(base);
+    auto ptr = createGEP(getIntTy(8), base, {offset}, "");
+
+    // Load Value val in the pointer returned by the GEP instruction
+    Value *loaded = createLoad(getIntTy(8 * size), ptr);
+
+    *out << "[makeLoadWithOffset size = " << size << "]\n";
+
+    // FIXME -- this code should not be needed, the ABI guarantees
+    // that loading an i1 should have the rest of the bits clear
+    if (false && size == 1) {
+      *out << "[it's a 1-byte load]\n";
+      if (auto llvmInst = getCurLLVMInst()) {
+        if (auto LI = dyn_cast<LoadInst>(llvmInst)) {
+          if (LI->getType() == getIntTy(1)) {
+            *out << "[following ABI rules for i1]\n";
+            loaded = createAnd(loaded, getUnsignedIntConst(1, 8));
+          } else {
+            *out << "[LLVM inst for this ARM load isn't a load i1]\n";
+          }
+        } else {
+          *out << "[LLVM inst for this ARM load is not a load]\n";
+        }
+      } else {
+        *out << "[can't find an LLVM inst for this ARM load]\n";
+      }
+    }
+
+    return loaded;
+  }
+
+  Value *makeLoadWithOffset(Value *base, int offset, unsigned size) {
+    return makeLoadWithOffset(base, getUnsignedIntConst(offset, 64), size);
+  }
+
+  tuple<Value *, Value *, Value *> getParamsStoreReg() {
+    auto &op0 = CurInst->getOperand(0);
+    auto &op1 = CurInst->getOperand(1);
+    auto &op2 = CurInst->getOperand(2);
+    auto &op3 = CurInst->getOperand(3);
+    auto &op4 = CurInst->getOperand(4);
+    assert(op0.isReg() && op1.isReg() && op2.isReg());
+    assert(op3.isImm() && op4.isImm());
+
+    auto baseReg = op1.getReg();
+    auto offsetReg = op2.getReg();
+    auto extendTypeVal = op3.getImm();
+    auto shiftAmtVal = op4.getImm();
+
+    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
+           (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
+           (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
+    assert((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
+           (offsetReg == AArch64::LR) || (offsetReg == AArch64::FP) ||
+           (offsetReg == AArch64::XZR) ||
+           (offsetReg >= AArch64::W0 && offsetReg <= AArch64::W30) ||
+           (offsetReg == AArch64::WZR));
+
+    int extTyp = 0, shiftAmt;
+    if ((offsetReg >= AArch64::W0 && offsetReg <= AArch64::W30) ||
+        offsetReg == AArch64::WZR) {
+      extTyp = extendTypeVal ? SXTW : UXTW;
+    } else if ((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
+               offsetReg == AArch64::FP || offsetReg == AArch64::XZR) {
+      // The manual assigns a value LSL to extTyp if extendTypeVal is 1
+      // which for a value of 64 bits, is the same as UXTX
+      extTyp = extendTypeVal ? SXTX : UXTX;
+    }
+
+    switch (CurInst->getOpcode()) {
+    case AArch64::STRBBroW:
+    case AArch64::STRBBroX:
+    case AArch64::STRBroW:
+    case AArch64::STRBroX:
+      shiftAmt = 0;
+      break;
+    case AArch64::STRHHroW:
+    case AArch64::STRHHroX:
+    case AArch64::STRHroW:
+    case AArch64::STRHroX:
+      shiftAmt = shiftAmtVal ? 1 : 0;
+      break;
+    case AArch64::STRWroW:
+    case AArch64::STRWroX:
+    case AArch64::STRSroW:
+    case AArch64::STRSroX:
+      shiftAmt = shiftAmtVal ? 2 : 0;
+      break;
+    case AArch64::STRXroW:
+    case AArch64::STRXroX:
+    case AArch64::STRDroW:
+    case AArch64::STRDroX:
+      shiftAmt = shiftAmtVal ? 3 : 0;
+      break;
+    case AArch64::STRQroW:
+    case AArch64::STRQroX:
+      shiftAmt = shiftAmtVal ? 4 : 0;
+      break;
+    default:
+      *out << "\nError Unknown opcode\n";
+      visitError();
+    }
+
+    auto baseAddr = readPtrFromReg(baseReg);
+    auto offset = extendAndShiftValue(readFromRegOld(offsetReg),
+                                      (ExtendType)extTyp, shiftAmt);
+
+    return make_tuple(baseAddr, offset, readFromRegOld(op0.getReg()));
+  }
+
+  void doIndirectCall() {
+    if (auto llvmInst = getCurLLVMInst()) {
+      if (auto CI = dyn_cast<CallInst>(llvmInst)) {
+        if (!CI->isIndirectCall()) {
+          *out << "OOPS: expected BR/BLR to map to an indirect call\n\n";
+          exit(-1);
+        }
+        auto reg = CurInst->getOperand(0).getReg();
+        auto fnPtr = readPtrFromReg(reg);
+        FunctionCallee FC(CI->getFunctionType(), fnPtr);
+        doCall(FC, CI, "");
+      } else {
+        *out << "OOPS: debuginfo gave us something that's not a callinst\n";
+        *out << "Can't process BR/BLR instruction\n\n";
+        exit(-1);
+      }
+    } else {
+      *out << "OOPS: no debuginfo mapping exists\n";
+      *out << "Can't process BR/BLR instruction\n\n";
+      exit(-1);
+    }
+  }
+
+  void doReturn() override {
+    auto i32 = getIntTy(32);
+    auto i64 = getIntTy(64);
+
+    if (EXTRA_ABI_CHECKS) {
+      /*
+       * ABI stuff: on all return paths, check that callee-saved +
+       * other registers have been reset to their previous
+       * values. these values were saved at the top of the function so
+       * the trivially dominate all returns
+       */
+      // FIXME: check callee-saved vector registers
+      // FIXME: make sure code doesn't touch 16, 17?
+      // FIXME: check FP and LR?
+      assertSame(initialSP, readFromRegTyped(AArch64::SP, getIntTy(64)));
+      for (unsigned r = 19; r <= 28; ++r)
+        assertSame(initialReg[r],
+                   readFromRegTyped(AArch64::X0 + r, getIntTy(64)));
+    }
+
+    auto *retTyp = srcFn.getReturnType();
+    if (retTyp->isVoidTy()) {
+      createReturn(nullptr);
+    } else {
+      Value *retVal = nullptr;
+      if (retTyp->isVectorTy() || retTyp->isFloatingPointTy()) {
+        retVal = readFromRegTyped(AArch64::Q0, retTyp);
+      } else {
+        retVal = readFromRegOld(AArch64::X0);
+      }
+      if (retTyp->isPointerTy()) {
+        retVal = new IntToPtrInst(retVal, PointerType::get(Ctx, 0), "", LLVMBB);
+      } else {
+        auto retWidth = DL.getTypeSizeInBits(retTyp);
+        auto retValWidth = DL.getTypeSizeInBits(retVal->getType());
+
+        if (retWidth < retValWidth)
+          retVal = createTrunc(retVal, getIntTy(retWidth));
+
+        // mask off any don't-care bits
+        if (has_ret_attr && (origRetWidth < 32)) {
+          assert(retWidth >= origRetWidth);
+          assert(retWidth == 64);
+          auto trunc = createTrunc(retVal, i32);
+          retVal = createZExt(trunc, i64);
+        }
+
+        if ((retTyp->isVectorTy() || retTyp->isFloatingPointTy()) &&
+            !has_ret_attr)
+          retVal = createBitCast(retVal, retTyp);
+      }
+      createReturn(retVal);
+    }
+  }
+
+  tuple<Value *, Value *, Value *, Value *> FPCompare(Value *a, Value *b) {
+    return {
+        createFCmp(FCmpInst::Predicate::FCMP_OLT, a, b),
+        createFCmp(FCmpInst::Predicate::FCMP_OEQ, a, b),
+        createFCmp(FCmpInst::Predicate::FCMP_UGT, a, b),
+        createFCmp(FCmpInst::Predicate::FCMP_UNO, a, b),
+    };
+  }
+
+  tuple<Value *, Value *, Value *, Value *> splitImmNZCV(uint64_t imm_flags) {
+    assert(imm_flags < 16);
+    return {
+        getBoolConst((imm_flags & 8) != 0),
+        getBoolConst((imm_flags & 4) != 0),
+        getBoolConst((imm_flags & 2) != 0),
+        getBoolConst((imm_flags & 1) != 0),
+    };
+  }
+
+  bool disjoint(const set<int> &a, const set<int> &b) {
+    set<int> i;
+    std::set_intersection(a.begin(), a.end(), b.begin(), b.end(),
+                          std::inserter(i, i.begin()));
+    return i.empty();
+  }
+
+  int64_t getImm(int idx) {
+    return CurInst->getOperand(idx).getImm();
+  }
+
+  enum ExtendType { SXTB, SXTH, SXTW, SXTX, UXTB, UXTH, UXTW, UXTX };
+
+  // Follows the "Library pseudocode for aarch64/instrs/extendreg/ExtendReg"
+  // from ARM manual
+  // val is always 64 bits and shiftAmt is always 0-4
+  Value *extendAndShiftValue(Value *val, enum ExtendType extType,
+                             int shiftAmt) {
+    assert(val->getType()->getIntegerBitWidth() == 64);
+    assert(shiftAmt >= 0 && shiftAmt <= 4);
+
+    // size is always 64 for offset shifting instructions
+    //    auto size = getInstSize(opcode);
+    auto size = 64;
+    auto ty = getIntTy(size);
+    auto isSigned = (extType & 0x4) != 0x4;
+
+    // extendSize is necessary so that we can start with the word size
+    // ARM wants us to (byte, half, full) and then sign extend to a new
+    // size. Without extendSize being used for a trunc, a lot of masking
+    // and more manual work to sign extend would be necessary
+    unsigned extendSize = 8 << (extType & 0x3);
+
+    // Make sure to not trunc to the same size as the parameter.
+    if (extendSize != (unsigned)size) {
+      auto truncType = getIntTy(extendSize);
+      val = createTrunc(val, truncType);
+      val =
+          createCast(val, ty, isSigned ? Instruction::SExt : Instruction::ZExt);
+    }
+
+    // shift may not be there, it may just be the extend
+    if (shiftAmt != 0)
+      val = createMaskedShl(val, getUnsignedIntConst(shiftAmt, size));
+
+    return val;
+  }
+
+  tuple<Value *, Value *> getParamsLoadReg() {
+    auto &op0 = CurInst->getOperand(0);
+    auto &op1 = CurInst->getOperand(1);
+    auto &op2 = CurInst->getOperand(2);
+    auto &op3 = CurInst->getOperand(3);
+    auto &op4 = CurInst->getOperand(4);
+    assert(op0.isReg() && op1.isReg() && op2.isReg());
+    assert(op3.isImm() && op4.isImm());
+
+    auto baseReg = op1.getReg();
+    auto offsetReg = op2.getReg();
+    auto extendTypeVal = op3.getImm();
+    auto shiftAmtVal = op4.getImm();
+
+    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
+           (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
+           (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
+    assert((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
+           (offsetReg == AArch64::LR) || (offsetReg == AArch64::FP) ||
+           (offsetReg == AArch64::SP) || (offsetReg == AArch64::XZR) ||
+           (offsetReg >= AArch64::W0 && offsetReg <= AArch64::W30) ||
+           (offsetReg == AArch64::WZR));
+
+    int extTyp = -1, shiftAmt;
+    if ((offsetReg >= AArch64::W0 && offsetReg <= AArch64::W29) ||
+        offsetReg == AArch64::WZR) {
+      extTyp = extendTypeVal ? SXTW : UXTW;
+    } else if ((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
+               offsetReg == AArch64::FP || offsetReg == AArch64::XZR) {
+      // The manual assigns a value LSL to extTyp if extendTypeVal is 1
+      // which for a value of 64 bits, is the same as UXTX
+      extTyp = extendTypeVal ? SXTX : UXTX;
+    }
+
+    switch (CurInst->getOpcode()) {
+    case AArch64::LDRBBroW:
+    case AArch64::LDRBBroX:
+    case AArch64::LDRBroW:
+    case AArch64::LDRBroX:
+    case AArch64::LDRSBWroW:
+    case AArch64::LDRSBWroX:
+    case AArch64::LDRSBXroW:
+    case AArch64::LDRSBXroX:
+      shiftAmt = 0;
+      break;
+    case AArch64::LDRHHroW:
+    case AArch64::LDRHHroX:
+    case AArch64::LDRHroW:
+    case AArch64::LDRHroX:
+    case AArch64::LDRSHWroW:
+    case AArch64::LDRSHWroX:
+    case AArch64::LDRSHXroW:
+    case AArch64::LDRSHXroX:
+      shiftAmt = shiftAmtVal ? 1 : 0;
+      break;
+    case AArch64::LDRWroW:
+    case AArch64::LDRWroX:
+    case AArch64::LDRSroW:
+    case AArch64::LDRSroX:
+    case AArch64::LDRSWroW:
+    case AArch64::LDRSWroX:
+      shiftAmt = shiftAmtVal ? 2 : 0;
+      break;
+    case AArch64::LDRXroW:
+    case AArch64::LDRXroX:
+    case AArch64::LDRDroW:
+    case AArch64::LDRDroX:
+      shiftAmt = shiftAmtVal ? 3 : 0;
+      break;
+    case AArch64::LDRQroW:
+    case AArch64::LDRQroX:
+      shiftAmt = shiftAmtVal ? 4 : 0;
+      break;
+    default:
+      *out << "\nError Unknown opcode\n";
+      visitError();
+    }
+
+    auto baseAddr = readPtrFromReg(baseReg);
+    auto offset = extendAndShiftValue(readFromRegTyped(offsetReg, getIntTy(64)),
+                                      (ExtendType)extTyp, shiftAmt);
+
+    return make_pair(baseAddr, offset);
+  }
+
+  // From https://github.com/agustingianni/retools
+  inline uint64_t VFPExpandImm(uint64_t imm8, unsigned N) {
+    unsigned E = ((N == 32) ? 8 : 11) - 2; // E in {6, 9}
+    unsigned F = N - E - 1;                // F in {25, 54}
+    uint64_t imm8_6 = (imm8 >> 6) & 1;     // imm8<6>
+    uint64_t sign = (imm8 >> 7) & 1;       // imm8<7>
+    // NOT(imm8<6>):Replicate(imm8<6>,{5, 8})
+    uint64_t exp = ((imm8_6 ^ 1) << (E - 1)) | Replicate(imm8_6, E - 1);
+    // imm8<5:0> : Zeros({19, 48})
+    uint64_t frac = ((imm8 & 0x3f) << (F - 6)) | Replicate(0, F - 6);
+    uint64_t res = (sign << (E + F)) | (exp << F) | frac;
+    return res;
+  }
+
+  // From https://github.com/agustingianni/retools
+  // Implementation of: bits(64) AdvSIMDExpandImm(bit op, bits(4) cmode, bits(8)
+  // imm8)
+  inline uint64_t AdvSIMDExpandImm(unsigned op, unsigned cmode, unsigned imm8) {
+    uint64_t imm64 = 0;
+
+    switch (cmode >> 1) {
+    case 0:
+      imm64 = Replicate32x2(imm8);
+      break;
+    case 1:
+      imm64 = Replicate32x2(imm8 << 8);
+      break;
+    case 2:
+      imm64 = Replicate32x2(imm8 << 16);
+      break;
+    case 3:
+      imm64 = Replicate32x2(imm8 << 24);
+      break;
+    case 4:
+      imm64 = Replicate16x4(imm8);
+      break;
+    case 5:
+      imm64 = Replicate16x4(imm8 << 8);
+      break;
+    case 6:
+      if ((cmode & 1) == 0)
+        imm64 = Replicate32x2((imm8 << 8) | 0xFF);
+      else
+        imm64 = Replicate32x2((imm8 << 16) | 0xFFFF);
+      break;
+    case 7:
+      if ((cmode & 1) == 0 && op == 0)
+        imm64 = Replicate8x8(imm8);
+
+      if ((cmode & 1) == 0 && op == 1) {
+        imm64 = 0;
+        imm64 |= (imm8 & 0x80) ? 0xFF : 0x00;
+        imm64 <<= 8;
+        imm64 |= (imm8 & 0x40) ? 0xFF : 0x00;
+        imm64 <<= 8;
+        imm64 |= (imm8 & 0x20) ? 0xFF : 0x00;
+        imm64 <<= 8;
+        imm64 |= (imm8 & 0x10) ? 0xFF : 0x00;
+        imm64 <<= 8;
+        imm64 |= (imm8 & 0x08) ? 0xFF : 0x00;
+        imm64 <<= 8;
+        imm64 |= (imm8 & 0x04) ? 0xFF : 0x00;
+        imm64 <<= 8;
+        imm64 |= (imm8 & 0x02) ? 0xFF : 0x00;
+        imm64 <<= 8;
+        imm64 |= (imm8 & 0x01) ? 0xFF : 0x00;
+      }
+
+      if ((cmode & 1) == 1 && op == 0) {
+        uint64_t imm8_7 = (imm8 >> 7) & 1;
+        uint64_t imm8_6 = (imm8 >> 6) & 1;
+        uint64_t imm8_50 = imm8 & 63;
+        uint64_t imm32 = (imm8_7 << (1 + 5 + 6 + 19)) |
+                         ((imm8_6 ^ 1) << (5 + 6 + 19)) |
+                         (Replicate(imm8_6, 5) << (6 + 19)) | (imm8_50 << 19);
+        imm64 = Replicate32x2(imm32);
+      }
+
+      if ((cmode & 1) == 1 && op == 1) {
+        // imm64 =
+        // imm8<7>:NOT(imm8<6>):Replicate(imm8<6>,8):imm8<5:0>:Zeros(48);
+        uint64_t imm8_7 = (imm8 >> 7) & 1;
+        uint64_t imm8_6 = (imm8 >> 6) & 1;
+        uint64_t imm8_50 = imm8 & 63;
+        imm64 = (imm8_7 << 63) | ((imm8_6 ^ 1) << 62) |
+                (Replicate(imm8_6, 8) << 54) | (imm8_50 << 48);
+      }
+      break;
+    default:
+      abort();
+    }
+
+    return imm64;
+  }
+
+  vector<Value *> marshallArgs(FunctionType *fTy) {
+    *out << "entering marshallArgs()\n";
+    assert(fTy);
+    if (fTy->getReturnType()->isStructTy()) {
+      *out << "\nERROR: we don't support structures in return values yet\n\n";
+      exit(-1);
+    }
+    if (fTy->getReturnType()->isArrayTy()) {
+      *out << "\nERROR: we don't support arrays in return values yet\n\n";
+      exit(-1);
+    }
+    unsigned vecArgNum = 0;
+    unsigned scalarArgNum = 0;
+    unsigned stackSlot = 0;
+    vector<Value *> args;
+    for (auto arg = fTy->param_begin(); arg != fTy->param_end(); ++arg) {
+      Type *argTy = *arg;
+      assert(argTy);
+      *out << "  vecArgNum = " << vecArgNum
+           << " scalarArgNum = " << scalarArgNum << "\n";
+      if (argTy->isStructTy()) {
+        *out << "\nERROR: we don't support structures in arguments yet\n\n";
+        exit(-1);
+      }
+      if (argTy->isArrayTy()) {
+        *out << "\nERROR: we don't support arrays in arguments yet\n\n";
+        exit(-1);
+      }
+      Value *param{nullptr};
+      if (argTy->isFloatingPointTy() || argTy->isVectorTy()) {
+        if (vecArgNum < 8) {
+          param = readFromRegTyped(AArch64::Q0 + vecArgNum, argTy);
+          ++vecArgNum;
+        } else {
+          auto sz = getBitWidth(argTy);
+          if (sz > 64 && ((stackSlot % 2) != 0)) {
+            ++stackSlot;
+            *out << "aligning stack slot for large vector parameter\n";
+          }
+          *out << "vector parameter going on stack with size = " << sz << "\n";
+          auto SP = readPtrFromReg(AArch64::SP);
+          auto addr =
+              createGEP(getIntTy(64), SP, {getUnsignedIntConst(stackSlot, 64)},
+                        nextName());
+          param = createBitCast(createLoad(getIntTy(sz), addr), argTy);
+          ++stackSlot;
+          if (sz > 64)
+            ++stackSlot;
+        }
+      } else if (argTy->isIntegerTy() || argTy->isPointerTy()) {
+        // FIXME check signext and zeroext
+        if (scalarArgNum < 8) {
+          param = readFromRegTyped(AArch64::X0 + scalarArgNum, getIntTy(64));
+          ++scalarArgNum;
+        } else {
+          auto SP = readPtrFromReg(AArch64::SP);
+          auto addr =
+              createGEP(getIntTy(64), SP, {getUnsignedIntConst(stackSlot, 64)},
+                        nextName());
+          param = createLoad(getIntTy(64), addr);
+          ++stackSlot;
+        }
+        if (argTy->isPointerTy()) {
+          param = new IntToPtrInst(param, PointerType::get(Ctx, 0), "", LLVMBB);
+        } else {
+          assert(argTy->getIntegerBitWidth() <= 64);
+          if (argTy->getIntegerBitWidth() < 64)
+            param = createTrunc(param, getIntTy(argTy->getIntegerBitWidth()));
+        }
+      } else {
+        assert(false && "unknown arg type\n");
+      }
+      args.push_back(param);
+    }
+    *out << "marshalled up " << args.size() << " arguments\n";
+    return args;
+  }
+
+  void doCall(FunctionCallee FC, CallInst *llvmCI, const string &calleeName) override {
+    *out << "entering doCall()\n";
+
+    for (auto &arg : FC.getFunctionType()->params()) {
+      if (auto vTy = dyn_cast<VectorType>(arg))
+        checkVectorTy(vTy);
+    }
+    if (auto RT = dyn_cast<VectorType>(FC.getFunctionType()->getReturnType()))
+      checkVectorTy(RT);
+
+    auto args = marshallArgs(FC.getFunctionType());
+
+    // ugh -- these functions have an LLVM "immediate" as their last
+    // argument; this is not present in the assembly at all, we have
+    // to provide it by hand
+    if (calleeName == "llvm.memset.p0.i64" ||
+        calleeName == "llvm.memset.p0.i32" ||
+        calleeName == "llvm.memcpy.p0.p0.i64" ||
+        calleeName == "llvm.memmove.p0.p0.i64")
+      args[3] = getBoolConst(false);
+
+    auto CI = CallInst::Create(FC, args, "", LLVMBB);
+
+    bool sext{false}, zext{false};
+
+    assert(llvmCI);
+    if (llvmCI->hasFnAttr(Attribute::NoReturn)) {
+      auto a = CI->getAttributes();
+      auto a2 = a.addFnAttribute(Ctx, Attribute::NoReturn);
+      CI->setAttributes(a2);
+    }
+    // NB we have to check for both function attributes and call site
+    // attributes
+    if (llvmCI->hasRetAttr(Attribute::SExt))
+      sext = true;
+    if (llvmCI->hasRetAttr(Attribute::ZExt))
+      zext = true;
+    auto calledFn = llvmCI->getCalledFunction();
+    if (calledFn) {
+      if (calledFn->hasRetAttribute(Attribute::SExt))
+        sext = true;
+      if (calledFn->hasRetAttribute(Attribute::ZExt))
+        zext = true;
+    }
+
+    auto RV = enforceSExtZExt(CI, sext, zext);
+
+    // invalidate machine state that is not guaranteed to be preserved across a
+    // call
+    invalidateReg(AArch64::N, 1);
+    invalidateReg(AArch64::Z, 1);
+    invalidateReg(AArch64::C, 1);
+    invalidateReg(AArch64::V, 1);
+    for (unsigned reg = 9; reg <= 15; ++reg)
+      invalidateReg(AArch64::X0 + reg, 64);
+
+    auto retTy = FC.getFunctionType()->getReturnType();
+    if (retTy->isIntegerTy() || retTy->isPointerTy()) {
+      updateReg(RV, AArch64::X0);
+    } else if (retTy->isFloatingPointTy() || retTy->isVectorTy()) {
+      updateReg(RV, AArch64::Q0);
+    } else {
+      assert(retTy->isVoidTy());
+    }
+  }
+
+  Value *conditionHolds(uint64_t cond) {
+    assert(cond < 16);
+
+    // cond<0> == '1' && cond != '1111'
+    auto invert_bit = (cond & 1) && (cond != 15);
+
+    cond >>= 1;
+
+    auto cur_v = getV();
+    auto cur_z = getZ();
+    auto cur_n = getN();
+    auto cur_c = getC();
+
+    auto falseVal = getBoolConst(false);
+    auto trueVal = getBoolConst(true);
+
+    Value *res = nullptr;
+    switch (cond) {
+    case 0:
+      res = cur_z;
+      break; // EQ/NE
+    case 1:
+      res = cur_c;
+      break; // CS/CC
+    case 2:
+      res = cur_n;
+      break; // MI/PL
+    case 3:
+      res = cur_v;
+      break; // VS/VC
+    case 4: {
+      // HI/LS: PSTATE.C == '1' && PSTATE.Z == '0'
+      // C == 1
+      auto c_cond = createICmp(ICmpInst::Predicate::ICMP_EQ, cur_c, trueVal);
+      // Z == 0
+      auto z_cond = createICmp(ICmpInst::Predicate::ICMP_EQ, cur_z, falseVal);
+      // C == 1 && Z == 0
+      res = createAnd(c_cond, z_cond);
+      break;
+    }
+    case 5:
+      // GE/LT PSTATE.N == PSTATE.V
+      res = createICmp(ICmpInst::Predicate::ICMP_EQ, cur_n, cur_v);
+      break;
+    case 6: {
+      // GT/LE PSTATE.N == PSTATE.V && PSTATE.Z == 0
+      auto n_eq_v = createICmp(ICmpInst::Predicate::ICMP_EQ, cur_n, cur_v);
+      auto z_cond = createICmp(ICmpInst::Predicate::ICMP_EQ, cur_z, falseVal);
+      res = createAnd(n_eq_v, z_cond);
+      break;
+    }
+    case 7:
+      res = trueVal;
+      break;
+    default:
+      assert(false && "invalid input to conditionHolds()");
+      break;
+    }
+
+    assert(res != nullptr && "condition code was not generated");
+
+    if (invert_bit)
+      res = createNot(res);
+
+    return res;
+  }
+
+  tuple<Value *, tuple<Value *, Value *, Value *, Value *>>
+  addWithCarry(Value *l, Value *r, Value *carryIn) {
+    assert(getBitWidth(l) == getBitWidth(r));
+    assert(getBitWidth(carryIn) == 1);
+
+    auto size = getBitWidth(l);
+
+    // Deal with size+1 bit integers so that we can easily calculate the c/v
+    // PSTATE bits.
+    auto ty = l->getType();
+    auto tyPlusOne = getIntTy(size + 1);
+    auto carry = createZExt(carryIn, tyPlusOne);
+
+    auto uAdd = createAdd(createZExt(l, tyPlusOne), createZExt(r, tyPlusOne));
+    auto unsignedSum = createAdd(uAdd, carry);
+
+    auto sAdd = createAdd(createSExt(l, tyPlusOne), createSExt(r, tyPlusOne));
+    auto signedSum = createAdd(sAdd, carry);
+
+    auto zero = getUnsignedIntConst(0, size);
+    auto res = createTrunc(unsignedSum, ty);
+
+    auto newN = createICmp(ICmpInst::Predicate::ICMP_SLT, res, zero);
+    auto newZ = createICmp(ICmpInst::Predicate::ICMP_EQ, res, zero);
+    auto newC = createICmp(ICmpInst::Predicate::ICMP_NE, unsignedSum,
+                           createZExt(res, tyPlusOne));
+    auto newV = createICmp(ICmpInst::Predicate::ICMP_NE, signedSum,
+                           createSExt(res, tyPlusOne));
+
+    return {res, {newN, newZ, newC, newV}};
+  };
+
+  void setV(Value *V) {
+    assert(getBitWidth(V) == 1);
+    updateReg(V, AArch64::V);
+  }
+
+  void setZ(Value *V) {
+    assert(getBitWidth(V) == 1);
+    updateReg(V, AArch64::Z);
+  }
+
+  void setN(Value *V) {
+    assert(getBitWidth(V) == 1);
+    updateReg(V, AArch64::N);
+  }
+
+  void setC(Value *V) {
+    assert(getBitWidth(V) == 1);
+    updateReg(V, AArch64::C);
+  }
+
+  void setZUsingResult(Value *V) {
+    auto W = getBitWidth(V);
+    auto zero = getUnsignedIntConst(0, W);
+    auto z = createICmp(ICmpInst::Predicate::ICMP_EQ, V, zero);
+    setZ(z);
+  }
+
+  void setNUsingResult(Value *V) {
+    auto W = getBitWidth(V);
+    auto zero = getUnsignedIntConst(0, W);
+    auto n = createICmp(ICmpInst::Predicate::ICMP_SLT, V, zero);
+    setN(n);
+  }
+
+  Value *getV() {
+    return createLoad(getIntTy(1), dealiasReg(AArch64::V));
+  }
+
+  Value *getZ() {
+    return createLoad(getIntTy(1), dealiasReg(AArch64::Z));
+  }
+
+  Value *getN() {
+    return createLoad(getIntTy(1), dealiasReg(AArch64::N));
+  }
+
+  Value *getC() {
+    return createLoad(getIntTy(1), dealiasReg(AArch64::C));
+  }
+
+  // Creates LLVM IR instructions which take two values with the same
+  // number of bits, bit casting them to vectors of numElts elements
+  // of size eltSize and doing an operation on them. In cases where
+  // LLVM does not have an appropriate vector instruction, we perform
+  // the operation element-wise.
+  Value *createVectorOp(function<Value *(Value *, Value *)> op, Value *a,
+                        Value *b, unsigned eltSize, unsigned numElts,
+                        bool elementWise, extKind ext, bool splatImm2,
+                        bool immShift, bool isUpper, bool operandTypesDiffer) {
+    if (splatImm2)
+      b = splatImm(b, numElts, eltSize, immShift);
+
+    auto vTy = getVecTy(eltSize, numElts);
+
+    if (operandTypesDiffer) {
+      if (isUpper) {
+        a = createBitCast(a, getVecTy(2 * eltSize, numElts / 2));
+      } else {
+        a = createBitCast(a, getVecTy(2 * eltSize, numElts));
+      }
+    } else {
+      a = createBitCast(a, vTy);
+    }
+    b = createBitCast(b, vTy);
+
+    // some instructions double element widths
+    if (ext == extKind::ZExt) {
+      if (!operandTypesDiffer) {
+        a = createZExt(a, getVecTy(2 * eltSize, numElts));
+      }
+      b = createZExt(b, getVecTy(2 * eltSize, numElts));
+    }
+    if (ext == extKind::SExt) {
+      if (!operandTypesDiffer) {
+        a = createSExt(a, getVecTy(2 * eltSize, numElts));
+      }
+      b = createSExt(b, getVecTy(2 * eltSize, numElts));
+    }
+
+    Value *res = nullptr;
+    if (elementWise) {
+      res = getUndefVec(numElts, eltSize);
+      for (unsigned i = 0; i < numElts; ++i) {
+        auto aa = createExtractElement(a, i);
+        auto bb = createExtractElement(b, i);
+        auto cc = op(aa, bb);
+        res = createInsertElement(res, cc, i);
+      }
+    } else {
+      // Some instructions use the upper half of the operands.
+      if (isUpper) {
+        assert(eltSize * numElts == 128);
+        if (ext == extKind::ZExt || ext == extKind::SExt) {
+          if (!operandTypesDiffer) {
+            a = createBitCast(a, getVecTy(128, 2));
+          }
+          b = createBitCast(b, getVecTy(128, 2));
+        } else {
+          if (!operandTypesDiffer) {
+            a = createBitCast(a, getVecTy(64, 2));
+          }
+          b = createBitCast(b, getVecTy(64, 2));
+        }
+
+        if (!operandTypesDiffer) {
+          a = createExtractElement(a, 1);
+          a = createBitCast(a, getVecTy(eltSize * 2, numElts / 2));
+        }
+
+        b = createExtractElement(b, 1);
+        b = createBitCast(b, getVecTy(eltSize * 2, numElts / 2));
+      }
+      assert(getBitWidth(a) == getBitWidth(b) &&
+             "Expected values of same bit width");
+      res = op(a, b);
+    }
+    return res;
+  }
+
+  Value *getIndexedElement(unsigned idx, unsigned eltSize,
+                           unsigned reg) override {
+    assert(getRegSize(reg) == 128 && "Expected 128-bit register");
+    auto *ty = getVecTy(eltSize, 128 / eltSize);
+    auto *r = readFromRegTyped(reg, ty);
+    return createExtractElement(r, idx);
+  }
+
+  Value *getIndexedFPElement(unsigned idx, unsigned eltSize, unsigned reg) {
+    assert(getRegSize(reg) == 128 && "Expected 128-bit register");
+    auto *element = getIndexedElement(idx, eltSize, reg);
+    return createBitCast(element, getFPType(eltSize));
+  }
+
+  // Returns bitWidth corresponding the registers
+  unsigned getRegSize(unsigned Reg) {
+    if (Reg == AArch64::N || Reg == AArch64::Z || Reg == AArch64::C ||
+        Reg == AArch64::V)
+      return 1;
+    if (Reg >= AArch64::B0 && Reg <= AArch64::B31)
+      return 8;
+    if (Reg >= AArch64::H0 && Reg <= AArch64::H31)
+      return 16;
+    if ((Reg >= AArch64::W0 && Reg <= AArch64::W30) ||
+        (Reg >= AArch64::S0 && Reg <= AArch64::S31) || Reg == AArch64::WZR ||
+        Reg == AArch64::WSP)
+      return 32;
+    if ((Reg >= AArch64::X0 && Reg <= AArch64::X28) ||
+        (Reg >= AArch64::D0 && Reg <= AArch64::D31) || Reg == AArch64::XZR ||
+        Reg == AArch64::SP || Reg == AArch64::FP || Reg == AArch64::LR)
+      return 64;
+    if (Reg >= AArch64::Q0 && Reg <= AArch64::Q31)
+      return 128;
+    assert(false && "unhandled register");
+  }
+
+  // Maps ARM registers to backing registers
+  unsigned mapRegToBackingReg(unsigned Reg) {
+    if (Reg == AArch64::WZR)
+      return AArch64::XZR;
+    else if (Reg == AArch64::W29)
+      return AArch64::FP;
+    else if (Reg == AArch64::W30)
+      return AArch64::LR;
+    else if (Reg == AArch64::WSP)
+      return AArch64::SP;
+    else if (Reg >= AArch64::W0 && Reg <= AArch64::W30)
+      return Reg - AArch64::W0 + AArch64::X0;
+    else if (Reg >= AArch64::X0 && Reg <= AArch64::X28)
+      return Reg - AArch64::X0 + AArch64::X0;
+    // Dealias rules for NEON SIMD/floating-point registers
+    // https://developer.arm.com/documentation/den0024/a/AArch64-Floating-point-and-NEON/NEON-and-Floating-Point-architecture/Floating-point
+    else if (Reg >= AArch64::B0 && Reg <= AArch64::B31)
+      return Reg - AArch64::B0 + AArch64::Q0;
+    else if (Reg >= AArch64::H0 && Reg <= AArch64::H31)
+      return Reg - AArch64::H0 + AArch64::Q0;
+    else if (Reg >= AArch64::S0 && Reg <= AArch64::S31)
+      return Reg - AArch64::S0 + AArch64::Q0;
+    else if (Reg >= AArch64::D0 && Reg <= AArch64::D31)
+      return Reg - AArch64::D0 + AArch64::Q0;
+    assert(RegFile[Reg] &&
+           "ERROR: Cannot have a register without a backing store"
+           " register corresponding it.");
+    return Reg;
+  }
+
+  // return pointer to the backing store for a register, doing the
+  // necessary de-aliasing
+  Value *dealiasReg(unsigned Reg) {
+    auto RegAddr = RegFile[mapRegToBackingReg(Reg)];
+    assert(RegAddr);
+    return RegAddr;
+  }
+
+  // always does a full-width read
+  //
+  // TODO eliminate all uses of this and rename readFromRegTyped to readFromReg
+  Value *readFromRegOld(unsigned Reg) {
+    auto RegAddr = dealiasReg(Reg);
+    return createLoad(getIntTy(getRegSize(mapRegToBackingReg(Reg))), RegAddr);
+  }
+
+  Value *readFromRegTyped(unsigned Reg, Type *ty) {
+    auto RegAddr = dealiasReg(Reg);
+    return createLoad(ty, RegAddr);
+  }
+
+  Value *readPtrFromReg(unsigned Reg) {
+    auto RegAddr = dealiasReg(Reg);
+    return createLoad(PointerType::get(Ctx, 0), RegAddr);
+  }
+
+  void updateReg(Value *V, uint64_t reg, bool SExt = false) {
+    // important -- squash updates to the zero register
+    if (reg == AArch64::WZR || reg == AArch64::XZR)
+      return;
+
+    if (V->getType()->isVectorTy())
+      V = createBitCast(V, getIntTy(getBitWidth(V)));
+    else if (V->getType()->isPointerTy())
+      V = createPtrToInt(V, getIntTy(getBitWidth(V)));
+    else if (V->getType()->isFloatingPointTy())
+      V = createBitCast(V, getIntTy(getBitWidth(V)));
+
+    auto destRegSize = getRegSize(reg);
+    auto realRegSize = getRegSize(mapRegToBackingReg(reg));
+
+    // important to chop the value down to the destination register
+    // size before extending it again
+    if (destRegSize < getBitWidth(V))
+      V = createTrunc(V, getIntTy(destRegSize));
+
+    // now sign extend if asked and appropriate
+    if (SExt && getBitWidth(V) < 32 && destRegSize == 32)
+      V = createSExt(V, getIntTy(32));
+    if (SExt && getBitWidth(V) < 64 && destRegSize == 64)
+      V = createSExt(V, getIntTy(64));
+
+    // annnnd zero out the rest of the destination reg!
+    if (getBitWidth(V) < realRegSize)
+      V = createZExt(V, getIntTy(realRegSize));
+
+    assert(getBitWidth(V) == realRegSize &&
+           "ERROR: register update should be full width");
+
+    createStore(V, dealiasReg(reg));
+  }
+
+  Value *readInputReg(int idx) {
+    auto op = CurInst->getOperand(idx);
+    assert(op.isReg());
+    auto reg = op.getReg();
+    auto regSize = getRegSize(reg);
+    return readFromRegTyped(reg, getIntTy(regSize));
+  }
+
+  // FIXME: stop using this -- instructions should know what they're loading
+  // FIXME: then remove getInstSize!
+  // TODO: make it so that lshr generates code on register lookups
+  // some instructions make use of this, and the semantics need to be
+  // worked out
+  Value *readFromOperand(int idx, unsigned size = 0) {
+    auto op = CurInst->getOperand(idx);
+    if (!size)
+      size = getInstSize(CurInst->getOpcode());
+    // Expr operand is required for a combination of ADRP and ADDXri address
+    // calculation
+    assert(op.isImm() || op.isReg() || op.isExpr());
+
+    if (!(size == 8 || size == 16 || size == 32 || size == 64 || size == 128)) {
+      *out << "\nERROR: Registers can be 8, 16, 32, 64 or 128 bits\n\n";
+      exit(-1);
+    }
+
+    Value *V = nullptr;
+    if (op.isImm()) {
+      V = getUnsignedIntConst(op.getImm(), size);
+    } else if (op.isReg()) {
+      V = readFromRegOld(op.getReg());
+      if (size == 32) {
+        // Always truncate since backing registers are either 64 or 128 bits
+        V = createTrunc(V, getIntTy(32));
+      } else if (size == 64 && getBitWidth(V) == 128) {
+        // Only truncate if the backing register read from is 128 bits
+        // i.e. If value V is 128 bits
+        V = createTrunc(V, getIntTy(64));
+      }
+    } else {
+      auto [val, _] = getExprVar(op.getExpr());
+      V = val;
+    }
+    return V;
+  }
+
+  Value *readFromFPOperand(int idx, unsigned size) {
+    assert((size == 16 || size == 32 || size == 64) &&
+           "Only 16, 32 and 64 bit FP regs");
+    auto val = readFromOperand(idx, size);
+    return createBitCast(val, getFPType(size));
+  }
+
+  Value *readFromVecOperand(int idx, unsigned int eltSize, unsigned int numElts,
+                            bool isUpperHalf = false, bool isFP = false) {
+    VectorType *ty;
+    auto regVal = readFromOperand(idx);
+    if (eltSize * numElts < getBitWidth(regVal)) {
+      regVal = createTrunc(regVal, getIntTy(eltSize * numElts));
+    }
+
+    assert(eltSize * numElts == getBitWidth(regVal));
+    if (isUpperHalf) {
+      assert(eltSize * numElts == 128);
+      auto casted = createBitCast(regVal, getVecTy(64, 2));
+
+      regVal = createExtractElement(casted, 1);
+      ty = getVecTy(eltSize, numElts / 2, isFP);
+    } else {
+      ty = getVecTy(eltSize, numElts, isFP);
+    }
+    return createBitCast(regVal, ty);
+  }
+
+  void updateOutputReg(Value *V, bool SExt = false) override {
+    auto destReg = CurInst->getOperand(0).getReg();
+    updateReg(V, destReg, SExt);
+  }
+
+  Value *splatImm(Value *v, unsigned numElts, unsigned eltSize, bool shift) {
+    if (shift) {
+      assert(CurInst->getOperand(3).isImm());
+      v = regShift(v, getImm(3));
+    }
+    if (getBitWidth(v) > eltSize)
+      v = createTrunc(v, getIntTy(eltSize));
+    Value *res = getUndefVec(numElts, eltSize);
+    for (unsigned i = 0; i < numElts; ++i)
+      res = createInsertElement(res, v, i);
+    return res;
   }
 
   const set<int> s_flag = {
@@ -2208,2378 +5224,10 @@ class mc2llvm : public aslp::lifter_interface_llvm {
     return llvm::cast<llvm::AllocaInst>(RegFile.at(reg));
   }
 
-  void set_bb(llvm::BasicBlock *bb) override {
-    LLVMBB = bb;
-  }
-  llvm::BasicBlock *get_bb() override {
-    return LLVMBB;
-  }
-  llvm::Function &ll_function() override {
-    return *liftedFn;
-  }
-
-  // lifted instructions are named using the number of the ARM
-  // instruction they come from
-  string nextName() override {
-    stringstream ss;
-    ss << "a" << armInstNum << "_" << llvmInstNum++;
-    return ss.str();
-  }
-
-  AllocaInst *createAlloca(Type *ty, Value *sz,
-                           const string &NameStr) override {
-    return new AllocaInst(ty, 0, sz, NameStr, LLVMBB);
-  }
-
-  GetElementPtrInst *createGEP(Type *ty, Value *v, ArrayRef<Value *> idxlist,
-                               const string &NameStr) override {
-    return GetElementPtrInst::Create(ty, v, idxlist, NameStr, LLVMBB);
-  }
-
-  void createBranch(Value *c, BasicBlock *t, BasicBlock *f) {
-    BranchInst::Create(t, f, c, LLVMBB);
-  }
-
-  void createBranch(Value *c, stmt_t t, stmt_t f) override {
-    createBranch(c, t.first, f.first);
-  }
-
-  void createBranch(BasicBlock *dst) {
-    BranchInst::Create(dst, LLVMBB);
-  }
-
-  void createBranch(stmt_t dst) override {
-    createBranch(dst.first);
-  }
-
-  LoadInst *createLoad(Type *ty, Value *ptr) override {
-    return new LoadInst(ty, ptr, nextName(), false, Align(1), LLVMBB);
-  }
-
-  void createStore(Value *v, Value *ptr) override {
-    new StoreInst(v, ptr, false, Align(1), LLVMBB);
-  }
-
-  Value *createTrap() override {
-    auto decl =
-        Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::trap);
-    return CallInst::Create(decl, "", LLVMBB);
-  }
-
-  Value *createSMin(Value *a, Value *b) override {
-    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::smin,
-                                                  a->getType());
-    return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
-  }
-
-  Value *createSMax(Value *a, Value *b) override {
-    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::smax,
-                                                  a->getType());
-    return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
-  }
-
-  Value *createUMin(Value *a, Value *b) override {
-    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::umin,
-                                                  a->getType());
-    return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
-  }
-
-  Value *createUMax(Value *a, Value *b) override {
-    auto decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::umax,
-                                                  a->getType());
-    return CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
-  }
-
-  Value *createFNeg(Value *v) override {
-    return UnaryOperator::CreateFNeg(v, nextName(), LLVMBB);
-  }
-
-  Value *createFAbs(Value *v) override {
-    auto fabs_decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::fabs, v->getType());
-    return CallInst::Create(fabs_decl, {v}, nextName(), LLVMBB);
-  }
-
-  CallInst *createSSubOverflow(Value *a, Value *b) override {
-    auto ssub_decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::ssub_with_overflow, a->getType());
-    return CallInst::Create(ssub_decl, {a, b}, nextName(), LLVMBB);
-  }
-
-  CallInst *createSAddOverflow(Value *a, Value *b) override {
-    auto sadd_decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::sadd_with_overflow, a->getType());
-    return CallInst::Create(sadd_decl, {a, b}, nextName(), LLVMBB);
-  }
-
-  CallInst *createUSubOverflow(Value *a, Value *b) override {
-    auto usub_decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::usub_with_overflow, a->getType());
-    return CallInst::Create(usub_decl, {a, b}, nextName(), LLVMBB);
-  }
-
-  CallInst *createUAddOverflow(Value *a, Value *b) override {
-    auto uadd_decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::uadd_with_overflow, a->getType());
-    return CallInst::Create(uadd_decl, {a, b}, nextName(), LLVMBB);
-  }
-
-  CallInst *createUAddSat(Value *a, Value *b) override {
-    auto uadd_decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::uadd_sat, a->getType());
-    return CallInst::Create(uadd_decl, {a, b}, nextName(), LLVMBB);
-  }
-
-  CallInst *createUSubSat(Value *a, Value *b) override {
-    auto usub_decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::usub_sat, a->getType());
-    return CallInst::Create(usub_decl, {a, b}, nextName(), LLVMBB);
-  }
-
-  CallInst *createSAddSat(Value *a, Value *b) override {
-    auto sadd_decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::sadd_sat, a->getType());
-    return CallInst::Create(sadd_decl, {a, b}, nextName(), LLVMBB);
-  }
-
-  CallInst *createSSubSat(Value *a, Value *b) override {
-    auto ssub_decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::ssub_sat, a->getType());
-    return CallInst::Create(ssub_decl, {a, b}, nextName(), LLVMBB);
-  }
-
-  CallInst *createCtPop(Value *v) override {
-    auto decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::ctpop, v->getType());
-    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
-  }
-
-  // first argument is an i16
-  CallInst *createConvertFromFP16(Value *v, Type *ty) override {
-    auto cvt_decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::convert_from_fp16, ty);
-    return CallInst::Create(cvt_decl, {v}, nextName(), LLVMBB);
-  }
-
-  CastInst *createConvertFPToSI(Value *v, Type *ty) override {
-    return new FPToSIInst(v, ty, nextName(), LLVMBB);
-  }
-
-  CastInst *createConvertFPToUI(Value *v, Type *ty) override {
-    return new FPToUIInst(v, ty, nextName(), LLVMBB);
-  }
-
-  CastInst *createPtrToInt(Value *v, Type *ty) override {
-    return new PtrToIntInst(v, ty, nextName(), LLVMBB);
-  }
-
-  InsertElementInst *createInsertElement(Value *vec, Value *val,
-                                         int idx) override {
-    auto idxv = getUnsignedIntConst(idx, 32);
-    return InsertElementInst::Create(vec, val, idxv, nextName(), LLVMBB);
-  }
-
-  InsertElementInst *createInsertElement(Value *vec, Value *val,
-                                         Value *idx) override {
-    return InsertElementInst::Create(vec, val, idx, nextName(), LLVMBB);
-  }
-
-  ExtractElementInst *createExtractElement(Value *v, Value *idx) override {
-    return ExtractElementInst::Create(v, idx, nextName(), LLVMBB);
-  }
-
-  ExtractElementInst *createExtractElement(Value *v, int idx) override {
-    auto idxv = getUnsignedIntConst(idx, 32);
-    return ExtractElementInst::Create(v, idxv, nextName(), LLVMBB);
-  }
-
-  ShuffleVectorInst *createShuffleVector(Value *v,
-                                         ArrayRef<int> mask) override {
-    return new ShuffleVectorInst(v, mask, nextName(), LLVMBB);
-  }
-
-  ShuffleVectorInst *createShuffleVector(Value *v, Value *mask) {
-    return new ShuffleVectorInst(v, mask, nextName(), LLVMBB);
-  }
-
-  ShuffleVectorInst *createShuffleVector(Value *v, Value *x,
-                                         ArrayRef<int> mask) override {
-    return new ShuffleVectorInst(v, x, mask, nextName(), LLVMBB);
-  }
-
-  ShuffleVectorInst *createShuffleVector(Value *v1, Value *v2, Value *mask) {
-    return new ShuffleVectorInst(v1, v2, mask, nextName(), LLVMBB);
-  }
-
-  Value *getIndexedElement(unsigned idx, unsigned eltSize,
-                           unsigned reg) override {
-    assert(getRegSize(reg) == 128 && "Expected 128-bit register");
-    auto *ty = getVecTy(eltSize, 128 / eltSize);
-    auto *r = readFromRegTyped(reg, ty);
-    return createExtractElement(r, idx);
-  }
-
-  Value *getIndexedFPElement(unsigned idx, unsigned eltSize, unsigned reg) {
-    assert(getRegSize(reg) == 128 && "Expected 128-bit register");
-    auto *element = getIndexedElement(idx, eltSize, reg);
-    return createBitCast(element, getFPType(eltSize));
-  }
-
-  ExtractValueInst *createExtractValue(Value *v,
-                                       ArrayRef<unsigned> idxs) override {
-    return ExtractValueInst::Create(v, idxs, nextName(), LLVMBB);
-  }
-
-  ReturnInst *createReturn(Value *v) override {
-    return ReturnInst::Create(Ctx, v, LLVMBB);
-  }
-
-  CallInst *createFShr(Value *a, Value *b, Value *c) override {
-    auto *decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::fshr, a->getType());
-    return CallInst::Create(decl, {a, b, c}, nextName(), LLVMBB);
-  }
-
-  CallInst *createFShl(Value *a, Value *b, Value *c) override {
-    auto *decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::fshl, a->getType());
-    return CallInst::Create(decl, {a, b, c}, nextName(), LLVMBB);
-  }
-
-  CallInst *createBitReverse(Value *v) override {
-    auto *decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::bitreverse, v->getType());
-    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
-  }
-
-  CallInst *createAbs(Value *v) override {
-    auto *decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::abs,
-                                                   v->getType());
-    return CallInst::Create(decl, {v, getBoolConst(false)}, nextName(), LLVMBB);
-  }
-
-  CallInst *createCtlz(Value *v) override {
-    auto *decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::ctlz, v->getType());
-    return CallInst::Create(decl, {v, getBoolConst(false)}, nextName(), LLVMBB);
-  }
-
-  CallInst *createBSwap(Value *v) override {
-    auto *decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::bswap, v->getType());
-    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
-  }
-
-  CallInst *createVectorReduceAdd(Value *v) override {
-    auto *decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::vector_reduce_add, v->getType());
-    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
-  }
-
-  CallInst *createFusedMultiplyAdd(Value *a, Value *b, Value *c) override {
-    auto *decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::fma,
-                                                   a->getType());
-    return CallInst::Create(decl, {a, b, c}, nextName(), LLVMBB);
-  }
-
-  CallInst *createSQRT(Value *v) override {
-    auto *decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::sqrt, v->getType());
-    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
-  }
-
-  CallInst *createRound(Value *v) override {
-    auto *decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::rint, v->getType());
-    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
-  }
-
-  CallInst *createConstrainedRound(Value *v, Metadata *md) {
-    auto *decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::experimental_constrained_round, v->getType());
-    return CallInst::Create(decl, {v, MetadataAsValue::get(Ctx, md)},
-                            nextName(), LLVMBB);
-  }
-
-  CallInst *createConstrainedFloor(Value *v, Metadata *md) {
-    auto *decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::experimental_constrained_floor, v->getType());
-    return CallInst::Create(decl, {v, MetadataAsValue::get(Ctx, md)},
-                            nextName(), LLVMBB);
-  }
-
-  CallInst *createConstrainedCeil(Value *v, Metadata *md) {
-    auto *decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::experimental_constrained_ceil, v->getType());
-    return CallInst::Create(decl, {v, MetadataAsValue::get(Ctx, md)},
-                            nextName(), LLVMBB);
-  }
-
-  CallInst *createConstrainedRound(Value *v) override {
-    return createConstrainedRound(v, MDString::get(Ctx, "fpexcept.strict"));
-  }
-
-  CallInst *createConstrainedFloor(Value *v) override {
-    return createConstrainedFloor(v, MDString::get(Ctx, "fpexcept.strict"));
-  }
-
-  CallInst *createConstrainedCeil(Value *v) override {
-    return createConstrainedCeil(v, MDString::get(Ctx, "fpexcept.strict"));
-  }
-
-  SelectInst *createSelect(Value *cond, Value *a, Value *b) override {
-    return SelectInst::Create(cond, a, b, nextName(), LLVMBB);
-  }
-
-  ICmpInst *createICmp(ICmpInst::Predicate p, Value *a, Value *b) override {
-    return new ICmpInst(LLVMBB, p, a, b, nextName());
-  }
-
-  FCmpInst *createFCmp(FCmpInst::Predicate p, Value *a, Value *b) override {
-    return new FCmpInst(LLVMBB, p, a, b, nextName());
-  }
-
-  BinaryOperator *createBinop(Value *a, Value *b,
-                              Instruction::BinaryOps op) override {
-    return BinaryOperator::Create(op, a, b, nextName(), LLVMBB);
-  }
-
-  BinaryOperator *createUDiv(Value *a, Value *b) override {
-    return BinaryOperator::Create(Instruction::UDiv, a, b, nextName(), LLVMBB);
-  }
-
-  BinaryOperator *createSDiv(Value *a, Value *b) override {
-    return BinaryOperator::Create(Instruction::SDiv, a, b, nextName(), LLVMBB);
-  }
-
-  BinaryOperator *createMul(Value *a, Value *b) override {
-    return BinaryOperator::Create(Instruction::Mul, a, b, nextName(), LLVMBB);
-  }
-
-  BinaryOperator *createAdd(Value *a, Value *b) override {
-    return BinaryOperator::Create(Instruction::Add, a, b, nextName(), LLVMBB);
-  }
-
-  BinaryOperator *createFAdd(Value *a, Value *b) {
-    return BinaryOperator::Create(Instruction::FAdd, a, b, nextName(), LLVMBB);
-  }
-
-  BinaryOperator *createSub(Value *a, Value *b) override {
-    return BinaryOperator::Create(Instruction::Sub, a, b, nextName(), LLVMBB);
-  }
-
-  BinaryOperator *createFSub(Value *a, Value *b) {
-    return BinaryOperator::Create(Instruction::FSub, a, b, nextName(), LLVMBB);
-  }
-
-  BinaryOperator *createFMul(Value *a, Value *b) {
-    return BinaryOperator::Create(Instruction::FMul, a, b, nextName(), LLVMBB);
-  }
-
-  Value *createRawLShr(Value *a, Value *b) override {
-    return BinaryOperator::Create(Instruction::LShr, a, b, nextName(), LLVMBB);
-  }
-
-  Value *createMaskedLShr(Value *a, Value *b) override {
-    assert(a->getType() == b->getType() && "Expected values of same type");
-
-    // Get an LLVM mask for b to get shift value less than bit width of a
-    // In LLVM shift >= bitwidth -> poison
-    auto mask = getMaskByType(a->getType());
-    assert(a->getType() == mask->getType() && "Expected values of same type");
-
-    auto masked =
-        BinaryOperator::Create(Instruction::And, mask, b, nextName(), LLVMBB);
-    return BinaryOperator::Create(Instruction::LShr, a, masked, nextName(),
-                                  LLVMBB);
-  }
-
-  Value *createRawAShr(Value *a, Value *b) override {
-    return BinaryOperator::Create(Instruction::AShr, a, b, nextName(), LLVMBB);
-  }
-
-  Value *createMaskedAShr(Value *a, Value *b) override {
-    assert(a->getType() == b->getType() && "Expected values of same type");
-
-    // Get an LLVM mask for b to get shift value less than bit width of a
-    // In LLVM shift >= bitwidth -> poison
-    auto mask = getMaskByType(a->getType());
-    assert(a->getType() == mask->getType() && "Expected values of same type");
-
-    auto masked =
-        BinaryOperator::Create(Instruction::And, mask, b, nextName(), LLVMBB);
-    return BinaryOperator::Create(Instruction::AShr, a, masked, nextName(),
-                                  LLVMBB);
-  }
-
-  Value *createRawShl(Value *a, Value *b) override {
-    return BinaryOperator::Create(Instruction::Shl, a, b, nextName(), LLVMBB);
-  }
-
-  Value *createMaskedShl(Value *a, Value *b) override {
-    assert(a->getType() == b->getType() && "Expected values of same type");
-
-    // Get an LLVM mask for b to get shift value less than bit width of a
-    // In LLVM shift >= bitwidth -> poison
-    auto mask = getMaskByType(a->getType());
-    assert(a->getType() == mask->getType() && "Expected values of same type");
-
-    auto masked =
-        BinaryOperator::Create(Instruction::And, mask, b, nextName(), LLVMBB);
-    return BinaryOperator::Create(Instruction::Shl, a, masked, nextName(),
-                                  LLVMBB);
-  }
-
-  Value *getLowOnes(int ones, int w) override {
-    auto zero = getUnsignedIntConst(0, ones);
-    auto one = getUnsignedIntConst(1, ones);
-    auto minusOne = createSub(zero, one);
-    return createZExt(minusOne, getIntTy(w));
-  }
-
-  Value *createMSL(Value *a, int b) override {
-    auto v = BinaryOperator::Create(Instruction::Shl, a,
-                                    getUnsignedIntConst(b, getBitWidth(a)),
-                                    nextName(), LLVMBB);
-    auto ones = getLowOnes(b, getBitWidth(a));
-    return createOr(v, ones);
-  }
-
-  BinaryOperator *createAnd(Value *a, Value *b) override {
-    return BinaryOperator::Create(Instruction::And, a, b, nextName(), LLVMBB);
-  }
-
-  BinaryOperator *createOr(Value *a, Value *b) override {
-    return BinaryOperator::Create(Instruction::Or, a, b, nextName(), LLVMBB);
-  }
-
-  BinaryOperator *createXor(Value *a, Value *b) override {
-    return BinaryOperator::Create(Instruction::Xor, a, b, nextName(), LLVMBB);
-  }
-
-  BinaryOperator *createNot(Value *a) override {
-    auto NegOne = getAllOnesConst(a->getType());
-    return BinaryOperator::Create(Instruction::Xor, a, NegOne, nextName(),
-                                  LLVMBB);
-  }
-
-  FreezeInst *createFreeze(Value *v) override {
-    return new FreezeInst(v, nextName(), LLVMBB);
-  }
-
-  Value *createTrunc(Value *v, Type *t) override {
-    if (v->getType() == t)
-      return v;
-    return CastInst::Create(Instruction::Trunc, v, t, nextName(), LLVMBB);
-  }
-
-  CastInst *createSExt(Value *v, Type *t) override {
-    return CastInst::Create(Instruction::SExt, v, t, nextName(), LLVMBB);
-  }
-
-  CastInst *createZExt(Value *v, Type *t) override {
-    return CastInst::Create(Instruction::ZExt, v, t, nextName(), LLVMBB);
-  }
-
-  CallInst *createFPToUI_sat(Value *v, Type *t) override {
-    auto decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::fptoui_sat, {t, v->getType()});
-    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
-  }
-
-  CallInst *createFPToSI_sat(Value *v, Type *t) override {
-    auto decl = Intrinsic::getOrInsertDeclaration(
-        LiftedModule, Intrinsic::fptosi_sat, {t, v->getType()});
-    return CallInst::Create(decl, {v}, nextName(), LLVMBB);
-  }
-
-  CastInst *createUIToFP(Value *v, Type *t) override {
-    return CastInst::Create(Instruction::UIToFP, v, t, nextName(), LLVMBB);
-  }
-
-  CastInst *createSIToFP(Value *v, Type *t) override {
-    return CastInst::Create(Instruction::SIToFP, v, t, nextName(), LLVMBB);
-  }
-
-  CastInst *createFPTrunc(Value *v, Type *t) override {
-    return CastInst::Create(Instruction::FPTrunc, v, t, nextName(), LLVMBB);
-  }
-
-  CastInst *createFPExt(Value *v, Type *t) override {
-    return CastInst::Create(Instruction::FPExt, v, t, nextName(), LLVMBB);
-  }
-
-  CastInst *createBitCast(Value *v, Type *t) override {
-    return CastInst::Create(Instruction::BitCast, v, t, nextName(), LLVMBB);
-  }
-
-  CastInst *createCast(Value *v, Type *t, Instruction::CastOps op) override {
-    return CastInst::Create(op, v, t, nextName(), LLVMBB);
-  }
-
-  Value *splatImm(Value *v, unsigned numElts, unsigned eltSize, bool shift) {
-    if (shift) {
-      assert(CurInst->getOperand(3).isImm());
-      v = regShift(v, getImm(3));
-    }
-    if (getBitWidth(v) > eltSize)
-      v = createTrunc(v, getIntTy(eltSize));
-    Value *res = getUndefVec(numElts, eltSize);
-    for (unsigned i = 0; i < numElts; ++i)
-      res = createInsertElement(res, v, i);
-    return res;
-  }
-
-  Value *splat(Value *v, unsigned numElts, unsigned eltSize) {
-    assert(getBitWidth(v) == eltSize);
-    Value *res = getUndefVec(numElts, eltSize);
-    for (unsigned i = 0; i < numElts; ++i)
-      res = createInsertElement(res, v, i);
-    return res;
-  }
-
-  enum class extKind { SExt, ZExt, None };
-
-  Value *addPairs(Value *src, unsigned eltSize, unsigned numElts, extKind ext) {
-    auto bigEltTy = getIntTy(2 * eltSize);
-    Value *res = getUndefVec(numElts / 2, 2 * eltSize);
-    for (unsigned i = 0; i < numElts; i += 2) {
-      auto elt1 = createExtractElement(src, i);
-      auto elt2 = createExtractElement(src, i + 1);
-      auto ext1 = ext == extKind::SExt ? createSExt(elt1, bigEltTy)
-                                       : createZExt(elt1, bigEltTy);
-      auto ext2 = ext == extKind::SExt ? createSExt(elt2, bigEltTy)
-                                       : createZExt(elt2, bigEltTy);
-      auto sum = createAdd(ext1, ext2);
-      res = createInsertElement(res, sum, i / 2);
-    }
-    return res;
-  }
-
-  // Creates LLVM IR instructions which take two values with the same
-  // number of bits, bit casting them to vectors of numElts elements
-  // of size eltSize and doing an operation on them. In cases where
-  // LLVM does not have an appropriate vector instruction, we perform
-  // the operation element-wise.
-  Value *createVectorOp(function<Value *(Value *, Value *)> op, Value *a,
-                        Value *b, unsigned eltSize, unsigned numElts,
-                        bool elementWise, extKind ext, bool splatImm2,
-                        bool immShift, bool isUpper, bool operandTypesDiffer) {
-    if (splatImm2)
-      b = splatImm(b, numElts, eltSize, immShift);
-
-    auto vTy = getVecTy(eltSize, numElts);
-
-    if (operandTypesDiffer) {
-      if (isUpper) {
-        a = createBitCast(a, getVecTy(2 * eltSize, numElts / 2));
-      } else {
-        a = createBitCast(a, getVecTy(2 * eltSize, numElts));
-      }
-    } else {
-      a = createBitCast(a, vTy);
-    }
-    b = createBitCast(b, vTy);
-
-    // some instructions double element widths
-    if (ext == extKind::ZExt) {
-      if (!operandTypesDiffer) {
-        a = createZExt(a, getVecTy(2 * eltSize, numElts));
-      }
-      b = createZExt(b, getVecTy(2 * eltSize, numElts));
-    }
-    if (ext == extKind::SExt) {
-      if (!operandTypesDiffer) {
-        a = createSExt(a, getVecTy(2 * eltSize, numElts));
-      }
-      b = createSExt(b, getVecTy(2 * eltSize, numElts));
-    }
-
-    Value *res = nullptr;
-    if (elementWise) {
-      res = getUndefVec(numElts, eltSize);
-      for (unsigned i = 0; i < numElts; ++i) {
-        auto aa = createExtractElement(a, i);
-        auto bb = createExtractElement(b, i);
-        auto cc = op(aa, bb);
-        res = createInsertElement(res, cc, i);
-      }
-    } else {
-      // Some instructions use the upper half of the operands.
-      if (isUpper) {
-        assert(eltSize * numElts == 128);
-        if (ext == extKind::ZExt || ext == extKind::SExt) {
-          if (!operandTypesDiffer) {
-            a = createBitCast(a, getVecTy(128, 2));
-          }
-          b = createBitCast(b, getVecTy(128, 2));
-        } else {
-          if (!operandTypesDiffer) {
-            a = createBitCast(a, getVecTy(64, 2));
-          }
-          b = createBitCast(b, getVecTy(64, 2));
-        }
-
-        if (!operandTypesDiffer) {
-          a = createExtractElement(a, 1);
-          a = createBitCast(a, getVecTy(eltSize * 2, numElts / 2));
-        }
-
-        b = createExtractElement(b, 1);
-        b = createBitCast(b, getVecTy(eltSize * 2, numElts / 2));
-      }
-      assert(getBitWidth(a) == getBitWidth(b) &&
-             "Expected values of same bit width");
-      res = op(a, b);
-    }
-    return res;
-  }
-
-  static unsigned int getBitWidth(Type *ty) {
-    if (auto vTy = dyn_cast<VectorType>(ty)) {
-      return vTy->getScalarSizeInBits() *
-             vTy->getElementCount().getFixedValue();
-    } else if (ty->isIntegerTy()) {
-      return ty->getIntegerBitWidth();
-    } else if (ty->isHalfTy()) {
-      return 16;
-    } else if (ty->isFloatTy()) {
-      return 32;
-    } else if (ty->isDoubleTy()) {
-      return 64;
-    } else if (ty->isPointerTy()) {
-      return 64;
-    } else {
-      ty->dump();
-      assert(false && "Unhandled type");
-    }
-  }
-
-  static unsigned int getBitWidth(Value *V) {
-    return getBitWidth(V->getType());
-  }
-
-  // Returns bitWidth corresponding the registers
-  unsigned getRegSize(unsigned Reg) {
-    if (Reg == AArch64::N || Reg == AArch64::Z || Reg == AArch64::C ||
-        Reg == AArch64::V)
-      return 1;
-    if (Reg >= AArch64::B0 && Reg <= AArch64::B31)
-      return 8;
-    if (Reg >= AArch64::H0 && Reg <= AArch64::H31)
-      return 16;
-    if ((Reg >= AArch64::W0 && Reg <= AArch64::W30) ||
-        (Reg >= AArch64::S0 && Reg <= AArch64::S31) || Reg == AArch64::WZR ||
-        Reg == AArch64::WSP)
-      return 32;
-    if ((Reg >= AArch64::X0 && Reg <= AArch64::X28) ||
-        (Reg >= AArch64::D0 && Reg <= AArch64::D31) || Reg == AArch64::XZR ||
-        Reg == AArch64::SP || Reg == AArch64::FP || Reg == AArch64::LR)
-      return 64;
-    if (Reg >= AArch64::Q0 && Reg <= AArch64::Q31)
-      return 128;
-    assert(false && "unhandled register");
-  }
-
-  // Maps ARM registers to backing registers
-  unsigned mapRegToBackingReg(unsigned Reg) {
-    if (Reg == AArch64::WZR)
-      return AArch64::XZR;
-    else if (Reg == AArch64::W29)
-      return AArch64::FP;
-    else if (Reg == AArch64::W30)
-      return AArch64::LR;
-    else if (Reg == AArch64::WSP)
-      return AArch64::SP;
-    else if (Reg >= AArch64::W0 && Reg <= AArch64::W30)
-      return Reg - AArch64::W0 + AArch64::X0;
-    else if (Reg >= AArch64::X0 && Reg <= AArch64::X28)
-      return Reg - AArch64::X0 + AArch64::X0;
-    // Dealias rules for NEON SIMD/floating-point registers
-    // https://developer.arm.com/documentation/den0024/a/AArch64-Floating-point-and-NEON/NEON-and-Floating-Point-architecture/Floating-point
-    else if (Reg >= AArch64::B0 && Reg <= AArch64::B31)
-      return Reg - AArch64::B0 + AArch64::Q0;
-    else if (Reg >= AArch64::H0 && Reg <= AArch64::H31)
-      return Reg - AArch64::H0 + AArch64::Q0;
-    else if (Reg >= AArch64::S0 && Reg <= AArch64::S31)
-      return Reg - AArch64::S0 + AArch64::Q0;
-    else if (Reg >= AArch64::D0 && Reg <= AArch64::D31)
-      return Reg - AArch64::D0 + AArch64::Q0;
-    assert(RegFile[Reg] &&
-           "ERROR: Cannot have a register without a backing store"
-           " register corresponding it.");
-    return Reg;
-  }
-
-  // return pointer to the backing store for a register, doing the
-  // necessary de-aliasing
-  Value *dealiasReg(unsigned Reg) {
-    auto RegAddr = RegFile[mapRegToBackingReg(Reg)];
-    assert(RegAddr);
-    return RegAddr;
-  }
-
-  // always does a full-width read
-  //
-  // TODO eliminate all uses of this and rename readFromRegTyped to readFromReg
-  Value *readFromRegOld(unsigned Reg) {
-    auto RegAddr = dealiasReg(Reg);
-    return createLoad(getIntTy(getRegSize(mapRegToBackingReg(Reg))), RegAddr);
-  }
-
-  Value *readFromRegTyped(unsigned Reg, Type *ty) {
-    auto RegAddr = dealiasReg(Reg);
-    return createLoad(ty, RegAddr);
-  }
-
-  Value *readPtrFromReg(unsigned Reg) {
-    auto RegAddr = dealiasReg(Reg);
-    return createLoad(PointerType::get(Ctx, 0), RegAddr);
-  }
-
-  void updateReg(Value *V, uint64_t reg, bool SExt = false) {
-    // important -- squash updates to the zero register
-    if (reg == AArch64::WZR || reg == AArch64::XZR)
-      return;
-
-    if (V->getType()->isVectorTy())
-      V = createBitCast(V, getIntTy(getBitWidth(V)));
-    else if (V->getType()->isPointerTy())
-      V = createPtrToInt(V, getIntTy(getBitWidth(V)));
-    else if (V->getType()->isFloatingPointTy())
-      V = createBitCast(V, getIntTy(getBitWidth(V)));
-
-    auto destRegSize = getRegSize(reg);
-    auto realRegSize = getRegSize(mapRegToBackingReg(reg));
-
-    // important to chop the value down to the destination register
-    // size before extending it again
-    if (destRegSize < getBitWidth(V))
-      V = createTrunc(V, getIntTy(destRegSize));
-
-    // now sign extend if asked and appropriate
-    if (SExt && getBitWidth(V) < 32 && destRegSize == 32)
-      V = createSExt(V, getIntTy(32));
-    if (SExt && getBitWidth(V) < 64 && destRegSize == 64)
-      V = createSExt(V, getIntTy(64));
-
-    // annnnd zero out the rest of the destination reg!
-    if (getBitWidth(V) < realRegSize)
-      V = createZExt(V, getIntTy(realRegSize));
-
-    assert(getBitWidth(V) == realRegSize &&
-           "ERROR: register update should be full width");
-
-    createStore(V, dealiasReg(reg));
-  }
-
-  Value *readInputReg(int idx) {
-    auto op = CurInst->getOperand(idx);
-    assert(op.isReg());
-    auto reg = op.getReg();
-    auto regSize = getRegSize(reg);
-    return readFromRegTyped(reg, getIntTy(regSize));
-  }
-
-  // FIXME: stop using this -- instructions should know what they're loading
-  // FIXME: then remove getInstSize!
-  // TODO: make it so that lshr generates code on register lookups
-  // some instructions make use of this, and the semantics need to be
-  // worked out
-  Value *readFromOperand(int idx, unsigned size = 0) {
-    auto op = CurInst->getOperand(idx);
-    if (!size)
-      size = getInstSize(CurInst->getOpcode());
-    // Expr operand is required for a combination of ADRP and ADDXri address
-    // calculation
-    assert(op.isImm() || op.isReg() || op.isExpr());
-
-    if (!(size == 8 || size == 16 || size == 32 || size == 64 || size == 128)) {
-      *out << "\nERROR: Registers can be 8, 16, 32, 64 or 128 bits\n\n";
-      exit(-1);
-    }
-
-    Value *V = nullptr;
-    if (op.isImm()) {
-      V = getUnsignedIntConst(op.getImm(), size);
-    } else if (op.isReg()) {
-      V = readFromRegOld(op.getReg());
-      if (size == 32) {
-        // Always truncate since backing registers are either 64 or 128 bits
-        V = createTrunc(V, getIntTy(32));
-      } else if (size == 64 && getBitWidth(V) == 128) {
-        // Only truncate if the backing register read from is 128 bits
-        // i.e. If value V is 128 bits
-        V = createTrunc(V, getIntTy(64));
-      }
-    } else {
-      auto [val, _] = getExprVar(op.getExpr());
-      V = val;
-    }
-    return V;
-  }
-
-  Value *readFromFPOperand(int idx, unsigned size) {
-    assert((size == 16 || size == 32 || size == 64) &&
-           "Only 16, 32 and 64 bit FP regs");
-    auto val = readFromOperand(idx, size);
-    return createBitCast(val, getFPType(size));
-  }
-
-  Value *readFromVecOperand(int idx, unsigned int eltSize, unsigned int numElts,
-                            bool isUpperHalf = false, bool isFP = false) {
-    VectorType *ty;
-    auto regVal = readFromOperand(idx);
-    if (eltSize * numElts < getBitWidth(regVal)) {
-      regVal = createTrunc(regVal, getIntTy(eltSize * numElts));
-    }
-
-    assert(eltSize * numElts == getBitWidth(regVal));
-    if (isUpperHalf) {
-      assert(eltSize * numElts == 128);
-      auto casted = createBitCast(regVal, getVecTy(64, 2));
-
-      regVal = createExtractElement(casted, 1);
-      ty = getVecTy(eltSize, numElts / 2, isFP);
-    } else {
-      ty = getVecTy(eltSize, numElts, isFP);
-    }
-    return createBitCast(regVal, ty);
-  }
-
-  void updateOutputReg(Value *V, bool SExt = false) override {
-    auto destReg = CurInst->getOperand(0).getReg();
-    updateReg(V, destReg, SExt);
-  }
-
-  std::tuple<string, long> getOffset(const string &var) {
-    std::smatch m;
-    std::regex offset("^(.*)\\+([0-9]+)$");
-    if (std::regex_search(var, m, offset)) {
-      auto root = m[1];
-      auto offset = m[2];
-      *out << "  root = " << root << "\n";
-      *out << "  offset = " << offset << "\n";
-      return make_tuple(root, stol(offset));
-    } else {
-      return make_tuple(var, 0);
-    }
-  }
-
-  // Reads an Expr and maps containing string variable to a global variable
-  std::string mapExprVar(const MCExpr *expr) {
-    std::string name;
-    llvm::raw_string_ostream ss(name);
-    expr->print(ss, nullptr);
-
-    // If the expression starts with a relocation specifier, strip it and map
-    // the rest to a string name of the global variable. Assuming there is only
-    // one relocation specifier, and it is at the beginning
-    // (std::regex_constants::match_continuous).
-    // eg: ":lo12:a" becomes  "a"
-    std::smatch sm1;
-    std::regex reloc("^:[a-z0-9_]+:");
-    if (std::regex_search(name, sm1, reloc)) {
-      name = sm1.suffix();
-    }
-
-    name = demangle(name);
-    auto [root, offset] = getOffset(name);
-    name = root;
-
-    if (!lookupGlobal(name)) {
-      *out << "\ncan't find global '" << name << "'\n";
-      *out << "ERROR: Unknown global in ADRP\n\n";
-      exit(-1);
-    }
-
-    instExprVarMap[CurInst] = name;
-    return name;
-  }
-
-  llvm::Value *lookupExprVar(const llvm::MCExpr &expr) override {
-    return lookupGlobal(mapExprVar(&expr));
-  }
-
-  string demangle(const string &name) {
-    if (name.rfind(".L.", 0) == 0) {
-      // the assembler has mangled local symbols, which start with a
-      // dot, by prefixing them with ".L"; here we demangle
-      return name.substr(2);
-    } else {
-      return name;
-    }
-  }
-
-  // Reads an Expr and gets the global variable corresponding the containing
-  // string variable. Assuming the Expr consists of a single global variable.
-  pair<Value *, bool> getExprVar(const MCExpr *expr) {
-    Value *globalVar;
-    // Default to true meaning store the ptr global value rather than loading
-    // the value from the global
-    bool storePtr = true;
-    std::string sss;
-
-    // Matched strings
-    std::smatch sm;
-
-    // Regex to match relocation specifiers
-    std::regex re(":[a-z0-9_]+:");
-
-    llvm::raw_string_ostream ss(sss);
-    expr->print(ss, nullptr);
-
-    auto [root, offset] = getOffset(sss);
-    sss = root;
-
-    // If the expression starts with a relocation specifier, strip it and look
-    // for the rest (variable in the Expr) in the instExprVarMap and globals.
-    // Assuming there is only one relocation specifier, and it is at the
-    // beginning (std::regex_constants::match_continuous).
-    if (std::regex_search(sss, sm, re,
-                          std::regex_constants::match_continuous)) {
-      string stringVar = sm.suffix();
-      // Check the relocation specifiers to determine whether to store ptr
-      // global value in the register or load the value from the global
-      if (!sm.empty() && (sm[0] == ":lo12:")) {
-        storePtr = false;
-      }
-
-      stringVar = demangle(stringVar);
-
-      if (!lookupGlobal(stringVar)) {
-        *out << "\nERROR: instruction mentions '" << stringVar << "'\n";
-        *out << "which is not a global variable we know about\n\n";
-        exit(-1);
-      }
-
-      // Look through all visited ADRP instructions to find one in which
-      // stringVar was the operand used.
-      bool foundStringVar = false;
-      for (const auto &exprVar : instExprVarMap) {
-        if (exprVar.second == stringVar) {
-          foundStringVar = true;
-          break;
-        }
-      }
-
-      if (!foundStringVar) {
-        *out << "\nERROR: Did not use \"" << stringVar
-             << "\" in an ADRP "
-                "instruction\n\n";
-        exit(-1);
-      }
-
-      globalVar = lookupGlobal(stringVar);
-      if (!globalVar) {
-        *out << "\nERROR: global not found\n\n";
-        exit(-1);
-      }
-    } else {
-      globalVar = lookupGlobal(demangle(sss));
-      if (!globalVar) {
-        *out << "\nERROR: global not found\n\n";
-        exit(-1);
-      }
-    }
-
-    assert(globalVar);
-    if (offset != 0) {
-      // FIXME -- would be better to return the root symbol and the
-      // offset separately, and let the caller do the pointer
-      // arithmetic
-      globalVar = createGEP(getIntTy(8), globalVar,
-                            {getUnsignedIntConst(offset, 64)}, "");
-    }
-    return make_pair(globalVar, storePtr);
-  }
-
-  Value *getV() {
-    return createLoad(getIntTy(1), dealiasReg(AArch64::V));
-  }
-
-  Value *getZ() {
-    return createLoad(getIntTy(1), dealiasReg(AArch64::Z));
-  }
-
-  Value *getN() {
-    return createLoad(getIntTy(1), dealiasReg(AArch64::N));
-  }
-
-  Value *getC() {
-    return createLoad(getIntTy(1), dealiasReg(AArch64::C));
-  }
-
-  uint64_t replicate8to64(uint64_t v) {
-    uint64_t ret = 0;
-    for (int i = 0; i < 8; ++i) {
-      bool b = (v & 128) != 0;
-      ret <<= 8;
-      if (b)
-        ret |= 0xff;
-      v <<= 1;
-    }
-    return ret;
-  }
-
-  // negative shift exponents go the other direction
-  Value *createUSHL(Value *a, Value *b) {
-    auto zero = getUnsignedIntConst(0, getBitWidth(b));
-    auto c = createICmp(ICmpInst::Predicate::ICMP_SGT, b, zero);
-    auto neg = createSub(zero, b);
-    auto posRes = createMaskedShl(a, b);
-    auto negRes = createMaskedLShr(a, neg);
-    return createSelect(c, posRes, negRes);
-  }
-
-  // negative shift exponents go the other direction
-  Value *createSSHL(Value *a, Value *b) {
-    auto zero = getUnsignedIntConst(0, getBitWidth(b));
-    auto c = createICmp(ICmpInst::Predicate::ICMP_SGT, b, zero);
-    auto neg = createSub(zero, b);
-    auto posRes = createMaskedShl(a, b);
-    auto negRes = createMaskedAShr(a, neg);
-    return createSelect(c, posRes, negRes);
-  }
-
-  Value *rev(Value *in, unsigned eltSize, unsigned amt) {
-    assert(eltSize == 8 || eltSize == 16 || eltSize == 32);
-    assert(getBitWidth(in) == 64 || getBitWidth(in) == 128);
-    if (getBitWidth(in) == 64)
-      in = createZExt(in, getIntTy(128));
-    Value *rev = getUndefVec(128 / eltSize, eltSize);
-    in = createBitCast(in, getVecTy(eltSize, 128 / eltSize));
-    for (unsigned i = 0; i < (128 / amt); ++i) {
-      auto innerCount = amt / eltSize;
-      for (unsigned j = 0; j < innerCount; j++) {
-        auto elt = createExtractElement(in, (i * innerCount) + j);
-        rev = createInsertElement(rev, elt,
-                                  (i * innerCount) + innerCount - j - 1);
-      }
-    }
-    return rev;
-  }
-
-  Value *dupElts(Value *v, unsigned numElts, unsigned eltSize) {
-    unsigned w = numElts * eltSize;
-    assert(w == 64 || w == 128);
-    assert(getBitWidth(v) == eltSize);
-    Value *res = getUndefVec(numElts, eltSize);
-    for (unsigned i = 0; i < numElts; i++)
-      res = createInsertElement(res, v, i);
-    return res;
-  }
-
-  Value *concat(Value *a, Value *b) {
-    int wa = getBitWidth(a);
-    int wb = getBitWidth(b);
-    auto wide_a = createZExt(a, getIntTy(wa + wb));
-    auto wide_b = createZExt(b, getIntTy(wa + wb));
-    auto shifted_a = createRawShl(wide_a, getUnsignedIntConst(wb, wa + wb));
-    return createOr(shifted_a, wide_b);
-  }
-
-  Value *conditionHolds(uint64_t cond) {
-    assert(cond < 16);
-
-    // cond<0> == '1' && cond != '1111'
-    auto invert_bit = (cond & 1) && (cond != 15);
-
-    cond >>= 1;
-
-    auto cur_v = getV();
-    auto cur_z = getZ();
-    auto cur_n = getN();
-    auto cur_c = getC();
-
-    auto falseVal = getBoolConst(false);
-    auto trueVal = getBoolConst(true);
-
-    Value *res = nullptr;
-    switch (cond) {
-    case 0:
-      res = cur_z;
-      break; // EQ/NE
-    case 1:
-      res = cur_c;
-      break; // CS/CC
-    case 2:
-      res = cur_n;
-      break; // MI/PL
-    case 3:
-      res = cur_v;
-      break; // VS/VC
-    case 4: {
-      // HI/LS: PSTATE.C == '1' && PSTATE.Z == '0'
-      // C == 1
-      auto c_cond = createICmp(ICmpInst::Predicate::ICMP_EQ, cur_c, trueVal);
-      // Z == 0
-      auto z_cond = createICmp(ICmpInst::Predicate::ICMP_EQ, cur_z, falseVal);
-      // C == 1 && Z == 0
-      res = createAnd(c_cond, z_cond);
-      break;
-    }
-    case 5:
-      // GE/LT PSTATE.N == PSTATE.V
-      res = createICmp(ICmpInst::Predicate::ICMP_EQ, cur_n, cur_v);
-      break;
-    case 6: {
-      // GT/LE PSTATE.N == PSTATE.V && PSTATE.Z == 0
-      auto n_eq_v = createICmp(ICmpInst::Predicate::ICMP_EQ, cur_n, cur_v);
-      auto z_cond = createICmp(ICmpInst::Predicate::ICMP_EQ, cur_z, falseVal);
-      res = createAnd(n_eq_v, z_cond);
-      break;
-    }
-    case 7:
-      res = trueVal;
-      break;
-    default:
-      assert(false && "invalid input to conditionHolds()");
-      break;
-    }
-
-    assert(res != nullptr && "condition code was not generated");
-
-    if (invert_bit)
-      res = createNot(res);
-
-    return res;
-  }
-
-  tuple<Value *, tuple<Value *, Value *, Value *, Value *>>
-  addWithCarry(Value *l, Value *r, Value *carryIn) {
-    assert(getBitWidth(l) == getBitWidth(r));
-    assert(getBitWidth(carryIn) == 1);
-
-    auto size = getBitWidth(l);
-
-    // Deal with size+1 bit integers so that we can easily calculate the c/v
-    // PSTATE bits.
-    auto ty = l->getType();
-    auto tyPlusOne = getIntTy(size + 1);
-    auto carry = createZExt(carryIn, tyPlusOne);
-
-    auto uAdd = createAdd(createZExt(l, tyPlusOne), createZExt(r, tyPlusOne));
-    auto unsignedSum = createAdd(uAdd, carry);
-
-    auto sAdd = createAdd(createSExt(l, tyPlusOne), createSExt(r, tyPlusOne));
-    auto signedSum = createAdd(sAdd, carry);
-
-    auto zero = getUnsignedIntConst(0, size);
-    auto res = createTrunc(unsignedSum, ty);
-
-    auto newN = createICmp(ICmpInst::Predicate::ICMP_SLT, res, zero);
-    auto newZ = createICmp(ICmpInst::Predicate::ICMP_EQ, res, zero);
-    auto newC = createICmp(ICmpInst::Predicate::ICMP_NE, unsignedSum,
-                           createZExt(res, tyPlusOne));
-    auto newV = createICmp(ICmpInst::Predicate::ICMP_NE, signedSum,
-                           createSExt(res, tyPlusOne));
-
-    return {res, {newN, newZ, newC, newV}};
-  };
-
-  void setV(Value *V) {
-    assert(getBitWidth(V) == 1);
-    updateReg(V, AArch64::V);
-  }
-
-  void setZ(Value *V) {
-    assert(getBitWidth(V) == 1);
-    updateReg(V, AArch64::Z);
-  }
-
-  void setN(Value *V) {
-    assert(getBitWidth(V) == 1);
-    updateReg(V, AArch64::N);
-  }
-
-  void setC(Value *V) {
-    assert(getBitWidth(V) == 1);
-    updateReg(V, AArch64::C);
-  }
-
-  void setZUsingResult(Value *V) {
-    auto W = getBitWidth(V);
-    auto zero = getUnsignedIntConst(0, W);
-    auto z = createICmp(ICmpInst::Predicate::ICMP_EQ, V, zero);
-    setZ(z);
-  }
-
-  void setNUsingResult(Value *V) {
-    auto W = getBitWidth(V);
-    auto zero = getUnsignedIntConst(0, W);
-    auto n = createICmp(ICmpInst::Predicate::ICMP_SLT, V, zero);
-    setN(n);
-  }
-
-  void assertTrue(Value *cond) override {
-    assert(cond->getType()->getIntegerBitWidth() == 1 && "assert requires i1");
-    CallInst::Create(assertDecl, {cond}, "", LLVMBB);
-  }
-
-  void assertSame(Value *a, Value *b) {
-    auto *c = createICmp(ICmpInst::Predicate::ICMP_EQ, a, b);
-    assertTrue(c);
-  }
-
-  // Implemented library pseudocode for signed satuaration from A64 ISA manual
-  tuple<Value *, bool> SignedSatQ(Value *i, unsigned bitWidth) {
-    auto W = getBitWidth(i);
-    assert(bitWidth < W);
-    auto max = getSignedIntConst(((uint64_t)1 << (bitWidth - 1)) - 1, W);
-    auto min = getSignedIntConst(-((uint64_t)1 << (bitWidth - 1)), W);
-    auto *max_bitWidth = getSignedMaxConst(bitWidth);
-    auto *min_bitWidth = getSignedMinConst(bitWidth);
-    Value *i_bitWidth = createTrunc(i, getIntTy(bitWidth));
-
-    auto sat = createOr(createICmp(ICmpInst::Predicate::ICMP_SGT, i, max),
-                        createICmp(ICmpInst::Predicate::ICMP_SLT, i, min));
-    auto max_or_min =
-        createSelect(createICmp(ICmpInst::Predicate::ICMP_SGT, i, max),
-                     max_bitWidth, min_bitWidth);
-
-    auto res = createSelect(sat, max_or_min, i_bitWidth);
-    return make_pair(res, sat);
-  }
-
-  // Implemented library pseudocode for unsigned satuaration from A64 ISA manual
-  tuple<Value *, bool> UnsignedSatQ(Value *i, unsigned bitWidth) {
-    auto W = getBitWidth(i);
-    assert(bitWidth < W);
-    auto max = getUnsignedIntConst(((uint64_t)1 << bitWidth) - 1, W);
-    auto min = getUnsignedIntConst(0, W);
-    Value *max_bitWidth = ConstantInt::get(Ctx, APInt::getMaxValue(bitWidth));
-    Value *min_bitWidth = ConstantInt::get(Ctx, APInt::getMinValue(bitWidth));
-    Value *i_bitWidth = createTrunc(i, getIntTy(bitWidth));
-
-    auto sat = createOr(createICmp(ICmpInst::Predicate::ICMP_UGT, i, max),
-                        createICmp(ICmpInst::Predicate::ICMP_ULT, i, min));
-    auto max_or_min =
-        createSelect(createICmp(ICmpInst::Predicate::ICMP_UGT, i, max),
-                     max_bitWidth, min_bitWidth);
-
-    auto res = createSelect(sat, max_or_min, i_bitWidth);
-    return make_pair(res, sat);
-  }
-
-  // Implemented library pseudocode for satuaration from A64 ISA manual
-  tuple<Value *, bool> SatQ(Value *i, unsigned bitWidth, bool isSigned) {
-    auto [result, sat] =
-        isSigned ? SignedSatQ(i, bitWidth) : UnsignedSatQ(i, bitWidth);
-
-    return make_pair(result, sat);
-  }
-
-  // From https://github.com/agustingianni/retools
-  inline uint64_t Replicate(uint64_t bit, int N) {
-    if (!bit)
-      return 0;
-    if (N == 64)
-      return 0xffffffffffffffffLL;
-    return (1ULL << N) - 1;
-  }
-
-  // From https://github.com/agustingianni/retools
-  inline uint64_t Replicate32x2(uint64_t bits32) {
-    return (bits32 << 32) | bits32;
-  }
-
-  // From https://github.com/agustingianni/retools
-  inline uint64_t Replicate16x4(uint64_t bits16) {
-    return Replicate32x2((bits16 << 16) | bits16);
-  }
-
-  // From https://github.com/agustingianni/retools
-  inline uint64_t Replicate8x8(uint64_t bits8) {
-    return Replicate16x4((bits8 << 8) | bits8);
-  }
-
-  // From https://github.com/agustingianni/retools
-  inline uint64_t VFPExpandImm(uint64_t imm8, unsigned N) {
-    unsigned E = ((N == 32) ? 8 : 11) - 2; // E in {6, 9}
-    unsigned F = N - E - 1;                // F in {25, 54}
-    uint64_t imm8_6 = (imm8 >> 6) & 1;     // imm8<6>
-    uint64_t sign = (imm8 >> 7) & 1;       // imm8<7>
-    // NOT(imm8<6>):Replicate(imm8<6>,{5, 8})
-    uint64_t exp = ((imm8_6 ^ 1) << (E - 1)) | Replicate(imm8_6, E - 1);
-    // imm8<5:0> : Zeros({19, 48})
-    uint64_t frac = ((imm8 & 0x3f) << (F - 6)) | Replicate(0, F - 6);
-    uint64_t res = (sign << (E + F)) | (exp << F) | frac;
-    return res;
-  }
-
-  // From https://github.com/agustingianni/retools
-  // Implementation of: bits(64) AdvSIMDExpandImm(bit op, bits(4) cmode, bits(8)
-  // imm8)
-  inline uint64_t AdvSIMDExpandImm(unsigned op, unsigned cmode, unsigned imm8) {
-    uint64_t imm64 = 0;
-
-    switch (cmode >> 1) {
-    case 0:
-      imm64 = Replicate32x2(imm8);
-      break;
-    case 1:
-      imm64 = Replicate32x2(imm8 << 8);
-      break;
-    case 2:
-      imm64 = Replicate32x2(imm8 << 16);
-      break;
-    case 3:
-      imm64 = Replicate32x2(imm8 << 24);
-      break;
-    case 4:
-      imm64 = Replicate16x4(imm8);
-      break;
-    case 5:
-      imm64 = Replicate16x4(imm8 << 8);
-      break;
-    case 6:
-      if ((cmode & 1) == 0)
-        imm64 = Replicate32x2((imm8 << 8) | 0xFF);
-      else
-        imm64 = Replicate32x2((imm8 << 16) | 0xFFFF);
-      break;
-    case 7:
-      if ((cmode & 1) == 0 && op == 0)
-        imm64 = Replicate8x8(imm8);
-
-      if ((cmode & 1) == 0 && op == 1) {
-        imm64 = 0;
-        imm64 |= (imm8 & 0x80) ? 0xFF : 0x00;
-        imm64 <<= 8;
-        imm64 |= (imm8 & 0x40) ? 0xFF : 0x00;
-        imm64 <<= 8;
-        imm64 |= (imm8 & 0x20) ? 0xFF : 0x00;
-        imm64 <<= 8;
-        imm64 |= (imm8 & 0x10) ? 0xFF : 0x00;
-        imm64 <<= 8;
-        imm64 |= (imm8 & 0x08) ? 0xFF : 0x00;
-        imm64 <<= 8;
-        imm64 |= (imm8 & 0x04) ? 0xFF : 0x00;
-        imm64 <<= 8;
-        imm64 |= (imm8 & 0x02) ? 0xFF : 0x00;
-        imm64 <<= 8;
-        imm64 |= (imm8 & 0x01) ? 0xFF : 0x00;
-      }
-
-      if ((cmode & 1) == 1 && op == 0) {
-        uint64_t imm8_7 = (imm8 >> 7) & 1;
-        uint64_t imm8_6 = (imm8 >> 6) & 1;
-        uint64_t imm8_50 = imm8 & 63;
-        uint64_t imm32 = (imm8_7 << (1 + 5 + 6 + 19)) |
-                         ((imm8_6 ^ 1) << (5 + 6 + 19)) |
-                         (Replicate(imm8_6, 5) << (6 + 19)) | (imm8_50 << 19);
-        imm64 = Replicate32x2(imm32);
-      }
-
-      if ((cmode & 1) == 1 && op == 1) {
-        // imm64 =
-        // imm8<7>:NOT(imm8<6>):Replicate(imm8<6>,8):imm8<5:0>:Zeros(48);
-        uint64_t imm8_7 = (imm8 >> 7) & 1;
-        uint64_t imm8_6 = (imm8 >> 6) & 1;
-        uint64_t imm8_50 = imm8 & 63;
-        imm64 = (imm8_7 << 63) | ((imm8_6 ^ 1) << 62) |
-                (Replicate(imm8_6, 8) << 54) | (imm8_50 << 48);
-      }
-      break;
-    default:
-      abort();
-    }
-
-    return imm64;
-  }
-
-  vector<Value *> marshallArgs(FunctionType *fTy) {
-    *out << "entering marshallArgs()\n";
-    assert(fTy);
-    if (fTy->getReturnType()->isStructTy()) {
-      *out << "\nERROR: we don't support structures in return values yet\n\n";
-      exit(-1);
-    }
-    if (fTy->getReturnType()->isArrayTy()) {
-      *out << "\nERROR: we don't support arrays in return values yet\n\n";
-      exit(-1);
-    }
-    unsigned vecArgNum = 0;
-    unsigned scalarArgNum = 0;
-    unsigned stackSlot = 0;
-    vector<Value *> args;
-    for (auto arg = fTy->param_begin(); arg != fTy->param_end(); ++arg) {
-      Type *argTy = *arg;
-      assert(argTy);
-      *out << "  vecArgNum = " << vecArgNum
-           << " scalarArgNum = " << scalarArgNum << "\n";
-      if (argTy->isStructTy()) {
-        *out << "\nERROR: we don't support structures in arguments yet\n\n";
-        exit(-1);
-      }
-      if (argTy->isArrayTy()) {
-        *out << "\nERROR: we don't support arrays in arguments yet\n\n";
-        exit(-1);
-      }
-      Value *param{nullptr};
-      if (argTy->isFloatingPointTy() || argTy->isVectorTy()) {
-        if (vecArgNum < 8) {
-          param = readFromRegTyped(AArch64::Q0 + vecArgNum, argTy);
-          ++vecArgNum;
-        } else {
-          auto sz = getBitWidth(argTy);
-          if (sz > 64 && ((stackSlot % 2) != 0)) {
-            ++stackSlot;
-            *out << "aligning stack slot for large vector parameter\n";
-          }
-          *out << "vector parameter going on stack with size = " << sz << "\n";
-          auto SP = readPtrFromReg(AArch64::SP);
-          auto addr =
-              createGEP(getIntTy(64), SP, {getUnsignedIntConst(stackSlot, 64)},
-                        nextName());
-          param = createBitCast(createLoad(getIntTy(sz), addr), argTy);
-          ++stackSlot;
-          if (sz > 64)
-            ++stackSlot;
-        }
-      } else if (argTy->isIntegerTy() || argTy->isPointerTy()) {
-        // FIXME check signext and zeroext
-        if (scalarArgNum < 8) {
-          param = readFromRegTyped(AArch64::X0 + scalarArgNum, getIntTy(64));
-          ++scalarArgNum;
-        } else {
-          auto SP = readPtrFromReg(AArch64::SP);
-          auto addr =
-              createGEP(getIntTy(64), SP, {getUnsignedIntConst(stackSlot, 64)},
-                        nextName());
-          param = createLoad(getIntTy(64), addr);
-          ++stackSlot;
-        }
-        if (argTy->isPointerTy()) {
-          param = new IntToPtrInst(param, PointerType::get(Ctx, 0), "", LLVMBB);
-        } else {
-          assert(argTy->getIntegerBitWidth() <= 64);
-          if (argTy->getIntegerBitWidth() < 64)
-            param = createTrunc(param, getIntTy(argTy->getIntegerBitWidth()));
-        }
-      } else {
-        assert(false && "unknown arg type\n");
-      }
-      args.push_back(param);
-    }
-    *out << "marshalled up " << args.size() << " arguments\n";
-    return args;
-  }
-
-  void doCall(FunctionCallee FC, CallInst *llvmCI, const string &calleeName) {
-    *out << "entering doCall()\n";
-
-    for (auto &arg : FC.getFunctionType()->params()) {
-      if (auto vTy = dyn_cast<VectorType>(arg))
-        checkVectorTy(vTy);
-    }
-    if (auto RT = dyn_cast<VectorType>(FC.getFunctionType()->getReturnType()))
-      checkVectorTy(RT);
-
-    auto args = marshallArgs(FC.getFunctionType());
-
-    // ugh -- these functions have an LLVM "immediate" as their last
-    // argument; this is not present in the assembly at all, we have
-    // to provide it by hand
-    if (calleeName == "llvm.memset.p0.i64" ||
-        calleeName == "llvm.memset.p0.i32" ||
-        calleeName == "llvm.memcpy.p0.p0.i64" ||
-        calleeName == "llvm.memmove.p0.p0.i64")
-      args[3] = getBoolConst(false);
-
-    auto CI = CallInst::Create(FC, args, "", LLVMBB);
-
-    bool sext{false}, zext{false};
-
-    assert(llvmCI);
-    if (llvmCI->hasFnAttr(Attribute::NoReturn)) {
-      auto a = CI->getAttributes();
-      auto a2 = a.addFnAttribute(Ctx, Attribute::NoReturn);
-      CI->setAttributes(a2);
-    }
-    // NB we have to check for both function attributes and call site
-    // attributes
-    if (llvmCI->hasRetAttr(Attribute::SExt))
-      sext = true;
-    if (llvmCI->hasRetAttr(Attribute::ZExt))
-      zext = true;
-    auto calledFn = llvmCI->getCalledFunction();
-    if (calledFn) {
-      if (calledFn->hasRetAttribute(Attribute::SExt))
-        sext = true;
-      if (calledFn->hasRetAttribute(Attribute::ZExt))
-        zext = true;
-    }
-
-    auto RV = enforceSExtZExt(CI, sext, zext);
-
-    // invalidate machine state that is not guaranteed to be preserved across a
-    // call
-    invalidateReg(AArch64::N, 1);
-    invalidateReg(AArch64::Z, 1);
-    invalidateReg(AArch64::C, 1);
-    invalidateReg(AArch64::V, 1);
-    for (unsigned reg = 9; reg <= 15; ++reg)
-      invalidateReg(AArch64::X0 + reg, 64);
-
-    auto retTy = FC.getFunctionType()->getReturnType();
-    if (retTy->isIntegerTy() || retTy->isPointerTy()) {
-      updateReg(RV, AArch64::X0);
-    } else if (retTy->isFloatingPointTy() || retTy->isVectorTy()) {
-      updateReg(RV, AArch64::Q0);
-    } else {
-      assert(retTy->isVoidTy());
-    }
-  }
-
-  void doDirectCall() {
-    auto &op0 = CurInst->getOperand(0);
-    assert(op0.isExpr());
-    auto [expr, _] = getExprVar(op0.getExpr());
-    assert(expr);
-    string calleeName = (string)expr->getName();
-
-    if (calleeName == "__stack_chk_fail") {
-      createTrap();
-      return;
-    }
-
-    *out << "lifting a direct call, callee is: '" << calleeName << "'\n";
-    auto *callee = dyn_cast<Function>(expr);
-    assert(callee);
-
-    if (false && callee == liftedFn) {
-      *out << "Recursion currently not supported\n\n";
-      exit(-1);
-    }
-
-    auto llvmInst = getCurLLVMInst();
-    CallInst *llvmCI{nullptr};
-    if (!llvmInst) {
-      *out << "oops, no debuginfo mapping exists\n";
-    } else {
-      llvmCI = dyn_cast<CallInst>(llvmInst);
-      if (!llvmCI)
-        *out << "oops, debuginfo gave us something that's not a callinst\n";
-    }
-    if (!llvmCI) {
-      *out
-          << "error: can't locate corresponding source-side call instruction\n";
-      exit(-1);
-    }
-
-    FunctionCallee FC{callee};
-    doCall(FC, llvmCI, calleeName);
-  }
-
-  void doIndirectCall() {
-    if (auto llvmInst = getCurLLVMInst()) {
-      if (auto CI = dyn_cast<CallInst>(llvmInst)) {
-        if (!CI->isIndirectCall()) {
-          *out << "OOPS: expected BR/BLR to map to an indirect call\n\n";
-          exit(-1);
-        }
-        auto reg = CurInst->getOperand(0).getReg();
-        auto fnPtr = readPtrFromReg(reg);
-        FunctionCallee FC(CI->getFunctionType(), fnPtr);
-        doCall(FC, CI, "");
-      } else {
-        *out << "OOPS: debuginfo gave us something that's not a callinst\n";
-        *out << "Can't process BR/BLR instruction\n\n";
-        exit(-1);
-      }
-    } else {
-      *out << "OOPS: no debuginfo mapping exists\n";
-      *out << "Can't process BR/BLR instruction\n\n";
-      exit(-1);
-    }
-  }
-
-  void doReturn() {
-    auto i32 = getIntTy(32);
-    auto i64 = getIntTy(64);
-
-    if (EXTRA_ABI_CHECKS) {
-      /*
-       * ABI stuff: on all return paths, check that callee-saved +
-       * other registers have been reset to their previous
-       * values. these values were saved at the top of the function so
-       * the trivially dominate all returns
-       */
-      // FIXME: check callee-saved vector registers
-      // FIXME: make sure code doesn't touch 16, 17?
-      // FIXME: check FP and LR?
-      assertSame(initialSP, readFromRegTyped(AArch64::SP, getIntTy(64)));
-      for (unsigned r = 19; r <= 28; ++r)
-        assertSame(initialReg[r],
-                   readFromRegTyped(AArch64::X0 + r, getIntTy(64)));
-    }
-
-    auto *retTyp = srcFn.getReturnType();
-    if (retTyp->isVoidTy()) {
-      createReturn(nullptr);
-    } else {
-      Value *retVal = nullptr;
-      if (retTyp->isVectorTy() || retTyp->isFloatingPointTy()) {
-        retVal = readFromRegTyped(AArch64::Q0, retTyp);
-      } else {
-        retVal = readFromRegOld(AArch64::X0);
-      }
-      if (retTyp->isPointerTy()) {
-        retVal = new IntToPtrInst(retVal, PointerType::get(Ctx, 0), "", LLVMBB);
-      } else {
-        auto retWidth = DL.getTypeSizeInBits(retTyp);
-        auto retValWidth = DL.getTypeSizeInBits(retVal->getType());
-
-        if (retWidth < retValWidth)
-          retVal = createTrunc(retVal, getIntTy(retWidth));
-
-        // mask off any don't-care bits
-        if (has_ret_attr && (origRetWidth < 32)) {
-          assert(retWidth >= origRetWidth);
-          assert(retWidth == 64);
-          auto trunc = createTrunc(retVal, i32);
-          retVal = createZExt(trunc, i64);
-        }
-
-        if ((retTyp->isVectorTy() || retTyp->isFloatingPointTy()) &&
-            !has_ret_attr)
-          retVal = createBitCast(retVal, retTyp);
-      }
-      createReturn(retVal);
-    }
-  }
-
-  tuple<Value *, Value *, Value *, Value *> FPCompare(Value *a, Value *b) {
-    return {
-        createFCmp(FCmpInst::Predicate::FCMP_OLT, a, b),
-        createFCmp(FCmpInst::Predicate::FCMP_OEQ, a, b),
-        createFCmp(FCmpInst::Predicate::FCMP_UGT, a, b),
-        createFCmp(FCmpInst::Predicate::FCMP_UNO, a, b),
-    };
-  }
-
-  tuple<Value *, Value *, Value *, Value *> splitImmNZCV(uint64_t imm_flags) {
-    assert(imm_flags < 16);
-    return {
-        getBoolConst((imm_flags & 8) != 0),
-        getBoolConst((imm_flags & 4) != 0),
-        getBoolConst((imm_flags & 2) != 0),
-        getBoolConst((imm_flags & 1) != 0),
-    };
-  }
-
-  bool disjoint(const set<int> &a, const set<int> &b) {
-    set<int> i;
-    std::set_intersection(a.begin(), a.end(), b.begin(), b.end(),
-                          std::inserter(i, i.begin()));
-    return i.empty();
-  }
-
-  int64_t getImm(int idx) {
-    return CurInst->getOperand(idx).getImm();
-  }
-
-  enum ExtendType { SXTB, SXTH, SXTW, SXTX, UXTB, UXTH, UXTW, UXTX };
-
-  // Follows the "Library pseudocode for aarch64/instrs/extendreg/ExtendReg"
-  // from ARM manual
-  // val is always 64 bits and shiftAmt is always 0-4
-  Value *extendAndShiftValue(Value *val, enum ExtendType extType,
-                             int shiftAmt) {
-    assert(val->getType()->getIntegerBitWidth() == 64);
-    assert(shiftAmt >= 0 && shiftAmt <= 4);
-
-    // size is always 64 for offset shifting instructions
-    //    auto size = getInstSize(opcode);
-    auto size = 64;
-    auto ty = getIntTy(size);
-    auto isSigned = (extType & 0x4) != 0x4;
-
-    // extendSize is necessary so that we can start with the word size
-    // ARM wants us to (byte, half, full) and then sign extend to a new
-    // size. Without extendSize being used for a trunc, a lot of masking
-    // and more manual work to sign extend would be necessary
-    unsigned extendSize = 8 << (extType & 0x3);
-
-    // Make sure to not trunc to the same size as the parameter.
-    if (extendSize != (unsigned)size) {
-      auto truncType = getIntTy(extendSize);
-      val = createTrunc(val, truncType);
-      val =
-          createCast(val, ty, isSigned ? Instruction::SExt : Instruction::ZExt);
-    }
-
-    // shift may not be there, it may just be the extend
-    if (shiftAmt != 0)
-      val = createMaskedShl(val, getUnsignedIntConst(shiftAmt, size));
-
-    return val;
-  }
-
-  tuple<Value *, Value *> getParamsLoadReg() {
-    auto &op0 = CurInst->getOperand(0);
-    auto &op1 = CurInst->getOperand(1);
-    auto &op2 = CurInst->getOperand(2);
-    auto &op3 = CurInst->getOperand(3);
-    auto &op4 = CurInst->getOperand(4);
-    assert(op0.isReg() && op1.isReg() && op2.isReg());
-    assert(op3.isImm() && op4.isImm());
-
-    auto baseReg = op1.getReg();
-    auto offsetReg = op2.getReg();
-    auto extendTypeVal = op3.getImm();
-    auto shiftAmtVal = op4.getImm();
-
-    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
-           (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
-           (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
-    assert((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
-           (offsetReg == AArch64::LR) || (offsetReg == AArch64::FP) ||
-           (offsetReg == AArch64::SP) || (offsetReg == AArch64::XZR) ||
-           (offsetReg >= AArch64::W0 && offsetReg <= AArch64::W30) ||
-           (offsetReg == AArch64::WZR));
-
-    int extTyp = -1, shiftAmt;
-    if ((offsetReg >= AArch64::W0 && offsetReg <= AArch64::W29) ||
-        offsetReg == AArch64::WZR) {
-      extTyp = extendTypeVal ? SXTW : UXTW;
-    } else if ((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
-               offsetReg == AArch64::FP || offsetReg == AArch64::XZR) {
-      // The manual assigns a value LSL to extTyp if extendTypeVal is 1
-      // which for a value of 64 bits, is the same as UXTX
-      extTyp = extendTypeVal ? SXTX : UXTX;
-    }
-
-    switch (CurInst->getOpcode()) {
-    case AArch64::LDRBBroW:
-    case AArch64::LDRBBroX:
-    case AArch64::LDRBroW:
-    case AArch64::LDRBroX:
-    case AArch64::LDRSBWroW:
-    case AArch64::LDRSBWroX:
-    case AArch64::LDRSBXroW:
-    case AArch64::LDRSBXroX:
-      shiftAmt = 0;
-      break;
-    case AArch64::LDRHHroW:
-    case AArch64::LDRHHroX:
-    case AArch64::LDRHroW:
-    case AArch64::LDRHroX:
-    case AArch64::LDRSHWroW:
-    case AArch64::LDRSHWroX:
-    case AArch64::LDRSHXroW:
-    case AArch64::LDRSHXroX:
-      shiftAmt = shiftAmtVal ? 1 : 0;
-      break;
-    case AArch64::LDRWroW:
-    case AArch64::LDRWroX:
-    case AArch64::LDRSroW:
-    case AArch64::LDRSroX:
-    case AArch64::LDRSWroW:
-    case AArch64::LDRSWroX:
-      shiftAmt = shiftAmtVal ? 2 : 0;
-      break;
-    case AArch64::LDRXroW:
-    case AArch64::LDRXroX:
-    case AArch64::LDRDroW:
-    case AArch64::LDRDroX:
-      shiftAmt = shiftAmtVal ? 3 : 0;
-      break;
-    case AArch64::LDRQroW:
-    case AArch64::LDRQroX:
-      shiftAmt = shiftAmtVal ? 4 : 0;
-      break;
-    default:
-      *out << "\nError Unknown opcode\n";
-      visitError();
-    }
-
-    auto baseAddr = readPtrFromReg(baseReg);
-    auto offset = extendAndShiftValue(readFromRegTyped(offsetReg, getIntTy(64)),
-                                      (ExtendType)extTyp, shiftAmt);
-
-    return make_pair(baseAddr, offset);
-  }
-
-  Instruction *getCurLLVMInst() {
-    return (Instruction *)(CurInst->getLoc().getPointer());
-  }
-
-  unsigned decodeRegSet(unsigned r) {
-    switch (r) {
-    case AArch64::D0:
-    case AArch64::D0_D1:
-    case AArch64::D0_D1_D2:
-    case AArch64::D0_D1_D2_D3:
-      return AArch64::D0;
-    case AArch64::D1:
-    case AArch64::D1_D2:
-    case AArch64::D1_D2_D3:
-    case AArch64::D1_D2_D3_D4:
-      return AArch64::D1;
-    case AArch64::D2:
-    case AArch64::D2_D3:
-    case AArch64::D2_D3_D4:
-    case AArch64::D2_D3_D4_D5:
-      return AArch64::D2;
-    case AArch64::D3:
-    case AArch64::D3_D4:
-    case AArch64::D3_D4_D5:
-    case AArch64::D3_D4_D5_D6:
-      return AArch64::D3;
-    case AArch64::D4:
-    case AArch64::D4_D5:
-    case AArch64::D4_D5_D6:
-    case AArch64::D4_D5_D6_D7:
-      return AArch64::D4;
-    case AArch64::D5:
-    case AArch64::D5_D6:
-    case AArch64::D5_D6_D7:
-    case AArch64::D5_D6_D7_D8:
-      return AArch64::D5;
-    case AArch64::D6:
-    case AArch64::D6_D7:
-    case AArch64::D6_D7_D8:
-    case AArch64::D6_D7_D8_D9:
-      return AArch64::D6;
-    case AArch64::D7:
-    case AArch64::D7_D8:
-    case AArch64::D7_D8_D9:
-    case AArch64::D7_D8_D9_D10:
-      return AArch64::D7;
-    case AArch64::D8:
-    case AArch64::D8_D9:
-    case AArch64::D8_D9_D10:
-    case AArch64::D8_D9_D10_D11:
-      return AArch64::D8;
-    case AArch64::D9:
-    case AArch64::D9_D10:
-    case AArch64::D9_D10_D11:
-    case AArch64::D9_D10_D11_D12:
-      return AArch64::D9;
-    case AArch64::D10:
-    case AArch64::D10_D11:
-    case AArch64::D10_D11_D12:
-    case AArch64::D10_D11_D12_D13:
-      return AArch64::D10;
-    case AArch64::D11:
-    case AArch64::D11_D12:
-    case AArch64::D11_D12_D13:
-    case AArch64::D11_D12_D13_D14:
-      return AArch64::D11;
-    case AArch64::D12:
-    case AArch64::D12_D13:
-    case AArch64::D12_D13_D14:
-    case AArch64::D12_D13_D14_D15:
-      return AArch64::D12;
-    case AArch64::D13:
-    case AArch64::D13_D14:
-    case AArch64::D13_D14_D15:
-    case AArch64::D13_D14_D15_D16:
-      return AArch64::D13;
-    case AArch64::D14:
-    case AArch64::D14_D15:
-    case AArch64::D14_D15_D16:
-    case AArch64::D14_D15_D16_D17:
-      return AArch64::D14;
-    case AArch64::D15:
-    case AArch64::D15_D16:
-    case AArch64::D15_D16_D17:
-    case AArch64::D15_D16_D17_D18:
-      return AArch64::D15;
-    case AArch64::D16:
-    case AArch64::D16_D17:
-    case AArch64::D16_D17_D18:
-    case AArch64::D16_D17_D18_D19:
-      return AArch64::D16;
-    case AArch64::D17:
-    case AArch64::D17_D18:
-    case AArch64::D17_D18_D19:
-    case AArch64::D17_D18_D19_D20:
-      return AArch64::D17;
-    case AArch64::D18:
-    case AArch64::D18_D19:
-    case AArch64::D18_D19_D20:
-    case AArch64::D18_D19_D20_D21:
-      return AArch64::D18;
-    case AArch64::D19:
-    case AArch64::D19_D20:
-    case AArch64::D19_D20_D21:
-    case AArch64::D19_D20_D21_D22:
-      return AArch64::D19;
-    case AArch64::D20:
-    case AArch64::D20_D21:
-    case AArch64::D20_D21_D22:
-    case AArch64::D20_D21_D22_D23:
-      return AArch64::D20;
-    case AArch64::D21:
-    case AArch64::D21_D22:
-    case AArch64::D21_D22_D23:
-    case AArch64::D21_D22_D23_D24:
-      return AArch64::D21;
-    case AArch64::D22:
-    case AArch64::D22_D23:
-    case AArch64::D22_D23_D24:
-    case AArch64::D22_D23_D24_D25:
-      return AArch64::D22;
-    case AArch64::D23:
-    case AArch64::D23_D24:
-    case AArch64::D23_D24_D25:
-    case AArch64::D23_D24_D25_D26:
-      return AArch64::D23;
-    case AArch64::D24:
-    case AArch64::D24_D25:
-    case AArch64::D24_D25_D26:
-    case AArch64::D24_D25_D26_D27:
-      return AArch64::D24;
-    case AArch64::D25:
-    case AArch64::D25_D26:
-    case AArch64::D25_D26_D27:
-    case AArch64::D25_D26_D27_D28:
-      return AArch64::D25;
-    case AArch64::D26:
-    case AArch64::D26_D27:
-    case AArch64::D26_D27_D28:
-    case AArch64::D26_D27_D28_D29:
-      return AArch64::D26;
-    case AArch64::D27:
-    case AArch64::D27_D28:
-    case AArch64::D27_D28_D29:
-    case AArch64::D27_D28_D29_D30:
-      return AArch64::D27;
-    case AArch64::D28:
-    case AArch64::D28_D29:
-    case AArch64::D28_D29_D30:
-    case AArch64::D28_D29_D30_D31:
-      return AArch64::D28;
-    case AArch64::D29:
-    case AArch64::D29_D30:
-    case AArch64::D29_D30_D31:
-    case AArch64::D29_D30_D31_D0:
-      return AArch64::D29;
-    case AArch64::D30:
-    case AArch64::D30_D31:
-    case AArch64::D30_D31_D0:
-    case AArch64::D30_D31_D0_D1:
-      return AArch64::D30;
-    case AArch64::D31:
-    case AArch64::D31_D0:
-    case AArch64::D31_D0_D1:
-    case AArch64::D31_D0_D1_D2:
-      return AArch64::D31;
-    case AArch64::Q0:
-    case AArch64::Q0_Q1:
-    case AArch64::Q0_Q1_Q2:
-    case AArch64::Q0_Q1_Q2_Q3:
-      return AArch64::Q0;
-    case AArch64::Q1:
-    case AArch64::Q1_Q2:
-    case AArch64::Q1_Q2_Q3:
-    case AArch64::Q1_Q2_Q3_Q4:
-      return AArch64::Q1;
-    case AArch64::Q2:
-    case AArch64::Q2_Q3:
-    case AArch64::Q2_Q3_Q4:
-    case AArch64::Q2_Q3_Q4_Q5:
-      return AArch64::Q2;
-    case AArch64::Q3:
-    case AArch64::Q3_Q4:
-    case AArch64::Q3_Q4_Q5:
-    case AArch64::Q3_Q4_Q5_Q6:
-      return AArch64::Q3;
-    case AArch64::Q4:
-    case AArch64::Q4_Q5:
-    case AArch64::Q4_Q5_Q6:
-    case AArch64::Q4_Q5_Q6_Q7:
-      return AArch64::Q4;
-    case AArch64::Q5:
-    case AArch64::Q5_Q6:
-    case AArch64::Q5_Q6_Q7:
-    case AArch64::Q5_Q6_Q7_Q8:
-      return AArch64::Q5;
-    case AArch64::Q6:
-    case AArch64::Q6_Q7:
-    case AArch64::Q6_Q7_Q8:
-    case AArch64::Q6_Q7_Q8_Q9:
-      return AArch64::Q6;
-    case AArch64::Q7:
-    case AArch64::Q7_Q8:
-    case AArch64::Q7_Q8_Q9:
-    case AArch64::Q7_Q8_Q9_Q10:
-      return AArch64::Q7;
-    case AArch64::Q8:
-    case AArch64::Q8_Q9:
-    case AArch64::Q8_Q9_Q10:
-    case AArch64::Q8_Q9_Q10_Q11:
-      return AArch64::Q8;
-    case AArch64::Q9:
-    case AArch64::Q9_Q10:
-    case AArch64::Q9_Q10_Q11:
-    case AArch64::Q9_Q10_Q11_Q12:
-      return AArch64::Q9;
-    case AArch64::Q10:
-    case AArch64::Q10_Q11:
-    case AArch64::Q10_Q11_Q12:
-    case AArch64::Q10_Q11_Q12_Q13:
-      return AArch64::Q10;
-    case AArch64::Q11:
-    case AArch64::Q11_Q12:
-    case AArch64::Q11_Q12_Q13:
-    case AArch64::Q11_Q12_Q13_Q14:
-      return AArch64::Q11;
-    case AArch64::Q12:
-    case AArch64::Q12_Q13:
-    case AArch64::Q12_Q13_Q14:
-    case AArch64::Q12_Q13_Q14_Q15:
-      return AArch64::Q12;
-    case AArch64::Q13:
-    case AArch64::Q13_Q14:
-    case AArch64::Q13_Q14_Q15:
-    case AArch64::Q13_Q14_Q15_Q16:
-      return AArch64::Q13;
-    case AArch64::Q14:
-    case AArch64::Q14_Q15:
-    case AArch64::Q14_Q15_Q16:
-    case AArch64::Q14_Q15_Q16_Q17:
-      return AArch64::Q14;
-    case AArch64::Q15:
-    case AArch64::Q15_Q16:
-    case AArch64::Q15_Q16_Q17:
-    case AArch64::Q15_Q16_Q17_Q18:
-      return AArch64::Q15;
-    case AArch64::Q16:
-    case AArch64::Q16_Q17:
-    case AArch64::Q16_Q17_Q18:
-    case AArch64::Q16_Q17_Q18_Q19:
-      return AArch64::Q16;
-    case AArch64::Q17:
-    case AArch64::Q17_Q18:
-    case AArch64::Q17_Q18_Q19:
-    case AArch64::Q17_Q18_Q19_Q20:
-      return AArch64::Q17;
-    case AArch64::Q18:
-    case AArch64::Q18_Q19:
-    case AArch64::Q18_Q19_Q20:
-    case AArch64::Q18_Q19_Q20_Q21:
-      return AArch64::Q18;
-    case AArch64::Q19:
-    case AArch64::Q19_Q20:
-    case AArch64::Q19_Q20_Q21:
-    case AArch64::Q19_Q20_Q21_Q22:
-      return AArch64::Q19;
-    case AArch64::Q20:
-    case AArch64::Q20_Q21:
-    case AArch64::Q20_Q21_Q22:
-    case AArch64::Q20_Q21_Q22_Q23:
-      return AArch64::Q20;
-    case AArch64::Q21:
-    case AArch64::Q21_Q22:
-    case AArch64::Q21_Q22_Q23:
-    case AArch64::Q21_Q22_Q23_Q24:
-      return AArch64::Q21;
-    case AArch64::Q22:
-    case AArch64::Q22_Q23:
-    case AArch64::Q22_Q23_Q24:
-    case AArch64::Q22_Q23_Q24_Q25:
-      return AArch64::Q22;
-    case AArch64::Q23:
-    case AArch64::Q23_Q24:
-    case AArch64::Q23_Q24_Q25:
-    case AArch64::Q23_Q24_Q25_Q26:
-      return AArch64::Q23;
-    case AArch64::Q24:
-    case AArch64::Q24_Q25:
-    case AArch64::Q24_Q25_Q26:
-    case AArch64::Q24_Q25_Q26_Q27:
-      return AArch64::Q24;
-    case AArch64::Q25:
-    case AArch64::Q25_Q26:
-    case AArch64::Q25_Q26_Q27:
-    case AArch64::Q25_Q26_Q27_Q28:
-      return AArch64::Q25;
-    case AArch64::Q26:
-    case AArch64::Q26_Q27:
-    case AArch64::Q26_Q27_Q28:
-    case AArch64::Q26_Q27_Q28_Q29:
-      return AArch64::Q26;
-    case AArch64::Q27:
-    case AArch64::Q27_Q28:
-    case AArch64::Q27_Q28_Q29:
-    case AArch64::Q27_Q28_Q29_Q30:
-      return AArch64::Q27;
-    case AArch64::Q28:
-    case AArch64::Q28_Q29:
-    case AArch64::Q28_Q29_Q30:
-    case AArch64::Q28_Q29_Q30_Q31:
-      return AArch64::Q28;
-    case AArch64::Q29:
-    case AArch64::Q29_Q30:
-    case AArch64::Q29_Q30_Q31:
-    case AArch64::Q29_Q30_Q31_Q0:
-      return AArch64::Q29;
-    case AArch64::Q30:
-    case AArch64::Q30_Q31:
-    case AArch64::Q30_Q31_Q0:
-    case AArch64::Q30_Q31_Q0_Q1:
-      return AArch64::Q30;
-    case AArch64::Q31:
-    case AArch64::Q31_Q0:
-    case AArch64::Q31_Q0_Q1:
-    case AArch64::Q31_Q0_Q1_Q2:
-      return AArch64::Q31;
-    default:
-      assert(false && "missing case in decodeRegSet");
-      break;
-    }
-  }
-
-  Value *tblHelper2(vector<Value *> &tbl, Value *idx, unsigned i) {
-    if (i == tbl.size())
-      return getUnsignedIntConst(0, 8);
-    auto cond = createICmp(ICmpInst::Predicate::ICMP_ULT, idx,
-                           getUnsignedIntConst((i + 1) * 16, 8));
-    auto adjIdx = createSub(idx, getUnsignedIntConst(i * 16, 8));
-    auto t = createExtractElement(tbl.at(i), adjIdx);
-    auto f = tblHelper2(tbl, idx, i + 1);
-    return createSelect(cond, t, f);
-  }
-
-  Value *tblHelper(vector<Value *> &tbl, Value *idx) {
-    return tblHelper2(tbl, idx, 0);
-  }
-
-  tuple<Value *, int> getParamsLoadImmed() {
-    auto &op0 = CurInst->getOperand(0);
-    auto &op1 = CurInst->getOperand(1);
-    auto &op2 = CurInst->getOperand(2);
-    assert(op0.isReg() && op1.isReg());
-    assert(op2.isImm());
-    auto baseReg = op1.getReg();
-    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
-           (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
-           (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
-    auto baseAddr = readPtrFromReg(baseReg);
-    return make_pair(baseAddr, op2.getImm());
-  }
-
-  Value *makeLoadWithOffset(Value *base, Value *offset, int size) override {
-    // Create a GEP instruction based on a byte addressing basis (8 bits)
-    // returning pointer to base + offset
-    assert(base);
-    auto ptr = createGEP(getIntTy(8), base, {offset}, "");
-
-    // Load Value val in the pointer returned by the GEP instruction
-    Value *loaded = createLoad(getIntTy(8 * size), ptr);
-
-    *out << "[makeLoadWithOffset size = " << size << "]\n";
-
-    // FIXME -- this code should not be needed, the ABI guarantees
-    // that loading an i1 should have the rest of the bits clear
-    if (false && size == 1) {
-      *out << "[it's a 1-byte load]\n";
-      if (auto llvmInst = getCurLLVMInst()) {
-        if (auto LI = dyn_cast<LoadInst>(llvmInst)) {
-          if (LI->getType() == getIntTy(1)) {
-            *out << "[following ABI rules for i1]\n";
-            loaded = createAnd(loaded, getUnsignedIntConst(1, 8));
-          } else {
-            *out << "[LLVM inst for this ARM load isn't a load i1]\n";
-          }
-        } else {
-          *out << "[LLVM inst for this ARM load is not a load]\n";
-        }
-      } else {
-        *out << "[can't find an LLVM inst for this ARM load]\n";
-      }
-    }
-
-    return loaded;
-  }
-
-  Value *makeLoadWithOffset(Value *base, int offset, unsigned size) {
-    return makeLoadWithOffset(base, getUnsignedIntConst(offset, 64), size);
-  }
-
-  tuple<Value *, Value *, Value *> getParamsStoreReg() {
-    auto &op0 = CurInst->getOperand(0);
-    auto &op1 = CurInst->getOperand(1);
-    auto &op2 = CurInst->getOperand(2);
-    auto &op3 = CurInst->getOperand(3);
-    auto &op4 = CurInst->getOperand(4);
-    assert(op0.isReg() && op1.isReg() && op2.isReg());
-    assert(op3.isImm() && op4.isImm());
-
-    auto baseReg = op1.getReg();
-    auto offsetReg = op2.getReg();
-    auto extendTypeVal = op3.getImm();
-    auto shiftAmtVal = op4.getImm();
-
-    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
-           (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
-           (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
-    assert((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
-           (offsetReg == AArch64::LR) || (offsetReg == AArch64::FP) ||
-           (offsetReg == AArch64::XZR) ||
-           (offsetReg >= AArch64::W0 && offsetReg <= AArch64::W30) ||
-           (offsetReg == AArch64::WZR));
-
-    int extTyp = 0, shiftAmt;
-    if ((offsetReg >= AArch64::W0 && offsetReg <= AArch64::W30) ||
-        offsetReg == AArch64::WZR) {
-      extTyp = extendTypeVal ? SXTW : UXTW;
-    } else if ((offsetReg >= AArch64::X0 && offsetReg <= AArch64::X28) ||
-               offsetReg == AArch64::FP || offsetReg == AArch64::XZR) {
-      // The manual assigns a value LSL to extTyp if extendTypeVal is 1
-      // which for a value of 64 bits, is the same as UXTX
-      extTyp = extendTypeVal ? SXTX : UXTX;
-    }
-
-    switch (CurInst->getOpcode()) {
-    case AArch64::STRBBroW:
-    case AArch64::STRBBroX:
-    case AArch64::STRBroW:
-    case AArch64::STRBroX:
-      shiftAmt = 0;
-      break;
-    case AArch64::STRHHroW:
-    case AArch64::STRHHroX:
-    case AArch64::STRHroW:
-    case AArch64::STRHroX:
-      shiftAmt = shiftAmtVal ? 1 : 0;
-      break;
-    case AArch64::STRWroW:
-    case AArch64::STRWroX:
-    case AArch64::STRSroW:
-    case AArch64::STRSroX:
-      shiftAmt = shiftAmtVal ? 2 : 0;
-      break;
-    case AArch64::STRXroW:
-    case AArch64::STRXroX:
-    case AArch64::STRDroW:
-    case AArch64::STRDroX:
-      shiftAmt = shiftAmtVal ? 3 : 0;
-      break;
-    case AArch64::STRQroW:
-    case AArch64::STRQroX:
-      shiftAmt = shiftAmtVal ? 4 : 0;
-      break;
-    default:
-      *out << "\nError Unknown opcode\n";
-      visitError();
-    }
-
-    auto baseAddr = readPtrFromReg(baseReg);
-    auto offset = extendAndShiftValue(readFromRegOld(offsetReg),
-                                      (ExtendType)extTyp, shiftAmt);
-
-    return make_tuple(baseAddr, offset, readFromRegOld(op0.getReg()));
-  }
-
-  void storeToMemoryValOffset(Value *base, Value *offset, uint64_t size,
-                              Value *val) override {
-    // Create a GEP instruction based on a byte addressing basis (8 bits)
-    // returning pointer to base + offset
-    assert(base);
-    auto ptr = createGEP(getIntTy(8), base, {offset}, "");
-
-    // Store Value val in the pointer returned by the GEP instruction
-    createStore(val, ptr);
-  }
-
-  tuple<Value *, int, Value *> getStoreParams() {
-    auto &op0 = CurInst->getOperand(0);
-    auto &op1 = CurInst->getOperand(1);
-    auto &op2 = CurInst->getOperand(2);
-    assert(op0.isReg() && op1.isReg());
-
-    if (op2.isImm()) {
-      auto baseReg = op1.getReg();
-      assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
-             (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
-             (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
-      auto baseAddr = readPtrFromReg(baseReg);
-      return make_tuple(baseAddr, op2.getImm(), readFromRegOld(op0.getReg()));
-    } else {
-      assert(op2.isExpr());
-      auto [globalVar, _] = getExprVar(op2.getExpr());
-      return make_tuple(globalVar, 0, readFromRegOld(op0.getReg()));
-    }
-  }
-
-  // Creates instructions to store val in memory pointed by base + offset
-  // offset and size are in bytes
-  void storeToMemoryImmOffset(Value *base, uint64_t offset, uint64_t size,
-                              Value *val) {
-    // Get offset as a 64-bit LLVM constant
-    auto offsetVal = getUnsignedIntConst(offset, 64);
-
-    // Create a GEP instruction based on a byte addressing basis (8 bits)
-    // returning pointer to base + offset
-    assert(base);
-    auto ptr = createGEP(getIntTy(8), base, {offsetVal}, "");
-
-    // Store Value val in the pointer returned by the GEP instruction
-    createStore(val, ptr);
-  }
-
-public:
-  mc2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
-          MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
-          const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)
-      : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
-        InstPrinter(InstPrinter), MCE{MCE}, STI{STI}, IA{IA},
-        DL(srcFn.getParent()->getDataLayout()) {}
-
-  std::optional<aslp::opcode_t> getArmOpcode(const MCInst &I) {
-    SmallVector<MCFixup> Fixups{};
-    SmallVector<char> Code{};
-
-    if (I.getOpcode() == AArch64::SEH_Nop)
-      return std::nullopt;
-
-    MCE.encodeInstruction(I, Code, Fixups, STI);
-    for (auto x : Fixups) {
-      // std::cerr << "fixup: " << x.getKind() << ' ' << x.getTargetKind() << '
-      // ' << x.getOffset() << ' ' << std::flush; x.getValue()->dump();
-      // std::cout << std::endl;
-      (void)x;
-    }
-
-    // do not hand any instructions with relocation fixups to aslp
-    if (Fixups.size() != 0)
-      return std::nullopt;
-
-    aslp::opcode_t ret;
-    unsigned i = 0;
-    for (const char &x : Code) {
-      ret.at(i++) = x;
-    }
-    return ret;
-  }
-
-  // Visit an MCInst and convert it to LLVM IR
-  // See: https://documentation-service.arm.com/static/6245e8f0f7d10f7540e0c054
-  void liftInst(MCInst &I) {
-
-    *out << "mcinst: " << I.getOpcode() << " = ";
-    auto opcode = I.getOpcode();
-    PrevInst = CurInst;
-    CurInst = &I;
-
-    std::string sss;
-    llvm::raw_string_ostream ss{sss};
-    I.dump_pretty(ss, InstPrinter);
-    *out << sss << " = " << std::flush;
-    if (I.getOpcode() != AArch64::SEH_Nop) {
-      InstPrinter->printInst(&I, 100, "", STI, outs());
-      outs().flush();
-    }
-    *out << std::endl;
-
+  void lift(MCInst &I) override {
     auto entrybb = LLVMBB;
     aslp::bridge bridge{*this, MCE, STI, IA};
+    auto opcode = I.getOpcode();
 
     StringRef instStr = InstPrinter->getOpcodeName(I.getOpcode());
     if (auto a64Opcode = getArmOpcode(I)) {
@@ -12754,185 +13402,8 @@ case AArch64::FCMGE64:
     }
   }
 
-  void invalidateReg(unsigned Reg, unsigned Width) {
-    auto F = createFreeze(PoisonValue::get(getIntTy(Width)));
-    createStore(F, RegFile[Reg]);
-  }
-
-  // create the actual storage associated with a register -- all of its
-  // asm-level aliases will get redirected here
-  void createRegStorage(unsigned Reg, unsigned Width, const string &Name) {
-    auto A = createAlloca(getIntTy(Width), getUnsignedIntConst(1, 64), Name);
-    auto F = createFreeze(PoisonValue::get(getIntTy(Width)));
-    createStore(F, A);
-    RegFile[Reg] = A;
-  }
-
-  /*
-   * the idea here is that if a parameter to the lifted function, or
-   * the return value from the lifted function is, for example, 8
-   * bits, then we only want to initialize the lower 8 bits of the
-   * register or stack slot, with the remaining bits containing junk,
-   * in order to detect cases where the compiler incorrectly emits
-   * code depending on that junk. on the other hand, if a parameter is
-   * signext or zeroext then we have to actually initialize those
-   * higher bits.
-   *
-   * FIXME -- this code was originally developed for scalar parameters
-   * and we're mostly sort of hoping it also works for vectors. this
-   * should work fine as long as the only vectors we accept are 64 and
-   * 128 bits, which seemed (as of Nov 2023) to be the only ones with
-   * a stable ABI
-   */
-  Value *enforceSExtZExt(Value *V, bool isSExt, bool isZExt) {
+  Value *createRegFileAndStack() override {   
     auto i8 = getIntTy(8);
-    auto i32 = getIntTy(32);
-    auto argTy = V->getType();
-    unsigned targetWidth;
-
-    // no work needed
-    if (argTy->isPointerTy() || argTy->isVoidTy())
-      return V;
-
-    if (argTy->isVectorTy() || argTy->isFloatingPointTy()) {
-      auto W = getBitWidth(V);
-      argTy = getIntTy(W);
-      V = createBitCast(V, argTy);
-      if (W <= 64)
-        targetWidth = 64;
-      else
-        targetWidth = 128;
-    } else {
-      targetWidth = 64;
-    }
-
-    assert(argTy->isIntegerTy());
-
-    /*
-     * i1 has special two ABI rules. first, by default, an i1 is
-     * implicitly zero-extended to i8. this is from AAPCS64. second,
-     * if the i1 is a signext parameter, then this overrides the
-     * zero-extension rule. this is from the LLVM folks.
-     */
-    if (getBitWidth(V) == 1) {
-      if (isSExt)
-        V = createSExt(V, i32);
-      else
-        V = createZExt(V, i8);
-    }
-
-    if (isSExt) {
-      if (getBitWidth(V) < 32)
-        V = createSExt(V, i32);
-      else if (getBitWidth(V) > 32 && getBitWidth(V) < targetWidth)
-        V = createSExt(V, getIntTy(targetWidth));
-    }
-
-    if (isZExt && getBitWidth(V) < targetWidth)
-      V = createZExt(V, getIntTy(targetWidth));
-
-    // finally, pad out any remaining bits with junk (frozen poisons)
-    auto junkBits = targetWidth - getBitWidth(V);
-    if (junkBits > 0) {
-      auto junk = createFreeze(PoisonValue::get(getIntTy(junkBits)));
-      auto ext1 = createZExt(junk, getIntTy(targetWidth));
-      auto shifted =
-          createRawShl(ext1, getUnsignedIntConst(getBitWidth(V), targetWidth));
-      auto ext2 = createZExt(V, getIntTy(targetWidth));
-      V = createOr(shifted, ext2);
-    }
-
-    return V;
-  }
-
-  string linkageStr(GlobalValue::LinkageTypes linkage) {
-    switch (linkage) {
-    case GlobalValue::LinkageTypes::ExternalLinkage:
-      return "External";
-    case GlobalValue::LinkageTypes::AvailableExternallyLinkage:
-      return "AvailableExternally";
-    case GlobalValue::LinkageTypes::LinkOnceAnyLinkage:
-      return "LinkOnceAny";
-    case GlobalValue::LinkageTypes::LinkOnceODRLinkage:
-      return "LinkOnceODR";
-    case GlobalValue::LinkageTypes::WeakAnyLinkage:
-      return "WeakAny";
-    case GlobalValue::LinkageTypes::WeakODRLinkage:
-      return "WeakODR";
-    case GlobalValue::LinkageTypes::AppendingLinkage:
-      return "Appending";
-    case GlobalValue::LinkageTypes::InternalLinkage:
-      return "Internal";
-    case GlobalValue::LinkageTypes::PrivateLinkage:
-      return "Private";
-    case GlobalValue::LinkageTypes::ExternalWeakLinkage:
-      return "ExternalWeak";
-    case GlobalValue::LinkageTypes::CommonLinkage:
-      return "Common";
-    default:
-      assert(false);
-    }
-  }
-
-  Function *run() {
-    // sanity checking
-    assert(disjoint(instrs_32, instrs_64));
-    assert(disjoint(instrs_32, instrs_128));
-    assert(disjoint(instrs_64, instrs_128));
-    *out << (instrs_32.size() + instrs_64.size() + instrs_128.size())
-         << " instructions supported\n";
-
-    // we'll want this later
-    vector<Type *> args{getIntTy(1)};
-    FunctionType *assertTy =
-        FunctionType::get(Type::getVoidTy(Ctx), args, false);
-    assertDecl = Function::Create(assertTy, Function::ExternalLinkage,
-                                  "llvm.assert", LiftedModule);
-    auto i8 = getIntTy(8);
-    auto i64 = getIntTy(64);
-
-    // create a fresh function
-    liftedFn =
-        Function::Create(srcFn.getFunctionType(), GlobalValue::ExternalLinkage,
-                         0, srcFn.getName(), LiftedModule);
-    liftedFn->copyAttributesFrom(&srcFn);
-
-    // create LLVM-side basic blocks
-    vector<pair<BasicBlock *, MCBasicBlock *>> BBs;
-    {
-      long insts = 0;
-      for (auto &mbb : MF.BBs) {
-        for (auto &inst [[maybe_unused]] : mbb.getInstrs())
-          ++insts;
-        auto bb = BasicBlock::Create(Ctx, mbb.getName(), liftedFn);
-        BBs.push_back(make_pair(bb, &mbb));
-      }
-      *out << insts << " assembly instructions\n";
-      out->flush();
-    }
-
-    // default to adding instructions to the entry block
-    LLVMBB = BBs[0].first;
-
-    // number of 8-byte stack slots for parameters
-    const int numStackSlots = 32;
-
-    auto *allocTy =
-        FunctionType::get(PointerType::get(Ctx, 0), {i64, i64}, false);
-    myAlloc = Function::Create(allocTy, GlobalValue::ExternalLinkage, 0,
-                               "myalloc", LiftedModule);
-    myAlloc->addRetAttr(Attribute::NonNull);
-    AttrBuilder B1(Ctx);
-    B1.addAllocKindAttr(AllocFnKind::Alloc);
-    B1.addAllocSizeAttr(0, {});
-    B1.addAttribute(Attribute::WillReturn);
-    myAlloc->addFnAttrs(B1);
-    myAlloc->addParamAttr(1, Attribute::AllocAlign);
-    myAlloc->addFnAttr("alloc-family", "arm-tv-alloc");
-    stackSize = getUnsignedIntConst(stackBytes + (8 * numStackSlots), 64);
-
-    stackMem = CallInst::Create(
-        myAlloc, {stackSize, getUnsignedIntConst(16, 64)}, "stack", LLVMBB);
 
     // allocate storage for the main register file
     for (unsigned Reg = AArch64::X0; Reg <= AArch64::X28; ++Reg) {
@@ -12976,476 +13447,53 @@ case AArch64::FCMGE64:
     createRegStorage(AArch64::C, 1, "C");
     createRegStorage(AArch64::V, 1, "V");
 
-    *out << "about to do callee-side ABI stuff\n";
-
-    // implement the callee side of the ABI; FIXME -- this code only
-    // supports integer parameters <= 64 bits and will require
-    // significant generalization to handle large parameters
-    unsigned vecArgNum = 0;
-    unsigned scalarArgNum = 0;
-    unsigned stackSlot = 0;
-
-    for (Function::arg_iterator arg = liftedFn->arg_begin(),
-                                E = liftedFn->arg_end(),
-                                srcArg = srcFn.arg_begin();
-         arg != E; ++arg, ++srcArg) {
-      *out << "  processing " << getBitWidth(arg)
-           << "-bit arg with vecArgNum = " << vecArgNum
-           << ", scalarArgNum = " << scalarArgNum
-           << ", stackSlot = " << stackSlot;
-      auto *argTy = arg->getType();
-      auto *val =
-          enforceSExtZExt(arg, srcArg->hasSExtAttr(), srcArg->hasZExtAttr());
-
-      // first 8 integer parameters go in the first 8 integer registers
-      if ((argTy->isIntegerTy() || argTy->isPointerTy()) && scalarArgNum < 8) {
-        auto Reg = AArch64::X0 + scalarArgNum;
-        createStore(val, RegFile[Reg]);
-        ++scalarArgNum;
-        goto end;
-      }
-
-      // first 8 vector/FP parameters go in the first 8 vector registers
-      if ((argTy->isVectorTy() || argTy->isFloatingPointTy()) &&
-          vecArgNum < 8) {
-        auto Reg = AArch64::Q0 + vecArgNum;
-        createStore(val, RegFile[Reg]);
-        ++vecArgNum;
-        goto end;
-      }
-
-      // anything else goes onto the stack
-      {
-        // 128-bit alignment required for 128-bit arguments
-        if ((getBitWidth(val) == 128) && ((stackSlot % 2) != 0)) {
-          ++stackSlot;
-          *out << " (actual stack slot = " << stackSlot << ")";
-        }
-
-        if (stackSlot >= numStackSlots) {
-          *out << "\nERROR: maximum stack slots for parameter values "
-                  "exceeded\n\n";
-          exit(-1);
-        }
-
-        auto addr =
-            createGEP(i64, paramBase, {getUnsignedIntConst(stackSlot, 64)}, "");
-        createStore(val, addr);
-
-        if (getBitWidth(val) == 64) {
-          stackSlot += 1;
-        } else if (getBitWidth(val) == 128) {
-          stackSlot += 2;
-        } else {
-          assert(false);
-        }
-      }
-
-    end:
-      *out << "\n";
-    }
-
-    *out << "done with callee-side ABI stuff\n";
-
-    // initialize the frame pointer
-    auto initFP =
-        createGEP(i64, paramBase, {getUnsignedIntConst(stackSlot, 64)}, "");
-    createStore(initFP, RegFile[AArch64::FP]);
-
-    *out << "\n\nlifting ARM instructions to LLVM\n";
-
-    for (auto &[llvm_bb, mc_bb] : BBs) {
-      LLVMBB = llvm_bb;
-      MCBB = mc_bb;
-      auto &mc_instrs = mc_bb->getInstrs();
-
-      for (auto &inst : mc_instrs) {
-        llvmInstNum = 0;
-        *out << armInstNum << " : about to lift "
-             << (string)InstPrinter->getOpcodeName(inst.getOpcode()) << "\n";
-        liftInst(inst);
-        *out << "    lifted\n";
-        ++armInstNum;
-      }
-
-      // machine code falls through but LLVM isn't allowed to
-      if (!LLVMBB->getTerminator()) {
-        auto succs = MCBB->getSuccs().size();
-        if (succs == 0) {
-          // this should only happen when we have a function with a
-          // single, empty basic block, which should only when we
-          // started with an LLVM function whose body is something
-          // like UNREACHABLE
-          doReturn();
-        } else if (succs == 1) {
-          auto *dst = getBBByName(MCBB->getSuccs()[0]->getName());
-          createBranch(dst);
-        }
-      }
-    }
-    *out << armInstNum << " AArch64 instructions\n";
-
-    *out << "encoding counts: ";
-    for (auto &[enc, count] : encodingCounts) {
-      *out << enc << '=' << count << ',';
-    }
-    *out << '\n';
-    // liftedFn->dump();
-    return liftedFn;
-  }
-};
-
-// We're overriding MCStreamerWrapper to generate an MCFunction
-// from the arm assembly. MCStreamerWrapper provides callbacks to handle
-// different parts of the assembly file. The callbacks that we're
-// using right now are all emit* functions.
-class MCStreamerWrapper final : public MCStreamer {
-  enum ASMLine { none = 0, label = 1, non_term_instr = 2, terminator = 3 };
-
-private:
-  MCInstrAnalysis *IA;
-  MCBasicBlock *curBB{nullptr};
-  unsigned prev_line{0};
-  Align curAlign;
-  string curSym;
-  string curSec;
-  bool FunctionEnded = false;
-  unsigned curDebugLine = 0;
-
-  vector<RODataItem> curROData;
-
-public:
-  MCFunction MF;
-  unsigned cnt{0};
-
-  MCStreamerWrapper(MCContext &Context, MCInstrAnalysis *IA,
-                    MCInstPrinter *InstPrinter, MCRegisterInfo *MRI)
-      : MCStreamer(Context), IA(IA) {
-    MF.IA = IA;
-    MF.InstPrinter = InstPrinter;
-    MF.MRI = MRI;
+    return paramBase;
   }
 
-  void addConstant() {
-    if (curROData.empty())
-      return;
-
-    MCGlobal g{
-        .name = curSym,
-        .align = curAlign,
-        .section = curSec,
-        .data = curROData,
-    };
-    MF.MCglobals.emplace_back(g);
-    curROData.clear();
-    *out << "created constant: " << curSym << "\n";
-  }
-
-  // We only want to intercept the emission of new instructions.
-  virtual void emitInstruction(const MCInst &Inst,
-                               const MCSubtargetInfo & /* unused */) override {
-
-    assert(prev_line != ASMLine::none);
-
-    if (prev_line == ASMLine::terminator)
-      curBB = MF.addBlock(MF.getLabel());
-
-    Instruction *LLVMInst = lineMap[curDebugLine];
-    SMLoc Loc = SMLoc::getFromPointer((char *)LLVMInst);
-    MCInst i(Inst);
-    i.setLoc(Loc);
-    curBB->addInst(i);
-
-    prev_line =
-        IA->isTerminator(Inst) ? ASMLine::terminator : ASMLine::non_term_instr;
-    auto num_operands = i.getNumOperands();
-    for (unsigned idx = 0; idx < num_operands; ++idx) {
-      auto op = i.getOperand(idx);
-      if (op.isExpr()) {
-        auto expr = op.getExpr();
-        if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
-          const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*expr);
-          const MCSymbol &Sym = SRE.getSymbol();
-          *out << "target label : " << (string)Sym.getName()
-               << ", offset=" << to_string(Sym.getOffset())
-               << '\n'; // FIXME remove when done
-        }
-      }
-    }
-
-    *out << cnt++ << "  : ";
-    std::string sss;
-    llvm::raw_string_ostream ss(sss);
-    // Inst.dump_pretty(ss, IP, " ", MRI);
-    *out << sss;
-    if (IA->isBranch(Inst))
-      *out << ": branch ";
-    if (IA->isConditionalBranch(Inst))
-      *out << ": conditional branch ";
-    if (IA->isUnconditionalBranch(Inst))
-      *out << ": unconditional branch ";
-    if (IA->isTerminator(Inst))
-      *out << ": terminator ";
-    *out << "\n";
-  }
-
-  string attrName(MCSymbolAttr A) {
-    switch (A) {
-    case MCSA_ELF_TypeFunction:
-      return "ELF function";
-    case MCSA_ELF_TypeObject:
-      return "ELF object";
-    case MCSA_Global:
-      return "global";
-    default:
-      assert(false && "unknown symbol attribute");
-    }
-  }
-
-  virtual bool emitSymbolAttribute(MCSymbol *Symbol,
-                                   MCSymbolAttr Attribute) override {
-    *out << "[emitSymbolAttribute '" << Symbol->getName().str() << "']\n";
-    if (false) {
-      *out << "  Common? " << Symbol->isCommon() << "\n";
-      *out << "  Variable? " << Symbol->isVariable() << "\n";
-    }
-    return true;
-  }
-
-  virtual void emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override {
-    *out << "[emitSymbolDesc '" << Symbol->getName().str() << "']\n";
-  }
-
-  virtual void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                Align ByteAlignment) override {
-    vector<RODataItem> data;
-    string name{Symbol->getName()};
-    for (uint64_t i = 0; i < Size; ++i)
-      data.push_back(RODataItem{'0'});
-    MCGlobal g{
-        .name = name,
-        .align = ByteAlignment,
-        .section = "common",
-        .data = data,
-    };
-    MF.MCglobals.emplace_back(g);
-    *out << "[emitCommonSymbol = " << name << "]\n";
-  }
-
-  virtual void emitBytes(StringRef Data) override {
-    auto len = Data.size();
-    *out << "[emitBytes " << len << " bytes]\n";
-    for (unsigned i = 0; i < len; ++i) {
-      auto rod = RODataItem{Data[i]};
-      curROData.push_back(rod);
-    }
-  }
-
-  virtual void emitFill(const MCExpr &NumBytes, uint64_t FillValue,
-                        SMLoc Loc) override {
-    auto ce = dyn_cast<MCConstantExpr>(&NumBytes);
-    if (ce) {
-      assert(FillValue < 256);
-      auto bytes = ce->getValue();
-      *out << "[emitFill value = " << FillValue << ", size = " << bytes
-           << "]\n";
-      for (int i = 0; i < bytes; ++i) {
-        auto rod = RODataItem{(char)FillValue};
-        curROData.push_back(rod);
-      }
-    } else {
-      *out << "[emitFill is unknown!]\n";
-    }
-  }
-
-  virtual void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
-                            uint64_t Size = 0, Align ByteAlignment = Align(1),
-                            SMLoc Loc = SMLoc()) override {
-    *out << "[emitZerofill " << Size << " bytes]\n";
-  }
-
-  virtual void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override {
-    *out << "[emitELFSize '" << Symbol->getName().str() << "']\n";
-    addConstant();
-  }
-
-  // FIXME -- we probably need a proper recursive descent parser for
-  // MCExprs here
-  virtual void emitValueImpl(const MCExpr *Value, unsigned Size,
-                             SMLoc Loc = SMLoc()) override {
-    if (curSec.starts_with(".debug")) {
-      *out << "skipping emitValue in debug section\n";
-      return;
-    }
-    if (auto SR = dyn_cast<MCSymbolRefExpr>(Value)) {
-      const MCSymbol &Sym = SR->getSymbol();
-      string name{Sym.getName()};
-      *out << "[emitValue MCSymbolRefExpr= " << name << "]\n";
-      OffsetSym s{name, 0};
-      curROData.push_back(RODataItem{s});
-    } else if (auto CE = dyn_cast<MCConstantExpr>(Value)) {
-      *out << "[emitValue MCConstantExpr]\n";
-      CE->dump();
-      assert(false && "handle this");
-    } else if (auto UE = dyn_cast<MCUnaryExpr>(Value)) {
-      *out << "[emitValue MCUnaryExpr]\n";
-      UE->dump();
-      assert(false && "handle this");
-    } else if (auto BE = dyn_cast<MCBinaryExpr>(Value)) {
-      *out << "[emitValue MCBinaryExpr]\n";
-      auto *LHS = dyn_cast<MCSymbolRefExpr>(BE->getLHS());
-      assert(LHS);
-      auto *RHS = dyn_cast<MCConstantExpr>(BE->getRHS());
-      assert(RHS);
-      OffsetSym s{(string)LHS->getSymbol().getName(), RHS->getValue()};
-      curROData.push_back(RODataItem{s});
-    } else if (auto TE = dyn_cast<MCTargetExpr>(Value)) {
-      *out << "[emitValue MCTargetExpr]\n";
-      TE->dump();
-      assert(false && "handle this");
-    } else {
-      assert(false && "unexpected MCExpr type");
-    }
-  }
-
-  virtual void emitValueToAlignment(Align Alignment, int64_t Value = 0,
-                                    unsigned int ValueSize = 1,
-                                    unsigned int MaxBytesToEmit = 0) override {
-    *out << "[emitValueToAlignment= " << Alignment.value() << "]\n";
-    curAlign = Alignment;
-  }
-
-  virtual void emitAssignment(MCSymbol *Symbol, const MCExpr *Value) override {
-    *out << "[emitAssignment]\n";
-  }
-
-  virtual void emitDwarfLocDirective(unsigned FileNo, unsigned Line,
-                                     unsigned Column, unsigned Flags,
-                                     unsigned Isa, unsigned Discriminator,
-                                     StringRef FileName,
-                                     StringRef Comment) override {
-    *out << "[dwarf loc directive: line = " << Line << "]\n";
-    curDebugLine = Line;
-  }
-
-  virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
-    auto sp = getCurrentSection();
-    string secName = sp.first->getName().str();
-    string lab = Symbol->getName().str();
-    *out << "[emitLabel '" << lab << "' in section '" << secName << "']\n";
-
-    if (secName.starts_with(".debug")) {
-      *out << "  skipping debug stuff\n";
-      curSec = (string)sp.first->getName();
-      return;
-    }
-
-    addConstant();
-
-    curSym = Symbol->getName().str();
-    curSec = (string)sp.first->getName();
-
-    if (lab == ".Lfunc_end0")
-      FunctionEnded = true;
-    if (!FunctionEnded) {
-      curBB = MF.addBlock(lab);
-      MCInst nop;
-      // subsequent logic can be a bit simpler if we assume each BB
-      // contains at least one instruction. might need to revisit this
-      // later on.
-      nop.setOpcode(AArch64::SEH_Nop);
-      curBB->addInstBegin(std::move(nop));
-      prev_line = ASMLine::label;
-    }
-  }
-
-  string findTargetLabel(MCInst &Inst) {
-    auto num_operands = Inst.getNumOperands();
-    for (unsigned i = 0; i < num_operands; ++i) {
-      auto op = Inst.getOperand(i);
-      if (op.isExpr()) {
-        auto expr = op.getExpr();
-        if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
-          const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*expr);
-          const MCSymbol &Sym = SRE.getSymbol();
-          return Sym.getName().str();
-        }
-      }
-    }
-    assert(false && "could not find target label in arm branch instruction");
-  }
-
-  // Make sure that we have an entry label with no predecessors
-  void checkEntryBlock() {
-    MF.checkEntryBlock();
-  }
-
-  // Fill in the CFG
-  void generateSuccessors() {
-    *out << "generating basic block successors" << '\n';
-    for (unsigned i = 0; i < MF.BBs.size(); ++i) {
-      auto &cur_bb = MF.BBs[i];
-      MCBasicBlock *next_bb_ptr = nullptr;
-      if (i < MF.BBs.size() - 1)
-        next_bb_ptr = &MF.BBs[i + 1];
-
-      if (cur_bb.empty()) {
-        *out
-            << "generateSuccessors, encountered basic block with 0 instructions"
-            << '\n';
-        continue;
-      }
-      auto &last_mc_instr = cur_bb.getInstrs().back();
-      // handle the special case of adding where we have added a new entry block
-      // with no predecessors. This is hacky because I don't know the API to
-      // create an MCExpr and have to create a branch with an immediate operand
-      // instead
-      if (i == 0 && (IA->isUnconditionalBranch(last_mc_instr)) &&
-          last_mc_instr.getOperand(0).isImm()) {
-        cur_bb.addSucc(next_bb_ptr);
-        continue;
-      }
-      if (IA->isConditionalBranch(last_mc_instr)) {
-        string target = findTargetLabel(last_mc_instr);
-        auto target_bb = MF.findBlockByName(target);
-        assert(target_bb);
-        cur_bb.addSucc(target_bb);
-        if (next_bb_ptr)
-          cur_bb.addSucc(next_bb_ptr);
-      } else if (IA->isUnconditionalBranch(last_mc_instr)) {
-        string target = findTargetLabel(last_mc_instr);
-        auto target_bb = MF.findBlockByName(target);
-        if (target_bb) {
-          cur_bb.addSucc(target_bb);
-        } else {
-          *out << "looks like a tail call to " << target << "\n";
-        }
-      } else if (IA->isReturn(last_mc_instr)) {
-        continue;
-      } else if (next_bb_ptr) {
-        // add edge to next block
-        cur_bb.addSucc(next_bb_ptr);
-      }
-    }
-  }
-
-  // Remove empty basic blocks, including .Lfunc_end
-  void removeEmptyBlocks() {
-    erase_if(MF.BBs, [](MCBasicBlock bb) { return bb.empty(); });
-  }
-};
-
-// FIXME -- these need to go into their own files
-  
-class arm2llvm : public mc2llvm {
 public:
   arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
            MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
            const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)
-      : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA) {}
+      : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA) {
+    // sanity checking
+    assert(disjoint(instrs_32, instrs_64));
+    assert(disjoint(instrs_32, instrs_128));
+    assert(disjoint(instrs_64, instrs_128));
+    *out << (instrs_32.size() + instrs_64.size() + instrs_128.size())
+         << " AArch64 instructions supported\n";
+  }
 };
 
 class riscv2llvm : public mc2llvm {
+  llvm::AllocaInst *get_reg(aslp::reg_t regtype, uint64_t num) override {
+    return nullptr;
+  }
+  
+  void updateOutputReg(Value *V, bool SExt = false) override {
+  }
+
+  Value *makeLoadWithOffset(Value *base, Value *offset, int size) override {
+    return nullptr;
+  }
+
+  Value *getIndexedElement(unsigned idx, unsigned eltSize,
+                           unsigned reg) override {
+    return nullptr;
+  }
+
+  void doCall(FunctionCallee FC, CallInst *llvmCI, const string &calleeName) override {
+  }
+
+  void lift(MCInst &I) override {
+  }
+  
+  Value *createRegFileAndStack() override {
+    return nullptr;
+  }
+
+  void doReturn() override {
+  }
+    
 public:
   riscv2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
              MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
