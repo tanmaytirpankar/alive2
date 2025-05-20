@@ -231,7 +231,7 @@ public:
       {"sincos", "llvm.cos.f64"},
   };
 
-  std::map<std::string, unsigned int> encodingCounts;
+  std::map<std::string, unsigned> encodingCounts;
 
   // Map of ADRP MCInsts to the string representations of the operand variable
   // names
@@ -244,198 +244,12 @@ public:
   };
   vector<deferredGlobal> deferredGlobs;
 
-  Function *copyFunctionToTarget(Function *f, const Twine &name) {
-    auto newF = Function::Create(f->getFunctionType(),
-                                 GlobalValue::LinkageTypes::ExternalLinkage,
-                                 name, LiftedModule);
-    if (f->hasFnAttribute(Attribute::NoReturn))
-      newF->addFnAttr(Attribute::NoReturn);
-    if (f->hasFnAttribute(Attribute::WillReturn))
-      newF->addFnAttr(Attribute::WillReturn);
-    if (f->hasRetAttribute(Attribute::NoAlias))
-      newF->addRetAttr(Attribute::NoAlias);
-    if (f->hasRetAttribute(Attribute::SExt))
-      newF->addRetAttr(Attribute::SExt);
-    if (f->hasRetAttribute(Attribute::ZExt))
-      newF->addRetAttr(Attribute::ZExt);
-    auto attr = f->getFnAttribute(Attribute::Memory);
-    if (attr.hasAttribute(Attribute::Memory))
-      newF->addFnAttr(attr);
-    return newF;
-  }
-
-  Constant *lazyAddGlobal(string newGlobal) {
-    *out << "  lazyAddGlobal '" << newGlobal << "'\n";
-
-    {
-      auto got = intrinsic_names.find(newGlobal);
-      if (got != intrinsic_names.end())
-        newGlobal = got->second;
-    }
-
-    if (newGlobal == "__stack_chk_fail") {
-      return new GlobalVariable(*LiftedModule, getIntTy(8), false,
-                                GlobalValue::LinkageTypes::ExternalLinkage,
-                                nullptr, "__stack_chk_fail");
-    }
-
-    // is the global the address of a function?
-    if (newGlobal == liftedFn->getName()) {
-      // pointer to the function we're lifting into is a special case
-      *out << "  yay it's me!\n";
-      return liftedFn;
-    }
-    for (auto &f : *srcFn.getParent()) {
-      auto name = f.getName();
-      if (name != newGlobal)
-        continue;
-      *out << "  creating function '" << newGlobal << "'\n";
-      return copyFunctionToTarget(&f, newGlobal);
-    }
-
-    // globals that are definitions in the assembly can be lifted
-    // directly. here we have to deal with a mix of literal and
-    // symbolic data, and also deal with globals whose initializers
-    // reference each other. we support the latter by creating an
-    // initializer-free dummy variable right now, and then later
-    // creating the actual thing we need
-    for (const auto &g : MF.MCglobals) {
-      string name{demangle(g.name)};
-      if (name != newGlobal)
-        continue;
-      *out << "creating lifted global " << name << " from the assembly\n";
-      auto size = g.data.size();
-      *out << "  section = " << g.section << "\n";
-
-      vector<Type *> tys;
-      vector<Constant *> vals;
-      for (unsigned i = 0; i < size; ++i) {
-        auto &data = g.data[i];
-        if (holds_alternative<char>(data)) {
-          tys.push_back(getIntTy(8));
-          vals.push_back(ConstantInt::get(getIntTy(8), get<char>(data)));
-        } else if (holds_alternative<OffsetSym>(data)) {
-          auto s = get<OffsetSym>(data);
-          *out << "  it's a symbol named " << s.sym << "\n";
-          auto res = LLVMglobals.find(s.sym);
-          Constant *con;
-          if (res == LLVMglobals.end()) {
-            // ok, this global hasn't been lifted yet. but it might
-            // already be in the deferred queue, in which case we can
-            // use its dummy version.
-            bool found = false;
-            for (auto [name, _con] : deferredGlobs) {
-              if (name == s.sym) {
-                found = true;
-                con = _con;
-                break;
-              }
-            }
-            if (!found) {
-              *out << "  breaking recursive loop by deferring " << s.sym
-                   << "\n";
-              auto *dummy =
-                  new GlobalVariable(*LiftedModule, getIntTy(8), false,
-                                     GlobalValue::LinkageTypes::ExternalLinkage,
-                                     nullptr, s.sym + "_tmp");
-              deferredGlobs.push_back({.name = demangle(s.sym), .val = dummy});
-              con = dummy;
-            }
-          } else {
-            *out << "  found it using regular lookup\n";
-            con = res->second;
-          }
-          Constant *offset = getUnsignedIntConst(s.offset, 64);
-          Constant *ptr =
-              ConstantExpr::getGetElementPtr(getIntTy(8), con, offset);
-          tys.push_back(PointerType::get(Ctx, 0));
-          vals.push_back(ptr);
-        } else {
-          assert(false);
-        }
-      }
-      auto *ty = StructType::create(tys);
-      auto initializer = ConstantStruct::get(ty, vals);
-      bool isConstant =
-          g.section.starts_with(".rodata") || g.section == ".text";
-      auto *glob = new GlobalVariable(
-          *LiftedModule, ty, isConstant,
-          GlobalValue::LinkageTypes::ExternalLinkage, initializer, name);
-      glob->setAlignment(g.align);
-      return glob;
-    }
-
-    // globals that are only declarations have to be registered in
-    // LLVM IR, but they don't show up anywhere in the assembly -- the
-    // declaration is implicit. so here we find those and create them
-    // in the lifted module
-    for (auto &srcFnGlobal : srcFn.getParent()->globals()) {
-      if (!srcFnGlobal.isDeclaration())
-        continue;
-      string name{srcFnGlobal.getName()};
-      if (name != newGlobal)
-        continue;
-      *out << "creating declaration for global variable " << name << "\n";
-      *out << "  linkage = " << srcFnGlobal.getLinkage() << "\n";
-      auto *glob = new GlobalVariable(
-          *LiftedModule, srcFnGlobal.getValueType(), srcFnGlobal.isConstant(),
-          GlobalValue::LinkageTypes::ExternalLinkage,
-          /*initializer=*/nullptr, name);
-      glob->setAlignment(srcFnGlobal.getAlign());
-      return glob;
-    }
-
-    {
-      /*
-       * sometimes an intrinsic appears in tgt, but not src. there's
-       * no principled way to deal with these, we'll special case them
-       * here
-       */
-      auto got = implicit_intrinsics.find(newGlobal);
-      if (got != implicit_intrinsics.end()) {
-        auto newF = Function::Create(got->second,
-                                     GlobalValue::LinkageTypes::ExternalLinkage,
-                                     newGlobal, LiftedModule);
-        return newF;
-      }
-    }
-
-    *out << "ERROR: global symbol '" << newGlobal << "' not found\n";
-    exit(-1);
-  }
+  Function *copyFunctionToTarget(Function *f, const Twine &name);
+  Constant *lazyAddGlobal(string newGlobal);
 
   // create lifted globals only on demand -- saves time and clutter for
   // large modules
-  Constant *lookupGlobal(const string &nm) {
-    auto name = demangle(nm);
-    *out << "lookupGlobal '" << name << "'\n";
-
-    auto glob = LLVMglobals.find(name);
-    if (glob != LLVMglobals.end())
-      return glob->second;
-
-    auto *g = lazyAddGlobal(name);
-    assert(g);
-    LLVMglobals[name] = g;
-
-    // lifting this one may have necessitated lifting other variables,
-    // which we deferred, and created placeholders instead. fill those
-    // in now. this may keep cascading for a while, no problem! our
-    // overall goal here is to end up lifting the transitive closure
-    // of stuff reachable from the function we're lifting, and nothing
-    // else.
-    while (!deferredGlobs.empty()) {
-      *out << "  processing a deferred global\n";
-      auto def = deferredGlobs.at(0);
-      deferredGlobs.erase(deferredGlobs.begin());
-      auto g2 = lazyAddGlobal(def.name);
-      def.val->replaceAllUsesWith(g2);
-      def.val->eraseFromParent();
-      LLVMglobals[def.name] = g2;
-    }
-
-    return g;
-  }
+  Constant *lookupGlobal(const string &nm);
 
   BasicBlock *getBB(MCOperand &jmp_tgt) {
     assert(jmp_tgt.isExpr() && "[getBB] expected expression operand");
@@ -555,35 +369,7 @@ public:
   // Takes an LLVM Type*, constructs a mask value of this type with
   // mask value = W - 1 where W is the bitwidth of the element type if a vector
   // type or the bitwidth of the type if an integer
-  Value *getMaskByType(Type *llvm_ty) {
-    assert((llvm_ty->isIntegerTy() || llvm_ty->isVectorTy()) &&
-           "getMaskByType only handles integer or vector type right now\n");
-    Value *mask_value;
-
-    if (llvm_ty->isIntegerTy()) {
-      auto W = llvm_ty->getIntegerBitWidth();
-      mask_value = getUnsignedIntConst(W - 1, W);
-    } else if (llvm_ty->isVectorTy()) {
-      VectorType *shift_value_type = ((VectorType *)llvm_ty);
-      auto W_element = shift_value_type->getScalarSizeInBits();
-      auto numElements = shift_value_type->getElementCount().getFixedValue();
-      vector<Constant *> widths;
-
-      // Push numElements x (W_element-1)'s to the vector widths
-      for (unsigned int i = 0; i < numElements; i++) {
-        widths.push_back(
-            ConstantInt::get(Ctx, llvm::APInt(W_element, W_element - 1)));
-      }
-
-      // Get a ConstantVector of the widths
-      mask_value = getVectorConst(widths);
-    } else {
-      *out << "ERROR: getMaskByType encountered unhandled/unknown type\n";
-      exit(-1);
-    }
-
-    return mask_value;
-  }
+  Value *getMaskByType(Type *llvm_ty);
 
   [[noreturn]] void visitError() {
     out->flush();
@@ -1116,7 +902,7 @@ public:
     return res;
   }
 
-  unsigned int getBitWidth(Type *ty) {
+  unsigned getBitWidth(Type *ty) {
     if (auto vTy = dyn_cast<VectorType>(ty)) {
       return vTy->getScalarSizeInBits() *
              vTy->getElementCount().getFixedValue();
@@ -1136,69 +922,14 @@ public:
     }
   }
 
-  unsigned int getBitWidth(Value *V) {
+  unsigned getBitWidth(Value *V) {
     return getBitWidth(V->getType());
   }
 
-  std::tuple<string, long> getOffset(const string &var) {
-    std::smatch m;
-    std::regex offset("^(.*)\\+([0-9]+)$");
-    if (std::regex_search(var, m, offset)) {
-      auto root = m[1];
-      auto offset = m[2];
-      *out << "  root = " << root << "\n";
-      *out << "  offset = " << offset << "\n";
-      return make_tuple(root, stol(offset));
-    } else {
-      return make_tuple(var, 0);
-    }
-  }
-
+  std::tuple<string, long> getOffset(const string &var);
   // Reads an Expr and maps containing string variable to a global variable
-  std::string mapExprVar(const MCExpr *expr) {
-    std::string name;
-    llvm::raw_string_ostream ss(name);
-    expr->print(ss, nullptr);
-
-    // If the expression starts with a relocation specifier, strip it and map
-    // the rest to a string name of the global variable. Assuming there is only
-    // one relocation specifier, and it is at the beginning
-    // (std::regex_constants::match_continuous).
-    // eg: ":lo12:a" becomes  "a"
-    std::smatch sm1;
-    std::regex reloc("^:[a-z0-9_]+:");
-    if (std::regex_search(name, sm1, reloc)) {
-      name = sm1.suffix();
-    }
-
-    name = demangle(name);
-    auto [root, offset] = getOffset(name);
-    name = root;
-
-    if (!lookupGlobal(name)) {
-      *out << "\ncan't find global '" << name << "'\n";
-      *out << "ERROR: Unknown global in ADRP\n\n";
-      exit(-1);
-    }
-
-    instExprVarMap[CurInst] = name;
-    return name;
-  }
-
-  llvm::Value *lookupExprVar(const llvm::MCExpr &expr) override {
-    return lookupGlobal(mapExprVar(&expr));
-  }
-
-  string demangle(const string &name) {
-    if (name.rfind(".L.", 0) == 0) {
-      // the assembler has mangled local symbols, which start with a
-      // dot, by prefixing them with ".L"; here we demangle
-      return name.substr(2);
-    } else {
-      return name;
-    }
-  }
-
+  std::string mapExprVar(const MCExpr *expr);
+  string demangle(const string &name);
   // Reads an Expr and gets the global variable corresponding the containing
   // string variable. Assuming the Expr consists of a single global variable.
   pair<Value *, bool> getExprVar(const MCExpr *expr);
@@ -1221,6 +952,9 @@ public:
   /*
    * shared with the aslp lifter
    */
+  llvm::Value *lookupExprVar(const llvm::MCExpr &expr) override {
+    return lookupGlobal(mapExprVar(&expr));
+  }
   void assertTrue(Value *cond) override;
   void storeToMemoryValOffset(Value *base, Value *offset, uint64_t size,
                               Value *val) override;
@@ -1236,152 +970,424 @@ public:
   virtual void doReturn() = 0;
 };
 
-  pair<Value *, bool> mc2llvm::getExprVar(const MCExpr *expr) {
-    Value *globalVar;
-    // Default to true meaning store the ptr global value rather than loading
-    // the value from the global
-    bool storePtr = true;
-    std::string sss;
+Function *mc2llvm::copyFunctionToTarget(Function *f, const Twine &name) {
+  auto newF = Function::Create(f->getFunctionType(),
+                               GlobalValue::LinkageTypes::ExternalLinkage, name,
+                               LiftedModule);
+  if (f->hasFnAttribute(Attribute::NoReturn))
+    newF->addFnAttr(Attribute::NoReturn);
+  if (f->hasFnAttribute(Attribute::WillReturn))
+    newF->addFnAttr(Attribute::WillReturn);
+  if (f->hasRetAttribute(Attribute::NoAlias))
+    newF->addRetAttr(Attribute::NoAlias);
+  if (f->hasRetAttribute(Attribute::SExt))
+    newF->addRetAttr(Attribute::SExt);
+  if (f->hasRetAttribute(Attribute::ZExt))
+    newF->addRetAttr(Attribute::ZExt);
+  auto attr = f->getFnAttribute(Attribute::Memory);
+  if (attr.hasAttribute(Attribute::Memory))
+    newF->addFnAttr(attr);
+  return newF;
+}
 
-    // Matched strings
-    std::smatch sm;
+Constant *mc2llvm::lazyAddGlobal(string newGlobal) {
+  *out << "  lazyAddGlobal '" << newGlobal << "'\n";
 
-    // Regex to match relocation specifiers
-    std::regex re(":[a-z0-9_]+:");
+  {
+    auto got = intrinsic_names.find(newGlobal);
+    if (got != intrinsic_names.end())
+      newGlobal = got->second;
+  }
 
-    llvm::raw_string_ostream ss(sss);
-    expr->print(ss, nullptr);
+  if (newGlobal == "__stack_chk_fail") {
+    return new GlobalVariable(*LiftedModule, getIntTy(8), false,
+                              GlobalValue::LinkageTypes::ExternalLinkage,
+                              nullptr, "__stack_chk_fail");
+  }
 
-    auto [root, offset] = getOffset(sss);
-    sss = root;
+  // is the global the address of a function?
+  if (newGlobal == liftedFn->getName()) {
+    // pointer to the function we're lifting into is a special case
+    *out << "  yay it's me!\n";
+    return liftedFn;
+  }
+  for (auto &f : *srcFn.getParent()) {
+    auto name = f.getName();
+    if (name != newGlobal)
+      continue;
+    *out << "  creating function '" << newGlobal << "'\n";
+    return copyFunctionToTarget(&f, newGlobal);
+  }
 
-    // If the expression starts with a relocation specifier, strip it and look
-    // for the rest (variable in the Expr) in the instExprVarMap and globals.
-    // Assuming there is only one relocation specifier, and it is at the
-    // beginning (std::regex_constants::match_continuous).
-    if (std::regex_search(sss, sm, re,
-                          std::regex_constants::match_continuous)) {
-      string stringVar = sm.suffix();
-      // Check the relocation specifiers to determine whether to store ptr
-      // global value in the register or load the value from the global
-      if (!sm.empty() && (sm[0] == ":lo12:")) {
-        storePtr = false;
-      }
+  // globals that are definitions in the assembly can be lifted
+  // directly. here we have to deal with a mix of literal and
+  // symbolic data, and also deal with globals whose initializers
+  // reference each other. we support the latter by creating an
+  // initializer-free dummy variable right now, and then later
+  // creating the actual thing we need
+  for (const auto &g : MF.MCglobals) {
+    string name{demangle(g.name)};
+    if (name != newGlobal)
+      continue;
+    *out << "creating lifted global " << name << " from the assembly\n";
+    auto size = g.data.size();
+    *out << "  section = " << g.section << "\n";
 
-      stringVar = demangle(stringVar);
-
-      if (!lookupGlobal(stringVar)) {
-        *out << "\nERROR: instruction mentions '" << stringVar << "'\n";
-        *out << "which is not a global variable we know about\n\n";
-        exit(-1);
-      }
-
-      // Look through all visited ADRP instructions to find one in which
-      // stringVar was the operand used.
-      bool foundStringVar = false;
-      for (const auto &exprVar : instExprVarMap) {
-        if (exprVar.second == stringVar) {
-          foundStringVar = true;
-          break;
+    vector<Type *> tys;
+    vector<Constant *> vals;
+    for (unsigned i = 0; i < size; ++i) {
+      auto &data = g.data[i];
+      if (holds_alternative<char>(data)) {
+        tys.push_back(getIntTy(8));
+        vals.push_back(ConstantInt::get(getIntTy(8), get<char>(data)));
+      } else if (holds_alternative<OffsetSym>(data)) {
+        auto s = get<OffsetSym>(data);
+        *out << "  it's a symbol named " << s.sym << "\n";
+        auto res = LLVMglobals.find(s.sym);
+        Constant *con;
+        if (res == LLVMglobals.end()) {
+          // ok, this global hasn't been lifted yet. but it might
+          // already be in the deferred queue, in which case we can
+          // use its dummy version.
+          bool found = false;
+          for (auto [name, _con] : deferredGlobs) {
+            if (name == s.sym) {
+              found = true;
+              con = _con;
+              break;
+            }
+          }
+          if (!found) {
+            *out << "  breaking recursive loop by deferring " << s.sym << "\n";
+            auto *dummy =
+                new GlobalVariable(*LiftedModule, getIntTy(8), false,
+                                   GlobalValue::LinkageTypes::ExternalLinkage,
+                                   nullptr, s.sym + "_tmp");
+            deferredGlobs.push_back({.name = demangle(s.sym), .val = dummy});
+            con = dummy;
+          }
+        } else {
+          *out << "  found it using regular lookup\n";
+          con = res->second;
         }
+        Constant *offset = getUnsignedIntConst(s.offset, 64);
+        Constant *ptr =
+            ConstantExpr::getGetElementPtr(getIntTy(8), con, offset);
+        tys.push_back(PointerType::get(Ctx, 0));
+        vals.push_back(ptr);
+      } else {
+        assert(false);
       }
+    }
+    auto *ty = StructType::create(tys);
+    auto initializer = ConstantStruct::get(ty, vals);
+    bool isConstant = g.section.starts_with(".rodata") || g.section == ".text";
+    auto *glob = new GlobalVariable(*LiftedModule, ty, isConstant,
+                                    GlobalValue::LinkageTypes::ExternalLinkage,
+                                    initializer, name);
+    glob->setAlignment(g.align);
+    return glob;
+  }
 
-      if (!foundStringVar) {
-        *out << "\nERROR: Did not use \"" << stringVar
-             << "\" in an ADRP "
-                "instruction\n\n";
-        exit(-1);
-      }
+  // globals that are only declarations have to be registered in
+  // LLVM IR, but they don't show up anywhere in the assembly -- the
+  // declaration is implicit. so here we find those and create them
+  // in the lifted module
+  for (auto &srcFnGlobal : srcFn.getParent()->globals()) {
+    if (!srcFnGlobal.isDeclaration())
+      continue;
+    string name{srcFnGlobal.getName()};
+    if (name != newGlobal)
+      continue;
+    *out << "creating declaration for global variable " << name << "\n";
+    *out << "  linkage = " << srcFnGlobal.getLinkage() << "\n";
+    auto *glob = new GlobalVariable(*LiftedModule, srcFnGlobal.getValueType(),
+                                    srcFnGlobal.isConstant(),
+                                    GlobalValue::LinkageTypes::ExternalLinkage,
+                                    /*initializer=*/nullptr, name);
+    glob->setAlignment(srcFnGlobal.getAlign());
+    return glob;
+  }
 
-      globalVar = lookupGlobal(stringVar);
-      if (!globalVar) {
-        *out << "\nERROR: global not found\n\n";
-        exit(-1);
-      }
-    } else {
-      globalVar = lookupGlobal(demangle(sss));
-      if (!globalVar) {
-        *out << "\nERROR: global not found\n\n";
-        exit(-1);
+  {
+    /*
+     * sometimes an intrinsic appears in tgt, but not src. there's
+     * no principled way to deal with these, we'll special case them
+     * here
+     */
+    auto got = implicit_intrinsics.find(newGlobal);
+    if (got != implicit_intrinsics.end()) {
+      auto newF = Function::Create(got->second,
+                                   GlobalValue::LinkageTypes::ExternalLinkage,
+                                   newGlobal, LiftedModule);
+      return newF;
+    }
+  }
+
+  *out << "ERROR: global symbol '" << newGlobal << "' not found\n";
+  exit(-1);
+}
+
+Constant *mc2llvm::lookupGlobal(const string &nm) {
+  auto name = demangle(nm);
+  *out << "lookupGlobal '" << name << "'\n";
+
+  auto glob = LLVMglobals.find(name);
+  if (glob != LLVMglobals.end())
+    return glob->second;
+
+  auto *g = lazyAddGlobal(name);
+  assert(g);
+  LLVMglobals[name] = g;
+
+  // lifting this one may have necessitated lifting other variables,
+  // which we deferred, and created placeholders instead. fill those
+  // in now. this may keep cascading for a while, no problem! our
+  // overall goal here is to end up lifting the transitive closure
+  // of stuff reachable from the function we're lifting, and nothing
+  // else.
+  while (!deferredGlobs.empty()) {
+    *out << "  processing a deferred global\n";
+    auto def = deferredGlobs.at(0);
+    deferredGlobs.erase(deferredGlobs.begin());
+    auto g2 = lazyAddGlobal(def.name);
+    def.val->replaceAllUsesWith(g2);
+    def.val->eraseFromParent();
+    LLVMglobals[def.name] = g2;
+  }
+
+  return g;
+}
+
+Value *mc2llvm::getMaskByType(Type *llvm_ty) {
+  assert((llvm_ty->isIntegerTy() || llvm_ty->isVectorTy()) &&
+         "getMaskByType only handles integer or vector type right now\n");
+  Value *mask_value;
+
+  if (llvm_ty->isIntegerTy()) {
+    auto W = llvm_ty->getIntegerBitWidth();
+    mask_value = getUnsignedIntConst(W - 1, W);
+  } else if (llvm_ty->isVectorTy()) {
+    VectorType *shift_value_type = ((VectorType *)llvm_ty);
+    auto W_element = shift_value_type->getScalarSizeInBits();
+    auto numElements = shift_value_type->getElementCount().getFixedValue();
+    vector<Constant *> widths;
+
+    // Push numElements x (W_element-1)'s to the vector widths
+    for (unsigned i = 0; i < numElements; i++) {
+      widths.push_back(
+          ConstantInt::get(Ctx, llvm::APInt(W_element, W_element - 1)));
+    }
+
+    // Get a ConstantVector of the widths
+    mask_value = getVectorConst(widths);
+  } else {
+    *out << "ERROR: getMaskByType encountered unhandled/unknown type\n";
+    exit(-1);
+  }
+
+  return mask_value;
+}
+
+std::tuple<string, long> mc2llvm::getOffset(const string &var) {
+  std::smatch m;
+  std::regex offset("^(.*)\\+([0-9]+)$");
+  if (std::regex_search(var, m, offset)) {
+    auto root = m[1];
+    auto offset = m[2];
+    *out << "  root = " << root << "\n";
+    *out << "  offset = " << offset << "\n";
+    return make_tuple(root, stol(offset));
+  } else {
+    return make_tuple(var, 0);
+  }
+}
+
+string mc2llvm::demangle(const string &name) {
+  if (name.rfind(".L.", 0) == 0) {
+    // the assembler has mangled local symbols, which start with a
+    // dot, by prefixing them with ".L"; here we demangle
+    return name.substr(2);
+  } else {
+    return name;
+  }
+}
+
+std::string mc2llvm::mapExprVar(const MCExpr *expr) {
+  std::string name;
+  llvm::raw_string_ostream ss(name);
+  expr->print(ss, nullptr);
+
+  // If the expression starts with a relocation specifier, strip it and map
+  // the rest to a string name of the global variable. Assuming there is only
+  // one relocation specifier, and it is at the beginning
+  // (std::regex_constants::match_continuous).
+  // eg: ":lo12:a" becomes  "a"
+  std::smatch sm1;
+  std::regex reloc("^:[a-z0-9_]+:");
+  if (std::regex_search(name, sm1, reloc)) {
+    name = sm1.suffix();
+  }
+
+  name = demangle(name);
+  auto [root, offset] = getOffset(name);
+  name = root;
+
+  if (!lookupGlobal(name)) {
+    *out << "\ncan't find global '" << name << "'\n";
+    *out << "ERROR: Unknown global in ADRP\n\n";
+    exit(-1);
+  }
+
+  instExprVarMap[CurInst] = name;
+  return name;
+}
+
+pair<Value *, bool> mc2llvm::getExprVar(const MCExpr *expr) {
+  Value *globalVar;
+  // Default to true meaning store the ptr global value rather than loading
+  // the value from the global
+  bool storePtr = true;
+  std::string sss;
+
+  // Matched strings
+  std::smatch sm;
+
+  // Regex to match relocation specifiers
+  std::regex re(":[a-z0-9_]+:");
+
+  llvm::raw_string_ostream ss(sss);
+  expr->print(ss, nullptr);
+
+  auto [root, offset] = getOffset(sss);
+  sss = root;
+
+  // If the expression starts with a relocation specifier, strip it and look
+  // for the rest (variable in the Expr) in the instExprVarMap and globals.
+  // Assuming there is only one relocation specifier, and it is at the
+  // beginning (std::regex_constants::match_continuous).
+  if (std::regex_search(sss, sm, re, std::regex_constants::match_continuous)) {
+    string stringVar = sm.suffix();
+    // Check the relocation specifiers to determine whether to store ptr
+    // global value in the register or load the value from the global
+    if (!sm.empty() && (sm[0] == ":lo12:")) {
+      storePtr = false;
+    }
+
+    stringVar = demangle(stringVar);
+
+    if (!lookupGlobal(stringVar)) {
+      *out << "\nERROR: instruction mentions '" << stringVar << "'\n";
+      *out << "which is not a global variable we know about\n\n";
+      exit(-1);
+    }
+
+    // Look through all visited ADRP instructions to find one in which
+    // stringVar was the operand used.
+    bool foundStringVar = false;
+    for (const auto &exprVar : instExprVarMap) {
+      if (exprVar.second == stringVar) {
+        foundStringVar = true;
+        break;
       }
     }
 
-    assert(globalVar);
-    if (offset != 0) {
-      // FIXME -- would be better to return the root symbol and the
-      // offset separately, and let the caller do the pointer
-      // arithmetic
-      globalVar = createGEP(getIntTy(8), globalVar,
-                            {getUnsignedIntConst(offset, 64)}, "");
+    if (!foundStringVar) {
+      *out << "\nERROR: Did not use \"" << stringVar
+           << "\" in an ADRP "
+              "instruction\n\n";
+      exit(-1);
     }
-    return make_pair(globalVar, storePtr);
-  }
 
-  Value *mc2llvm::createUSHL(Value *a, Value *b) {
-    auto zero = getUnsignedIntConst(0, getBitWidth(b));
-    auto c = createICmp(ICmpInst::Predicate::ICMP_SGT, b, zero);
-    auto neg = createSub(zero, b);
-    auto posRes = createMaskedShl(a, b);
-    auto negRes = createMaskedLShr(a, neg);
-    return createSelect(c, posRes, negRes);
-  }
-
-  Value *mc2llvm::createSSHL(Value *a, Value *b) {
-    auto zero = getUnsignedIntConst(0, getBitWidth(b));
-    auto c = createICmp(ICmpInst::Predicate::ICMP_SGT, b, zero);
-    auto neg = createSub(zero, b);
-    auto posRes = createMaskedShl(a, b);
-    auto negRes = createMaskedAShr(a, neg);
-    return createSelect(c, posRes, negRes);
-  }
-
-  Value *mc2llvm::rev(Value *in, unsigned eltSize, unsigned amt) {
-    assert(eltSize == 8 || eltSize == 16 || eltSize == 32);
-    assert(getBitWidth(in) == 64 || getBitWidth(in) == 128);
-    if (getBitWidth(in) == 64)
-      in = createZExt(in, getIntTy(128));
-    Value *rev = getUndefVec(128 / eltSize, eltSize);
-    in = createBitCast(in, getVecTy(eltSize, 128 / eltSize));
-    for (unsigned i = 0; i < (128 / amt); ++i) {
-      auto innerCount = amt / eltSize;
-      for (unsigned j = 0; j < innerCount; j++) {
-        auto elt = createExtractElement(in, (i * innerCount) + j);
-        rev = createInsertElement(rev, elt,
-                                  (i * innerCount) + innerCount - j - 1);
-      }
+    globalVar = lookupGlobal(stringVar);
+    if (!globalVar) {
+      *out << "\nERROR: global not found\n\n";
+      exit(-1);
     }
-    return rev;
+  } else {
+    globalVar = lookupGlobal(demangle(sss));
+    if (!globalVar) {
+      *out << "\nERROR: global not found\n\n";
+      exit(-1);
+    }
   }
 
-  Value *mc2llvm::dupElts(Value *v, unsigned numElts, unsigned eltSize) {
-    unsigned w = numElts * eltSize;
-    assert(w == 64 || w == 128);
-    assert(getBitWidth(v) == eltSize);
-    Value *res = getUndefVec(numElts, eltSize);
-    for (unsigned i = 0; i < numElts; i++)
-      res = createInsertElement(res, v, i);
-    return res;
+  assert(globalVar);
+  if (offset != 0) {
+    // FIXME -- would be better to return the root symbol and the
+    // offset separately, and let the caller do the pointer
+    // arithmetic
+    globalVar = createGEP(getIntTy(8), globalVar,
+                          {getUnsignedIntConst(offset, 64)}, "");
   }
+  return make_pair(globalVar, storePtr);
+}
 
-  Value *mc2llvm::concat(Value *a, Value *b) {
-    int wa = getBitWidth(a);
-    int wb = getBitWidth(b);
-    auto wide_a = createZExt(a, getIntTy(wa + wb));
-    auto wide_b = createZExt(b, getIntTy(wa + wb));
-    auto shifted_a = createRawShl(wide_a, getUnsignedIntConst(wb, wa + wb));
-    return createOr(shifted_a, wide_b);
-  }
+Value *mc2llvm::createUSHL(Value *a, Value *b) {
+  auto zero = getUnsignedIntConst(0, getBitWidth(b));
+  auto c = createICmp(ICmpInst::Predicate::ICMP_SGT, b, zero);
+  auto neg = createSub(zero, b);
+  auto posRes = createMaskedShl(a, b);
+  auto negRes = createMaskedLShr(a, neg);
+  return createSelect(c, posRes, negRes);
+}
 
-  void mc2llvm::assertTrue(Value *cond) {
-    assert(cond->getType()->getIntegerBitWidth() == 1 && "assert requires i1");
-    CallInst::Create(assertDecl, {cond}, "", LLVMBB);
-  }
+Value *mc2llvm::createSSHL(Value *a, Value *b) {
+  auto zero = getUnsignedIntConst(0, getBitWidth(b));
+  auto c = createICmp(ICmpInst::Predicate::ICMP_SGT, b, zero);
+  auto neg = createSub(zero, b);
+  auto posRes = createMaskedShl(a, b);
+  auto negRes = createMaskedAShr(a, neg);
+  return createSelect(c, posRes, negRes);
+}
 
-  void mc2llvm::assertSame(Value *a, Value *b) {
-    auto *c = createICmp(ICmpInst::Predicate::ICMP_EQ, a, b);
-    assertTrue(c);
+Value *mc2llvm::rev(Value *in, unsigned eltSize, unsigned amt) {
+  assert(eltSize == 8 || eltSize == 16 || eltSize == 32);
+  assert(getBitWidth(in) == 64 || getBitWidth(in) == 128);
+  if (getBitWidth(in) == 64)
+    in = createZExt(in, getIntTy(128));
+  Value *rev = getUndefVec(128 / eltSize, eltSize);
+  in = createBitCast(in, getVecTy(eltSize, 128 / eltSize));
+  for (unsigned i = 0; i < (128 / amt); ++i) {
+    auto innerCount = amt / eltSize;
+    for (unsigned j = 0; j < innerCount; j++) {
+      auto elt = createExtractElement(in, (i * innerCount) + j);
+      rev =
+          createInsertElement(rev, elt, (i * innerCount) + innerCount - j - 1);
+    }
   }
-  
+  return rev;
+}
+
+Value *mc2llvm::dupElts(Value *v, unsigned numElts, unsigned eltSize) {
+  unsigned w = numElts * eltSize;
+  assert(w == 64 || w == 128);
+  assert(getBitWidth(v) == eltSize);
+  Value *res = getUndefVec(numElts, eltSize);
+  for (unsigned i = 0; i < numElts; i++)
+    res = createInsertElement(res, v, i);
+  return res;
+}
+
+Value *mc2llvm::concat(Value *a, Value *b) {
+  int wa = getBitWidth(a);
+  int wb = getBitWidth(b);
+  auto wide_a = createZExt(a, getIntTy(wa + wb));
+  auto wide_b = createZExt(b, getIntTy(wa + wb));
+  auto shifted_a = createRawShl(wide_a, getUnsignedIntConst(wb, wa + wb));
+  return createOr(shifted_a, wide_b);
+}
+
+void mc2llvm::assertTrue(Value *cond) {
+  assert(cond->getType()->getIntegerBitWidth() == 1 && "assert requires i1");
+  CallInst::Create(assertDecl, {cond}, "", LLVMBB);
+}
+
+void mc2llvm::assertSame(Value *a, Value *b) {
+  auto *c = createICmp(ICmpInst::Predicate::ICMP_EQ, a, b);
+  assertTrue(c);
+}
+
 void mc2llvm::doDirectCall() {
   auto &op0 = CurInst->getOperand(0);
   assert(op0.isExpr());
@@ -1879,8 +1885,8 @@ public:
   }
 
   virtual void emitValueToAlignment(Align Alignment, int64_t Value = 0,
-                                    unsigned int ValueSize = 1,
-                                    unsigned int MaxBytesToEmit = 0) override {
+                                    unsigned ValueSize = 1,
+                                    unsigned MaxBytesToEmit = 0) override {
     *out << "[emitValueToAlignment= " << Alignment.value() << "]\n";
     curAlign = Alignment;
   }
@@ -3526,7 +3532,7 @@ class arm2llvm : public mc2llvm {
     return createBitCast(val, getFPType(size));
   }
 
-  Value *readFromVecOperand(int idx, unsigned int eltSize, unsigned int numElts,
+  Value *readFromVecOperand(int idx, unsigned eltSize, unsigned numElts,
                             bool isUpperHalf = false, bool isFP = false) {
     VectorType *ty;
     auto regVal = readFromOperand(idx);
@@ -13465,7 +13471,7 @@ public:
 namespace lifter {
 
 std::ostream *out;
-unsigned int origRetWidth;
+unsigned origRetWidth;
 bool has_ret_attr;
 const Target *Targ;
 Function *myAlloc;
