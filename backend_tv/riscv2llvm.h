@@ -35,4 +35,3 @@ public:
              const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)
       : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA) {}
 };
-

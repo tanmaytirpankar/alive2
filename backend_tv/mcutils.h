@@ -121,4 +121,3 @@ public:
 
   void checkEntryBlock();
 };
-

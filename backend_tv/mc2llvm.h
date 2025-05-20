@@ -832,4 +832,3 @@ public:
   virtual Value *createRegFileAndStack() = 0;
   virtual void doReturn() = 0;
 };
-

@@ -206,4 +206,3 @@ public:
     erase_if(MF.BBs, [](MCBasicBlock bb) { return bb.empty(); });
   }
 };
-

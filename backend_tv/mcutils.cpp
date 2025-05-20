@@ -22,13 +22,13 @@
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
 void MCFunction::checkEntryBlock() {
-    // LLVM doesn't let the entry block be a jump target, but assembly
-    // does; we can fix that up by adding an extra block at the start
-    // of the function. simplifyCFG will clean this up when it's not
-    // needed.
-    BBs.emplace(BBs.begin(), "arm_tv_entry");
-    MCInst jmp_instr;
-    jmp_instr.setOpcode(AArch64::B);
-    jmp_instr.addOperand(MCOperand::createImm(1));
-    BBs[0].addInstBegin(std::move(jmp_instr));
-  }
+  // LLVM doesn't let the entry block be a jump target, but assembly
+  // does; we can fix that up by adding an extra block at the start
+  // of the function. simplifyCFG will clean this up when it's not
+  // needed.
+  BBs.emplace(BBs.begin(), "arm_tv_entry");
+  MCInst jmp_instr;
+  jmp_instr.setOpcode(AArch64::B);
+  jmp_instr.addOperand(MCOperand::createImm(1));
+  BBs[0].addInstBegin(std::move(jmp_instr));
+}
