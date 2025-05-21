@@ -226,6 +226,8 @@ public:
   llvm::AllocaInst *get_reg(aslp::reg_t regtype, uint64_t num) override;
 
   void lift(MCInst &I) override;
+  void lift_add(unsigned);
 
   Value *createRegFileAndStack() override;
+
 };
