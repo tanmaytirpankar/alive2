@@ -19,13 +19,11 @@
 #include <string>
 #include <vector>
 
-using namespace llvm;
-
 // Represents a basic block of machine instructions
 class MCBasicBlock {
 private:
   std::string name;
-  std::vector<MCInst> Instrs;
+  std::vector<llvm::MCInst> Instrs;
   llvm::SetVector<MCBasicBlock *> Succs;
 
 public:
@@ -47,11 +45,11 @@ public:
     return Succs;
   }
 
-  void addInst(MCInst &inst) {
+  void addInst(llvm::MCInst &inst) {
     Instrs.push_back(inst);
   }
 
-  void addInstBegin(MCInst &&inst) {
+  void addInstBegin(llvm::MCInst &&inst) {
     Instrs.insert(Instrs.begin(), std::move(inst));
   }
 
@@ -69,7 +67,7 @@ typedef std::variant<OffsetSym, char> RODataItem;
 
 struct MCGlobal {
   std::string name;
-  Align align;
+  llvm::Align align;
   std::string section;
   std::vector<RODataItem> data;
 };
@@ -77,18 +75,18 @@ struct MCGlobal {
 class MCFunction {
   std::string name;
   unsigned label_cnt{0};
-
+  
 public:
-  MCInstrAnalysis *IA;
-  MCInstPrinter *InstPrinter;
-  MCRegisterInfo *MRI;
+  llvm::MCInstrAnalysis *IA;
+  llvm::MCInstPrinter *InstPrinter;
+  llvm::MCRegisterInfo *MRI;
   std::vector<MCBasicBlock> BBs;
   std::vector<MCGlobal> MCglobals;
 
   MCFunction() {
     MCGlobal g{
         .name = "__stack_chk_guard",
-        .align = Align(8),
+        .align = llvm::Align(8),
         .section = ".rodata",
         // FIXME -- use symbolic data here? does this matter?
         .data = {'7', '7', '7', '7', '7', '7', '7', '7'},

@@ -26,9 +26,19 @@
 #include <cmath>
 #include <vector>
 
-using namespace std;
-using namespace llvm;
-using namespace lifter;
+// avoid collisions with the upstream AArch64 namespace
+namespace llvm::AArch64 {
+const unsigned N = 100000000;
+const unsigned Z = 100000001;
+const unsigned C = 100000002;
+const unsigned V = 100000003;
+} // namespace llvm::AArch64
+
+#define GET_INSTRINFO_ENUM
+#include "Target/AArch64/AArch64GenInstrInfo.inc"
+
+#define GET_REGINFO_ENUM
+#include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
 class arm2llvm final : public mc2llvm {
 public:
@@ -226,7 +236,9 @@ public:
   llvm::AllocaInst *get_reg(aslp::reg_t regtype, uint64_t num) override;
 
   void lift(MCInst &I) override;
-  void lift_add(unsigned);
+  void lift_add(unsigned opcode);
+  void lift_adc_sbc(unsigned opcode);
+  void lift_branch();
 
   Value *createRegFileAndStack() override;
 

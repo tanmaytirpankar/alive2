@@ -1,24 +1,10 @@
 #include "backend_tv/arm2llvm.h"
 
-#define GET_INSTRINFO_ENUM
-#include "Target/AArch64/AArch64GenInstrInfo.inc"
-
-#define GET_REGINFO_ENUM
-#include "Target/AArch64/AArch64GenRegisterInfo.inc"
-
 #define AARCH64_MAP_IMPL
 #include "aslp/aarch64_map.h"
 #include "aslp/aslp_bridge.h"
 
 const bool EXTRA_ABI_CHECKS = false;
-
-// avoid collisions with the upstream AArch64 namespace
-namespace llvm::AArch64 {
-const unsigned N = 100000000;
-const unsigned Z = 100000001;
-const unsigned C = 100000002;
-const unsigned V = 100000003;
-} // namespace llvm::AArch64
 
 arm2llvm::arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
                    MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
@@ -3286,47 +3272,26 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::PACIBSP:
   case AArch64::AUTIASP:
   case AArch64::AUTIBSP:
-  case AArch64::HINT: {
+  case AArch64::HINT:
     // NO-OPS
     break;
-  }
 
   // we're abusing this opcode -- better hope we don't run across these for
   // real
   case AArch64::SEH_Nop:
     break;
 
-  case AArch64::BRK: {
+  case AArch64::BRK:
     createTrap();
     break;
-  }
 
-  case AArch64::BL: {
+  case AArch64::BL:
     doDirectCall();
     break;
-  }
 
-  case AArch64::B: {
-    BasicBlock *dst{nullptr};
-    // JDR: I don't understand this
-    if (CurInst->getOperand(0).isImm()) {
-      // handles the case when we add an entry block with no predecessors
-      auto &dst_name = MF.BBs[getImm(0)].getName();
-      dst = getBBByName(dst_name);
-    } else {
-      dst = getBB(CurInst->getOperand(0));
-    }
-    if (dst) {
-      createBranch(dst);
-    } else {
-      // ok, if we don't have a destination block then we left this
-      // dangling on purpose, with the assumption that it's a tail
-      // call
-      doDirectCall();
-      doReturn();
-    }
+  case AArch64::B:
+    lift_branch();
     break;
-  }
 
   case AArch64::BR: {
     doIndirectCall();
@@ -3449,32 +3414,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::SBCWr:
   case AArch64::SBCXr:
   case AArch64::SBCSWr:
-  case AArch64::SBCSXr: {
-    auto a = readFromOperand(1);
-    auto b = readFromOperand(2);
-
-    switch (opcode) {
-    case AArch64::SBCWr:
-    case AArch64::SBCXr:
-    case AArch64::SBCSWr:
-    case AArch64::SBCSXr:
-      b = createNot(b);
-      break;
-    }
-
-    auto [res, flags] = addWithCarry(a, b, getC());
-    updateOutputReg(res);
-
-    if (has_s(opcode)) {
-      auto [n, z, c, v] = flags;
-      setN(n);
-      setZ(z);
-      setC(c);
-      setV(v);
-    }
-
+  case AArch64::SBCSXr:
+    lift_adc_sbc(opcode);
     break;
-  }
 
   case AArch64::ASRVWr:
   case AArch64::ASRVXr: {

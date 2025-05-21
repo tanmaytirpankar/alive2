@@ -1,21 +1,5 @@
 #include "backend_tv/arm2llvm.h"
 
-#define GET_INSTRINFO_ENUM
-#include "Target/AArch64/AArch64GenInstrInfo.inc"
-
-#define GET_REGINFO_ENUM
-#include "Target/AArch64/AArch64GenRegisterInfo.inc"
-
-const bool EXTRA_ABI_CHECKS = false;
-
-// avoid collisions with the upstream AArch64 namespace
-namespace llvm::AArch64 {
-const unsigned N = 100000000;
-const unsigned Z = 100000001;
-const unsigned C = 100000002;
-const unsigned V = 100000003;
-} // namespace llvm::AArch64
-
 void arm2llvm::lift_add(unsigned opcode) {
   Value *a = nullptr;
   Value *b = nullptr;
@@ -92,3 +76,29 @@ void arm2llvm::lift_add(unsigned opcode) {
 
   updateOutputReg(createAdd(a, b));
 }
+
+void arm2llvm::lift_adc_sbc(unsigned opcode) {
+  auto a = readFromOperand(1);
+  auto b = readFromOperand(2);
+  
+  switch (opcode) {
+  case AArch64::SBCWr:
+  case AArch64::SBCXr:
+  case AArch64::SBCSWr:
+  case AArch64::SBCSXr:
+    b = createNot(b);
+    return;
+  }
+  
+  auto [res, flags] = addWithCarry(a, b, getC());
+  updateOutputReg(res);
+  
+  if (has_s(opcode)) {
+    auto [n, z, c, v] = flags;
+    setN(n);
+    setZ(z);
+    setC(c);
+    setV(v);
+  }
+}
+

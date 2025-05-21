@@ -26,10 +26,6 @@
 #include <cmath>
 #include <vector>
 
-using namespace std;
-using namespace llvm;
-using namespace lifter;
-
 class riscv2llvm final : public mc2llvm {
   Value *enforceSExtZExt(Value *V, bool isSExt, bool isZExt) override;
 

@@ -18,25 +18,22 @@
 #include "backend_tv/mc2llvm.h"
 #include "backend_tv/mcutils.h"
 
-using namespace llvm;
-
 // We're overriding MCStreamerWrapper to generate an MCFunction
 // from the arm assembly. MCStreamerWrapper provides callbacks to handle
 // different parts of the assembly file. The callbacks that we're
 // using right now are all emit* functions.
-class MCStreamerWrapper final : public MCStreamer {
+class MCStreamerWrapper final : public llvm::MCStreamer {
   enum ASMLine { none = 0, label = 1, non_term_instr = 2, terminator = 3 };
 
 private:
-  MCInstrAnalysis *IA;
+  llvm::MCInstrAnalysis *IA;
   MCBasicBlock *curBB{nullptr};
   unsigned prev_line{0};
-  Align curAlign;
+  llvm::Align curAlign;
   std::string curSym;
   std::string curSec;
   bool FunctionEnded = false;
   unsigned curDebugLine = 0;
-
   vector<RODataItem> curROData;
 
 public:

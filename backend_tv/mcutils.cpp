@@ -21,6 +21,8 @@
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+using namespace llvm;
+
 void MCFunction::checkEntryBlock() {
   // LLVM doesn't let the entry block be a jump target, but assembly
   // does; we can fix that up by adding an extra block at the start

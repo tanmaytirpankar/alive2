@@ -208,9 +208,13 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
     "backend_tv/run_backend.cpp"
     "backend_tv/streamerwrapper.cpp"
     "backend_tv/mcutils.cpp"
+
     "backend_tv/arm2llvm.cpp"
-    "backend_tv/arm2llvm_add.cpp"
+    "backend_tv/arm2llvm_arith.cpp"
+    "backend_tv/arm2llvm_branch.cpp"
+
     "backend_tv/riscv2llvm.cpp"
+
   )
 
   add_library(llvm_util STATIC ${LLVM_UTIL_SRCS})
