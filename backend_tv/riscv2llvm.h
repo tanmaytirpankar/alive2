@@ -27,6 +27,8 @@
 #include <string>
 #include <vector>
 
+namespace lifter {
+
 class riscv2llvm final : public mc2llvm {
   Value *enforceSExtZExt(Value *V, bool isSExt, bool isZExt) override;
 
@@ -53,3 +55,5 @@ public:
              MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
              const MCSubtargetInfo &STI, const MCInstrAnalysis &IA);
 };
+
+} // end namespace lifter

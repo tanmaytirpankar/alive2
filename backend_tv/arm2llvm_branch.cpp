@@ -1,6 +1,7 @@
 #include "backend_tv/arm2llvm.h"
 
 using namespace std;
+using namespace lifter;
 
 void arm2llvm::lift_branch() {
   BasicBlock *dst{nullptr};

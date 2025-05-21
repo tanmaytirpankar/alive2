@@ -40,6 +40,8 @@ const unsigned V = 100000003;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+namespace lifter {
+
 class arm2llvm final : public mc2llvm {
 public:
   arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
@@ -248,3 +250,5 @@ public:
 
   Value *createRegFileAndStack() override;
 };
+
+} // end namespace lifter

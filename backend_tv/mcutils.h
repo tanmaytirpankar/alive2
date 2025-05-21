@@ -19,6 +19,8 @@
 #include <string>
 #include <vector>
 
+namespace lifter {
+
 // Represents a basic block of machine instructions
 class MCBasicBlock {
 private:
@@ -119,3 +121,5 @@ public:
 
   void checkEntryBlock();
 };
+
+} // end namespace lifter

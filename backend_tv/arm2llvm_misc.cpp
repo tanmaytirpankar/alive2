@@ -1,5 +1,7 @@
 #include "backend_tv/arm2llvm.h"
 
+using namespace lifter;
+
 // https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/NZCV--Condition-Flags
 void arm2llvm::lift_mrs() {
   auto imm = getImm(1);

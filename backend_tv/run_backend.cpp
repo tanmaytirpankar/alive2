@@ -15,11 +15,9 @@ using namespace std;
 using namespace llvm;
 using namespace lifter;
 
-namespace lifter {
-
 SmallString<1024> Asm;
 
-unique_ptr<MemoryBuffer> generateAsm(Module &M) {
+unique_ptr<MemoryBuffer> lifter::generateAsm(Module &M) {
   TargetOptions Opt;
   auto RM = optional<Reloc::Model>();
   unique_ptr<TargetMachine> TM(
@@ -43,5 +41,3 @@ unique_ptr<MemoryBuffer> generateAsm(Module &M) {
   pass.run(*MClone.get());
   return MemoryBuffer::getMemBuffer(Asm.c_str());
 }
-
-} // namespace lifter

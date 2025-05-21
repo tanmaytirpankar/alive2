@@ -22,7 +22,8 @@
 
 /* FIXME remove these ugh */
 using namespace llvm;
-using namespace lifter;
+
+namespace lifter {
 
 class MCFunction;
 class MCBasicBlock;
@@ -831,3 +832,5 @@ public:
   virtual Value *createRegFileAndStack() = 0;
   virtual void doReturn() = 0;
 };
+
+} // end namespace lifter

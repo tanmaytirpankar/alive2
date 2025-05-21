@@ -18,6 +18,8 @@
 #include "backend_tv/mc2llvm.h"
 #include "backend_tv/mcutils.h"
 
+namespace lifter {
+
 // We're overriding MCStreamerWrapper to generate an MCFunction
 // from the arm assembly. MCStreamerWrapper provides callbacks to handle
 // different parts of the assembly file. The callbacks that we're
@@ -169,3 +171,5 @@ public:
     erase_if(MF.BBs, [](MCBasicBlock bb) { return bb.empty(); });
   }
 };
+
+} // end namespace lifter

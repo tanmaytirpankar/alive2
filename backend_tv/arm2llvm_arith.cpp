@@ -1,5 +1,7 @@
 #include "backend_tv/arm2llvm.h"
 
+using namespace lifter;
+
 void arm2llvm::lift_add(unsigned opcode) {
   Value *a = nullptr;
   Value *b = nullptr;

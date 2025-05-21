@@ -22,6 +22,7 @@
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
 using namespace llvm;
+using namespace lifter;
 
 void MCFunction::checkEntryBlock() {
   // LLVM doesn't let the entry block be a jump target, but assembly
