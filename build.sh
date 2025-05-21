@@ -33,9 +33,9 @@ fi
 
 cd ..
 
-if command -v clang++ &>/dev/null && [[ -z "$CXX" ]]; then
-  export CXX=$(which clang++)
-fi
+#if command -v clang++ &>/dev/null && [[ -z "$CXX" ]]; then
+#  export CXX=$(which clang++)
+#fi
 
 if [ ! -z "$LOCAL_LLVM" ]; then
   cmake -B build -DBUILD_TV=1 \

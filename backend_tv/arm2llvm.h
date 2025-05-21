@@ -30,7 +30,7 @@ using namespace std;
 using namespace llvm;
 using namespace lifter;
 
-class arm2llvm : public mc2llvm {
+class arm2llvm final : public mc2llvm {
 public:
   arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
            MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,

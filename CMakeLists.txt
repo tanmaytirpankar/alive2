@@ -202,13 +202,14 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
 
   set(BACKEND_TV_SRCS
     "backend_tv/adjust_src.cpp"
-    "backend_tv/arm2llvm.cpp"
     "backend_tv/bitutils.cpp"
     "backend_tv/lifter.cpp"
     "backend_tv/mc2llvm.cpp"
     "backend_tv/run_backend.cpp"
     "backend_tv/streamerwrapper.cpp"
     "backend_tv/mcutils.cpp"
+    "backend_tv/arm2llvm.cpp"
+    "backend_tv/riscv2llvm.cpp"
   )
 
   add_library(llvm_util STATIC ${LLVM_UTIL_SRCS})
