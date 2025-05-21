@@ -243,6 +243,8 @@ public:
   void lift_bcc();
   void lift_mrs();
   void lift_msr();
+  void lift_asrv(unsigned opcode);
+  void lift_sub(unsigned opcode);
 
   Value *createRegFileAndStack() override;
 };

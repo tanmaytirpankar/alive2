@@ -101,3 +101,93 @@ void arm2llvm::lift_adc_sbc(unsigned opcode) {
     setV(v);
   }
 }
+
+void arm2llvm::lift_asrv(unsigned opcode) {
+  auto size = getInstSize(opcode);
+  auto a = readFromOperand(1);
+  auto b = readFromOperand(2);
+
+  auto shift_amt =
+      createBinop(b, getUnsignedIntConst(size, size), Instruction::URem);
+  auto res = createMaskedAShr(a, shift_amt);
+  updateOutputReg(res);
+}
+
+// SUBrx is a subtract instruction with an extended register.
+// ARM has 8 types of extensions:
+// 000 -> uxtb
+// 001 -> uxth
+// 010 -> uxtw
+// 011 -> uxtx
+// 100 -> sxtb
+// 110 -> sxth
+// 101 -> sxtw
+// 111 -> sxtx
+// To figure out if the extension is signed, we can use (extendType / 4)
+// Since the types repeat byte, half word, word, etc. for signed and
+// unsigned extensions, we can use 8 << (extendType & 0x3) to calculate
+// the extension's byte size
+void arm2llvm::lift_sub(unsigned opcode) {
+  auto size = getInstSize(opcode);
+  auto ty = getIntTy(size);
+  assert(CurInst->getNumOperands() == 4); // dst, lhs, rhs, shift amt
+  assert(CurInst->getOperand(3).isImm());
+
+  // convert lhs, rhs operands to IR::Values
+  auto a = readFromOperand(1);
+  Value *b = nullptr;
+  switch (opcode) {
+  case AArch64::SUBWrx:
+  case AArch64::SUBSWrx:
+  case AArch64::SUBXrx:
+  case AArch64::SUBXrx64:
+  case AArch64::SUBSXrx: {
+    auto extendImm = getImm(3);
+    auto extendType = (extendImm >> 3) & 0x7;
+    auto isSigned = extendType / 4;
+    // extendSize is necessary so that we can start with the word size
+    // ARM wants us to (byte, half, full) and then sign extend to a new
+    // size. Without extendSize being used for a trunc, a lot of masking
+    // and more manual work to sign extend would be necessary
+    unsigned extendSize = 8 << (extendType & 0x3);
+    auto shift = extendImm & 0x7;
+    b = readFromOperand(2);
+
+    // Make sure to not to trunc to the same size as the parameter.
+    // Sometimes SUBrx is generated using 32 bit registers and "extends" to
+    // a 32 bit value. This is seen as a type error by LLVM, but is valid
+    // ARM
+    if (extendSize != ty->getIntegerBitWidth()) {
+      auto truncType = getIntTy(extendSize);
+      b = createTrunc(b, truncType);
+      b = createCast(b, ty, isSigned ? Instruction::SExt : Instruction::ZExt);
+    }
+
+    // shift may not be there, it may just be the extend
+    if (shift != 0)
+      b = createMaskedShl(b, getUnsignedIntConst(shift, size));
+    break;
+  }
+  default:
+    b = readFromOperand(2);
+    b = regShift(b, getImm(3));
+  }
+
+  // make sure that lhs and rhs conversion succeeded, type lookup succeeded
+  if (!ty || !a || !b)
+    visitError();
+
+  if (has_s(opcode)) {
+    auto ssub = createSSubOverflow(a, b);
+    auto result = createExtractValue(ssub, {0});
+    auto new_v = createExtractValue(ssub, {1});
+    setC(createICmp(ICmpInst::Predicate::ICMP_UGE, a, b));
+    setZ(createICmp(ICmpInst::Predicate::ICMP_EQ, a, b));
+    setV(new_v);
+    setNUsingResult(result);
+    updateOutputReg(result);
+  } else {
+    auto sub = createSub(a, b);
+    updateOutputReg(sub);
+  }
+};
