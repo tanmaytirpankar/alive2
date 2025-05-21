@@ -1,5 +1,7 @@
 #include "backend_tv/arm2llvm.h"
 
+using namespace std;
+
 void arm2llvm::lift_branch() {
   BasicBlock *dst{nullptr};
   // JDR: I don't understand this
@@ -19,4 +21,31 @@ void arm2llvm::lift_branch() {
     doDirectCall();
     doReturn();
   }
+}
+
+void arm2llvm::lift_bcc() {
+  auto cond_val_imm = getImm(0);
+  auto cond_val = conditionHolds(cond_val_imm);
+
+  auto &jmp_tgt_op = CurInst->getOperand(1);
+  assert(jmp_tgt_op.isExpr() && "expected expression");
+  assert((jmp_tgt_op.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
+         "expected symbol ref as bcc operand");
+  const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt_op.getExpr());
+  const MCSymbol &Sym = SRE.getSymbol();
+
+  auto *dst_true = getBBByName(Sym.getName());
+
+  assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
+  const string *dst_false_name = nullptr;
+  for (auto &succ : MCBB->getSuccs()) {
+    if (succ->getName() != Sym.getName()) {
+      dst_false_name = &succ->getName();
+      return;
+    }
+  }
+  auto *dst_false =
+      getBBByName(dst_false_name ? *dst_false_name : Sym.getName());
+
+  createBranch(cond_val, dst_true, dst_false);
 }

@@ -240,6 +240,9 @@ public:
   void lift_add(unsigned opcode);
   void lift_adc_sbc(unsigned opcode);
   void lift_branch();
+  void lift_bcc();
+  void lift_mrs();
+  void lift_msr();
 
   Value *createRegFileAndStack() override;
 };

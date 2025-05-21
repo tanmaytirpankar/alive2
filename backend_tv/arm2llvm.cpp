@@ -3265,6 +3265,7 @@ void arm2llvm::lift(MCInst &I) {
 
   switch (opcode) {
 
+  // nops
   case AArch64::PRFMl:
   case AArch64::PRFMroW:
   case AArch64::PRFMroX:
@@ -3275,7 +3276,6 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::AUTIASP:
   case AArch64::AUTIBSP:
   case AArch64::HINT:
-    // NO-OPS
     break;
 
   // we're abusing this opcode -- better hope we don't run across these for
@@ -3295,104 +3295,30 @@ void arm2llvm::lift(MCInst &I) {
     lift_branch();
     break;
 
-  case AArch64::BR: {
+  case AArch64::BR:
     doIndirectCall();
     doReturn();
     break;
-  }
 
-  case AArch64::BLR: {
+  case AArch64::BLR:
     doIndirectCall();
     break;
-  }
 
   case AArch64::RET:
     doReturn();
     break;
 
-  case AArch64::Bcc: {
-    auto cond_val_imm = getImm(0);
-    auto cond_val = conditionHolds(cond_val_imm);
-
-    auto &jmp_tgt_op = CurInst->getOperand(1);
-    assert(jmp_tgt_op.isExpr() && "expected expression");
-    assert((jmp_tgt_op.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
-           "expected symbol ref as bcc operand");
-    const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt_op.getExpr());
-    const MCSymbol &Sym = SRE.getSymbol();
-
-    auto *dst_true = getBBByName(Sym.getName());
-
-    assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
-    const string *dst_false_name = nullptr;
-    for (auto &succ : MCBB->getSuccs()) {
-      if (succ->getName() != Sym.getName()) {
-        dst_false_name = &succ->getName();
-        break;
-      }
-    }
-    auto *dst_false =
-        getBBByName(dst_false_name ? *dst_false_name : Sym.getName());
-
-    createBranch(cond_val, dst_true, dst_false);
+  case AArch64::Bcc:
+    lift_bcc();
     break;
-  }
 
-  case AArch64::MRS: {
-    // https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/NZCV--Condition-Flags
-    auto imm = getImm(1);
-    if (imm != 55824) {
-      *out << "\nERROR: NZCV is the only supported case for MRS\n\n";
-      exit(-1);
-    }
-
-    auto N = createZExt(getN(), i64);
-    auto Z = createZExt(getZ(), i64);
-    auto C = createZExt(getC(), i64);
-    auto V = createZExt(getV(), i64);
-
-    auto newN = createMaskedShl(N, getUnsignedIntConst(31, 64));
-    auto newZ = createMaskedShl(Z, getUnsignedIntConst(30, 64));
-    auto newC = createMaskedShl(C, getUnsignedIntConst(29, 64));
-    auto newV = createMaskedShl(V, getUnsignedIntConst(28, 64));
-
-    Value *res = getUnsignedIntConst(0, 64);
-    res = createOr(res, newN);
-    res = createOr(res, newZ);
-    res = createOr(res, newC);
-    res = createOr(res, newV);
-    updateOutputReg(res);
+  case AArch64::MRS:
+    lift_mrs();
     break;
-  }
 
-  case AArch64::MSR: {
-    // https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/NZCV--Condition-Flags
-    auto imm = getImm(0);
-    if (imm != 55824) {
-      *out << "\nERROR: NZCV is the only supported case for MSR\n\n";
-      exit(-1);
-    }
-
-    auto i64_0 = getUnsignedIntConst(0, 64);
-    auto i64_1 = getUnsignedIntConst(1, 64);
-
-    auto Nmask = createMaskedShl(i64_1, getUnsignedIntConst(31, 64));
-    auto Zmask = createMaskedShl(i64_1, getUnsignedIntConst(30, 64));
-    auto Cmask = createMaskedShl(i64_1, getUnsignedIntConst(29, 64));
-    auto Vmask = createMaskedShl(i64_1, getUnsignedIntConst(28, 64));
-
-    auto reg = readFromOperand(1);
-    auto Nval = createAnd(Nmask, reg);
-    auto Zval = createAnd(Zmask, reg);
-    auto Cval = createAnd(Cmask, reg);
-    auto Vval = createAnd(Vmask, reg);
-
-    setN(createICmp(ICmpInst::Predicate::ICMP_NE, Nval, i64_0));
-    setZ(createICmp(ICmpInst::Predicate::ICMP_NE, Zval, i64_0));
-    setC(createICmp(ICmpInst::Predicate::ICMP_NE, Cval, i64_0));
-    setV(createICmp(ICmpInst::Predicate::ICMP_NE, Vval, i64_0));
+  case AArch64::MSR:
+    lift_msr();
     break;
-  }
 
   case AArch64::ADDWrs:
   case AArch64::ADDWri:

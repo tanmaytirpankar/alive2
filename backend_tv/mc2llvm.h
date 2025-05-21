@@ -20,6 +20,7 @@
 
 #include "aslp/aslp_bridge.h"
 
+/* FIXME remove these ugh */
 using namespace llvm;
 using namespace lifter;
 
@@ -27,7 +28,6 @@ class MCFunction;
 class MCBasicBlock;
 
 class mc2llvm : public aslp::lifter_interface_llvm {
-  // FIXME making everything public is a temporary hack
 public:
   Module *LiftedModule{nullptr};
   LLVMContext &Ctx = LiftedModule->getContext();
