@@ -44,20 +44,22 @@ namespace lifter {
 
 class arm2llvm final : public mc2llvm {
 public:
-  arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
-           MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
-           const MCSubtargetInfo &STI, const MCInstrAnalysis &IA);
+  arm2llvm(llvm::Module *LiftedModule, MCFunction &MF, llvm::Function &srcFn,
+           llvm::MCInstPrinter *InstPrinter, const llvm::MCCodeEmitter &MCE,
+           const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA);
 
   // Implemented library pseudocode for signed satuaration from A64 ISA manual
-  std::tuple<Value *, bool> SignedSatQ(Value *i, unsigned bitWidth);
+  std::tuple<llvm::Value *, bool> SignedSatQ(llvm::Value *i, unsigned bitWidth);
 
   // Implemented library pseudocode for unsigned satuaration from A64 ISA manual
-  std::tuple<Value *, bool> UnsignedSatQ(Value *i, unsigned bitWidth);
+  std::tuple<llvm::Value *, bool> UnsignedSatQ(llvm::Value *i,
+                                               unsigned bitWidth);
 
   // Implemented library pseudocode for satuaration from A64 ISA manual
-  std::tuple<Value *, bool> SatQ(Value *i, unsigned bitWidth, bool isSigned);
+  std::tuple<llvm::Value *, bool> SatQ(llvm::Value *i, unsigned bitWidth,
+                                       bool isSigned);
 
-  bool isSIMDandFPRegOperand(MCOperand &op);
+  bool isSIMDandFPRegOperand(llvm::MCOperand &op);
 
   /*
    * the idea here is that if a parameter to the lifted function, or
@@ -75,36 +77,40 @@ public:
    * 128 bits, which seemed (as of Nov 2023) to be the only ones with
    * a stable ABI
    */
-  Value *enforceSExtZExt(Value *V, bool isSExt, bool isZExt) override;
+  llvm::Value *enforceSExtZExt(llvm::Value *V, bool isSExt,
+                               bool isZExt) override;
 
-  std::tuple<Value *, int, Value *> getStoreParams();
+  std::tuple<llvm::Value *, int, llvm::Value *> getStoreParams();
 
   // Creates instructions to store val in memory pointed by base + offset
   // offset and size are in bytes
-  void storeToMemoryImmOffset(Value *base, uint64_t offset, uint64_t size,
-                              Value *val);
+  void storeToMemoryImmOffset(llvm::Value *base, uint64_t offset, uint64_t size,
+                              llvm::Value *val);
 
   unsigned decodeRegSet(unsigned r);
 
-  Value *tblHelper2(std::vector<Value *> &tbl, Value *idx, unsigned i);
+  llvm::Value *tblHelper2(std::vector<llvm::Value *> &tbl, llvm::Value *idx,
+                          unsigned i);
 
-  Value *tblHelper(std::vector<Value *> &tbl, Value *idx);
+  llvm::Value *tblHelper(std::vector<llvm::Value *> &tbl, llvm::Value *idx);
 
-  std::tuple<Value *, int> getParamsLoadImmed();
+  std::tuple<llvm::Value *, int> getParamsLoadImmed();
 
-  Value *makeLoadWithOffset(Value *base, Value *offset, int size) override;
+  llvm::Value *makeLoadWithOffset(llvm::Value *base, llvm::Value *offset,
+                                  int size) override;
 
-  Value *makeLoadWithOffset(Value *base, int offset, unsigned size);
+  llvm::Value *makeLoadWithOffset(llvm::Value *base, int offset, unsigned size);
 
-  std::tuple<Value *, Value *, Value *> getParamsStoreReg();
+  std::tuple<llvm::Value *, llvm::Value *, llvm::Value *> getParamsStoreReg();
 
   void doIndirectCall();
 
   void doReturn() override;
 
-  std::tuple<Value *, Value *, Value *, Value *> FPCompare(Value *a, Value *b);
+  std::tuple<llvm::Value *, llvm::Value *, llvm::Value *, llvm::Value *>
+  FPCompare(llvm::Value *a, llvm::Value *b);
 
-  std::tuple<Value *, Value *, Value *, Value *>
+  std::tuple<llvm::Value *, llvm::Value *, llvm::Value *, llvm::Value *>
   splitImmNZCV(uint64_t imm_flags);
 
   bool disjoint(const std::set<int> &a, const std::set<int> &b);
@@ -116,9 +122,10 @@ public:
   // Follows the "Library pseudocode for aarch64/instrs/extendreg/ExtendReg"
   // from ARM manual
   // val is always 64 bits and shiftAmt is always 0-4
-  Value *extendAndShiftValue(Value *val, enum ExtendType extType, int shiftAmt);
+  llvm::Value *extendAndShiftValue(llvm::Value *val, enum ExtendType extType,
+                                   int shiftAmt);
 
-  std::tuple<Value *, Value *> getParamsLoadReg();
+  std::tuple<llvm::Value *, llvm::Value *> getParamsLoadReg();
 
   // From https://github.com/agustingianni/retools
   uint64_t VFPExpandImm(uint64_t imm8, unsigned N);
@@ -128,50 +135,54 @@ public:
   // imm8)
   uint64_t AdvSIMDExpandImm(unsigned op, unsigned cmode, unsigned imm8);
 
-  std::vector<Value *> marshallArgs(FunctionType *fTy);
+  std::vector<llvm::Value *> marshallArgs(llvm::FunctionType *fTy);
 
-  void doCall(FunctionCallee FC, CallInst *llvmCI,
+  void doCall(llvm::FunctionCallee FC, llvm::CallInst *llvmCI,
               const std::string &calleeName) override;
 
-  Value *conditionHolds(uint64_t cond);
+  llvm::Value *conditionHolds(uint64_t cond);
 
-  std::tuple<Value *, std::tuple<Value *, Value *, Value *, Value *>>
-  addWithCarry(Value *l, Value *r, Value *carryIn);
+  std::tuple<llvm::Value *, std::tuple<llvm::Value *, llvm::Value *,
+                                       llvm::Value *, llvm::Value *>>
+  addWithCarry(llvm::Value *l, llvm::Value *r, llvm::Value *carryIn);
 
-  void setV(Value *V);
+  void setV(llvm::Value *V);
 
-  void setZ(Value *V);
+  void setZ(llvm::Value *V);
 
-  void setN(Value *V);
+  void setN(llvm::Value *V);
 
-  void setC(Value *V);
+  void setC(llvm::Value *V);
 
-  void setZUsingResult(Value *V);
+  void setZUsingResult(llvm::Value *V);
 
-  void setNUsingResult(Value *V);
+  void setNUsingResult(llvm::Value *V);
 
-  Value *getV();
+  llvm::Value *getV();
 
-  Value *getZ();
+  llvm::Value *getZ();
 
-  Value *getN();
+  llvm::Value *getN();
 
-  Value *getC();
+  llvm::Value *getC();
 
   // Creates LLVM IR instructions which take two values with the same
   // number of bits, bit casting them to vectors of numElts elements
   // of size eltSize and doing an operation on them. In cases where
   // LLVM does not have an appropriate vector instruction, we perform
   // the operation element-wise.
-  Value *createVectorOp(std::function<Value *(Value *, Value *)> op, Value *a,
-                        Value *b, unsigned eltSize, unsigned numElts,
-                        bool elementWise, extKind ext, bool splatImm2,
-                        bool immShift, bool isUpper, bool operandTypesDiffer);
+  llvm::Value *
+  createVectorOp(std::function<llvm::Value *(llvm::Value *, llvm::Value *)> op,
+                 llvm::Value *a, llvm::Value *b, unsigned eltSize,
+                 unsigned numElts, bool elementWise, extKind ext,
+                 bool splatImm2, bool immShift, bool isUpper,
+                 bool operandTypesDiffer);
 
-  Value *getIndexedElement(unsigned idx, unsigned eltSize,
-                           unsigned reg) override;
+  llvm::Value *getIndexedElement(unsigned idx, unsigned eltSize,
+                                 unsigned reg) override;
 
-  Value *getIndexedFPElement(unsigned idx, unsigned eltSize, unsigned reg);
+  llvm::Value *getIndexedFPElement(unsigned idx, unsigned eltSize,
+                                   unsigned reg);
 
   // Returns bitWidth corresponding the registers
   unsigned getRegSize(unsigned Reg);
@@ -181,36 +192,37 @@ public:
 
   // return pointer to the backing store for a register, doing the
   // necessary de-aliasing
-  Value *dealiasReg(unsigned Reg);
+  llvm::Value *dealiasReg(unsigned Reg);
 
   // always does a full-width read
   //
   // TODO eliminate all uses of this and rename readFromRegTyped to readFromReg
-  Value *readFromRegOld(unsigned Reg);
+  llvm::Value *readFromRegOld(unsigned Reg);
 
-  Value *readFromRegTyped(unsigned Reg, Type *ty);
+  llvm::Value *readFromRegTyped(unsigned Reg, llvm::Type *ty);
 
-  Value *readPtrFromReg(unsigned Reg);
+  llvm::Value *readPtrFromReg(unsigned Reg);
 
-  void updateReg(Value *V, uint64_t reg, bool SExt = false);
+  void updateReg(llvm::Value *V, uint64_t reg, bool SExt = false);
 
-  Value *readInputReg(int idx);
+  llvm::Value *readInputReg(int idx);
 
   // FIXME: stop using this -- instructions should know what they're loading
   // FIXME: then remove getInstSize!
   // TODO: make it so that lshr generates code on register lookups
   // some instructions make use of this, and the semantics need to be
   // worked out
-  Value *readFromOperand(int idx, unsigned size = 0);
+  llvm::Value *readFromOperand(int idx, unsigned size = 0);
 
-  Value *readFromFPOperand(int idx, unsigned size);
+  llvm::Value *readFromFPOperand(int idx, unsigned size);
 
-  Value *readFromVecOperand(int idx, unsigned eltSize, unsigned numElts,
-                            bool isUpperHalf = false, bool isFP = false);
+  llvm::Value *readFromVecOperand(int idx, unsigned eltSize, unsigned numElts,
+                                  bool isUpperHalf = false, bool isFP = false);
 
-  void updateOutputReg(Value *V, bool SExt = false) override;
+  void updateOutputReg(llvm::Value *V, bool SExt = false) override;
 
-  Value *splatImm(Value *v, unsigned numElts, unsigned eltSize, bool shift);
+  llvm::Value *splatImm(llvm::Value *v, unsigned numElts, unsigned eltSize,
+                        bool shift);
 
   static const std::set<int> s_flag;
 
@@ -234,11 +246,11 @@ public:
 
   // from getShiftType/getShiftValue:
   // https://github.com/llvm/llvm-project/blob/93d1a623cecb6f732db7900baf230a13e6ac6c6a/llvm/lib/Target/AArch64/MCTargetDesc/AArch64AddressingModes.h#L74
-  Value *regShift(Value *value, int encodedShift);
+  llvm::Value *regShift(llvm::Value *value, int encodedShift);
 
   llvm::AllocaInst *get_reg(aslp::reg_t regtype, uint64_t num) override;
 
-  void lift(MCInst &I) override;
+  void lift(llvm::MCInst &I) override;
   void lift_add(unsigned opcode);
   void lift_adc_sbc(unsigned opcode);
   void lift_branch();
@@ -248,7 +260,7 @@ public:
   void lift_asrv(unsigned opcode);
   void lift_sub(unsigned opcode);
 
-  Value *createRegFileAndStack() override;
+  llvm::Value *createRegFileAndStack() override;
 };
 
 } // end namespace lifter

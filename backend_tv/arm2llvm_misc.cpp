@@ -1,6 +1,7 @@
 #include "backend_tv/arm2llvm.h"
 
 using namespace lifter;
+using namespace llvm;
 
 // https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/NZCV--Condition-Flags
 void arm2llvm::lift_mrs() {

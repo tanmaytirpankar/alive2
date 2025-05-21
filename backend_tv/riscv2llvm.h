@@ -30,30 +30,32 @@
 namespace lifter {
 
 class riscv2llvm final : public mc2llvm {
-  Value *enforceSExtZExt(Value *V, bool isSExt, bool isZExt) override;
+  llvm::Value *enforceSExtZExt(llvm::Value *V, bool isSExt,
+                               bool isZExt) override;
 
   llvm::AllocaInst *get_reg(aslp::reg_t regtype, uint64_t num) override;
 
-  void updateOutputReg(Value *V, bool SExt = false) override;
+  void updateOutputReg(llvm::Value *V, bool SExt = false) override;
 
-  Value *makeLoadWithOffset(Value *base, Value *offset, int size) override;
+  llvm::Value *makeLoadWithOffset(llvm::Value *base, llvm::Value *offset,
+                                  int size) override;
 
-  Value *getIndexedElement(unsigned idx, unsigned eltSize,
-                           unsigned reg) override;
+  llvm::Value *getIndexedElement(unsigned idx, unsigned eltSize,
+                                 unsigned reg) override;
 
-  void doCall(FunctionCallee FC, CallInst *llvmCI,
+  void doCall(llvm::FunctionCallee FC, llvm::CallInst *llvmCI,
               const std::string &calleeName) override;
 
-  void lift(MCInst &I) override;
+  void lift(llvm::MCInst &I) override;
 
-  Value *createRegFileAndStack() override;
+  llvm::Value *createRegFileAndStack() override;
 
   void doReturn() override;
 
 public:
-  riscv2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
-             MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
-             const MCSubtargetInfo &STI, const MCInstrAnalysis &IA);
+  riscv2llvm(llvm::Module *LiftedModule, MCFunction &MF, llvm::Function &srcFn,
+             llvm::MCInstPrinter *InstPrinter, const llvm::MCCodeEmitter &MCE,
+             const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA);
 };
 
 } // end namespace lifter

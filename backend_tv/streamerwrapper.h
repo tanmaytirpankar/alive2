@@ -42,8 +42,8 @@ public:
   MCFunction MF;
   unsigned cnt{0};
 
-  MCStreamerWrapper(MCContext &Context, MCInstrAnalysis *IA,
-                    MCInstPrinter *InstPrinter, MCRegisterInfo *MRI)
+  MCStreamerWrapper(llvm::MCContext &Context, llvm::MCInstrAnalysis *IA,
+                    llvm::MCInstPrinter *InstPrinter, llvm::MCRegisterInfo *MRI)
       : MCStreamer(Context), IA(IA) {
     MF.IA = IA;
     MF.InstPrinter = InstPrinter;
@@ -66,24 +66,25 @@ public:
   }
 
   // We only want to intercept the emission of new instructions.
-  virtual void emitInstruction(const MCInst &Inst,
-                               const MCSubtargetInfo & /* unused */) override;
+  virtual void
+  emitInstruction(const llvm::MCInst &Inst,
+                  const llvm::MCSubtargetInfo & /* unused */) override;
 
-  std::string attrName(MCSymbolAttr A) {
+  std::string attrName(llvm::MCSymbolAttr A) {
     switch (A) {
-    case MCSA_ELF_TypeFunction:
+    case llvm::MCSA_ELF_TypeFunction:
       return "ELF function";
-    case MCSA_ELF_TypeObject:
+    case llvm::MCSA_ELF_TypeObject:
       return "ELF object";
-    case MCSA_Global:
+    case llvm::MCSA_Global:
       return "global";
     default:
       assert(false && "unknown symbol attribute");
     }
   }
 
-  virtual bool emitSymbolAttribute(MCSymbol *Symbol,
-                                   MCSymbolAttr Attribute) override {
+  virtual bool emitSymbolAttribute(llvm::MCSymbol *Symbol,
+                                   llvm::MCSymbolAttr Attribute) override {
     *out << "[emitSymbolAttribute '" << Symbol->getName().str() << "']\n";
     if (false) {
       *out << "  Common? " << Symbol->isCommon() << "\n";
@@ -92,65 +93,69 @@ public:
     return true;
   }
 
-  virtual void emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override {
+  virtual void emitSymbolDesc(llvm::MCSymbol *Symbol,
+                              unsigned DescValue) override {
     *out << "[emitSymbolDesc '" << Symbol->getName().str() << "']\n";
   }
 
-  virtual void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                Align ByteAlignment) override;
+  virtual void emitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size,
+                                llvm::Align ByteAlignment) override;
 
-  virtual void emitBytes(StringRef Data) override;
+  virtual void emitBytes(llvm::StringRef Data) override;
 
-  virtual void emitFill(const MCExpr &NumBytes, uint64_t FillValue,
-                        SMLoc Loc) override;
+  virtual void emitFill(const llvm::MCExpr &NumBytes, uint64_t FillValue,
+                        llvm::SMLoc Loc) override;
 
-  virtual void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
-                            uint64_t Size = 0, Align ByteAlignment = Align(1),
-                            SMLoc Loc = SMLoc()) override {
+  virtual void emitZerofill(llvm::MCSection *Section,
+                            llvm::MCSymbol *Symbol = nullptr, uint64_t Size = 0,
+                            llvm::Align ByteAlignment = llvm::Align(1),
+                            llvm::SMLoc Loc = llvm::SMLoc()) override {
     *out << "[emitZerofill " << Size << " bytes]\n";
   }
 
-  virtual void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override {
+  virtual void emitELFSize(llvm::MCSymbol *Symbol,
+                           const llvm::MCExpr *Value) override {
     *out << "[emitELFSize '" << Symbol->getName().str() << "']\n";
     addConstant();
   }
 
   // FIXME -- we probably need a proper recursive descent parser for
   // MCExprs here
-  virtual void emitValueImpl(const MCExpr *Value, unsigned Size,
-                             SMLoc Loc = SMLoc()) override;
+  virtual void emitValueImpl(const llvm::MCExpr *Value, unsigned Size,
+                             llvm::SMLoc Loc = llvm::SMLoc()) override;
 
-  virtual void emitValueToAlignment(Align Alignment, int64_t Value = 0,
+  virtual void emitValueToAlignment(llvm::Align Alignment, int64_t Value = 0,
                                     unsigned ValueSize = 1,
                                     unsigned MaxBytesToEmit = 0) override {
     *out << "[emitValueToAlignment= " << Alignment.value() << "]\n";
     curAlign = Alignment;
   }
 
-  virtual void emitAssignment(MCSymbol *Symbol, const MCExpr *Value) override {
+  virtual void emitAssignment(llvm::MCSymbol *Symbol,
+                              const llvm::MCExpr *Value) override {
     *out << "[emitAssignment]\n";
   }
 
   virtual void emitDwarfLocDirective(unsigned FileNo, unsigned Line,
                                      unsigned Column, unsigned Flags,
                                      unsigned Isa, unsigned Discriminator,
-                                     StringRef FileName,
-                                     StringRef Comment) override {
+                                     llvm::StringRef FileName,
+                                     llvm::StringRef Comment) override {
     *out << "[dwarf loc directive: line = " << Line << "]\n";
     curDebugLine = Line;
   }
 
-  virtual void emitLabel(MCSymbol *Symbol, SMLoc Loc) override;
+  virtual void emitLabel(llvm::MCSymbol *Symbol, llvm::SMLoc Loc) override;
 
-  std::string findTargetLabel(MCInst &Inst) {
+  std::string findTargetLabel(llvm::MCInst &Inst) {
     auto num_operands = Inst.getNumOperands();
     for (unsigned i = 0; i < num_operands; ++i) {
       auto op = Inst.getOperand(i);
       if (op.isExpr()) {
         auto expr = op.getExpr();
-        if (expr->getKind() == MCExpr::ExprKind::SymbolRef) {
-          const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*expr);
-          const MCSymbol &Sym = SRE.getSymbol();
+        if (expr->getKind() == llvm::MCExpr::ExprKind::SymbolRef) {
+          const llvm::MCSymbolRefExpr &SRE = cast<llvm::MCSymbolRefExpr>(*expr);
+          const llvm::MCSymbol &Sym = SRE.getSymbol();
           return Sym.getName().str();
         }
       }

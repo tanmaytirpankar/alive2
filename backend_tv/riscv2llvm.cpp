@@ -8,6 +8,7 @@
 
 using namespace std;
 using namespace lifter;
+using namespace llvm;
 
 riscv2llvm::riscv2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
                        MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,

@@ -8,6 +8,7 @@ const bool EXTRA_ABI_CHECKS = false;
 
 using namespace std;
 using namespace lifter;
+using namespace llvm;
 
 arm2llvm::arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
                    MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,

@@ -2,6 +2,7 @@
 
 using namespace std;
 using namespace lifter;
+using namespace llvm;
 
 void arm2llvm::lift_branch() {
   BasicBlock *dst{nullptr};
