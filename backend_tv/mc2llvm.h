@@ -20,7 +20,6 @@
 
 #include "aslp/aslp_bridge.h"
 
-using namespace std;
 using namespace llvm;
 using namespace lifter;
 
@@ -40,9 +39,9 @@ public:
   MCInstPrinter *InstPrinter{nullptr};
   MCInst *CurInst{nullptr}, *PrevInst{nullptr};
   unsigned armInstNum{0}, llvmInstNum{0};
-  map<unsigned, Value *> RegFile;
+  std::map<unsigned, Value *> RegFile;
   Value *stackMem{nullptr};
-  unordered_map<string, Constant *> LLVMglobals;
+  std::unordered_map<std::string, Constant *> LLVMglobals;
   Value *initialSP, *initialReg[32];
   Function *assertDecl;
   const MCCodeEmitter &MCE;
@@ -58,7 +57,7 @@ public:
 
   // these are ones that the backend adds to tgt, even when they don't
   // appear at all in src
-  const unordered_map<string, FunctionType *> implicit_intrinsics = {
+  const std::unordered_map<std::string, FunctionType *> implicit_intrinsics = {
       {"llvm.memset.p0.i64", FunctionType::get(Type::getVoidTy(Ctx),
                                                {
                                                    PointerType::get(Ctx, 0),
@@ -72,7 +71,7 @@ public:
   // intrinsics get their names mangled by LLVM, we need to reverse
   // that, and there's no way to do it other than hard-coding this
   // mapping
-  const unordered_map<string, string> intrinsic_names = {
+  const std::unordered_map<std::string, std::string> intrinsic_names = {
       // memory
       {"memcpy", "llvm.memcpy.p0.p0.i64"},
       {"memset", "llvm.memset.p0.i64"},
@@ -98,21 +97,21 @@ public:
 
   // Map of ADRP MCInsts to the string representations of the operand variable
   // names
-  unordered_map<MCInst *, string> instExprVarMap;
+  std::unordered_map<MCInst *, std::string> instExprVarMap;
   const DataLayout &DL;
 
   struct deferredGlobal {
-    string name;
+    std::string name;
     GlobalVariable *val;
   };
-  vector<deferredGlobal> deferredGlobs;
+  std::vector<deferredGlobal> deferredGlobs;
 
   Function *copyFunctionToTarget(Function *f, const Twine &name);
-  Constant *lazyAddGlobal(string newGlobal);
+  Constant *lazyAddGlobal(std::string newGlobal);
 
   // create lifted globals only on demand -- saves time and clutter for
   // large modules
-  Constant *lookupGlobal(const string &nm);
+  Constant *lookupGlobal(const std::string &nm);
 
   BasicBlock *getBB(MCOperand &jmp_tgt) {
     assert(jmp_tgt.isExpr() && "[getBB] expected expression operand");
@@ -236,7 +235,7 @@ public:
 
   [[noreturn]] void visitError() {
     out->flush();
-    string str(InstPrinter->getOpcodeName(CurInst->getOpcode()));
+    std::string str(InstPrinter->getOpcodeName(CurInst->getOpcode()));
     *out << "\nERROR: Unsupported AArch64 instruction: " << str << "\n";
     out->flush();
     exit(-1);
@@ -256,19 +255,19 @@ public:
 
   // lifted instructions are named using the number of the ARM
   // instruction they come from
-  string nextName() override {
-    stringstream ss;
+  std::string nextName() override {
+    std::stringstream ss;
     ss << "a" << armInstNum << "_" << llvmInstNum++;
     return ss.str();
   }
 
   AllocaInst *createAlloca(Type *ty, Value *sz,
-                           const string &NameStr) override {
+                           const std::string &NameStr) override {
     return new AllocaInst(ty, 0, sz, NameStr, LLVMBB);
   }
 
   GetElementPtrInst *createGEP(Type *ty, Value *v, ArrayRef<Value *> idxlist,
-                               const string &NameStr) override {
+                               const std::string &NameStr) override {
     return GetElementPtrInst::Create(ty, v, idxlist, NameStr, LLVMBB);
   }
 
@@ -789,13 +788,13 @@ public:
     return getBitWidth(V->getType());
   }
 
-  std::tuple<string, long> getOffset(const string &var);
+  std::tuple<std::string, long> getOffset(const std::string &var);
   // Reads an Expr and maps containing string variable to a global variable
   std::string mapExprVar(const MCExpr *expr);
-  string demangle(const string &name);
+  std::string demangle(const std::string &name);
   // Reads an Expr and gets the global variable corresponding the containing
   // string variable. Assuming the Expr consists of a single global variable.
-  pair<Value *, bool> getExprVar(const MCExpr *expr);
+  std::pair<Value *, bool> getExprVar(const MCExpr *expr);
   // negative shift exponents go the other direction
   Value *createUSHL(Value *a, Value *b);
   // negative shift exponents go the other direction
@@ -809,7 +808,7 @@ public:
   std::optional<aslp::opcode_t> getArmOpcode(const MCInst &I);
   void liftInst(MCInst &I);
   void invalidateReg(unsigned Reg, unsigned Width);
-  void createRegStorage(unsigned Reg, unsigned Width, const string &Name);
+  void createRegStorage(unsigned Reg, unsigned Width, const std::string &Name);
   Function *run();
 
   /*
@@ -826,7 +825,7 @@ public:
    * per-backend functionality goes here
    */
   virtual void doCall(FunctionCallee FC, CallInst *llvmCI,
-                      const string &calleeName) = 0;
+                      const std::string &calleeName) = 0;
   virtual void lift(MCInst &I) = 0;
   virtual Value *enforceSExtZExt(Value *V, bool isSExt, bool isZExt) = 0;
   virtual Value *createRegFileAndStack() = 0;

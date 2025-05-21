@@ -24,6 +24,7 @@
 #include "backend_tv/streamerwrapper.h"
 
 #include <cmath>
+#include <string>
 #include <vector>
 
 class riscv2llvm final : public mc2llvm {
@@ -39,7 +40,7 @@ class riscv2llvm final : public mc2llvm {
                            unsigned reg) override;
 
   void doCall(FunctionCallee FC, CallInst *llvmCI,
-              const string &calleeName) override;
+              const std::string &calleeName) override;
 
   void lift(MCInst &I) override;
 

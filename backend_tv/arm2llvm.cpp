@@ -6,6 +6,8 @@
 
 const bool EXTRA_ABI_CHECKS = false;
 
+using namespace std;
+
 arm2llvm::arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
                    MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
                    const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)

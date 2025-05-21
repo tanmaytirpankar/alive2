@@ -47,13 +47,13 @@ public:
            const MCSubtargetInfo &STI, const MCInstrAnalysis &IA);
 
   // Implemented library pseudocode for signed satuaration from A64 ISA manual
-  tuple<Value *, bool> SignedSatQ(Value *i, unsigned bitWidth);
+  std::tuple<Value *, bool> SignedSatQ(Value *i, unsigned bitWidth);
 
   // Implemented library pseudocode for unsigned satuaration from A64 ISA manual
-  tuple<Value *, bool> UnsignedSatQ(Value *i, unsigned bitWidth);
+  std::tuple<Value *, bool> UnsignedSatQ(Value *i, unsigned bitWidth);
 
   // Implemented library pseudocode for satuaration from A64 ISA manual
-  tuple<Value *, bool> SatQ(Value *i, unsigned bitWidth, bool isSigned);
+  std::tuple<Value *, bool> SatQ(Value *i, unsigned bitWidth, bool isSigned);
 
   bool isSIMDandFPRegOperand(MCOperand &op);
 
@@ -75,7 +75,7 @@ public:
    */
   Value *enforceSExtZExt(Value *V, bool isSExt, bool isZExt) override;
 
-  tuple<Value *, int, Value *> getStoreParams();
+  std::tuple<Value *, int, Value *> getStoreParams();
 
   // Creates instructions to store val in memory pointed by base + offset
   // offset and size are in bytes
@@ -84,27 +84,28 @@ public:
 
   unsigned decodeRegSet(unsigned r);
 
-  Value *tblHelper2(vector<Value *> &tbl, Value *idx, unsigned i);
+  Value *tblHelper2(std::vector<Value *> &tbl, Value *idx, unsigned i);
 
-  Value *tblHelper(vector<Value *> &tbl, Value *idx);
+  Value *tblHelper(std::vector<Value *> &tbl, Value *idx);
 
-  tuple<Value *, int> getParamsLoadImmed();
+  std::tuple<Value *, int> getParamsLoadImmed();
 
   Value *makeLoadWithOffset(Value *base, Value *offset, int size) override;
 
   Value *makeLoadWithOffset(Value *base, int offset, unsigned size);
 
-  tuple<Value *, Value *, Value *> getParamsStoreReg();
+  std::tuple<Value *, Value *, Value *> getParamsStoreReg();
 
   void doIndirectCall();
 
   void doReturn() override;
 
-  tuple<Value *, Value *, Value *, Value *> FPCompare(Value *a, Value *b);
+  std::tuple<Value *, Value *, Value *, Value *> FPCompare(Value *a, Value *b);
 
-  tuple<Value *, Value *, Value *, Value *> splitImmNZCV(uint64_t imm_flags);
+  std::tuple<Value *, Value *, Value *, Value *>
+  splitImmNZCV(uint64_t imm_flags);
 
-  bool disjoint(const set<int> &a, const set<int> &b);
+  bool disjoint(const std::set<int> &a, const std::set<int> &b);
 
   int64_t getImm(int idx);
 
@@ -115,7 +116,7 @@ public:
   // val is always 64 bits and shiftAmt is always 0-4
   Value *extendAndShiftValue(Value *val, enum ExtendType extType, int shiftAmt);
 
-  tuple<Value *, Value *> getParamsLoadReg();
+  std::tuple<Value *, Value *> getParamsLoadReg();
 
   // From https://github.com/agustingianni/retools
   uint64_t VFPExpandImm(uint64_t imm8, unsigned N);
@@ -125,14 +126,14 @@ public:
   // imm8)
   uint64_t AdvSIMDExpandImm(unsigned op, unsigned cmode, unsigned imm8);
 
-  vector<Value *> marshallArgs(FunctionType *fTy);
+  std::vector<Value *> marshallArgs(FunctionType *fTy);
 
   void doCall(FunctionCallee FC, CallInst *llvmCI,
-              const string &calleeName) override;
+              const std::string &calleeName) override;
 
   Value *conditionHolds(uint64_t cond);
 
-  tuple<Value *, tuple<Value *, Value *, Value *, Value *>>
+  std::tuple<Value *, std::tuple<Value *, Value *, Value *, Value *>>
   addWithCarry(Value *l, Value *r, Value *carryIn);
 
   void setV(Value *V);
@@ -160,7 +161,7 @@ public:
   // of size eltSize and doing an operation on them. In cases where
   // LLVM does not have an appropriate vector instruction, we perform
   // the operation element-wise.
-  Value *createVectorOp(function<Value *(Value *, Value *)> op, Value *a,
+  Value *createVectorOp(std::function<Value *(Value *, Value *)> op, Value *a,
                         Value *b, unsigned eltSize, unsigned numElts,
                         bool elementWise, extKind ext, bool splatImm2,
                         bool immShift, bool isUpper, bool operandTypesDiffer);
@@ -209,13 +210,13 @@ public:
 
   Value *splatImm(Value *v, unsigned numElts, unsigned eltSize, bool shift);
 
-  static const set<int> s_flag;
+  static const std::set<int> s_flag;
 
-  static const set<int> instrs_32;
+  static const std::set<int> instrs_32;
 
-  static const set<int> instrs_64;
+  static const std::set<int> instrs_64;
 
-  static const set<int> instrs_128;
+  static const std::set<int> instrs_128;
 
   bool has_s(int instr);
 
@@ -225,7 +226,7 @@ public:
   // DecodeBitMasks function from the ARMv8 manual.
   //
   // WARNING: tmask is untested
-  pair<uint64_t, uint64_t> decodeBitMasks(uint64_t val, unsigned regSize);
+  std::pair<uint64_t, uint64_t> decodeBitMasks(uint64_t val, unsigned regSize);
 
   unsigned getInstSize(int instr);
 
@@ -241,5 +242,4 @@ public:
   void lift_branch();
 
   Value *createRegFileAndStack() override;
-
 };

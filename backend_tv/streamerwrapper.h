@@ -34,7 +34,7 @@ private:
   std::string curSec;
   bool FunctionEnded = false;
   unsigned curDebugLine = 0;
-  vector<RODataItem> curROData;
+  std::vector<RODataItem> curROData;
 
 public:
   MCFunction MF;
@@ -95,46 +95,12 @@ public:
   }
 
   virtual void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                Align ByteAlignment) override {
-    vector<RODataItem> data;
-    std::string name{Symbol->getName()};
-    for (uint64_t i = 0; i < Size; ++i)
-      data.push_back(RODataItem{'0'});
-    MCGlobal g{
-        .name = name,
-        .align = ByteAlignment,
-        .section = "common",
-        .data = data,
-    };
-    MF.MCglobals.emplace_back(g);
-    *out << "[emitCommonSymbol = " << name << "]\n";
-  }
+                                Align ByteAlignment) override;
 
-  virtual void emitBytes(StringRef Data) override {
-    auto len = Data.size();
-    *out << "[emitBytes " << len << " bytes]\n";
-    for (unsigned i = 0; i < len; ++i) {
-      auto rod = RODataItem{Data[i]};
-      curROData.push_back(rod);
-    }
-  }
+  virtual void emitBytes(StringRef Data) override;
 
   virtual void emitFill(const MCExpr &NumBytes, uint64_t FillValue,
-                        SMLoc Loc) override {
-    auto ce = dyn_cast<MCConstantExpr>(&NumBytes);
-    if (ce) {
-      assert(FillValue < 256);
-      auto bytes = ce->getValue();
-      *out << "[emitFill value = " << FillValue << ", size = " << bytes
-           << "]\n";
-      for (int i = 0; i < bytes; ++i) {
-        auto rod = RODataItem{(char)FillValue};
-        curROData.push_back(rod);
-      }
-    } else {
-      *out << "[emitFill is unknown!]\n";
-    }
-  }
+                        SMLoc Loc) override;
 
   virtual void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
                             uint64_t Size = 0, Align ByteAlignment = Align(1),

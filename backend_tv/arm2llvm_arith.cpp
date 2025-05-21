@@ -80,7 +80,7 @@ void arm2llvm::lift_add(unsigned opcode) {
 void arm2llvm::lift_adc_sbc(unsigned opcode) {
   auto a = readFromOperand(1);
   auto b = readFromOperand(2);
-  
+
   switch (opcode) {
   case AArch64::SBCWr:
   case AArch64::SBCXr:
@@ -89,10 +89,10 @@ void arm2llvm::lift_adc_sbc(unsigned opcode) {
     b = createNot(b);
     return;
   }
-  
+
   auto [res, flags] = addWithCarry(a, b, getC());
   updateOutputReg(res);
-  
+
   if (has_s(opcode)) {
     auto [n, z, c, v] = flags;
     setN(n);
@@ -101,4 +101,3 @@ void arm2llvm::lift_adc_sbc(unsigned opcode) {
     setV(v);
   }
 }
-

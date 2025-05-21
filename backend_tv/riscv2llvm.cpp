@@ -6,6 +6,8 @@
 #define GET_REGINFO_ENUM
 #include "Target/RISCV/RISCVGenRegisterInfo.inc"
 
+using namespace std;
+
 riscv2llvm::riscv2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
                        MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
                        const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)

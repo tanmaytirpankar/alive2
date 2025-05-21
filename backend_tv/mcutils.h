@@ -75,7 +75,7 @@ struct MCGlobal {
 class MCFunction {
   std::string name;
   unsigned label_cnt{0};
-  
+
 public:
   llvm::MCInstrAnalysis *IA;
   llvm::MCInstPrinter *InstPrinter;
