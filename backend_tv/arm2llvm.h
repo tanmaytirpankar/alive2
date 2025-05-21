@@ -250,6 +250,8 @@ public:
 
   llvm::AllocaInst *get_reg(aslp::reg_t regtype, uint64_t num) override;
 
+  llvm::Value *createRegFileAndStack() override;
+
   void lift(llvm::MCInst &I) override;
   void lift_add(unsigned opcode);
   void lift_adc_sbc(unsigned opcode);
@@ -259,8 +261,12 @@ public:
   void lift_msr();
   void lift_asrv(unsigned opcode);
   void lift_sub(unsigned opcode);
-
-  llvm::Value *createRegFileAndStack() override;
+  void lift_csel(unsigned opcode);
+  void lift_and(unsigned opcode);
+  void lift_madd(unsigned opcode);
+  void lift_umadd(unsigned opcode);
+  void lift_smaddl();
+  void lift_msubl(unsigned opcode);
 };
 
 } // end namespace lifter

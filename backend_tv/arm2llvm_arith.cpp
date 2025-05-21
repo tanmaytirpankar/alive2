@@ -3,6 +3,87 @@
 using namespace lifter;
 using namespace llvm;
 
+void arm2llvm::lift_msubl(unsigned opcode) {
+  auto i32 = getIntTy(32);
+  auto i64 = getIntTy(64);
+
+  // SMSUBL: Signed Multiply-Subtract Long.
+  // UMSUBL: Unsigned Multiply-Subtract Long.
+  auto *mul_lhs = readFromOperand(1);
+  auto *mul_rhs = readFromOperand(2);
+  auto *minuend = readFromOperand(3);
+
+  // The inputs are automatically zero extended, but we want sign
+  // extension for signed, so we need to truncate them back to i32s
+  auto lhs_trunc = createTrunc(mul_lhs, i32);
+  auto rhs_trunc = createTrunc(mul_rhs, i32);
+
+  Value *lhs_extended = nullptr;
+  Value *rhs_extended = nullptr;
+  if (opcode == AArch64::SMSUBLrrr) {
+    // For signed multiplication, must sign extend the lhs and rhs to not
+    // overflow
+    lhs_extended = createSExt(lhs_trunc, i64);
+    rhs_extended = createSExt(rhs_trunc, i64);
+  } else {
+    lhs_extended = createZExt(lhs_trunc, i64);
+    rhs_extended = createZExt(rhs_trunc, i64);
+  }
+
+  auto mul = createMul(lhs_extended, rhs_extended);
+  auto subtract = createSub(minuend, mul);
+  updateOutputReg(subtract);
+}
+
+void arm2llvm::lift_smaddl() {
+  auto i32 = getIntTy(32);
+  auto i64 = getIntTy(64);
+
+  // Signed Multiply-Add Long multiplies two 32-bit register values,
+  // adds a 64-bit register value, and writes the result to the 64-bit
+  // destination register.
+  auto mul_lhs = readFromOperand(1);
+  auto mul_rhs = readFromOperand(2);
+  auto addend = readFromOperand(3);
+
+  // The inputs are automatically zero extended, but we want sign extension,
+  // so we need to truncate them back to i32s
+  auto lhs_trunc = createTrunc(mul_lhs, i32);
+  auto rhs_trunc = createTrunc(mul_rhs, i32);
+
+  // For signed multiplication, must sign extend the lhs and rhs to not
+  // overflow
+  auto lhs_ext = createSExt(lhs_trunc, i64);
+  auto rhs_ext = createSExt(rhs_trunc, i64);
+
+  auto mul = createMul(lhs_ext, rhs_ext);
+  auto add = createAdd(mul, addend);
+  updateOutputReg(add);
+}
+
+void arm2llvm::lift_umadd(unsigned opcode) {
+  auto size = getInstSize(opcode);
+  auto mul_lhs = readFromOperand(1);
+  auto mul_rhs = readFromOperand(2);
+  auto addend = readFromOperand(3);
+
+  auto lhs_masked = createAnd(mul_lhs, getUnsignedIntConst(0xffffffffUL, size));
+  auto rhs_masked = createAnd(mul_rhs, getUnsignedIntConst(0xffffffffUL, size));
+  auto mul = createMul(lhs_masked, rhs_masked);
+  auto add = createAdd(mul, addend);
+  updateOutputReg(add);
+}
+
+void arm2llvm::lift_madd(unsigned opcode) {
+  auto mul_lhs = readFromOperand(1);
+  auto mul_rhs = readFromOperand(2);
+  auto addend = readFromOperand(3);
+
+  auto mul = createMul(mul_lhs, mul_rhs);
+  auto add = createAdd(mul, addend);
+  updateOutputReg(add);
+}
+
 void arm2llvm::lift_add(unsigned opcode) {
   Value *a = nullptr;
   Value *b = nullptr;
@@ -103,17 +184,6 @@ void arm2llvm::lift_adc_sbc(unsigned opcode) {
     setC(c);
     setV(v);
   }
-}
-
-void arm2llvm::lift_asrv(unsigned opcode) {
-  auto size = getInstSize(opcode);
-  auto a = readFromOperand(1);
-  auto b = readFromOperand(2);
-
-  auto shift_amt =
-      createBinop(b, getUnsignedIntConst(size, size), Instruction::URem);
-  auto res = createMaskedAShr(a, shift_amt);
-  updateOutputReg(res);
 }
 
 // SUBrx is a subtract instruction with an extended register.

@@ -3372,24 +3372,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::FCSELDrrr:
   case AArch64::FCSELSrrr:
   case AArch64::CSELWr:
-  case AArch64::CSELXr: {
-    assert(CurInst->getNumOperands() == 4); // dst, lhs, rhs, cond
-    // TODO decode condition and find the approprate cond val
-    assert(CurInst->getOperand(1).isReg() && CurInst->getOperand(2).isReg());
-    assert(CurInst->getOperand(3).isImm());
-
-    auto a = readFromOperand(1);
-    auto b = readFromOperand(2);
-    if (!a || !b)
-      visitError();
-
-    auto cond_val_imm = getImm(3);
-    auto cond_val = conditionHolds(cond_val_imm);
-
-    auto result = createSelect(cond_val, a, b);
-    updateOutputReg(result);
+  case AArch64::CSELXr:
+    lift_csel(opcode);
     break;
-  }
 
   case AArch64::ANDWri:
   case AArch64::ANDWrr:
@@ -3402,118 +3387,27 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::ANDXrs:
   case AArch64::ANDSXri:
   case AArch64::ANDSXrr:
-  case AArch64::ANDSXrs: {
-    auto size = getInstSize(opcode);
-    Value *rhs = nullptr;
-    if (CurInst->getOperand(2).isImm()) {
-      auto [wmask, _] = decodeBitMasks(getImm(2), size);
-      rhs = getUnsignedIntConst(wmask, size);
-    } else {
-      rhs = readFromOperand(2);
-    }
-
-    // We are in a ANDrs case. We need to handle a shift
-    if (CurInst->getNumOperands() == 4) {
-      // the 4th operand (if it exists) must be an immediate
-      assert(CurInst->getOperand(3).isImm());
-      rhs = regShift(rhs, getImm(3));
-    }
-
-    auto and_op = createAnd(readFromOperand(1), rhs);
-
-    if (has_s(opcode)) {
-      setNUsingResult(and_op);
-      setZUsingResult(and_op);
-      setC(getBoolConst(false));
-      setV(getBoolConst(false));
-    }
-
-    updateOutputReg(and_op);
+  case AArch64::ANDSXrs:
+    lift_and(opcode);
     break;
-  }
 
   case AArch64::MADDWrrr:
-  case AArch64::MADDXrrr: {
-    auto mul_lhs = readFromOperand(1);
-    auto mul_rhs = readFromOperand(2);
-    auto addend = readFromOperand(3);
-
-    auto mul = createMul(mul_lhs, mul_rhs);
-    auto add = createAdd(mul, addend);
-    updateOutputReg(add);
+  case AArch64::MADDXrrr:
+    lift_madd(opcode);
     break;
-  }
 
-  case AArch64::UMADDLrrr: {
-    auto size = getInstSize(opcode);
-    auto mul_lhs = readFromOperand(1);
-    auto mul_rhs = readFromOperand(2);
-    auto addend = readFromOperand(3);
-
-    auto lhs_masked =
-        createAnd(mul_lhs, getUnsignedIntConst(0xffffffffUL, size));
-    auto rhs_masked =
-        createAnd(mul_rhs, getUnsignedIntConst(0xffffffffUL, size));
-    auto mul = createMul(lhs_masked, rhs_masked);
-    auto add = createAdd(mul, addend);
-    updateOutputReg(add);
+  case AArch64::UMADDLrrr:
+    lift_umadd(opcode);
     break;
-  }
 
-  case AArch64::SMADDLrrr: {
-    // Signed Multiply-Add Long multiplies two 32-bit register values,
-    // adds a 64-bit register value, and writes the result to the 64-bit
-    // destination register.
-    auto mul_lhs = readFromOperand(1);
-    auto mul_rhs = readFromOperand(2);
-    auto addend = readFromOperand(3);
-
-    // The inputs are automatically zero extended, but we want sign extension,
-    // so we need to truncate them back to i32s
-    auto lhs_trunc = createTrunc(mul_lhs, i32);
-    auto rhs_trunc = createTrunc(mul_rhs, i32);
-
-    // For signed multiplication, must sign extend the lhs and rhs to not
-    // overflow
-    auto lhs_ext = createSExt(lhs_trunc, i64);
-    auto rhs_ext = createSExt(rhs_trunc, i64);
-
-    auto mul = createMul(lhs_ext, rhs_ext);
-    auto add = createAdd(mul, addend);
-    updateOutputReg(add);
+  case AArch64::SMADDLrrr:
+    lift_smaddl();
     break;
-  }
 
   case AArch64::SMSUBLrrr:
-  case AArch64::UMSUBLrrr: {
-    // SMSUBL: Signed Multiply-Subtract Long.
-    // UMSUBL: Unsigned Multiply-Subtract Long.
-    auto *mul_lhs = readFromOperand(1);
-    auto *mul_rhs = readFromOperand(2);
-    auto *minuend = readFromOperand(3);
-
-    // The inputs are automatically zero extended, but we want sign
-    // extension for signed, so we need to truncate them back to i32s
-    auto lhs_trunc = createTrunc(mul_lhs, i32);
-    auto rhs_trunc = createTrunc(mul_rhs, i32);
-
-    Value *lhs_extended = nullptr;
-    Value *rhs_extended = nullptr;
-    if (opcode == AArch64::SMSUBLrrr) {
-      // For signed multiplication, must sign extend the lhs and rhs to not
-      // overflow
-      lhs_extended = createSExt(lhs_trunc, i64);
-      rhs_extended = createSExt(rhs_trunc, i64);
-    } else {
-      lhs_extended = createZExt(lhs_trunc, i64);
-      rhs_extended = createZExt(rhs_trunc, i64);
-    }
-
-    auto mul = createMul(lhs_extended, rhs_extended);
-    auto subtract = createSub(minuend, mul);
-    updateOutputReg(subtract);
+  case AArch64::UMSUBLrrr:
+    lift_msubl(opcode);
     break;
-  }
 
   case AArch64::SMULHrr:
   case AArch64::UMULHrr: {
