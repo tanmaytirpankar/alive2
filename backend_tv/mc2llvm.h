@@ -307,6 +307,10 @@ public:
     return llvm::CallInst::Create(decl, "", LLVMBB);
   }
 
+  llvm::Value *createUnreachable() {
+    return new llvm::UnreachableInst(Ctx, LLVMBB);
+  }
+
   llvm::Value *createSMin(llvm::Value *a, llvm::Value *b) override {
     auto decl = llvm::Intrinsic::getOrInsertDeclaration(
         LiftedModule, llvm::Intrinsic::smin, a->getType());

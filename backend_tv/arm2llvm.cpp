@@ -3287,6 +3287,7 @@ void arm2llvm::lift(MCInst &I) {
 
   case AArch64::BRK:
     createTrap();
+    createUnreachable();
     break;
 
   case AArch64::BL:

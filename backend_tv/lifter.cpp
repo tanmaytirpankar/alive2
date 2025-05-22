@@ -162,6 +162,9 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
     exit(-1);
   }
 
+  // uncomment this if we're emitting broken functions
+  // LiftedModule->dump();
+
   std::string sss;
   llvm::raw_string_ostream ss(sss);
   if (llvm::verifyModule(*LiftedModule, &ss)) {

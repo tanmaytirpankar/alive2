@@ -43,7 +43,7 @@ void arm2llvm::lift_bcc() {
   for (auto &succ : MCBB->getSuccs()) {
     if (succ->getName() != Sym.getName()) {
       dst_false_name = &succ->getName();
-      return;
+      break;
     }
   }
   auto *dst_false =
