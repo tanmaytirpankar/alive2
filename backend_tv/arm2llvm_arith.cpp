@@ -3,6 +3,46 @@
 using namespace lifter;
 using namespace llvm;
 
+void arm2llvm::lift_msub() {
+  auto mul_lhs = readFromOperand(1);
+  auto mul_rhs = readFromOperand(2);
+  auto minuend = readFromOperand(3);
+  auto mul = createMul(mul_lhs, mul_rhs);
+  auto sub = createSub(minuend, mul);
+  updateOutputReg(sub);
+}
+
+void arm2llvm::lift_mulh(unsigned opcode) {
+  auto i64 = getIntTy(64);
+  auto i128 = getIntTy(128);
+
+  // SMULH: Signed Multiply High
+  // UMULH: Unsigned Multiply High
+  auto mul_lhs = readFromOperand(1);
+  auto mul_rhs = readFromOperand(2);
+
+  // For unsigned multiplication, must zero extend the lhs and rhs to not
+  // overflow For signed multiplication, must sign extend the lhs and rhs to
+  // not overflow
+  Value *lhs_extended = nullptr, *rhs_extended = nullptr;
+  if (opcode == AArch64::UMULHrr) {
+    lhs_extended = createZExt(mul_lhs, i128);
+    rhs_extended = createZExt(mul_rhs, i128);
+  } else {
+    lhs_extended = createSExt(mul_lhs, i128);
+    rhs_extended = createSExt(mul_rhs, i128);
+  }
+
+  auto mul = createMul(lhs_extended, rhs_extended);
+  // After multiplying, shift down 64 bits to get the top half of the i128
+  // into the bottom half
+  auto shift = createMaskedLShr(mul, getUnsignedIntConst(64, 128));
+
+  // Truncate to the proper size:
+  auto trunc = createTrunc(shift, i64);
+  updateOutputReg(trunc);
+}
+
 void arm2llvm::lift_msubl(unsigned opcode) {
   auto i32 = getIntTy(32);
   auto i64 = getIntTy(64);
@@ -263,4 +303,4 @@ void arm2llvm::lift_sub(unsigned opcode) {
     auto sub = createSub(a, b);
     updateOutputReg(sub);
   }
-};
+}

@@ -3410,217 +3410,43 @@ void arm2llvm::lift(MCInst &I) {
     break;
 
   case AArch64::SMULHrr:
-  case AArch64::UMULHrr: {
-    // SMULH: Signed Multiply High
-    // UMULH: Unsigned Multiply High
-    auto mul_lhs = readFromOperand(1);
-    auto mul_rhs = readFromOperand(2);
-
-    // For unsigned multiplication, must zero extend the lhs and rhs to not
-    // overflow For signed multiplication, must sign extend the lhs and rhs to
-    // not overflow
-    Value *lhs_extended = nullptr, *rhs_extended = nullptr;
-    if (opcode == AArch64::UMULHrr) {
-      lhs_extended = createZExt(mul_lhs, i128);
-      rhs_extended = createZExt(mul_rhs, i128);
-    } else {
-      lhs_extended = createSExt(mul_lhs, i128);
-      rhs_extended = createSExt(mul_rhs, i128);
-    }
-
-    auto mul = createMul(lhs_extended, rhs_extended);
-    // After multiplying, shift down 64 bits to get the top half of the i128
-    // into the bottom half
-    auto shift = createMaskedLShr(mul, getUnsignedIntConst(64, 128));
-
-    // Truncate to the proper size:
-    auto trunc = createTrunc(shift, i64);
-    updateOutputReg(trunc);
+  case AArch64::UMULHrr:
+    lift_mulh(opcode);
     break;
-  }
 
   case AArch64::MSUBWrrr:
-  case AArch64::MSUBXrrr: {
-    auto mul_lhs = readFromOperand(1);
-    auto mul_rhs = readFromOperand(2);
-    auto minuend = readFromOperand(3);
-    auto mul = createMul(mul_lhs, mul_rhs);
-    auto sub = createSub(minuend, mul);
-    updateOutputReg(sub);
+  case AArch64::MSUBXrrr:
+    lift_msub();
     break;
-  }
 
   case AArch64::SBFMWri:
-  case AArch64::SBFMXri: {
-    auto size = getInstSize(opcode);
-    auto ty = getIntTy(size);
-    auto src = readFromOperand(1);
-    auto immr = getImm(2);
-    auto imms = getImm(3);
-
-    auto r = getUnsignedIntConst(immr, size);
-
-    // arithmetic shift right (ASR) alias is perferred when:
-    // imms == 011111 and size == 32 or when imms == 111111 and size = 64
-    if ((size == 32 && imms == 31) || (size == 64 && imms == 63)) {
-      auto dst = createMaskedAShr(src, r);
-      updateOutputReg(dst);
-      break;
-    }
-
-    // SXTB
-    if (immr == 0 && imms == 7) {
-      auto trunc = createTrunc(src, i8);
-      auto dst = createSExt(trunc, ty);
-      updateOutputReg(dst);
-      break;
-    }
-
-    // SXTH
-    if (immr == 0 && imms == 15) {
-      auto trunc = createTrunc(src, i16);
-      auto dst = createSExt(trunc, ty);
-      updateOutputReg(dst);
-      break;
-    }
-
-    // SXTW
-    if (immr == 0 && imms == 31) {
-      auto trunc = createTrunc(src, i32);
-      auto dst = createSExt(trunc, ty);
-      updateOutputReg(dst);
-      break;
-    }
-
-    // SBFIZ
-    if (imms < immr) {
-      auto pos = size - immr;
-      auto width = imms + 1;
-      assert(width != 64);
-      *out << "sbfiz with size = " << size << ", width = " << width << "\n";
-      auto mask = ((uint64_t)1 << width) - 1;
-      auto mask_comp = ~mask;
-      if (size == 32)
-        mask_comp &= 0xffffffff;
-      auto bitfield_mask = (uint64_t)1 << (width - 1);
-
-      auto masked = createAnd(src, getUnsignedIntConst(mask, size));
-      auto bitfield_lsb =
-          createAnd(src, getUnsignedIntConst(bitfield_mask, size));
-      auto insert_ones = createOr(masked, getUnsignedIntConst(mask_comp, size));
-      auto bitfield_lsb_set =
-          createICmp(ICmpInst::Predicate::ICMP_NE, bitfield_lsb,
-                     getUnsignedIntConst(0, size));
-      auto res = createSelect(bitfield_lsb_set, insert_ones, masked);
-      auto shifted_res = createMaskedShl(res, getUnsignedIntConst(pos, size));
-      updateOutputReg(shifted_res);
-      break;
-    }
-
-    // FIXME: this requires checking if SBFX is preferred.
-    // For now, assume this is always SBFX
-    auto width = imms + 1;
-    auto mask = ((uint64_t)1 << width) - 1;
-    auto pos = immr;
-
-    auto masked = createAnd(src, getUnsignedIntConst(mask, size));
-    auto l_shifted =
-        createRawShl(masked, getUnsignedIntConst(size - width, size));
-    auto shifted_res =
-        createRawAShr(l_shifted, getUnsignedIntConst(size - width + pos, size));
-    updateOutputReg(shifted_res);
+  case AArch64::SBFMXri:
+    lift_sbfm(opcode);
     break;
-  }
 
   case AArch64::CCMPWi:
   case AArch64::CCMPWr:
   case AArch64::CCMPXi:
-  case AArch64::CCMPXr: {
-    assert(CurInst->getNumOperands() == 4);
-
-    auto lhs = readFromOperand(0);
-    auto imm_rhs = readFromOperand(1);
-
-    if (!lhs || !imm_rhs)
-      visitError();
-
-    auto [imm_n, imm_z, imm_c, imm_v] = splitImmNZCV(getImm(2));
-
-    auto cond_val_imm = getImm(3);
-    auto cond_val = conditionHolds(cond_val_imm);
-
-    auto ssub = createSSubOverflow(lhs, imm_rhs);
-    auto result = createExtractValue(ssub, {0});
-    auto zero_val = getUnsignedIntConst(0, getBitWidth(result));
-
-    auto new_n = createICmp(ICmpInst::Predicate::ICMP_SLT, result, zero_val);
-    auto new_z = createICmp(ICmpInst::Predicate::ICMP_EQ, lhs, imm_rhs);
-    auto new_c = createICmp(ICmpInst::Predicate::ICMP_UGE, lhs, imm_rhs);
-    auto new_v = createExtractValue(ssub, {1});
-
-    auto new_n_flag = createSelect(cond_val, new_n, imm_n);
-    auto new_z_flag = createSelect(cond_val, new_z, imm_z);
-    auto new_c_flag = createSelect(cond_val, new_c, imm_c);
-    auto new_v_flag = createSelect(cond_val, new_v, imm_v);
-
-    setN(new_n_flag);
-    setZ(new_z_flag);
-    setC(new_c_flag);
-    setV(new_v_flag);
+  case AArch64::CCMPXr:
+    lift_ccmp(opcode);
     break;
-  }
 
   case AArch64::EORWri:
-  case AArch64::EORXri: {
-    auto size = getInstSize(opcode);
-    assert(CurInst->getNumOperands() == 3); // dst, src, imm
-    assert(CurInst->getOperand(1).isReg() && CurInst->getOperand(2).isImm());
-
-    auto a = readFromOperand(1);
-    auto [wmask, _] = decodeBitMasks(getImm(2), size);
-    auto imm_val =
-        getUnsignedIntConst(wmask,
-                            size); // FIXME, need to decode immediate val
-    if (!a || !imm_val)
-      visitError();
-
-    auto res = createXor(a, imm_val);
-    updateOutputReg(res);
+  case AArch64::EORXri:
+    lift_eori(opcode);
     break;
-  }
+
   case AArch64::EORWrs:
-  case AArch64::EORXrs: {
-    auto lhs = readFromOperand(1);
-    auto rhs = readFromOperand(2);
-    rhs = regShift(rhs, getImm(3));
-    auto result = createXor(lhs, rhs);
-    updateOutputReg(result);
+  case AArch64::EORXrs:
+    lift_eorr();
     break;
-  }
 
   case AArch64::CCMNWi:
   case AArch64::CCMNWr:
   case AArch64::CCMNXi:
-  case AArch64::CCMNXr: {
-    auto a = readFromOperand(0);
-    auto b = readFromOperand(1);
-    auto nzcv = getImm(2);
-    auto cond_val_imm = getImm(3);
-
-    auto zero = getBoolConst(false);
-    auto one = getBoolConst(true);
-
-    auto [res, flags] = addWithCarry(a, b, zero);
-    auto [n, z, c, v] = flags;
-
-    auto cond = conditionHolds(cond_val_imm);
-    setN(createSelect(cond, n, (nzcv & 8) ? one : zero));
-    setZ(createSelect(cond, z, (nzcv & 4) ? one : zero));
-    setC(createSelect(cond, c, (nzcv & 2) ? one : zero));
-    setV(createSelect(cond, v, (nzcv & 1) ? one : zero));
-
+  case AArch64::CCMNXr:
+    lift_ccmn();
     break;
-  }
 
   case AArch64::CSINVWr:
   case AArch64::CSINVXr:

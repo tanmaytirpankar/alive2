@@ -267,6 +267,13 @@ public:
   void lift_umadd(unsigned opcode);
   void lift_smaddl();
   void lift_msubl(unsigned opcode);
+  void lift_mulh(unsigned opcode);
+  void lift_msub();
+  void lift_sbfm(unsigned opcode);
+  void lift_ccmp(unsigned opcode);
+  void lift_eori(unsigned opcode);
+  void lift_eorr();
+  void lift_ccmn();
 };
 
 } // end namespace lifter
