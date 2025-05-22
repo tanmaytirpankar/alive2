@@ -67,9 +67,35 @@ void riscv2llvm::lift(MCInst &I) {
   assert(false);
 }
 
+Value *riscv2llvm::readFromReg(unsigned Reg, Type *ty) {
+  assert(Reg >= RISCV::X0 && Reg <= RISCV::X31);
+  return createLoad(ty, RegFile[Reg - RISCV::X0]);
+}
+
 Value *riscv2llvm::createRegFileAndStack() {
-  assert(false);
-  return nullptr;
+  auto i64ty = getIntTy(64);
+  auto i8ty = getIntTy(8);
+
+  // allocate storage for the main register file
+  for (unsigned Reg = RISCV::X0; Reg <= RISCV::X31; ++Reg) {
+    stringstream Name;
+    Name << "X" << Reg - RISCV::X0;
+    createRegStorage(Reg, 64, Name.str());
+    initialReg[Reg - RISCV::X0] = readFromReg(Reg, i64ty);
+  }
+
+  // TODO vector registers
+
+  auto paramBase =
+      createGEP(i8ty, stackMem, {getUnsignedIntConst(stackBytes, 64)}, "");
+  createStore(paramBase, RegFile[RISCV::X2]);
+  initialSP = readFromReg(RISCV::X2, i64ty);
+
+  // initializing to zero makes loads from XZR work; stores are
+  // handled in updateReg()
+  createStore(getUnsignedIntConst(0, 64), RegFile[RISCV::X0]);
+
+  return paramBase;
 }
 
 void riscv2llvm::doReturn() {

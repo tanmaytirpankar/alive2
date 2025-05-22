@@ -9,11 +9,15 @@ using namespace std;
 using namespace llvm;
 using namespace lifter;
 
+// FIXME we can't include these here!! get rid of the dependencies
+
 #define GET_INSTRINFO_ENUM
 #include "Target/AArch64/AArch64GenInstrInfo.inc"
 
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
+
+////////////////////
 
 Function *mc2llvm::copyFunctionToTarget(Function *f, const Twine &name) {
   auto newF = Function::Create(f->getFunctionType(),
@@ -485,33 +489,6 @@ void mc2llvm::storeToMemoryValOffset(Value *base, Value *offset, uint64_t size,
 
   // Store Value val in the pointer returned by the GEP instruction
   createStore(val, ptr);
-}
-
-std::optional<aslp::opcode_t> mc2llvm::getArmOpcode(const MCInst &I) {
-  SmallVector<MCFixup> Fixups{};
-  SmallVector<char> Code{};
-
-  if (I.getOpcode() == AArch64::SEH_Nop)
-    return std::nullopt;
-
-  MCE.encodeInstruction(I, Code, Fixups, STI);
-  for (auto x : Fixups) {
-    // std::cerr << "fixup: " << x.getKind() << ' ' << x.getTargetKind() << '
-    // ' << x.getOffset() << ' ' << std::flush; x.getValue()->dump();
-    // std::cout << std::endl;
-    (void)x;
-  }
-
-  // do not hand any instructions with relocation fixups to aslp
-  if (Fixups.size() != 0)
-    return std::nullopt;
-
-  aslp::opcode_t ret;
-  unsigned i = 0;
-  for (const char &x : Code) {
-    ret.at(i++) = x;
-  }
-  return ret;
 }
 
 void mc2llvm::liftInst(MCInst &I) {

@@ -860,7 +860,6 @@ public:
   void assertSame(llvm::Value *a, llvm::Value *b);
   void doDirectCall();
   llvm::Instruction *getCurLLVMInst();
-  std::optional<aslp::opcode_t> getArmOpcode(const llvm::MCInst &I);
   void liftInst(llvm::MCInst &I);
   void invalidateReg(unsigned Reg, unsigned Width);
   void createRegStorage(unsigned Reg, unsigned Width, const std::string &Name);

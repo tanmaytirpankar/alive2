@@ -15,12 +15,11 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Target/TargetMachine.h"
 
-#include "backend_tv/arm2llvm.h"
+#include "backend_tv/riscv2llvm.h"
 #include "backend_tv/bitutils.h"
 #include "backend_tv/lifter.h"
 #include "backend_tv/mc2llvm.h"
 #include "backend_tv/mcutils.h"
-#include "backend_tv/riscv2llvm.h"
 #include "backend_tv/streamerwrapper.h"
 
 #include <string>
@@ -49,6 +48,10 @@ class riscv2llvm final : public mc2llvm {
   llvm::Value *createRegFileAndStack() override;
 
   void doReturn() override;
+
+  llvm::Value *readFromReg(unsigned Reg, llvm::Type *ty);
+  llvm::Value *dealiasReg(unsigned Reg);
+  unsigned mapRegToBackingReg(unsigned Reg);
 
 public:
   riscv2llvm(llvm::Module *LiftedModule, MCFunction &MF, llvm::Function &srcFn,

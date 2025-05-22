@@ -252,6 +252,8 @@ public:
 
   llvm::Value *createRegFileAndStack() override;
 
+  std::optional<aslp::opcode_t> getArmOpcode(const llvm::MCInst &I);
+
   void lift(llvm::MCInst &I) override;
   void lift_add(unsigned opcode);
   void lift_adc_sbc(unsigned opcode);
