@@ -23,9 +23,7 @@
 #include "backend_tv/riscv2llvm.h"
 #include "backend_tv/streamerwrapper.h"
 
-#include <cmath>
 #include <string>
-#include <vector>
 
 namespace lifter {
 
