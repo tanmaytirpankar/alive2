@@ -274,6 +274,8 @@ public:
   void lift_eori(unsigned opcode);
   void lift_eorr();
   void lift_ccmn();
+  void lift_csinv_csneg(unsigned opcode);
+  void lift_csinc(unsigned opcode);
 };
 
 } // end namespace lifter

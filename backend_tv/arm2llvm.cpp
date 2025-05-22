@@ -3286,6 +3286,7 @@ void arm2llvm::lift(MCInst &I) {
     break;
 
   case AArch64::BRK:
+    // FIXME -- look at the argument and emit ubsan_trap if appropriate
     createTrap();
     createUnreachable();
     break;
@@ -3452,54 +3453,14 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::CSINVWr:
   case AArch64::CSINVXr:
   case AArch64::CSNEGWr:
-  case AArch64::CSNEGXr: {
-    auto size = getInstSize(opcode);
-    // csinv dst, a, b, cond
-    // if (cond) a else ~b
-    assert(CurInst->getNumOperands() == 4); // dst, lhs, rhs, cond
-    // TODO decode condition and find the approprate cond val
-    assert(CurInst->getOperand(1).isReg() && CurInst->getOperand(2).isReg());
-    assert(CurInst->getOperand(3).isImm());
-
-    auto a = readFromOperand(1);
-    auto b = readFromOperand(2);
-    if (!a || !b)
-      visitError();
-
-    auto cond_val_imm = getImm(3);
-    auto cond_val = conditionHolds(cond_val_imm);
-
-    auto inverted_b = createNot(b);
-
-    if (opcode == AArch64::CSNEGWr || opcode == AArch64::CSNEGXr) {
-      auto negated_b = createAdd(inverted_b, getUnsignedIntConst(1, size));
-      auto ret = createSelect(cond_val, a, negated_b);
-      updateOutputReg(ret);
-    } else {
-      auto ret = createSelect(cond_val, a, inverted_b);
-      updateOutputReg(ret);
-    }
+  case AArch64::CSNEGXr:
+    lift_csinv_csneg(opcode);
     break;
-  }
 
   case AArch64::CSINCWr:
-  case AArch64::CSINCXr: {
-    auto size = getInstSize(opcode);
-    assert(CurInst->getOperand(1).isReg() && CurInst->getOperand(2).isReg());
-    assert(CurInst->getOperand(3).isImm());
-
-    auto a = readFromOperand(1);
-    auto b = readFromOperand(2);
-
-    auto cond_val_imm = getImm(3);
-    auto cond_val = conditionHolds(cond_val_imm);
-
-    auto inc = createAdd(b, getUnsignedIntConst(1, size));
-    auto sel = createSelect(cond_val, a, inc);
-
-    updateOutputReg(sel);
+  case AArch64::CSINCXr:
+    lift_csinc(opcode);
     break;
-  }
 
   case AArch64::MOVZWi:
   case AArch64::MOVZXi: {

@@ -3,6 +3,52 @@
 using namespace lifter;
 using namespace llvm;
 
+void arm2llvm::lift_csinc(unsigned opcode) {
+  auto size = getInstSize(opcode);
+  assert(CurInst->getOperand(1).isReg() && CurInst->getOperand(2).isReg());
+  assert(CurInst->getOperand(3).isImm());
+
+  auto a = readFromOperand(1);
+  auto b = readFromOperand(2);
+
+  auto cond_val_imm = getImm(3);
+  auto cond_val = conditionHolds(cond_val_imm);
+
+  auto inc = createAdd(b, getUnsignedIntConst(1, size));
+  auto sel = createSelect(cond_val, a, inc);
+
+  updateOutputReg(sel);
+}
+
+void arm2llvm::lift_csinv_csneg(unsigned opcode) {
+  auto size = getInstSize(opcode);
+  // csinv dst, a, b, cond
+  // if (cond) a else ~b
+  assert(CurInst->getNumOperands() == 4); // dst, lhs, rhs, cond
+  // TODO decode condition and find the approprate cond val
+  assert(CurInst->getOperand(1).isReg() && CurInst->getOperand(2).isReg());
+  assert(CurInst->getOperand(3).isImm());
+
+  auto a = readFromOperand(1);
+  auto b = readFromOperand(2);
+  if (!a || !b)
+    visitError();
+
+  auto cond_val_imm = getImm(3);
+  auto cond_val = conditionHolds(cond_val_imm);
+
+  auto inverted_b = createNot(b);
+
+  if (opcode == AArch64::CSNEGWr || opcode == AArch64::CSNEGXr) {
+    auto negated_b = createAdd(inverted_b, getUnsignedIntConst(1, size));
+    auto ret = createSelect(cond_val, a, negated_b);
+    updateOutputReg(ret);
+  } else {
+    auto ret = createSelect(cond_val, a, inverted_b);
+    updateOutputReg(ret);
+  }
+}
+
 void arm2llvm::lift_ccmn() {
   auto a = readFromOperand(0);
   auto b = readFromOperand(1);
