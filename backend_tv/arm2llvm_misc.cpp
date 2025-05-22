@@ -3,6 +3,53 @@
 using namespace lifter;
 using namespace llvm;
 
+void arm2llvm::lift_movk(unsigned opcode) {
+  auto size = getInstSize(opcode);
+  auto dest = readFromOperand(1);
+  auto lhs = readFromOperand(2);
+  lhs = regShift(lhs, getImm(3));
+
+  uint64_t bitmask;
+  auto shift_amt = getImm(3);
+
+  if (opcode == AArch64::MOVKWi) {
+    assert(shift_amt == 0 || shift_amt == 16);
+    bitmask = (shift_amt == 0) ? 0xffff0000 : 0x0000ffff;
+  } else {
+    assert(shift_amt == 0 || shift_amt == 16 || shift_amt == 32 ||
+           shift_amt == 48);
+    bitmask = ~(((uint64_t)0xffff) << shift_amt);
+  }
+
+  auto bottom_bits = getUnsignedIntConst(bitmask, size);
+  auto cleared = createAnd(dest, bottom_bits);
+  auto ident = createOr(cleared, lhs);
+  updateOutputReg(ident);
+}
+
+void arm2llvm::lift_movn() {
+  assert(CurInst->getOperand(0).isReg());
+  assert(CurInst->getOperand(1).isImm());
+  assert(CurInst->getOperand(2).isImm());
+
+  auto lhs = readFromOperand(1);
+  lhs = regShift(lhs, getImm(2));
+  auto not_lhs = createNot(lhs);
+
+  updateOutputReg(not_lhs);
+}
+
+void arm2llvm::lift_movz(unsigned opcode) {
+  auto size = getInstSize(opcode);
+  assert(CurInst->getOperand(0).isReg());
+  assert(CurInst->getOperand(1).isImm());
+  auto lhs = readFromOperand(1);
+  lhs = regShift(lhs, getImm(2));
+  auto rhs = getUnsignedIntConst(0, size);
+  auto ident = createAdd(lhs, rhs);
+  updateOutputReg(ident);
+}
+
 // https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/NZCV--Condition-Flags
 void arm2llvm::lift_mrs() {
   auto imm = getImm(1);

@@ -276,6 +276,14 @@ public:
   void lift_ccmn();
   void lift_csinv_csneg(unsigned opcode);
   void lift_csinc(unsigned opcode);
+  void lift_movz(unsigned opcode);
+  void lift_movn();
+  void lift_movk(unsigned opcode);
+  void lift_bfm(unsigned opcode);
+  void lift_ubfm(unsigned opcode);
+  void lift_orn();
+  void lift_lsrv();
+  void lift_lslv();
 };
 
 } // end namespace lifter

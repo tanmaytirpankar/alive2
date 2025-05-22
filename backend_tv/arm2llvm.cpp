@@ -3463,207 +3463,44 @@ void arm2llvm::lift(MCInst &I) {
     break;
 
   case AArch64::MOVZWi:
-  case AArch64::MOVZXi: {
-    auto size = getInstSize(opcode);
-    assert(CurInst->getOperand(0).isReg());
-    assert(CurInst->getOperand(1).isImm());
-    auto lhs = readFromOperand(1);
-    lhs = regShift(lhs, getImm(2));
-    auto rhs = getUnsignedIntConst(0, size);
-    auto ident = createAdd(lhs, rhs);
-    updateOutputReg(ident);
+  case AArch64::MOVZXi:
+    lift_movz(opcode);
     break;
-  }
 
   case AArch64::MOVNWi:
-  case AArch64::MOVNXi: {
-    assert(CurInst->getOperand(0).isReg());
-    assert(CurInst->getOperand(1).isImm());
-    assert(CurInst->getOperand(2).isImm());
-
-    auto lhs = readFromOperand(1);
-    lhs = regShift(lhs, getImm(2));
-    auto not_lhs = createNot(lhs);
-
-    updateOutputReg(not_lhs);
+  case AArch64::MOVNXi:
+    lift_movn();
     break;
-  }
-
-  case AArch64::LSLVWr:
-  case AArch64::LSLVXr: {
-    auto lhs = readFromOperand(1);
-    auto rhs = readFromOperand(2);
-    auto exp = createMaskedShl(lhs, rhs);
-    updateOutputReg(exp);
-    break;
-  }
-
-  case AArch64::LSRVWr:
-  case AArch64::LSRVXr: {
-    auto lhs = readFromOperand(1);
-    auto rhs = readFromOperand(2);
-    auto exp = createMaskedLShr(lhs, rhs);
-    updateOutputReg(exp);
-    break;
-  }
-
-  case AArch64::ORNWrs:
-  case AArch64::ORNXrs: {
-    auto lhs = readFromOperand(1);
-    auto rhs = readFromOperand(2);
-    rhs = regShift(rhs, getImm(3));
-
-    auto not_rhs = createNot(rhs);
-    auto ident = createOr(lhs, not_rhs);
-    updateOutputReg(ident);
-    break;
-  }
 
   case AArch64::MOVKWi:
-  case AArch64::MOVKXi: {
-    auto size = getInstSize(opcode);
-    auto dest = readFromOperand(1);
-    auto lhs = readFromOperand(2);
-    lhs = regShift(lhs, getImm(3));
-
-    uint64_t bitmask;
-    auto shift_amt = getImm(3);
-
-    if (opcode == AArch64::MOVKWi) {
-      assert(shift_amt == 0 || shift_amt == 16);
-      bitmask = (shift_amt == 0) ? 0xffff0000 : 0x0000ffff;
-    } else {
-      assert(shift_amt == 0 || shift_amt == 16 || shift_amt == 32 ||
-             shift_amt == 48);
-      bitmask = ~(((uint64_t)0xffff) << shift_amt);
-    }
-
-    auto bottom_bits = getUnsignedIntConst(bitmask, size);
-    auto cleared = createAnd(dest, bottom_bits);
-    auto ident = createOr(cleared, lhs);
-    updateOutputReg(ident);
+  case AArch64::MOVKXi:
+    lift_movk(opcode);
     break;
-  }
+
+  case AArch64::LSLVWr:
+  case AArch64::LSLVXr:
+    lift_lslv();
+    break;
+
+  case AArch64::LSRVWr:
+  case AArch64::LSRVXr:
+    lift_lsrv();
+    break;
+
+  case AArch64::ORNWrs:
+  case AArch64::ORNXrs:
+    lift_orn();
+    break;
 
   case AArch64::UBFMWri:
-  case AArch64::UBFMXri: {
-    auto size = getInstSize(opcode);
-    auto src = readFromOperand(1);
-    auto immr = getImm(2);
-    auto imms = getImm(3);
-
-    // LSL is preferred when imms != 31 and imms + 1 == immr
-    if (size == 32 && imms != 31 && imms + 1 == immr) {
-      auto dst = createMaskedShl(src, getUnsignedIntConst(31 - imms, size));
-      updateOutputReg(dst);
-      break;
-    }
-
-    // LSL is preferred when imms != 63 and imms + 1 == immr
-    if (size == 64 && imms != 63 && imms + 1 == immr) {
-      auto dst = createMaskedShl(src, getUnsignedIntConst(63 - imms, size));
-      updateOutputReg(dst);
-      break;
-    }
-
-    // LSR is preferred when imms == 31 or 63 (size - 1)
-    if (imms == size - 1) {
-      auto dst = createMaskedLShr(src, getUnsignedIntConst(immr, size));
-      updateOutputReg(dst);
-      break;
-    }
-
-    // UBFIZ
-    if (imms < immr) {
-      auto pos = size - immr;
-      auto width = imms + 1;
-      auto mask = ((uint64_t)1 << width) - 1;
-      auto masked = createAnd(src, getUnsignedIntConst(mask, size));
-      auto shifted = createMaskedShl(masked, getUnsignedIntConst(pos, size));
-      updateOutputReg(shifted);
-      break;
-    }
-
-    // UXTB
-    if (immr == 0 && imms == 7) {
-      auto mask = ((uint64_t)1 << 8) - 1;
-      auto masked = createAnd(src, getUnsignedIntConst(mask, size));
-      updateOutputReg(masked);
-      break;
-    }
-
-    // UXTH
-    if (immr == 0 && imms == 15) {
-      auto mask = ((uint64_t)1 << 16) - 1;
-      auto masked = createAnd(src, getUnsignedIntConst(mask, size));
-      updateOutputReg(masked);
-      break;
-    }
-
-    // UBFX
-    // FIXME: this requires checking if UBFX is preferred.
-    // For now, assume this is always UBFX
-    // we mask from lsb to lsb + width and then perform a logical shift right
-    auto width = imms + 1;
-    auto mask = ((uint64_t)1 << width) - 1;
-    auto pos = immr;
-
-    auto masked = createAnd(src, getUnsignedIntConst(mask, size));
-    auto shifted_res = createMaskedLShr(masked, getUnsignedIntConst(pos, size));
-    updateOutputReg(shifted_res);
+  case AArch64::UBFMXri:
+    lift_ubfm(opcode);
     break;
-  }
 
   case AArch64::BFMWri:
-  case AArch64::BFMXri: {
-    auto size = getInstSize(opcode);
-    auto dst = readFromOperand(1);
-    auto src = readFromOperand(2);
-
-    auto immr = getImm(3);
-    auto imms = getImm(4);
-
-    // FIXME -- would be better to use decodeBitMasks() here, as
-    // shown in the ARM docs
-
-    if (imms >= immr) {
-      // BFXIL
-
-      auto bits = (imms - immr + 1);
-      auto pos = immr;
-      auto mask = (((uint64_t)1 << bits) - 1) << pos;
-
-      auto masked = createAnd(src, getUnsignedIntConst(mask, size));
-      auto shifted = createMaskedLShr(masked, getUnsignedIntConst(pos, size));
-      auto cleared =
-          createAnd(dst, getSignedIntConst((uint64_t)-1 << bits, size));
-      auto res = createOr(cleared, shifted);
-      updateOutputReg(res);
-    } else {
-      auto bits = imms + 1;
-      auto pos = size - immr;
-
-      // This mask deletes `bits` number of bits starting at `pos`.
-      // If the mask is for a 32 bit value, it will chop off the top 32 bits
-      // of the 64 bit mask to keep the mask to a size of 32 bits
-      auto mask =
-          ~((((uint64_t)1 << bits) - 1) << pos) & ((uint64_t)-1 >> (64 - size));
-
-      // get `bits` number of bits from the least significant bits
-      auto bitfield =
-          createAnd(src, getUnsignedIntConst(~((uint64_t)-1 << bits), size));
-
-      // move the bitfield into position
-      auto moved = createMaskedShl(bitfield, getUnsignedIntConst(pos, size));
-
-      // carve out a place for the bitfield
-      auto masked = createAnd(dst, getUnsignedIntConst(mask, size));
-      // place the bitfield
-      auto res = createOr(masked, moved);
-      updateOutputReg(res);
-    }
+  case AArch64::BFMXri:
+    lift_bfm(opcode);
     break;
-  }
 
   case AArch64::ORRWri:
   case AArch64::ORRXri: {
