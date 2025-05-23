@@ -1,5 +1,11 @@
 #include "backend_tv/arm2llvm.h"
 
+#define GET_INSTRINFO_ENUM
+#include "Target/AArch64/AArch64GenInstrInfo.inc"
+
+#define GET_REGINFO_ENUM
+#include "Target/AArch64/AArch64GenRegisterInfo.inc"
+
 #define AARCH64_MAP_IMPL
 #include "aslp/aarch64_map.h"
 #include "aslp/aslp_bridge.h"
@@ -12,8 +18,9 @@ using namespace llvm;
 
 arm2llvm::arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
                    MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
-                   const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)
-    : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA) {
+                   const MCSubtargetInfo &STI, const MCInstrAnalysis &IA,
+		   unsigned SentinelNOP)
+  : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA, SentinelNOP) {
   // sanity checking
   assert(disjoint(instrs_32, instrs_64));
   assert(disjoint(instrs_32, instrs_128));
@@ -3202,7 +3209,7 @@ std::optional<aslp::opcode_t> arm2llvm::getArmOpcode(const MCInst &I) {
   SmallVector<MCFixup> Fixups{};
   SmallVector<char> Code{};
 
-  if (I.getOpcode() == AArch64::SEH_Nop)
+  if (I.getOpcode() == SentinelNOP)
     return std::nullopt;
 
   MCE.encodeInstruction(I, Code, Fixups, STI);
@@ -3270,7 +3277,7 @@ void arm2llvm::lift(MCInst &I) {
   } else {
     *out << "... arm opnum failed: "
          << InstPrinter->getOpcodeName(I.getOpcode()).str() << '\n';
-    // arm opcode translation failed, possibly SEH_NOP. continue with classic.
+    // arm opcode translation failed, possibly SentinelNOP. continue with classic.
   }
 
   std::string encoding{"classic_" + aslp::aarch64_revmap().at(opcode)};
@@ -3307,8 +3314,8 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::HINT:
     break;
 
-  // we're abusing this opcode -- better hope we don't run across these for
-  // real
+  // we're abusing this opcode as the sentinel for basic blocks,
+  // shouldn't be a problem
   case AArch64::SEH_Nop:
     break;
 

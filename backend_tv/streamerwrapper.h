@@ -20,10 +20,12 @@
 
 namespace lifter {
 
-// We're overriding MCStreamerWrapper to generate an MCFunction
-// from the arm assembly. MCStreamerWrapper provides callbacks to handle
-// different parts of the assembly file. The callbacks that we're
-// using right now are all emit* functions.
+/*
+ * We're overriding MCStreamerWrapper to generate an MCFunction from
+ * the arm assembly. MCStreamerWrapper provides callbacks to handle
+ * different parts of the assembly file. The callbacks that we're
+ * using right now are all emit* functions.
+ */
 class MCStreamerWrapper final : public llvm::MCStreamer {
   enum ASMLine { none = 0, label = 1, non_term_instr = 2, terminator = 3 };
 
@@ -37,14 +39,16 @@ private:
   bool FunctionEnded = false;
   unsigned curDebugLine = 0;
   std::vector<RODataItem> curROData;
+  unsigned SentinelNOP;
 
 public:
   MCFunction MF;
   unsigned cnt{0};
 
   MCStreamerWrapper(llvm::MCContext &Context, llvm::MCInstrAnalysis *IA,
-                    llvm::MCInstPrinter *InstPrinter, llvm::MCRegisterInfo *MRI)
-      : MCStreamer(Context), IA(IA) {
+                    llvm::MCInstPrinter *InstPrinter, llvm::MCRegisterInfo *MRI,
+		    unsigned SentinelNOP)
+    : MCStreamer(Context), IA(IA), SentinelNOP(SentinelNOP) {
     MF.IA = IA;
     MF.InstPrinter = InstPrinter;
     MF.MRI = MRI;

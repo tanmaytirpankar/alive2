@@ -24,6 +24,12 @@
 #include <cmath>
 #include <vector>
 
+#define GET_INSTRINFO_ENUM
+#include "Target/AArch64/AArch64GenInstrInfo.inc"
+
+#define GET_INSTRINFO_ENUM
+#include "Target/RISCV/RISCVGenInstrInfo.inc"
+
 using namespace std;
 using namespace llvm;
 using namespace lifter;
@@ -121,7 +127,15 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
       Targ->createMCObjectFileInfo(Ctx, false, false));
   Ctx.setObjectFileInfo(MCOFI.get());
 
-  MCStreamerWrapper Str(Ctx, Ana.get(), IP.get(), MRI.get());
+  unsigned SentinelNOP;
+  if (DefaultBackend == "aarch64")
+    SentinelNOP = AArch64::SEH_Nop;
+  else if (DefaultBackend == "riscv64")
+    SentinelNOP = RISCV::C_NOP_HINT;
+  else
+    assert(false);
+      
+  MCStreamerWrapper Str(Ctx, Ana.get(), IP.get(), MRI.get(), SentinelNOP);
   Str.setUseAssemblerInfoForParsing(true);
 
   raw_ostream &OSRef = nulls();
@@ -151,11 +165,11 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
   Function *liftedFn;
   if (DefaultBackend == "aarch64") {
     liftedFn =
-        arm2llvm{LiftedModule, Str.MF, *srcFn, IP.get(), *MCE, *STI, *Ana}
+      arm2llvm{LiftedModule, Str.MF, *srcFn, IP.get(), *MCE, *STI, *Ana, SentinelNOP}
             .run();
   } else if (DefaultBackend == "riscv64") {
     liftedFn =
-        riscv2llvm{LiftedModule, Str.MF, *srcFn, IP.get(), *MCE, *STI, *Ana}
+      riscv2llvm{LiftedModule, Str.MF, *srcFn, IP.get(), *MCE, *STI, *Ana, SentinelNOP}
             .run();
   } else {
     *out << "ERROR: Nonexistent backend\n";

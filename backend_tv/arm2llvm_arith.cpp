@@ -3,6 +3,12 @@
 using namespace lifter;
 using namespace llvm;
 
+#define GET_INSTRINFO_ENUM
+#include "Target/AArch64/AArch64GenInstrInfo.inc"
+
+#define GET_REGINFO_ENUM
+#include "Target/AArch64/AArch64GenRegisterInfo.inc"
+
 void arm2llvm::lift_msub() {
   auto mul_lhs = readFromOperand(1);
   auto mul_rhs = readFromOperand(2);

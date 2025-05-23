@@ -30,8 +30,9 @@ using namespace llvm;
 
 riscv2llvm::riscv2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
                        MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
-                       const MCSubtargetInfo &STI, const MCInstrAnalysis &IA)
-    : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA) {}
+                       const MCSubtargetInfo &STI, const MCInstrAnalysis &IA,
+		       unsigned SentinelNOP)
+  : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA, SentinelNOP) {}
 
 Value *riscv2llvm::enforceSExtZExt(Value *V, bool isSExt, bool isZExt) {
   assert(false);

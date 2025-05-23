@@ -45,13 +45,16 @@ public:
   const llvm::MCCodeEmitter &MCE;
   const llvm::MCSubtargetInfo &STI;
   const llvm::MCInstrAnalysis &IA;
+  const llvm::DataLayout &DL;
+  unsigned SentinelNOP;
 
   mc2llvm(llvm::Module *LiftedModule, MCFunction &MF, llvm::Function &srcFn,
           llvm::MCInstPrinter *InstPrinter, const llvm::MCCodeEmitter &MCE,
-          const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA)
+          const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
+	  unsigned SentinelNOP)
       : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
         InstPrinter(InstPrinter), MCE{MCE}, STI{STI}, IA{IA},
-        DL(srcFn.getParent()->getDataLayout()) {}
+        DL(srcFn.getParent()->getDataLayout()), SentinelNOP(SentinelNOP) {}
 
   // these are ones that the backend adds to tgt, even when they don't
   // appear at all in src
@@ -98,7 +101,6 @@ public:
   // Map of ADRP MCInsts to the string representations of the operand variable
   // names
   std::unordered_map<llvm::MCInst *, std::string> instExprVarMap;
-  const llvm::DataLayout &DL;
 
   struct deferredGlobal {
     std::string name;

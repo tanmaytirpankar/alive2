@@ -500,7 +500,7 @@ void mc2llvm::liftInst(MCInst &I) {
   llvm::raw_string_ostream ss{sss};
   I.dump_pretty(ss, InstPrinter);
   *out << sss << " = " << std::flush;
-  if (I.getOpcode() != AArch64::SEH_Nop) {
+  if (I.getOpcode() != SentinelNOP) {
     InstPrinter->printInst(&I, 100, "", STI, outs());
     outs().flush();
   }

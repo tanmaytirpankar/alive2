@@ -56,7 +56,8 @@ class riscv2llvm final : public mc2llvm {
 public:
   riscv2llvm(llvm::Module *LiftedModule, MCFunction &MF, llvm::Function &srcFn,
              llvm::MCInstPrinter *InstPrinter, const llvm::MCCodeEmitter &MCE,
-             const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA);
+             const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
+	     unsigned SentinelNOP);
 };
 
 } // end namespace lifter

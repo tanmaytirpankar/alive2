@@ -4,12 +4,6 @@ using namespace std;
 using namespace llvm;
 using namespace lifter;
 
-#define GET_INSTRINFO_ENUM
-#include "Target/AArch64/AArch64GenInstrInfo.inc"
-
-#define GET_REGINFO_ENUM
-#include "Target/AArch64/AArch64GenRegisterInfo.inc"
-
 void MCStreamerWrapper::emitInstruction(const MCInst &Inst,
                                         const MCSubtargetInfo & /* unused */) {
 
@@ -119,7 +113,7 @@ void MCStreamerWrapper::emitLabel(MCSymbol *Symbol, SMLoc Loc) {
     // subsequent logic can be a bit simpler if we assume each BB
     // contains at least one instruction. might need to revisit this
     // later on.
-    nop.setOpcode(AArch64::SEH_Nop);
+    nop.setOpcode(SentinelNOP);
     curBB->addInstBegin(std::move(nop));
     prev_line = ASMLine::label;
   }

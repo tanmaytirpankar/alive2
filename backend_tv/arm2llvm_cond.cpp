@@ -3,6 +3,12 @@
 using namespace lifter;
 using namespace llvm;
 
+#define GET_INSTRINFO_ENUM
+#include "Target/AArch64/AArch64GenInstrInfo.inc"
+
+#define GET_REGINFO_ENUM
+#include "Target/AArch64/AArch64GenRegisterInfo.inc"
+
 void arm2llvm::lift_csinc(unsigned opcode) {
   auto size = getInstSize(opcode);
   assert(CurInst->getOperand(1).isReg() && CurInst->getOperand(2).isReg());
