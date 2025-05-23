@@ -12,8 +12,8 @@
  *
  * https://drive.google.com/file/d/1Ja_Tpp_5Me583CGVD-BIZMlgGBnlKU4R/view
  *
- * this thread has some good details on setting up a RISCV execution
- * environment:
+ * this thread has some useful details about setting up a RISCV
+ * execution environment:
  *
  * https://www.reddit.com/r/RISCV/comments/10k805c/how_can_i_buildrun_riscv_assembly_on_macos/
  */
@@ -45,8 +45,22 @@ llvm::AllocaInst *riscv2llvm::get_reg(aslp::reg_t regtype, uint64_t num) {
   return nullptr;
 }
 
+Value *riscv2llvm::lookupReg(unsigned Reg) {
+  assert(Reg >= RISCV::X0 && Reg <= RISCV::X31);
+  return RegFile[Reg];
+}
+
+void riscv2llvm::updateReg(Value *V, uint64_t Reg) {
+  // important -- squash updates to the zero register
+  if (Reg == RISCV::X0)
+    return;
+  createStore(V, lookupReg(Reg));
+}
+
 void riscv2llvm::updateOutputReg(Value *V, bool SExt) {
-  assert(false);
+  assert(!SExt); // FIXME implement
+  auto destReg = CurInst->getOperand(0).getReg();
+  updateReg(V, destReg);
 }
 
 Value *riscv2llvm::makeLoadWithOffset(Value *base, Value *offset, int size) {
@@ -65,67 +79,21 @@ void riscv2llvm::doCall(FunctionCallee FC, CallInst *llvmCI,
   assert(false);
 }
 
-void riscv2llvm::lift(MCInst &I) {
-  auto opcode = I.getOpcode();
-  // StringRef instStr = InstPrinter->getOpcodeName(opcode);
-  auto newbb = BasicBlock::Create(Ctx, "lifter_" + nextName(), liftedFn);
-  createBranch(newbb);
-  LLVMBB = newbb;
-
-  // auto i1ty = getIntTy(1);
-  // auto i8ty = getIntTy(8);
-  // auto i16ty = getIntTy(16);
-  // auto i32ty = getIntTy(32);
-  // auto i64ty = getIntTy(64);
-  // auto i128ty = getIntTy(128);
-
-  switch (opcode) {
-
-  case RISCV::C_NOP_HINT:
-    break;
-
-  case RISCV::C_J: {
-    // copied from ARM
-    BasicBlock *dst{nullptr};
-    // JDR: I don't understand this
-    if (CurInst->getOperand(0).isImm()) {
-      // handles the case when we add an entry block with no predecessors
-      auto &dst_name = MF.BBs[getImm(0)].getName();
-      dst = getBBByName(dst_name);
-    } else {
-      dst = getBB(CurInst->getOperand(0));
-    }
-    if (dst) {
-      createBranch(dst);
-    } else {
-      // ok, if we don't have a destination block then we left this
-      // dangling on purpose, with the assumption that it's a tail
-      // call
-      doDirectCall();
-      doReturn();
-    }
-    break;
-  }
-
-  case RISCV::C_SUBW:
-    // FIXME!!
-    break;
-
-  case RISCV::C_JR:
-    // FIXME!!
-    break;
-
-  default:
-    *out << "unhandled instruction\n";
-    exit(-1);
-  }
+Value *riscv2llvm::readFromRegOperand(int idx) {
+  auto op = CurInst->getOperand(idx);
+  assert(op.isReg());
+  auto i64ty = getIntTy(64);
+  return readFromReg(op.getReg(), i64ty);
 }
 
 Value *riscv2llvm::readFromReg(unsigned Reg, Type *ty) {
-  assert(Reg >= RISCV::X0 && Reg <= RISCV::X31);
-  Value *addr = RegFile[Reg];
+  auto addr = lookupReg(Reg);
   *out << "addr = " << addr << "\n";
   return createLoad(ty, addr);
+}
+
+void riscv2llvm::doReturn() {
+  assert(false);
 }
 
 void riscv2llvm::platformInit() {
@@ -228,6 +196,65 @@ void riscv2llvm::platformInit() {
   *out << "done with callee-side ABI stuff\n";
 }
 
-void riscv2llvm::doReturn() {
-  assert(false);
+void riscv2llvm::lift(MCInst &I) {
+  auto opcode = I.getOpcode();
+  // StringRef instStr = InstPrinter->getOpcodeName(opcode);
+  auto newbb = BasicBlock::Create(Ctx, "lifter_" + nextName(), liftedFn);
+  createBranch(newbb);
+  LLVMBB = newbb;
+
+  // auto i1ty = getIntTy(1);
+  // auto i8ty = getIntTy(8);
+  // auto i16ty = getIntTy(16);
+  // auto i32ty = getIntTy(32);
+  // auto i64ty = getIntTy(64);
+  // auto i128ty = getIntTy(128);
+
+  switch (opcode) {
+
+  case RISCV::C_NOP_HINT:
+    break;
+
+  case RISCV::C_J: {
+    /*
+     * copied from ARM -- maybe move to portable code
+     */
+    BasicBlock *dst{nullptr};
+    // JDR: I don't understand this
+    if (CurInst->getOperand(0).isImm()) {
+      // handles the case when we add an entry block with no predecessors
+      auto &dst_name = MF.BBs[getImm(0)].getName();
+      dst = getBBByName(dst_name);
+    } else {
+      dst = getBB(CurInst->getOperand(0));
+    }
+    if (dst) {
+      createBranch(dst);
+    } else {
+      // ok, if we don't have a destination block then we left this
+      // dangling on purpose, with the assumption that it's a tail
+      // call
+      doDirectCall();
+      doReturn();
+    }
+    break;
+  }
+
+  case RISCV::C_SUBW: {
+    auto a = readFromRegOperand(1);
+    auto b = readFromRegOperand(2);
+    auto sub = createSub(a, b);
+    updateOutputReg(sub);
+    break;
+  }
+
+  case RISCV::C_JR:
+    // FIXME!!
+    break;
+
+  default:
+    *out << "unhandled instruction\n";
+    exit(-1);
+  }
 }
+

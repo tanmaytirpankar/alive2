@@ -50,8 +50,10 @@ class riscv2llvm final : public mc2llvm {
   void doReturn() override;
 
   llvm::Value *readFromReg(unsigned Reg, llvm::Type *ty);
-  llvm::Value *dealiasReg(unsigned Reg);
   unsigned mapRegToBackingReg(unsigned Reg);
+  llvm::Value *readFromRegOperand(int idx);
+  llvm::Value *lookupReg(unsigned Reg);
+  void updateReg(llvm::Value *V, uint64_t reg);
 
 public:
   riscv2llvm(llvm::Module *LiftedModule, MCFunction &MF, llvm::Function &srcFn,
