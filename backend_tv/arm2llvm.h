@@ -110,8 +110,6 @@ public:
 
   bool disjoint(const std::set<int> &a, const std::set<int> &b);
 
-  int64_t getImm(int idx);
-
   enum ExtendType { SXTB, SXTH, SXTW, SXTX, UXTB, UXTH, UXTW, UXTX };
 
   // Follows the "Library pseudocode for aarch64/instrs/extendreg/ExtendReg"

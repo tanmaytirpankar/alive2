@@ -66,7 +66,59 @@ void riscv2llvm::doCall(FunctionCallee FC, CallInst *llvmCI,
 }
 
 void riscv2llvm::lift(MCInst &I) {
-  assert(false);
+  auto opcode = I.getOpcode();
+  // StringRef instStr = InstPrinter->getOpcodeName(opcode);
+  auto newbb = BasicBlock::Create(Ctx, "lifter_" + nextName(), liftedFn);
+  createBranch(newbb);
+  LLVMBB = newbb;
+
+  //auto i1ty = getIntTy(1);
+  //auto i8ty = getIntTy(8);
+  //auto i16ty = getIntTy(16);
+  //auto i32ty = getIntTy(32);
+  //auto i64ty = getIntTy(64);
+  //auto i128ty = getIntTy(128);
+
+  switch (opcode) {
+
+  case RISCV::C_NOP_HINT:
+    break;
+    
+  case RISCV::C_J: {
+    // copied from ARM
+    BasicBlock *dst{nullptr};
+    // JDR: I don't understand this
+    if (CurInst->getOperand(0).isImm()) {
+      // handles the case when we add an entry block with no predecessors
+      auto &dst_name = MF.BBs[getImm(0)].getName();
+      dst = getBBByName(dst_name);
+    } else {
+      dst = getBB(CurInst->getOperand(0));
+    }
+    if (dst) {
+      createBranch(dst);
+    } else {
+      // ok, if we don't have a destination block then we left this
+      // dangling on purpose, with the assumption that it's a tail
+      // call
+      doDirectCall();
+      doReturn();
+    }
+    break;
+  }
+
+  case RISCV::C_SUBW:
+    // FIXME!!
+    break;
+
+  case RISCV::C_JR:
+    // FIXME!!
+    break;
+    
+  default:
+    *out << "unhandled instruction\n";
+    exit(-1);
+  }
 }
 
 Value *riscv2llvm::readFromReg(unsigned Reg, Type *ty) {

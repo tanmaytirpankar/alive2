@@ -108,6 +108,10 @@ public:
   };
   std::vector<deferredGlobal> deferredGlobs;
 
+  int64_t getImm(int idx) {
+    return CurInst->getOperand(idx).getImm();
+  }
+
   llvm::Function *copyFunctionToTarget(llvm::Function *f,
                                        const llvm::Twine &name);
   llvm::Constant *lazyAddGlobal(std::string newGlobal);

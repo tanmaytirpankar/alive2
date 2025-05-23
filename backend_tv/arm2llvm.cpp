@@ -775,10 +775,6 @@ bool arm2llvm::disjoint(const set<int> &a, const set<int> &b) {
   return i.empty();
 }
 
-int64_t arm2llvm::getImm(int idx) {
-  return CurInst->getOperand(idx).getImm();
-}
-
 // Follows the "Library pseudocode for aarch64/instrs/extendreg/ExtendReg"
 // from ARM manual
 // val is always 64 bits and shiftAmt is always 0-4
