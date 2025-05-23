@@ -12,6 +12,54 @@ using namespace std;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+void arm2llvm::lift_ldp(unsigned opcode) {
+  auto &op0 = CurInst->getOperand(0);
+  auto &op1 = CurInst->getOperand(1);
+  auto &op2 = CurInst->getOperand(2);
+  auto &op3 = CurInst->getOperand(3);
+  assert(op0.isReg() && op1.isReg() && op2.isReg());
+  assert(op3.isImm());
+
+  auto baseReg = op2.getReg();
+  assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
+         (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
+         (baseReg == AArch64::XZR) || (baseReg == AArch64::FP));
+  auto baseAddr = readPtrFromReg(baseReg);
+
+  int size = 0;
+  switch (opcode) {
+  case AArch64::LDPSWi:
+  case AArch64::LDPWi:
+  case AArch64::LDPSi: {
+    size = 4;
+    break;
+  }
+  case AArch64::LDPXi:
+  case AArch64::LDPDi: {
+    size = 8;
+    break;
+  }
+  case AArch64::LDPQi: {
+    size = 16;
+    break;
+  }
+  default: {
+    *out << "\nError Unknown opcode\n";
+    visitError();
+  }
+  }
+  assert(size != 0);
+
+  bool SExt = opcode == AArch64::LDPSWi;
+
+  auto imm = op3.getImm();
+  auto out1 = op0.getReg();
+  auto out2 = op1.getReg();
+
+  updateReg(makeLoadWithOffset(baseAddr, imm * size, size), out1, SExt);
+  updateReg(makeLoadWithOffset(baseAddr, (imm + 1) * size, size), out2, SExt);
+}
+
 void arm2llvm::lift_ld2(unsigned opcode) {
   auto i64 = getIntTy(64);
   unsigned numElts, eltSize;

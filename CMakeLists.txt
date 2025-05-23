@@ -216,6 +216,7 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
     "backend_tv/arm2llvm_bitwise.cpp"
     "backend_tv/arm2llvm_cond.cpp"
     "backend_tv/arm2llvm_load.cpp"
+    "backend_tv/arm2llvm_store.cpp"
 
     "backend_tv/riscv2llvm.cpp"
 

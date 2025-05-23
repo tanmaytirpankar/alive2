@@ -298,6 +298,13 @@ public:
   void lift_ldu1(unsigned opcode);
   void lift_ldr1(unsigned opcode);
   void lift_ld2(unsigned opcode);
+  void lift_str_1(unsigned opcode);
+  void lift_str_2(unsigned opcode);
+  void lift_str_3(unsigned opcode);
+  void lift_str_4(unsigned opcode);
+  void lift_str_5(unsigned opcode);
+  void lift_stp(unsigned opcode);
+  void lift_ldp(unsigned opcode);
 };
 
 } // end namespace lifter
