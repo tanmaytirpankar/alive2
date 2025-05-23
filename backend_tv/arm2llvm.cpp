@@ -19,8 +19,8 @@ using namespace llvm;
 arm2llvm::arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
                    MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
                    const MCSubtargetInfo &STI, const MCInstrAnalysis &IA,
-		   unsigned SentinelNOP)
-  : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA, SentinelNOP) {
+                   unsigned SentinelNOP)
+    : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA, SentinelNOP) {
   // sanity checking
   assert(disjoint(instrs_32, instrs_64));
   assert(disjoint(instrs_32, instrs_128));
@@ -3277,7 +3277,8 @@ void arm2llvm::lift(MCInst &I) {
   } else {
     *out << "... arm opnum failed: "
          << InstPrinter->getOpcodeName(I.getOpcode()).str() << '\n';
-    // arm opcode translation failed, possibly SentinelNOP. continue with classic.
+    // arm opcode translation failed, possibly SentinelNOP. continue with
+    // classic.
   }
 
   std::string encoding{"classic_" + aslp::aarch64_revmap().at(opcode)};

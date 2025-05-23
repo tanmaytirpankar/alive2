@@ -47,8 +47,8 @@ public:
 
   MCStreamerWrapper(llvm::MCContext &Context, llvm::MCInstrAnalysis *IA,
                     llvm::MCInstPrinter *InstPrinter, llvm::MCRegisterInfo *MRI,
-		    unsigned SentinelNOP)
-    : MCStreamer(Context), IA(IA), SentinelNOP(SentinelNOP) {
+                    unsigned SentinelNOP)
+      : MCStreamer(Context), IA(IA), SentinelNOP(SentinelNOP) {
     MF.IA = IA;
     MF.InstPrinter = InstPrinter;
     MF.MRI = MRI;
@@ -168,8 +168,8 @@ public:
   }
 
   // Make sure that we have an entry label with no predecessors
-  void checkEntryBlock() {
-    MF.checkEntryBlock();
+  void checkEntryBlock(unsigned jumpOpcode) {
+    MF.checkEntryBlock(jumpOpcode);
   }
 
   // Fill in the CFG

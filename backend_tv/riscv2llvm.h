@@ -15,11 +15,11 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Target/TargetMachine.h"
 
-#include "backend_tv/riscv2llvm.h"
 #include "backend_tv/bitutils.h"
 #include "backend_tv/lifter.h"
 #include "backend_tv/mc2llvm.h"
 #include "backend_tv/mcutils.h"
+#include "backend_tv/riscv2llvm.h"
 #include "backend_tv/streamerwrapper.h"
 
 #include <string>
@@ -57,7 +57,7 @@ public:
   riscv2llvm(llvm::Module *LiftedModule, MCFunction &MF, llvm::Function &srcFn,
              llvm::MCInstPrinter *InstPrinter, const llvm::MCCodeEmitter &MCE,
              const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
-	     unsigned SentinelNOP);
+             unsigned SentinelNOP);
 };
 
 } // end namespace lifter

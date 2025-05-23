@@ -573,10 +573,13 @@ Function *mc2llvm::run() {
     MCBB = mc_bb;
     auto &mc_instrs = mc_bb->getInstrs();
 
+    *out << "entering new bb\n";
+
     for (auto &inst : mc_instrs) {
       llvmInstNum = 0;
-      *out << armInstNum << " : about to lift "
-           << (string)InstPrinter->getOpcodeName(inst.getOpcode()) << "\n";
+      *out << armInstNum << " : about to lift opcode " << inst.getOpcode()
+           << " " << (string)InstPrinter->getOpcodeName(inst.getOpcode())
+           << "\n";
       liftInst(inst);
       *out << "    lifted\n";
       ++armInstNum;

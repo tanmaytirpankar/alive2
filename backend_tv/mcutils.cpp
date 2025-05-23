@@ -15,23 +15,17 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Target/TargetMachine.h"
 
-#define GET_INSTRINFO_ENUM
-#include "Target/AArch64/AArch64GenInstrInfo.inc"
-
-#define GET_REGINFO_ENUM
-#include "Target/AArch64/AArch64GenRegisterInfo.inc"
-
 using namespace llvm;
 using namespace lifter;
 
-void MCFunction::checkEntryBlock() {
+void MCFunction::checkEntryBlock(unsigned jumpOpcode) {
   // LLVM doesn't let the entry block be a jump target, but assembly
   // does; we can fix that up by adding an extra block at the start
   // of the function. simplifyCFG will clean this up when it's not
   // needed.
   BBs.emplace(BBs.begin(), "arm_tv_entry");
   MCInst jmp_instr;
-  jmp_instr.setOpcode(AArch64::B);
+  jmp_instr.setOpcode(jumpOpcode);
   jmp_instr.addOperand(MCOperand::createImm(1));
   BBs[0].addInstBegin(std::move(jmp_instr));
 }

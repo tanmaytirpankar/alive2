@@ -7,6 +7,8 @@ using namespace lifter;
 void MCStreamerWrapper::emitInstruction(const MCInst &Inst,
                                         const MCSubtargetInfo & /* unused */) {
 
+  *out << "MCStreamerWrapper got opcode = " << Inst.getOpcode() << "\n";
+
   assert(prev_line != ASMLine::none);
 
   if (prev_line == ASMLine::terminator)

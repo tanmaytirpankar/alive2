@@ -134,7 +134,7 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
     SentinelNOP = RISCV::C_NOP_HINT;
   else
     assert(false);
-      
+
   MCStreamerWrapper Str(Ctx, Ana.get(), IP.get(), MRI.get(), SentinelNOP);
   Str.setUseAssemblerInfoForParsing(true);
 
@@ -156,7 +156,8 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
   }
 
   Str.removeEmptyBlocks();
-  Str.checkEntryBlock();
+  Str.checkEntryBlock(DefaultBackend == "aarch64" ? (unsigned)AArch64::B
+                                                  : (unsigned)RISCV::C_J);
   Str.generateSuccessors();
 
   unique_ptr<MCCodeEmitter> MCE{Targ->createMCCodeEmitter(*MCII.get(), Ctx)};
@@ -164,13 +165,13 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
 
   Function *liftedFn;
   if (DefaultBackend == "aarch64") {
-    liftedFn =
-      arm2llvm{LiftedModule, Str.MF, *srcFn, IP.get(), *MCE, *STI, *Ana, SentinelNOP}
-            .run();
+    liftedFn = arm2llvm{LiftedModule, Str.MF, *srcFn, IP.get(),
+                        *MCE,         *STI,   *Ana,   SentinelNOP}
+                   .run();
   } else if (DefaultBackend == "riscv64") {
-    liftedFn =
-      riscv2llvm{LiftedModule, Str.MF, *srcFn, IP.get(), *MCE, *STI, *Ana, SentinelNOP}
-            .run();
+    liftedFn = riscv2llvm{LiftedModule, Str.MF, *srcFn, IP.get(),
+                          *MCE,         *STI,   *Ana,   SentinelNOP}
+                   .run();
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);

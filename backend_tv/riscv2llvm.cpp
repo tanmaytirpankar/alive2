@@ -31,12 +31,13 @@ using namespace llvm;
 riscv2llvm::riscv2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
                        MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
                        const MCSubtargetInfo &STI, const MCInstrAnalysis &IA,
-		       unsigned SentinelNOP)
-  : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA, SentinelNOP) {}
+                       unsigned SentinelNOP)
+    : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA, SentinelNOP) {
+}
 
 Value *riscv2llvm::enforceSExtZExt(Value *V, bool isSExt, bool isZExt) {
-  assert(false);
-  return nullptr;
+  // FIXME
+  return V;
 }
 
 llvm::AllocaInst *riscv2llvm::get_reg(aslp::reg_t regtype, uint64_t num) {
@@ -88,7 +89,7 @@ void riscv2llvm::platformInit() {
   }
 
   *out << "created scalar registers\n";
-  
+
   // TODO vector registers
 
   auto paramBase =

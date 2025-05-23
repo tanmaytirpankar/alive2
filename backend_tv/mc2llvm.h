@@ -51,7 +51,7 @@ public:
   mc2llvm(llvm::Module *LiftedModule, MCFunction &MF, llvm::Function &srcFn,
           llvm::MCInstPrinter *InstPrinter, const llvm::MCCodeEmitter &MCE,
           const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
-	  unsigned SentinelNOP)
+          unsigned SentinelNOP)
       : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
         InstPrinter(InstPrinter), MCE{MCE}, STI{STI}, IA{IA},
         DL(srcFn.getParent()->getDataLayout()), SentinelNOP(SentinelNOP) {}

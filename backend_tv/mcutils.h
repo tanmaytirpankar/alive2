@@ -119,7 +119,7 @@ public:
     return nullptr;
   }
 
-  void checkEntryBlock();
+  void checkEntryBlock(unsigned);
 };
 
 } // end namespace lifter
