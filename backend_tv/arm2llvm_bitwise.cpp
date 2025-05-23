@@ -3,6 +3,105 @@
 using namespace lifter;
 using namespace llvm;
 
+#define GET_INSTRINFO_ENUM
+#include "Target/AArch64/AArch64GenInstrInfo.inc"
+
+#define GET_REGINFO_ENUM
+#include "Target/AArch64/AArch64GenRegisterInfo.inc"
+
+void arm2llvm::lift_eon_bic(unsigned opcode) {
+  // BIC:
+  // return = op1 AND NOT (optional shift) op2
+  // EON:
+  // return = op1 XOR NOT (optional shift) op2
+
+  auto op1 = readFromOperand(1);
+  auto op2 = readFromOperand(2);
+
+  // If there is a shift to be performed on the second operand
+  if (CurInst->getNumOperands() == 4) {
+    // the 4th operand (if it exists) must b an immediate
+    assert(CurInst->getOperand(3).isImm());
+    op2 = regShift(op2, getImm(3));
+  }
+
+  auto inverted_op2 = createNot(op2);
+
+  // Perform final Op: AND for BIC, XOR for EON
+  Value *ret = nullptr;
+  switch (opcode) {
+  case AArch64::BICWrs:
+  case AArch64::BICXrs:
+  case AArch64::BICSXrs:
+  case AArch64::BICSWrs:
+    ret = createAnd(op1, inverted_op2);
+    break;
+  case AArch64::EONWrs:
+  case AArch64::EONXrs:
+    ret = createXor(op1, inverted_op2);
+    break;
+  default:
+    assert(false && "missed case in EON/BIC");
+  }
+
+  if (has_s(opcode)) {
+    setNUsingResult(ret);
+    setZUsingResult(ret);
+    setC(getBoolConst(false));
+    setV(getBoolConst(false));
+  }
+
+  updateOutputReg(ret);
+}
+
+void arm2llvm::lift_clz() {
+  auto op = readFromOperand(1);
+  auto result = createCtlz(op);
+  updateOutputReg(result);
+}
+
+void arm2llvm::lift_rev() {
+  updateOutputReg(createBSwap(readFromOperand(1)));
+}
+
+void arm2llvm::lift_rbit() {
+  auto op = readFromOperand(1);
+  auto result = createBitReverse(op);
+  updateOutputReg(result);
+}
+
+void arm2llvm::lift_ror() {
+  auto op = readFromOperand(1);
+  auto shift = readFromOperand(2);
+  auto result = createFShr(op, op, shift);
+  updateOutputReg(result);
+}
+
+void arm2llvm::lift_extr() {
+  auto op1 = readFromOperand(1);
+  auto op2 = readFromOperand(2);
+  auto shift = readFromOperand(3);
+  auto result = createFShr(op1, op2, shift);
+  updateOutputReg(result);
+}
+
+void arm2llvm::lift_orrr() {
+  auto lhs = readFromOperand(1);
+  auto rhs = readFromOperand(2);
+  rhs = regShift(rhs, getImm(3));
+  auto result = createOr(lhs, rhs);
+  updateOutputReg(result);
+}
+
+void arm2llvm::lift_orri(unsigned opcode) {
+  auto size = getInstSize(opcode);
+  auto lhs = readFromOperand(1);
+  auto imm = getImm(2);
+  auto [wmask, _] = decodeBitMasks(imm, size);
+  auto result = createOr(lhs, getUnsignedIntConst(wmask, size));
+  updateOutputReg(result);
+}
+
 void arm2llvm::lift_bfm(unsigned opcode) {
   auto size = getInstSize(opcode);
   auto dst = readFromOperand(1);

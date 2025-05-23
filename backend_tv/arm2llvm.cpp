@@ -3534,171 +3534,58 @@ void arm2llvm::lift(MCInst &I) {
     break;
 
   case AArch64::ORRWri:
-  case AArch64::ORRXri: {
-    auto size = getInstSize(opcode);
-    auto lhs = readFromOperand(1);
-    auto imm = getImm(2);
-    auto [wmask, _] = decodeBitMasks(imm, size);
-    auto result = createOr(lhs, getUnsignedIntConst(wmask, size));
-    updateOutputReg(result);
+  case AArch64::ORRXri:
+    lift_orri(opcode);
     break;
-  }
 
   case AArch64::ORRWrs:
-  case AArch64::ORRXrs: {
-    auto lhs = readFromOperand(1);
-    auto rhs = readFromOperand(2);
-    rhs = regShift(rhs, getImm(3));
-    auto result = createOr(lhs, rhs);
-    updateOutputReg(result);
+  case AArch64::ORRXrs:
+    lift_orrr();
     break;
-  }
 
-  // can't directly lift ARM sdiv to LLVM sdiv because the latter
-  // is UB for divide by zero and INT_MIN / -1
   case AArch64::SDIVWr:
-  case AArch64::SDIVXr: {
-    auto Size = getInstSize(opcode);
-    auto Zero = getUnsignedIntConst(0, Size);
-    auto IntMin = createMaskedShl(getUnsignedIntConst(1, Size),
-                                  getUnsignedIntConst(Size - 1, Size));
-    auto LHS = readFromOperand(1);
-    auto RHS = readFromOperand(2);
-    auto ResMem = createAlloca(getIntTy(Size), getUnsignedIntConst(1, 64), "");
-    createStore(Zero, ResMem);
-    auto RHSIsZero = createICmp(ICmpInst::Predicate::ICMP_EQ, RHS, Zero);
-    auto LHSIsIntMin = createICmp(ICmpInst::Predicate::ICMP_EQ, LHS, IntMin);
-    auto RHSIsAllOnes =
-        createICmp(ICmpInst::Predicate::ICMP_EQ, RHS, getAllOnesConst(Size));
-    auto IsOverflow = createAnd(LHSIsIntMin, RHSIsAllOnes);
-    auto Cond = createOr(RHSIsZero, IsOverflow);
-    auto DivBB = BasicBlock::Create(Ctx, "", liftedFn);
-    auto ContBB = BasicBlock::Create(Ctx, "", liftedFn);
-    createBranch(Cond, ContBB, DivBB);
-    LLVMBB = DivBB;
-    auto DivResult = createSDiv(LHS, RHS);
-    createStore(DivResult, ResMem);
-    createBranch(ContBB);
-    LLVMBB = ContBB;
-    auto result = createLoad(getIntTy(Size), ResMem);
-    updateOutputReg(result);
+  case AArch64::SDIVXr:
+    lift_sdiv(opcode);
     break;
-  }
 
-  // can't directly lift ARM udiv to LLVM udiv because the latter
-  // is UB for divide by zero
   case AArch64::UDIVWr:
-  case AArch64::UDIVXr: {
-    auto size = getInstSize(opcode);
-    auto zero = getUnsignedIntConst(0, size);
-    auto lhs = readFromOperand(1);
-    auto rhs = readFromOperand(2);
-    auto A = createAlloca(getIntTy(size), getUnsignedIntConst(1, 64), "");
-    createStore(zero, A);
-    auto rhsIsZero = createICmp(ICmpInst::Predicate::ICMP_EQ, rhs, zero);
-    auto DivBB = BasicBlock::Create(Ctx, "", liftedFn);
-    auto ContBB = BasicBlock::Create(Ctx, "", liftedFn);
-    createBranch(rhsIsZero, ContBB, DivBB);
-    LLVMBB = DivBB;
-    auto divResult = createUDiv(lhs, rhs);
-    createStore(divResult, A);
-    createBranch(ContBB);
-    LLVMBB = ContBB;
-    auto result = createLoad(getIntTy(size), A);
-    updateOutputReg(result);
+  case AArch64::UDIVXr:
+    lift_udiv(opcode);
     break;
-  }
 
   case AArch64::EXTRWrri:
-  case AArch64::EXTRXrri: {
-    auto op1 = readFromOperand(1);
-    auto op2 = readFromOperand(2);
-    auto shift = readFromOperand(3);
-    auto result = createFShr(op1, op2, shift);
-    updateOutputReg(result);
+  case AArch64::EXTRXrri:
+    lift_extr();
     break;
-  }
 
   case AArch64::RORVWr:
-  case AArch64::RORVXr: {
-    auto op = readFromOperand(1);
-    auto shift = readFromOperand(2);
-    auto result = createFShr(op, op, shift);
-    updateOutputReg(result);
+  case AArch64::RORVXr:
+    lift_ror();
     break;
-  }
 
   case AArch64::RBITWr:
-  case AArch64::RBITXr: {
-    auto op = readFromOperand(1);
-    auto result = createBitReverse(op);
-    updateOutputReg(result);
+  case AArch64::RBITXr:
+    lift_rbit();
     break;
-  }
 
   case AArch64::REVWr:
   case AArch64::REVXr:
-    updateOutputReg(createBSwap(readFromOperand(1)));
+    lift_rev();
     break;
 
   case AArch64::CLZWr:
-  case AArch64::CLZXr: {
-    auto op = readFromOperand(1);
-    auto result = createCtlz(op);
-    updateOutputReg(result);
+  case AArch64::CLZXr:
+    lift_clz();
     break;
-  }
 
   case AArch64::EONWrs:
   case AArch64::EONXrs:
   case AArch64::BICWrs:
   case AArch64::BICXrs:
   case AArch64::BICSWrs:
-  case AArch64::BICSXrs: {
-    // BIC:
-    // return = op1 AND NOT (optional shift) op2
-    // EON:
-    // return = op1 XOR NOT (optional shift) op2
-
-    auto op1 = readFromOperand(1);
-    auto op2 = readFromOperand(2);
-
-    // If there is a shift to be performed on the second operand
-    if (CurInst->getNumOperands() == 4) {
-      // the 4th operand (if it exists) must b an immediate
-      assert(CurInst->getOperand(3).isImm());
-      op2 = regShift(op2, getImm(3));
-    }
-
-    auto inverted_op2 = createNot(op2);
-
-    // Perform final Op: AND for BIC, XOR for EON
-    Value *ret = nullptr;
-    switch (opcode) {
-    case AArch64::BICWrs:
-    case AArch64::BICXrs:
-    case AArch64::BICSXrs:
-    case AArch64::BICSWrs:
-      ret = createAnd(op1, inverted_op2);
-      break;
-    case AArch64::EONWrs:
-    case AArch64::EONXrs:
-      ret = createXor(op1, inverted_op2);
-      break;
-    default:
-      assert(false && "missed case in EON/BIC");
-    }
-
-    if (has_s(opcode)) {
-      setNUsingResult(ret);
-      setZUsingResult(ret);
-      setC(getBoolConst(false));
-      setV(getBoolConst(false));
-    }
-
-    updateOutputReg(ret);
+  case AArch64::BICSXrs:
+    lift_eon_bic(opcode);
     break;
-  }
 
   case AArch64::REV16Xr: {
     // REV16Xr: Reverse bytes of 64 bit value in 16-bit half-words.

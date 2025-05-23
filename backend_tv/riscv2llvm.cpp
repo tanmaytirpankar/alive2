@@ -72,18 +72,18 @@ void riscv2llvm::lift(MCInst &I) {
   createBranch(newbb);
   LLVMBB = newbb;
 
-  //auto i1ty = getIntTy(1);
-  //auto i8ty = getIntTy(8);
-  //auto i16ty = getIntTy(16);
-  //auto i32ty = getIntTy(32);
-  //auto i64ty = getIntTy(64);
-  //auto i128ty = getIntTy(128);
+  // auto i1ty = getIntTy(1);
+  // auto i8ty = getIntTy(8);
+  // auto i16ty = getIntTy(16);
+  // auto i32ty = getIntTy(32);
+  // auto i64ty = getIntTy(64);
+  // auto i128ty = getIntTy(128);
 
   switch (opcode) {
 
   case RISCV::C_NOP_HINT:
     break;
-    
+
   case RISCV::C_J: {
     // copied from ARM
     BasicBlock *dst{nullptr};
@@ -114,7 +114,7 @@ void riscv2llvm::lift(MCInst &I) {
   case RISCV::C_JR:
     // FIXME!!
     break;
-    
+
   default:
     *out << "unhandled instruction\n";
     exit(-1);

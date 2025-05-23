@@ -279,6 +279,16 @@ public:
   void lift_orn();
   void lift_lsrv();
   void lift_lslv();
+  void lift_orri(unsigned opcode);
+  void lift_orrr();
+  void lift_udiv(unsigned opcode);
+  void lift_sdiv(unsigned opcode);
+  void lift_eon_bic(unsigned opcode);
+  void lift_clz();
+  void lift_rev();
+  void lift_rbit();
+  void lift_ror();
+  void lift_extr();
 };
 
 } // end namespace lifter
