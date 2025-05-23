@@ -82,22 +82,55 @@ void riscv2llvm::doCall(FunctionCallee FC, CallInst *llvmCI,
 Value *riscv2llvm::readFromRegOperand(int idx) {
   auto op = CurInst->getOperand(idx);
   assert(op.isReg());
-  auto i64ty = getIntTy(64);
-  return readFromReg(op.getReg(), i64ty);
+  return readFromReg(op.getReg());
 }
 
-Value *riscv2llvm::readFromReg(unsigned Reg, Type *ty) {
+Value *riscv2llvm::readFromReg(unsigned Reg) {
   auto addr = lookupReg(Reg);
   *out << "addr = " << addr << "\n";
-  return createLoad(ty, addr);
+  auto i64ty = getIntTy(64);
+  return createLoad(i64ty, addr);
 }
 
 void riscv2llvm::doReturn() {
-  assert(false);
+  auto i32ty = getIntTy(32);
+  auto i64ty = getIntTy(64);
+
+  // FIXME add ABI checks
+
+  auto *retTyp = srcFn.getReturnType();
+  if (retTyp->isVoidTy()) {
+    createReturn(nullptr);
+  } else {
+    Value *retVal = nullptr;
+    // FIXME handle vectors and FP
+    retVal = readFromReg(RISCV::X10);
+    if (retTyp->isPointerTy()) {
+      retVal = new IntToPtrInst(retVal, PointerType::get(Ctx, 0), "", LLVMBB);
+    } else {
+      auto retWidth = DL.getTypeSizeInBits(retTyp);
+      auto retValWidth = DL.getTypeSizeInBits(retVal->getType());
+
+      if (retWidth < retValWidth)
+        retVal = createTrunc(retVal, getIntTy(retWidth));
+
+      // mask off any don't-care bits
+      if (has_ret_attr && (origRetWidth < 32)) {
+        assert(retWidth >= origRetWidth);
+        assert(retWidth == 64);
+        auto trunc = createTrunc(retVal, i32ty);
+        retVal = createZExt(trunc, i64ty);
+      }
+
+      if ((retTyp->isVectorTy() || retTyp->isFloatingPointTy()) &&
+          !has_ret_attr)
+        retVal = createBitCast(retVal, retTyp);
+    }
+    createReturn(retVal);
+  }
 }
 
 void riscv2llvm::platformInit() {
-  auto i64ty = getIntTy(64);
   auto i8ty = getIntTy(8);
 
   // allocate storage for the main register file
@@ -115,7 +148,7 @@ void riscv2llvm::platformInit() {
   auto paramBase =
       createGEP(i8ty, stackMem, {getUnsignedIntConst(stackBytes, 64)}, "");
   createStore(paramBase, RegFile[RISCV::X2]);
-  initialSP = readFromReg(RISCV::X2, i64ty);
+  initialSP = readFromReg(RISCV::X2);
 
   // initializing to zero makes loads from XZR work; stores are
   // handled in updateReg()
@@ -206,8 +239,8 @@ void riscv2llvm::lift(MCInst &I) {
   // auto i1ty = getIntTy(1);
   // auto i8ty = getIntTy(8);
   // auto i16ty = getIntTy(16);
-  // auto i32ty = getIntTy(32);
-  // auto i64ty = getIntTy(64);
+  auto i32ty = getIntTy(32);
+  auto i64ty = getIntTy(64);
   // auto i128ty = getIntTy(128);
 
   switch (opcode) {
@@ -243,13 +276,16 @@ void riscv2llvm::lift(MCInst &I) {
   case RISCV::C_SUBW: {
     auto a = readFromRegOperand(1);
     auto b = readFromRegOperand(2);
-    auto sub = createSub(a, b);
-    updateOutputReg(sub);
+    auto a32 = createTrunc(a, i32ty);
+    auto b32 = createTrunc(b, i32ty);
+    auto sub = createSub(a32, b32);
+    auto res = createSExt(sub, i64ty);
+    updateOutputReg(res);
     break;
   }
 
   case RISCV::C_JR:
-    // FIXME!!
+    doReturn();
     break;
 
   default:

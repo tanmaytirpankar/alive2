@@ -49,7 +49,7 @@ class riscv2llvm final : public mc2llvm {
 
   void doReturn() override;
 
-  llvm::Value *readFromReg(unsigned Reg, llvm::Type *ty);
+  llvm::Value *readFromReg(unsigned Reg);
   unsigned mapRegToBackingReg(unsigned Reg);
   llvm::Value *readFromRegOperand(int idx);
   llvm::Value *lookupReg(unsigned Reg);
