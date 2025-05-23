@@ -45,7 +45,7 @@ class riscv2llvm final : public mc2llvm {
 
   void lift(llvm::MCInst &I) override;
 
-  llvm::Value *createRegFileAndStack() override;
+  void platformInit() override;
 
   void doReturn() override;
 

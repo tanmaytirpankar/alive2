@@ -16,6 +16,9 @@ namespace lifter {
 // amount of stack available for use by the lifted function, in bytes
 #define stackBytes 1024
 
+  // number of 8-byte stack slots for parameters
+#define numStackSlots 32
+  
 void checkArguments(llvm::CallInst *ci, llvm::Value *val);
 void checkVectorTy(llvm::VectorType *Ty);
 std::string funcToString(llvm::Function *F);

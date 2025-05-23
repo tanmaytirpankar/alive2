@@ -885,7 +885,7 @@ public:
   virtual void lift(llvm::MCInst &I) = 0;
   virtual llvm::Value *enforceSExtZExt(llvm::Value *V, bool isSExt,
                                        bool isZExt) = 0;
-  virtual llvm::Value *createRegFileAndStack() = 0;
+  virtual void platformInit() = 0;
   virtual void doReturn() = 0;
 };
 

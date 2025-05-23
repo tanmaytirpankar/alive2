@@ -9,14 +9,6 @@ using namespace std;
 using namespace llvm;
 using namespace lifter;
 
-// FIXME we can't include these here!! get rid of the dependencies
-
-#define GET_INSTRINFO_ENUM
-#include "Target/AArch64/AArch64GenInstrInfo.inc"
-
-#define GET_REGINFO_ENUM
-#include "Target/AArch64/AArch64GenRegisterInfo.inc"
-
 ////////////////////
 
 Function *mc2llvm::copyFunctionToTarget(Function *f, const Twine &name) {
@@ -555,9 +547,6 @@ Function *mc2llvm::run() {
   // default to adding instructions to the entry block
   LLVMBB = BBs[0].first;
 
-  // number of 8-byte stack slots for parameters
-  const int numStackSlots = 32;
-
   auto *allocTy =
       FunctionType::get(PointerType::get(Ctx, 0), {i64, i64}, false);
   myAlloc = Function::Create(allocTy, GlobalValue::ExternalLinkage, 0,
@@ -575,82 +564,7 @@ Function *mc2llvm::run() {
   stackMem = CallInst::Create(myAlloc, {stackSize, getUnsignedIntConst(16, 64)},
                               "stack", LLVMBB);
 
-  auto paramBase = createRegFileAndStack();
-
-  *out << "about to do callee-side ABI stuff\n";
-
-  // implement the callee side of the ABI; FIXME -- this code only
-  // supports integer parameters <= 64 bits and will require
-  // significant generalization to handle large parameters
-  unsigned vecArgNum = 0;
-  unsigned scalarArgNum = 0;
-  unsigned stackSlot = 0;
-
-  for (Function::arg_iterator arg = liftedFn->arg_begin(),
-                              E = liftedFn->arg_end(),
-                              srcArg = srcFn.arg_begin();
-       arg != E; ++arg, ++srcArg) {
-    *out << "  processing " << getBitWidth(arg)
-         << "-bit arg with vecArgNum = " << vecArgNum
-         << ", scalarArgNum = " << scalarArgNum
-         << ", stackSlot = " << stackSlot;
-    auto *argTy = arg->getType();
-    auto *val =
-        enforceSExtZExt(arg, srcArg->hasSExtAttr(), srcArg->hasZExtAttr());
-
-    // first 8 integer parameters go in the first 8 integer registers
-    if ((argTy->isIntegerTy() || argTy->isPointerTy()) && scalarArgNum < 8) {
-      auto Reg = AArch64::X0 + scalarArgNum;
-      createStore(val, RegFile[Reg]);
-      ++scalarArgNum;
-      goto end;
-    }
-
-    // first 8 vector/FP parameters go in the first 8 vector registers
-    if ((argTy->isVectorTy() || argTy->isFloatingPointTy()) && vecArgNum < 8) {
-      auto Reg = AArch64::Q0 + vecArgNum;
-      createStore(val, RegFile[Reg]);
-      ++vecArgNum;
-      goto end;
-    }
-
-    // anything else goes onto the stack
-    {
-      // 128-bit alignment required for 128-bit arguments
-      if ((getBitWidth(val) == 128) && ((stackSlot % 2) != 0)) {
-        ++stackSlot;
-        *out << " (actual stack slot = " << stackSlot << ")";
-      }
-
-      if (stackSlot >= numStackSlots) {
-        *out << "\nERROR: maximum stack slots for parameter values "
-                "exceeded\n\n";
-        exit(-1);
-      }
-
-      auto addr =
-          createGEP(i64, paramBase, {getUnsignedIntConst(stackSlot, 64)}, "");
-      createStore(val, addr);
-
-      if (getBitWidth(val) == 64) {
-        stackSlot += 1;
-      } else if (getBitWidth(val) == 128) {
-        stackSlot += 2;
-      } else {
-        assert(false);
-      }
-    }
-
-  end:
-    *out << "\n";
-  }
-
-  *out << "done with callee-side ABI stuff\n";
-
-  // initialize the frame pointer
-  auto initFP =
-      createGEP(i64, paramBase, {getUnsignedIntConst(stackSlot, 64)}, "");
-  createStore(initFP, RegFile[AArch64::FP]);
+  platformInit();
 
   *out << "\n\nlifting assembly instructions to LLVM\n";
 

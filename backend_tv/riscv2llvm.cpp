@@ -70,10 +70,12 @@ void riscv2llvm::lift(MCInst &I) {
 
 Value *riscv2llvm::readFromReg(unsigned Reg, Type *ty) {
   assert(Reg >= RISCV::X0 && Reg <= RISCV::X31);
-  return createLoad(ty, RegFile[Reg - RISCV::X0]);
+  Value *addr = RegFile[Reg];
+  *out << "addr = " << addr << "\n";
+  return createLoad(ty, addr);
 }
 
-Value *riscv2llvm::createRegFileAndStack() {
+void riscv2llvm::platformInit() {
   auto i64ty = getIntTy(64);
   auto i8ty = getIntTy(8);
 
@@ -82,9 +84,11 @@ Value *riscv2llvm::createRegFileAndStack() {
     stringstream Name;
     Name << "X" << Reg - RISCV::X0;
     createRegStorage(Reg, 64, Name.str());
-    initialReg[Reg - RISCV::X0] = readFromReg(Reg, i64ty);
+    // initialReg[Reg - RISCV::X0] = readFromReg(Reg, i64ty);
   }
 
+  *out << "created scalar registers\n";
+  
   // TODO vector registers
 
   auto paramBase =
@@ -96,7 +100,79 @@ Value *riscv2llvm::createRegFileAndStack() {
   // handled in updateReg()
   createStore(getUnsignedIntConst(0, 64), RegFile[RISCV::X0]);
 
-  return paramBase;
+  *out << "about to do callee-side ABI stuff\n";
+
+  // implement the callee side of the ABI; FIXME -- this code only
+  // supports integer parameters <= 64 bits and will require
+  // significant generalization to handle large parameters
+  unsigned vecArgNum = 0;
+  unsigned scalarArgNum = 0;
+  unsigned stackSlot = 0;
+
+  for (Function::arg_iterator arg = liftedFn->arg_begin(),
+                              E = liftedFn->arg_end(),
+                              srcArg = srcFn.arg_begin();
+       arg != E; ++arg, ++srcArg) {
+    *out << "  processing " << getBitWidth(arg)
+         << "-bit arg with vecArgNum = " << vecArgNum
+         << ", scalarArgNum = " << scalarArgNum
+         << ", stackSlot = " << stackSlot;
+    auto *argTy = arg->getType();
+    auto *val =
+        enforceSExtZExt(arg, srcArg->hasSExtAttr(), srcArg->hasZExtAttr());
+
+    // first 8 integer parameters go in the first 8 integer registers
+    if ((argTy->isIntegerTy() || argTy->isPointerTy()) && scalarArgNum < 8) {
+      auto Reg = RISCV::X10 + scalarArgNum;
+      createStore(val, RegFile[Reg]);
+      ++scalarArgNum;
+      goto end;
+    }
+
+    assert(false && "unimplemented");
+#if 0
+    
+    // first 8 vector/FP parameters go in the first 8 vector registers
+    if ((argTy->isVectorTy() || argTy->isFloatingPointTy()) && vecArgNum < 8) {
+      auto Reg = AArch64::Q0 + vecArgNum;
+      createStore(val, RegFile[Reg]);
+      ++vecArgNum;
+      goto end;
+    }
+
+    // anything else goes onto the stack
+    {
+      // 128-bit alignment required for 128-bit arguments
+      if ((getBitWidth(val) == 128) && ((stackSlot % 2) != 0)) {
+        ++stackSlot;
+        *out << " (actual stack slot = " << stackSlot << ")";
+      }
+
+      if (stackSlot >= numStackSlots) {
+        *out << "\nERROR: maximum stack slots for parameter values "
+                "exceeded\n\n";
+        exit(-1);
+      }
+
+      auto addr =
+          createGEP(i64, paramBase, {getUnsignedIntConst(stackSlot, 64)}, "");
+      createStore(val, addr);
+
+      if (getBitWidth(val) == 64) {
+        stackSlot += 1;
+      } else if (getBitWidth(val) == 128) {
+        stackSlot += 2;
+      } else {
+        assert(false);
+      }
+    }
+#endif
+
+  end:
+    *out << "\n";
+  }
+
+  *out << "done with callee-side ABI stuff\n";
 }
 
 void riscv2llvm::doReturn() {

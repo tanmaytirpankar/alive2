@@ -245,7 +245,7 @@ public:
 
   llvm::AllocaInst *get_reg(aslp::reg_t regtype, uint64_t num) override;
 
-  llvm::Value *createRegFileAndStack() override;
+  void platformInit() override;
 
   std::optional<aslp::opcode_t> getArmOpcode(const llvm::MCInst &I);
 
