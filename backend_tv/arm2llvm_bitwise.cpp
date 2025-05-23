@@ -9,6 +9,35 @@ using namespace llvm;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+void arm2llvm::lift_rev32(unsigned opcode) {
+  // REV16Wr: Reverse bytes of 32 bit value in 16-bit half-words.
+  // REV32Xr: Reverse bytes of 64 bit value in 32-bit words.
+  auto size = getInstSize(opcode);
+  auto val = readFromOperand(1);
+
+  // Reversing all of the bytes, then performing a rotation by half the
+  // width reverses bytes in 16-bit halfwords for a 32 bit int and reverses
+  // bytes in a 32-bit word for a 64 bit int
+  auto reverse_val = createBSwap(val);
+  auto ret =
+      createFShr(reverse_val, reverse_val, getUnsignedIntConst(size / 2, size));
+  updateOutputReg(ret);
+}
+
+void arm2llvm::lift_rev16(unsigned opcode) {
+  // REV16Xr: Reverse bytes of 64 bit value in 16-bit half-words.
+  auto size = getInstSize(opcode);
+  auto val = readFromOperand(1);
+  auto first_part = createMaskedShl(val, getUnsignedIntConst(8, size));
+  auto first_part_and =
+      createAnd(first_part, getUnsignedIntConst(0xFF00FF00FF00FF00UL, size));
+  auto second_part = createMaskedLShr(val, getUnsignedIntConst(8, size));
+  auto second_part_and =
+      createAnd(second_part, getUnsignedIntConst(0x00FF00FF00FF00FFUL, size));
+  auto combined_val = createOr(first_part_and, second_part_and);
+  updateOutputReg(combined_val);
+}
+
 void arm2llvm::lift_eon_bic(unsigned opcode) {
   // BIC:
   // return = op1 AND NOT (optional shift) op2

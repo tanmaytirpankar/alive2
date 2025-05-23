@@ -289,6 +289,15 @@ public:
   void lift_rbit();
   void lift_ror();
   void lift_extr();
+  void lift_rev16(unsigned opcode);
+  void lift_rev32(unsigned opcode);
+  void lift_ld1r(unsigned opcode);
+  void lift_ld1(unsigned opcode);
+  void lift_ldr3(unsigned opcode);
+  void lift_ldr2(unsigned opcode);
+  void lift_ldu1(unsigned opcode);
+  void lift_ldr1(unsigned opcode);
+  void lift_ld2(unsigned opcode);
 };
 
 } // end namespace lifter
