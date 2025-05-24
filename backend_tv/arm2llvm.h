@@ -313,6 +313,9 @@ public:
   void lift_cbnz();
   void lift_ins_gpr(unsigned opcode);
   void lift_ins_lane(unsigned opcode);
+  void lift_fneg();
+  void lift_vec_fneg(unsigned opcode);
+  void lift_fcvt_1(unsigned opcode);
 };
 
 } // end namespace lifter

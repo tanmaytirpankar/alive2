@@ -211,6 +211,7 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
 
     "backend_tv/arm2llvm.cpp"
     "backend_tv/arm2llvm_arith.cpp"
+    "backend_tv/arm2llvm_float.cpp"
     "backend_tv/arm2llvm_branch.cpp"
     "backend_tv/arm2llvm_misc.cpp"
     "backend_tv/arm2llvm_bitwise.cpp"
@@ -218,6 +219,7 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
     "backend_tv/arm2llvm_load.cpp"
     "backend_tv/arm2llvm_store.cpp"
     "backend_tv/arm2llvm_int_vec.cpp"
+    "backend_tv/arm2llvm_fp_vec.cpp"
 
     "backend_tv/riscv2llvm.cpp"
 

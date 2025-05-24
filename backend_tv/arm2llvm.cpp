@@ -4011,54 +4011,15 @@ void arm2llvm::lift(MCInst &I) {
     break;
 
   case AArch64::FNEGSr:
-  case AArch64::FNEGDr: {
-    auto operandSize = getRegSize(CurInst->getOperand(1).getReg());
-    auto fVal = readFromFPOperand(1, operandSize);
-    auto res = createFNeg(fVal);
-    updateOutputReg(res);
+  case AArch64::FNEGDr:
+    lift_fneg();
     break;
-  }
 
   case AArch64::FNEGv2f32:
   case AArch64::FNEGv4f32:
-  case AArch64::FNEGv2f64: {
-    unsigned eltSize, numElts;
-    switch (opcode) {
-    case AArch64::FNEGv2f32: {
-      eltSize = 32;
-      numElts = 2;
-      break;
-    }
-    case AArch64::FNEGv4f16: {
-      eltSize = 16;
-      numElts = 4;
-      break;
-    }
-    case AArch64::FNEGv4f32: {
-      eltSize = 32;
-      numElts = 4;
-      break;
-    }
-    case AArch64::FNEGv2f64: {
-      eltSize = 64;
-      numElts = 2;
-      break;
-    }
-    case AArch64::FNEGv8f16: {
-      eltSize = 16;
-      numElts = 8;
-      break;
-    }
-    default: {
-      assert(false);
-      break;
-    }
-    }
-    auto v = readFromVecOperand(1, eltSize, numElts, false, true);
-    auto res = createFNeg(v);
-    updateOutputReg(res);
+  case AArch64::FNEGv2f64:
+    lift_vec_fneg(opcode);
     break;
-  }
 
   case AArch64::FCVTZUUWHr:
   case AArch64::FCVTZUUWSr:
@@ -4071,25 +4032,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::FCVTZSUWDr:
   case AArch64::FCVTZSUXHr:
   case AArch64::FCVTZSUXSr:
-  case AArch64::FCVTZSUXDr: {
-    auto &op0 = CurInst->getOperand(0);
-    auto &op1 = CurInst->getOperand(1);
-    assert(op0.isReg() && op1.isReg());
-
-    auto isSigned =
-        opcode == AArch64::FCVTZSUWHr || opcode == AArch64::FCVTZSUWSr ||
-        opcode == AArch64::FCVTZSUWDr || opcode == AArch64::FCVTZSUXHr ||
-        opcode == AArch64::FCVTZSUXSr || opcode == AArch64::FCVTZSUXDr;
-
-    auto op0Size = getRegSize(op0.getReg());
-    auto op1Size = getRegSize(op1.getReg());
-
-    auto fp_val = readFromFPOperand(1, op1Size);
-    auto converted = isSigned ? createFPToSI_sat(fp_val, getIntTy(op0Size))
-                              : createFPToUI_sat(fp_val, getIntTy(op0Size));
-    updateOutputReg(converted);
+  case AArch64::FCVTZSUXDr:
+    lift_fcvt_1(opcode);
     break;
-  }
 
   case AArch64::FCVTZSv1i32:
   case AArch64::FCVTZSv1i64: {
@@ -4113,11 +4058,10 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::FCVTSHr:
   case AArch64::FCVTDHr:
   case AArch64::FCVTHSr:
-  case AArch64::FCVTHDr: {
-    *out << "\nERROR: only float and double supported (not  bfloat, half, "
+  case AArch64::FCVTHDr:
+    *out << "\nERROR: only float and double supported (not bfloat, half, "
             "fp128, etc.)\n\n";
     exit(-1);
-  }
 
   case AArch64::FCVTDSr:
   case AArch64::FCVTSDr: {
