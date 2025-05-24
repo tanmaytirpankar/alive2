@@ -10,8 +10,8 @@ using namespace llvm;
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
 void arm2llvm::lift_adrp() {
-    assert(CurInst->getOperand(0).isReg());
-    mapExprVar(CurInst->getOperand(1).getExpr());
+  assert(CurInst->getOperand(0).isReg());
+  mapExprVar(CurInst->getOperand(1).getExpr());
 }
 
 void arm2llvm::lift_movk(unsigned opcode) {

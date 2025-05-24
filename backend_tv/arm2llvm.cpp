@@ -3289,7 +3289,7 @@ void arm2llvm::lift(MCInst &I) {
 
   LLVMBB = newbb;
 
-  auto i1 = getIntTy(1);
+  // auto i1 = getIntTy(1);
   auto i8 = getIntTy(8);
   auto i16 = getIntTy(16);
   auto i32 = getIntTy(32);
@@ -3975,158 +3975,40 @@ void arm2llvm::lift(MCInst &I) {
     lift_stp_2(opcode);
     break;
 
-  case AArch64::ADRP: {
-    assert(CurInst->getOperand(0).isReg());
-    mapExprVar(CurInst->getOperand(1).getExpr());
+  case AArch64::ADRP:
+    lift_adrp();
     break;
-  }
 
   case AArch64::CBZW:
-  case AArch64::CBZX: {
-    auto operand = readFromOperand(0);
-    assert(operand != nullptr && "operand is null");
-    auto cond_val = createICmp(ICmpInst::Predicate::ICMP_EQ, operand,
-                               getUnsignedIntConst(0, getBitWidth(operand)));
-    auto dst_true = getBB(CurInst->getOperand(1));
-    assert(dst_true);
-    assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
-
-    BasicBlock *dst_false{nullptr};
-    if (MCBB->getSuccs().size() == 1) {
-      dst_false = dst_true;
-    } else {
-      const string *dst_false_name = nullptr;
-      for (auto &succ : MCBB->getSuccs()) {
-        if (succ->getName() != dst_true->getName()) {
-          dst_false_name = &succ->getName();
-          break;
-        }
-      }
-      assert(dst_false_name != nullptr);
-      dst_false = getBBByName(*dst_false_name);
-    }
-    createBranch(cond_val, dst_true, dst_false);
+  case AArch64::CBZX:
+    lift_cbz();
     break;
-  }
 
   case AArch64::CBNZW:
-  case AArch64::CBNZX: {
-    auto operand = readFromOperand(0);
-    assert(operand != nullptr && "operand is null");
-    auto cond_val = createICmp(ICmpInst::Predicate::ICMP_NE, operand,
-                               getUnsignedIntConst(0, getBitWidth(operand)));
-
-    auto dst_true = getBB(CurInst->getOperand(1));
-    assert(dst_true);
-    auto succs = MCBB->getSuccs().size();
-
-    if (succs == 2) {
-      const string *dst_false_name = nullptr;
-      for (auto &succ : MCBB->getSuccs()) {
-        if (succ->getName() != dst_true->getName()) {
-          dst_false_name = &succ->getName();
-          break;
-        }
-      }
-      assert(dst_false_name != nullptr);
-      auto *dst_false = getBBByName(*dst_false_name);
-      createBranch(cond_val, dst_true, dst_false);
-    } else {
-      assert(succs == 1);
-    }
+  case AArch64::CBNZX:
+    lift_cbnz();
     break;
-  }
 
   case AArch64::TBZW:
   case AArch64::TBZX:
   case AArch64::TBNZW:
-  case AArch64::TBNZX: {
-    auto size = getInstSize(opcode);
-    auto operand = readFromOperand(0);
-    assert(operand != nullptr && "operand is null");
-    auto bit_pos = getImm(1);
-    auto shift = createMaskedLShr(operand, getUnsignedIntConst(bit_pos, size));
-    auto cond_val = createTrunc(shift, i1);
-
-    auto &jmp_tgt_op = CurInst->getOperand(2);
-    assert(jmp_tgt_op.isExpr() && "expected expression");
-    assert((jmp_tgt_op.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
-           "expected symbol ref as bcc operand");
-    const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt_op.getExpr());
-    const MCSymbol &Sym =
-        SRE.getSymbol(); // FIXME refactor this into a function
-    auto *dst_false = getBBByName(Sym.getName());
-
-    assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
-
-    const string *dst_true_name = nullptr;
-    for (auto &succ : MCBB->getSuccs()) {
-      if (succ->getName() != Sym.getName()) {
-        dst_true_name = &succ->getName();
-        break;
-      }
-    }
-    auto *dst_true =
-        getBBByName(dst_true_name ? *dst_true_name : Sym.getName());
-
-    if (opcode == AArch64::TBNZW || opcode == AArch64::TBNZX)
-      createBranch(cond_val, dst_false, dst_true);
-    else
-      createBranch(cond_val, dst_true, dst_false);
+  case AArch64::TBNZX:
+    lift_tbz(opcode);
     break;
-  }
 
   case AArch64::INSvi8lane:
   case AArch64::INSvi16lane:
   case AArch64::INSvi32lane:
-  case AArch64::INSvi64lane: {
-    unsigned w;
-    if (opcode == AArch64::INSvi8lane) {
-      w = 8;
-    } else if (opcode == AArch64::INSvi16lane) {
-      w = 16;
-    } else if (opcode == AArch64::INSvi32lane) {
-      w = 32;
-    } else if (opcode == AArch64::INSvi64lane) {
-      w = 64;
-    } else {
-      assert(false);
-    }
-    auto in = readFromVecOperand(3, w, 128 / w);
-    auto out = readFromVecOperand(1, w, 128 / w);
-    auto ext = createExtractElement(in, getImm(4));
-    auto ins = createInsertElement(out, ext, getImm(2));
-    updateOutputReg(ins);
+  case AArch64::INSvi64lane:
+    lift_ins_lane(opcode);
     break;
-  }
 
   case AArch64::INSvi8gpr:
   case AArch64::INSvi16gpr:
   case AArch64::INSvi32gpr:
-  case AArch64::INSvi64gpr: {
-    unsigned w;
-    if (opcode == AArch64::INSvi8gpr) {
-      w = 8;
-    } else if (opcode == AArch64::INSvi16gpr) {
-      w = 16;
-    } else if (opcode == AArch64::INSvi32gpr) {
-      w = 32;
-    } else if (opcode == AArch64::INSvi64gpr) {
-      w = 64;
-    } else {
-      assert(false);
-    }
-    auto val = readFromOperand(3);
-    // need to clear extraneous bits
-    if (w < 32)
-      val = createTrunc(val, getIntTy(w));
-    auto lane = getImm(2);
-    auto ty = getVecTy(w, 128 / w);
-    auto vec = readFromRegTyped(CurInst->getOperand(1).getReg(), ty);
-    auto inserted = createInsertElement(vec, val, lane);
-    updateOutputReg(inserted);
+  case AArch64::INSvi64gpr:
+    lift_ins_gpr(opcode);
     break;
-  }
 
   case AArch64::FNEGSr:
   case AArch64::FNEGDr: {

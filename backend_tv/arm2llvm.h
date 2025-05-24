@@ -308,6 +308,11 @@ public:
   void lift_ldp_1(unsigned opcode);
   void lift_ldp_2(unsigned opcode);
   void lift_adrp();
+  void lift_cbz();
+  void lift_tbz(unsigned opcode);
+  void lift_cbnz();
+  void lift_ins_gpr(unsigned opcode);
+  void lift_ins_lane(unsigned opcode);
 };
 
 } // end namespace lifter
