@@ -3936,7 +3936,7 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::LDPXi:
   case AArch64::LDPDi:
   case AArch64::LDPQi:
-    lift_ldp(opcode);
+    lift_ldp_1(opcode);
     break;
 
   case AArch64::STPWi:
@@ -3944,7 +3944,7 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::STPXi:
   case AArch64::STPDi:
   case AArch64::STPQi:
-    lift_stp(opcode);
+    lift_stp_1(opcode);
     break;
 
   case AArch64::LDPSWpre:
@@ -3958,92 +3958,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::LDPSpost:
   case AArch64::LDPXpost:
   case AArch64::LDPDpost:
-  case AArch64::LDPQpost: {
-    unsigned scale;
-    switch (opcode) {
-    case AArch64::LDPSWpre:
-    case AArch64::LDPWpre:
-    case AArch64::LDPSpre:
-    case AArch64::LDPSWpost:
-    case AArch64::LDPWpost:
-    case AArch64::LDPSpost: {
-      scale = 2;
-      break;
-    }
-    case AArch64::LDPXpre:
-    case AArch64::LDPDpre:
-    case AArch64::LDPXpost:
-    case AArch64::LDPDpost: {
-      scale = 3;
-      break;
-    }
-    case AArch64::LDPQpre:
-    case AArch64::LDPQpost: {
-      scale = 4;
-      break;
-    }
-    default: {
-      *out << "\nError Unknown opcode\n";
-      visitError();
-    }
-    }
-
-    bool sExt = false;
-    switch (opcode) {
-    case AArch64::LDPSWpre:
-    case AArch64::LDPSWpost:
-      sExt = true;
-      break;
-    default:
-      sExt = false;
-      break;
-    }
-    unsigned size = pow(2, scale);
-    auto &op0 = CurInst->getOperand(0);
-    auto &op1 = CurInst->getOperand(1);
-    auto &op2 = CurInst->getOperand(2);
-    auto &op3 = CurInst->getOperand(3);
-    auto &op4 = CurInst->getOperand(4);
-    assert(op0.isReg() && op1.isReg() && op2.isReg() && op3.isReg());
-    assert(op0.getReg() == op3.getReg());
-    assert(op4.isImm());
-
-    auto destReg1 = op1.getReg();
-    auto destReg2 = op2.getReg();
-    auto baseReg = op3.getReg();
-    auto imm = op4.getImm();
-    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
-           (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
-           (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
-    auto base = readPtrFromReg(baseReg);
-    auto baseAddr = createPtrToInt(base, i64);
-
-    // Start offset as 7-bit signed integer
-    assert(imm <= 63 && imm >= -64);
-    auto offset = getSignedIntConst(imm, 7);
-    Value *offsetVal1 = createMaskedShl(createSExt(offset, i64),
-                                        getUnsignedIntConst(scale, 64));
-    Value *offsetVal2 = createAdd(offsetVal1, getUnsignedIntConst(size, 64));
-
-    bool isPre = opcode == AArch64::LDPWpre || opcode == AArch64::LDPSpre ||
-                 opcode == AArch64::LDPXpre || opcode == AArch64::LDPDpre ||
-                 opcode == AArch64::LDPQpre;
-
-    Value *loaded1, *loaded2;
-    if (isPre) {
-      loaded1 = makeLoadWithOffset(base, offsetVal1, size);
-      loaded2 = makeLoadWithOffset(base, offsetVal2, size);
-    } else {
-      loaded1 = makeLoadWithOffset(base, getUnsignedIntConst(0, 64), size);
-      loaded2 = makeLoadWithOffset(base, getUnsignedIntConst(size, 64), size);
-    }
-    updateReg(loaded1, destReg1, sExt);
-    updateReg(loaded2, destReg2, sExt);
-
-    auto added = createAdd(baseAddr, offsetVal1);
-    updateOutputReg(added);
+  case AArch64::LDPQpost:
+    lift_ldp_2(opcode);
     break;
-  }
 
   case AArch64::STPWpre:
   case AArch64::STPSpre:
@@ -4054,91 +3971,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::STPSpost:
   case AArch64::STPXpost:
   case AArch64::STPDpost:
-  case AArch64::STPQpost: {
-    auto &op0 = CurInst->getOperand(0);
-    auto &op1 = CurInst->getOperand(1);
-    auto &op2 = CurInst->getOperand(2);
-    auto &op3 = CurInst->getOperand(3);
-    auto &op4 = CurInst->getOperand(4);
-    assert(op0.isReg() && op1.isReg() && op2.isReg() && op3.isReg());
-    assert(op0.getReg() == op3.getReg());
-    assert(op4.isImm());
-
-    auto srcReg1 = op1.getReg();
-    auto srcReg2 = op2.getReg();
-    auto baseReg = op3.getReg();
-    auto imm = op4.getImm();
-    assert((baseReg >= AArch64::X0 && baseReg <= AArch64::X28) ||
-           (baseReg == AArch64::SP) || (baseReg == AArch64::LR) ||
-           (baseReg == AArch64::FP) || (baseReg == AArch64::XZR));
-    auto base = readPtrFromReg(baseReg);
-    auto baseAddr = createPtrToInt(base, i64);
-
-    unsigned scale;
-    Value *loaded1, *loaded2;
-
-    switch (opcode) {
-    case AArch64::STPWpre:
-    case AArch64::STPSpre:
-    case AArch64::STPWpost:
-    case AArch64::STPSpost: {
-      scale = 2;
-      loaded1 = createTrunc(readFromRegOld(srcReg1), i32);
-      loaded2 = createTrunc(readFromRegOld(srcReg2), i32);
-      break;
-    }
-    case AArch64::STPXpre:
-    case AArch64::STPXpost: {
-      scale = 3;
-      loaded1 = readFromRegOld(srcReg1);
-      loaded2 = readFromRegOld(srcReg2);
-      break;
-    }
-    case AArch64::STPDpre:
-    case AArch64::STPDpost: {
-      scale = 3;
-      loaded1 = createTrunc(readFromRegOld(srcReg1), i64);
-      loaded2 = createTrunc(readFromRegOld(srcReg2), i64);
-      break;
-    }
-    case AArch64::STPQpre:
-    case AArch64::STPQpost: {
-      scale = 4;
-      loaded1 = readFromRegOld(srcReg1);
-      loaded2 = readFromRegOld(srcReg2);
-      break;
-    }
-    default: {
-      *out << "\nError Unknown opcode\n";
-      visitError();
-    }
-    }
-    unsigned size = pow(2, scale);
-
-    // Start offset as 7-bit signed integer
-    assert(imm <= 63 && imm >= -64);
-    auto offset = getSignedIntConst(imm, 7);
-    Value *offsetVal1 = createMaskedShl(createSExt(offset, i64),
-                                        getUnsignedIntConst(scale, 64));
-    Value *offsetVal2 = createAdd(offsetVal1, getUnsignedIntConst(size, 64));
-
-    bool isPre = opcode == AArch64::STPWpre || opcode == AArch64::STPSpre ||
-                 opcode == AArch64::STPXpre || opcode == AArch64::STPDpre ||
-                 opcode == AArch64::STPQpre;
-
-    if (isPre) {
-      storeToMemoryValOffset(base, offsetVal1, size, loaded1);
-      storeToMemoryValOffset(base, offsetVal2, size, loaded2);
-    } else {
-      storeToMemoryValOffset(base, getUnsignedIntConst(0, 64), size, loaded1);
-      storeToMemoryValOffset(base, getUnsignedIntConst(size, 64), size,
-                             loaded2);
-    }
-
-    auto added = createAdd(baseAddr, offsetVal1);
-    updateOutputReg(added);
+  case AArch64::STPQpost:
+    lift_stp_2(opcode);
     break;
-  }
 
   case AArch64::ADRP: {
     assert(CurInst->getOperand(0).isReg());

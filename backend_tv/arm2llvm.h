@@ -303,8 +303,11 @@ public:
   void lift_str_3(unsigned opcode);
   void lift_str_4(unsigned opcode);
   void lift_str_5(unsigned opcode);
-  void lift_stp(unsigned opcode);
-  void lift_ldp(unsigned opcode);
+  void lift_stp_1(unsigned opcode);
+  void lift_stp_2(unsigned opcode);
+  void lift_ldp_1(unsigned opcode);
+  void lift_ldp_2(unsigned opcode);
+  void lift_adrp();
 };
 
 } // end namespace lifter

@@ -9,6 +9,11 @@ using namespace llvm;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+void arm2llvm::lift_adrp() {
+    assert(CurInst->getOperand(0).isReg());
+    mapExprVar(CurInst->getOperand(1).getExpr());
+}
+
 void arm2llvm::lift_movk(unsigned opcode) {
   auto size = getInstSize(opcode);
   auto dest = readFromOperand(1);
