@@ -37,6 +37,8 @@ riscv2llvm::riscv2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
 
 Value *riscv2llvm::enforceSExtZExt(Value *V, bool isSExt, bool isZExt) {
   // FIXME
+  assert(!isSExt);
+  assert(!isZExt);
   return V;
 }
 
@@ -83,6 +85,12 @@ Value *riscv2llvm::readFromRegOperand(int idx) {
   auto op = CurInst->getOperand(idx);
   assert(op.isReg());
   return readFromReg(op.getReg());
+}
+
+Value *riscv2llvm::readFromImmOperand(int idx, unsigned size) {
+  auto op = CurInst->getOperand(idx);
+  assert(op.isImm());
+  return getSignedIntConst(op.getImm(), size);
 }
 
 Value *riscv2llvm::readFromReg(unsigned Reg) {
@@ -273,14 +281,77 @@ void riscv2llvm::lift(MCInst &I) {
     break;
   }
 
+  case RISCV::ADD:
+  case RISCV::SUB:
+  case RISCV::C_ADD:
+  case RISCV::C_SUB: {
+    auto a = readFromRegOperand(1);
+    auto b = readFromRegOperand(2);
+    Value *res;
+    switch (opcode) {
+    case RISCV::ADD:
+    case RISCV::C_ADD:
+      res = createAdd(a, b);
+      break;
+    case RISCV::SUB:
+    case RISCV::C_SUB:
+      res = createSub(a, b);
+      break;
+    default:
+      assert(false);
+    }
+    updateOutputReg(res);
+    break;
+  }
+
+  case RISCV::C_ADDW:
   case RISCV::C_SUBW: {
     auto a = readFromRegOperand(1);
     auto b = readFromRegOperand(2);
     auto a32 = createTrunc(a, i32ty);
     auto b32 = createTrunc(b, i32ty);
-    auto sub = createSub(a32, b32);
-    auto res = createSExt(sub, i64ty);
-    updateOutputReg(res);
+    Value *res;
+    switch (opcode) {
+    case RISCV::C_ADDW:
+      res = createAdd(a32, b32);
+      break;
+    case RISCV::C_SUBW:
+      res = createSub(a32, b32);
+      break;
+    default:
+      assert(false);
+    }
+    auto resExt = createSExt(res, i64ty);
+    updateOutputReg(resExt);
+    break;
+  }
+
+  case RISCV::C_ADDIW:
+  case RISCV::ADDIW: {
+    auto a = readFromRegOperand(1);
+    auto b = readFromImmOperand(2, 32);
+    auto a32 = createTrunc(a, i32ty);
+    auto res = createAdd(a32, b);
+    auto resExt = createSExt(res, i64ty);
+    updateOutputReg(resExt);
+    break;
+  }
+
+  case RISCV::SLT: {
+    auto a = readFromRegOperand(1);
+    auto b = readFromRegOperand(2);
+    auto res = createICmp(ICmpInst::Predicate::ICMP_SLT, a, b);
+    auto resExt = createZExt(res, i64ty);
+    updateOutputReg(resExt);
+    break;
+  }
+
+  case RISCV::SLTI: {
+    auto a = readFromRegOperand(1);
+    auto b = readFromImmOperand(2, 64);
+    auto res = createICmp(ICmpInst::Predicate::ICMP_SLT, a, b);
+    auto resExt = createZExt(res, i64ty);
+    updateOutputReg(resExt);
     break;
   }
 
@@ -293,4 +364,3 @@ void riscv2llvm::lift(MCInst &I) {
     exit(-1);
   }
 }
-

@@ -54,6 +54,7 @@ class riscv2llvm final : public mc2llvm {
   llvm::Value *readFromRegOperand(int idx);
   llvm::Value *lookupReg(unsigned Reg);
   void updateReg(llvm::Value *V, uint64_t reg);
+  llvm::Value *readFromImmOperand(int idx, unsigned size);
 
 public:
   riscv2llvm(llvm::Module *LiftedModule, MCFunction &MF, llvm::Function &srcFn,
