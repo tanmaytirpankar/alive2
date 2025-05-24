@@ -3,21 +3,6 @@
 #include <cmath>
 #include <vector>
 
-/*
- * primary references for this file are the user mode ISA reference:
- *
- * https://drive.google.com/file/d/1uviu1nH-tScFfgrovvFCrj7Omv8tFtkp/view
- *
- * and the ABI document:
- *
- * https://drive.google.com/file/d/1Ja_Tpp_5Me583CGVD-BIZMlgGBnlKU4R/view
- *
- * this thread has some useful details about setting up a RISCV
- * execution environment:
- *
- * https://www.reddit.com/r/RISCV/comments/10k805c/how_can_i_buildrun_riscv_assembly_on_macos/
- */
-
 #define GET_INSTRINFO_ENUM
 #include "Target/RISCV/RISCVGenInstrInfo.inc"
 
