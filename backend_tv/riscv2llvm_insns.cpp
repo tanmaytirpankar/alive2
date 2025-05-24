@@ -72,31 +72,20 @@ void riscv2llvm::lift(MCInst &I) {
     break;
   }
 
+  case RISCV::C_BNEZ: {
+    auto a = readFromRegOperand(0);
+    auto [dst_true, dst_false] = getBranchTargetsOperand(1);
+    Value *zero = getUnsignedIntConst(0, 64);
+    Value *cond = createICmp(ICmpInst::Predicate::ICMP_NE, a, zero);
+    createBranch(cond, dst_true, dst_false);
+    break;
+  }
+
   case RISCV::BLT:
   case RISCV::BLTU: {
     auto a = readFromRegOperand(0);
     auto b = readFromRegOperand(1);
-    auto &jmp_tgt_op = CurInst->getOperand(2);
-
-    assert(jmp_tgt_op.isExpr() && "expected expression");
-    assert((jmp_tgt_op.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
-           "expected symbol ref as bcc operand");
-    const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt_op.getExpr());
-    const MCSymbol &Sym = SRE.getSymbol();
-
-    auto *dst_true = getBBByName(Sym.getName());
-
-    assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
-    const string *dst_false_name = nullptr;
-    for (auto &succ : MCBB->getSuccs()) {
-      if (succ->getName() != Sym.getName()) {
-        dst_false_name = &succ->getName();
-        break;
-      }
-    }
-    auto *dst_false =
-        getBBByName(dst_false_name ? *dst_false_name : Sym.getName());
-
+    auto [dst_true, dst_false] = getBranchTargetsOperand(2);
     Value *cond;
     switch (opcode) {
     case RISCV::BLT:
@@ -159,6 +148,8 @@ void riscv2llvm::lift(MCInst &I) {
 
   case RISCV::C_SRAI:
   case RISCV::SRAI:
+  case RISCV::C_SRLI:
+  case RISCV::SRLI:
   case RISCV::C_SLLI:
   case RISCV::SLLI:
   case RISCV::C_ANDI:
@@ -185,6 +176,10 @@ void riscv2llvm::lift(MCInst &I) {
     case RISCV::SRAI:
       res = createMaskedAShr(a, b);
       break;
+    case RISCV::C_SRLI:
+    case RISCV::SRLI:
+      res = createMaskedLShr(a, b);
+      break;
     default:
       assert(false);
     }
@@ -200,6 +195,18 @@ void riscv2llvm::lift(MCInst &I) {
     auto res = createAdd(a32, b);
     auto resExt = createSExt(res, i64ty);
     updateOutputReg(resExt);
+    break;
+  }
+
+  case RISCV::C_MV: {
+    auto a = readFromRegOperand(1);
+    updateOutputReg(a);
+    break;
+  }
+
+  case RISCV::C_LI: {
+    auto a = readFromImmOperand(1, 64);
+    updateOutputReg(a);
     break;
   }
 

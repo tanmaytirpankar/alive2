@@ -20,6 +20,27 @@ riscv2llvm::riscv2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
     : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA, SentinelNOP) {
 }
 
+tuple<BasicBlock *, BasicBlock *> riscv2llvm::getBranchTargetsOperand(int op) {
+  auto &jmp_tgt_op = CurInst->getOperand(op);
+  assert(jmp_tgt_op.isExpr() && "expected expression");
+  assert((jmp_tgt_op.getExpr()->getKind() == MCExpr::ExprKind::SymbolRef) &&
+         "expected symbol ref as bcc operand");
+  const MCSymbolRefExpr &SRE = cast<MCSymbolRefExpr>(*jmp_tgt_op.getExpr());
+  const MCSymbol &Sym = SRE.getSymbol();
+  auto dst_true = getBBByName(Sym.getName());
+  assert(MCBB->getSuccs().size() == 1 || MCBB->getSuccs().size() == 2);
+  const string *dst_false_name = nullptr;
+  for (auto &succ : MCBB->getSuccs()) {
+    if (succ->getName() != Sym.getName()) {
+      dst_false_name = &succ->getName();
+      break;
+    }
+  }
+  auto dst_false =
+      getBBByName(dst_false_name ? *dst_false_name : Sym.getName());
+  return make_pair(dst_true, dst_false);
+}
+
 Value *riscv2llvm::enforceSExtZExt(Value *V, bool isSExt, bool isZExt) {
   // FIXME
   assert(!isSExt);

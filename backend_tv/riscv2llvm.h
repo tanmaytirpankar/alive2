@@ -70,6 +70,8 @@ class riscv2llvm final : public mc2llvm {
   llvm::Value *lookupReg(unsigned Reg);
   void updateReg(llvm::Value *V, uint64_t reg);
   llvm::Value *readFromImmOperand(int idx, unsigned size);
+  std::tuple<llvm::BasicBlock *, llvm::BasicBlock *>
+  getBranchTargetsOperand(int op);
 
 public:
   riscv2llvm(llvm::Module *LiftedModule, MCFunction &MF, llvm::Function &srcFn,
