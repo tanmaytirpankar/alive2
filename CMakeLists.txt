@@ -222,6 +222,7 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
     "backend_tv/arm2llvm_fp_vec.cpp"
 
     "backend_tv/riscv2llvm.cpp"
+    "backend_tv/riscv2llvm_insns.cpp"
 
   )
 

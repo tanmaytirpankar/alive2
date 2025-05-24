@@ -3,21 +3,6 @@
 #include <cmath>
 #include <vector>
 
-/*
- * primary references for this file are the user mode ISA reference:
- *
- * https://drive.google.com/file/d/1uviu1nH-tScFfgrovvFCrj7Omv8tFtkp/view
- *
- * and the ABI document:
- *
- * https://drive.google.com/file/d/1Ja_Tpp_5Me583CGVD-BIZMlgGBnlKU4R/view
- *
- * this thread has some useful details about setting up a RISCV
- * execution environment:
- *
- * https://www.reddit.com/r/RISCV/comments/10k805c/how_can_i_buildrun_riscv_assembly_on_macos/
- */
-
 #define GET_INSTRINFO_ENUM
 #include "Target/RISCV/RISCVGenInstrInfo.inc"
 
@@ -88,9 +73,11 @@ Value *riscv2llvm::readFromRegOperand(int idx) {
 }
 
 Value *riscv2llvm::readFromImmOperand(int idx, unsigned size) {
+  assert(size > 12);
   auto op = CurInst->getOperand(idx);
   assert(op.isImm());
-  return getSignedIntConst(op.getImm(), size);
+  auto imm = getSignedIntConst(op.getImm(), 12);
+  return createSExt(imm, getIntTy(size));
 }
 
 Value *riscv2llvm::readFromReg(unsigned Reg) {
@@ -235,136 +222,4 @@ void riscv2llvm::platformInit() {
   }
 
   *out << "done with callee-side ABI stuff\n";
-}
-
-void riscv2llvm::lift(MCInst &I) {
-  auto opcode = I.getOpcode();
-  // StringRef instStr = InstPrinter->getOpcodeName(opcode);
-  auto newbb = BasicBlock::Create(Ctx, "lifter_" + nextName(), liftedFn);
-  createBranch(newbb);
-  LLVMBB = newbb;
-
-  // auto i1ty = getIntTy(1);
-  // auto i8ty = getIntTy(8);
-  // auto i16ty = getIntTy(16);
-  auto i32ty = getIntTy(32);
-  auto i64ty = getIntTy(64);
-  // auto i128ty = getIntTy(128);
-
-  switch (opcode) {
-
-  case RISCV::C_NOP_HINT:
-    break;
-
-  case RISCV::C_J: {
-    /*
-     * copied from ARM -- maybe move to portable code
-     */
-    BasicBlock *dst{nullptr};
-    // JDR: I don't understand this
-    if (CurInst->getOperand(0).isImm()) {
-      // handles the case when we add an entry block with no predecessors
-      auto &dst_name = MF.BBs[getImm(0)].getName();
-      dst = getBBByName(dst_name);
-    } else {
-      dst = getBB(CurInst->getOperand(0));
-    }
-    if (dst) {
-      createBranch(dst);
-    } else {
-      // ok, if we don't have a destination block then we left this
-      // dangling on purpose, with the assumption that it's a tail
-      // call
-      doDirectCall();
-      doReturn();
-    }
-    break;
-  }
-
-  case RISCV::ADD:
-  case RISCV::SUB:
-  case RISCV::C_ADD:
-  case RISCV::C_SUB: {
-    auto a = readFromRegOperand(1);
-    auto b = readFromRegOperand(2);
-    Value *res;
-    switch (opcode) {
-    case RISCV::ADD:
-    case RISCV::C_ADD:
-      res = createAdd(a, b);
-      break;
-    case RISCV::SUB:
-    case RISCV::C_SUB:
-      res = createSub(a, b);
-      break;
-    default:
-      assert(false);
-    }
-    updateOutputReg(res);
-    break;
-  }
-
-  case RISCV::C_ADDW:
-  case RISCV::C_SUBW: {
-    auto a = readFromRegOperand(1);
-    auto b = readFromRegOperand(2);
-    auto a32 = createTrunc(a, i32ty);
-    auto b32 = createTrunc(b, i32ty);
-    Value *res;
-    switch (opcode) {
-    case RISCV::C_ADDW:
-      res = createAdd(a32, b32);
-      break;
-    case RISCV::C_SUBW:
-      res = createSub(a32, b32);
-      break;
-    default:
-      assert(false);
-    }
-    auto resExt = createSExt(res, i64ty);
-    updateOutputReg(resExt);
-    break;
-  }
-
-  case RISCV::C_ADDIW:
-  case RISCV::ADDIW: {
-    auto a = readFromRegOperand(1);
-    auto b = readFromImmOperand(2, 32);
-    auto a32 = createTrunc(a, i32ty);
-    auto res = createAdd(a32, b);
-    auto resExt = createSExt(res, i64ty);
-    updateOutputReg(resExt);
-    break;
-  }
-
-  case RISCV::SLT: {
-    auto a = readFromRegOperand(1);
-    auto b = readFromRegOperand(2);
-    auto res = createICmp(ICmpInst::Predicate::ICMP_SLT, a, b);
-    auto resExt = createZExt(res, i64ty);
-    updateOutputReg(resExt);
-    break;
-  }
-
-  case RISCV::SLTI: {
-    auto a = readFromRegOperand(1);
-    auto b = readFromImmOperand(2, 64);
-    auto res = createICmp(ICmpInst::Predicate::ICMP_SLT, a, b);
-    auto resExt = createZExt(res, i64ty);
-    updateOutputReg(resExt);
-    break;
-  }
-
-  case RISCV::BLT: {
-    
-  }
-
-  case RISCV::C_JR:
-    doReturn();
-    break;
-
-  default:
-    *out << "unhandled instruction\n";
-    exit(-1);
-  }
 }
