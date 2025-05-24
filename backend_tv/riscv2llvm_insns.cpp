@@ -157,11 +157,37 @@ void riscv2llvm::lift(MCInst &I) {
     break;
   }
 
+  case RISCV::C_SRAI:
+  case RISCV::SRAI:
+  case RISCV::C_SLLI:
+  case RISCV::SLLI:
+  case RISCV::C_ANDI:
+  case RISCV::ANDI:
   case RISCV::C_ADDI:
   case RISCV::ADDI: {
     auto a = readFromRegOperand(1);
     auto b = readFromImmOperand(2, 64);
-    auto res = createAdd(a, b);
+    Value *res;
+    switch (opcode) {
+    case RISCV::C_ADDI:
+    case RISCV::ADDI:
+      res = createAdd(a, b);
+      break;
+    case RISCV::C_ANDI:
+    case RISCV::ANDI:
+      res = createAnd(a, b);
+      break;
+    case RISCV::C_SLLI:
+    case RISCV::SLLI:
+      res = createMaskedShl(a, b);
+      break;
+    case RISCV::C_SRAI:
+    case RISCV::SRAI:
+      res = createMaskedAShr(a, b);
+      break;
+    default:
+      assert(false);
+    }
     updateOutputReg(res);
     break;
   }
