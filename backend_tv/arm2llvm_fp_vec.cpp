@@ -9,21 +9,78 @@ using namespace llvm;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+void arm2llvm::lift_fmov_3(unsigned opcode) {
+  bool bitWidth128 = false;
+  unsigned numElts, eltSize, op;
+  switch (opcode) {
+  case AArch64::FMOVv2f32_ns: {
+    numElts = 2;
+    eltSize = 32;
+    bitWidth128 = false;
+    op = 0;
+    break;
+  }
+  case AArch64::FMOVv4f32_ns: {
+    numElts = 4;
+    eltSize = 32;
+    bitWidth128 = true;
+    op = 0;
+    break;
+  }
+  case AArch64::FMOVv2f64_ns: {
+    numElts = 2;
+    eltSize = 64;
+    bitWidth128 = true;
+    op = 1;
+    break;
+  }
+  default:
+    assert(false);
+  }
+  unsigned cmode = 15;
+  auto imm = getImm(1);
+  assert(imm <= 256);
+  auto expandedImm = AdvSIMDExpandImm(op, cmode, imm);
+  Constant *expandedImmVal = getUnsignedIntConst(expandedImm, 64);
+  if (bitWidth128) {
+    // Create a 128-bit vector with the expanded immediate
+    expandedImmVal = getElemSplat(2, 64, expandedImm);
+  }
+
+  auto result = createBitCast(expandedImmVal, getVecTy(eltSize, numElts, true));
+  updateOutputReg(result);
+}
+
+void arm2llvm::lift_cvtf_2(unsigned opcode) {
+  auto &op0 = CurInst->getOperand(0);
+  auto &op1 = CurInst->getOperand(1);
+  assert(op0.isReg() && op1.isReg());
+
+  auto isSigned =
+      opcode == AArch64::SCVTFv1i32 || opcode == AArch64::SCVTFv1i64;
+
+  auto fTy = getFPType(getRegSize(op0.getReg()));
+  auto val = readFromOperand(1, getRegSize(op1.getReg()));
+  auto converted = isSigned ? createSIToFP(val, fTy) : createUIToFP(val, fTy);
+
+  updateOutputReg(converted);
+}
+
 void arm2llvm::lift_fcvt_2(unsigned opcode) {
-    auto &op0 = CurInst->getOperand(0);
-    auto &op1 = CurInst->getOperand(1);
-    assert(op0.isReg() && op1.isReg());
+  auto &op0 = CurInst->getOperand(0);
+  auto &op1 = CurInst->getOperand(1);
+  assert(op0.isReg() && op1.isReg());
 
-    auto isSigned =
-        opcode == AArch64::FCVTZSv1i32 || opcode == AArch64::FCVTZSv1i64;
+  auto isSigned =
+      opcode == AArch64::FCVTZSv1i32 || opcode == AArch64::FCVTZSv1i64;
 
-    auto op0Size = getRegSize(op0.getReg());
-    auto op1Size = getRegSize(op1.getReg());
+  auto op0Size = getRegSize(op0.getReg());
+  auto op1Size = getRegSize(op1.getReg());
 
-    auto fp_val = readFromFPOperand(1, op1Size);
-    auto converted = isSigned ? createFPToSI_sat(fp_val, getIntTy(op0Size))
-                              : createFPToUI_sat(fp_val, getIntTy(op0Size));
-    updateOutputReg(converted);
+  auto fp_val = readFromFPOperand(1, op1Size);
+  auto converted = isSigned ? createFPToSI_sat(fp_val, getIntTy(op0Size))
+                            : createFPToUI_sat(fp_val, getIntTy(op0Size));
+  updateOutputReg(converted);
 }
 
 void arm2llvm::lift_vec_fneg(unsigned opcode) {

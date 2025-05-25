@@ -236,7 +236,7 @@ void riscv2llvm::lift(MCInst &I) {
   }
 
   case RISCV::C_JR: {
-    
+
     doReturn();
     break;
   }

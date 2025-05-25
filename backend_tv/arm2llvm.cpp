@@ -895,7 +895,7 @@ tuple<Value *, Value *> arm2llvm::getParamsLoadReg() {
 }
 
 // From https://github.com/agustingianni/retools
-inline uint64_t arm2llvm::VFPExpandImm(uint64_t imm8, unsigned N) {
+uint64_t arm2llvm::VFPExpandImm(uint64_t imm8, unsigned N) {
   unsigned E = ((N == 32) ? 8 : 11) - 2; // E in {6, 9}
   unsigned F = N - E - 1;                // F in {25, 54}
   uint64_t imm8_6 = (imm8 >> 6) & 1;     // imm8<6>
@@ -911,8 +911,8 @@ inline uint64_t arm2llvm::VFPExpandImm(uint64_t imm8, unsigned N) {
 // From https://github.com/agustingianni/retools
 // Implementation of: bits(64) AdvSIMDExpandImm(bit op, bits(4) cmode, bits(8)
 // imm8)
-inline uint64_t arm2llvm::AdvSIMDExpandImm(unsigned op, unsigned cmode,
-                                           unsigned imm8) {
+uint64_t arm2llvm::AdvSIMDExpandImm(unsigned op, unsigned cmode,
+                                    unsigned imm8) {
   uint64_t imm64 = 0;
 
   switch (cmode >> 1) {
@@ -4071,115 +4071,39 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::SCVTFUWSri:
   case AArch64::SCVTFUWDri:
   case AArch64::SCVTFUXSri:
-  case AArch64::SCVTFUXDri: {
-    auto &op0 = CurInst->getOperand(0);
-    auto &op1 = CurInst->getOperand(1);
-    assert(op0.isReg() && op1.isReg());
-
-    auto isSigned =
-        opcode == AArch64::SCVTFUWSri || opcode == AArch64::SCVTFUWDri ||
-        opcode == AArch64::SCVTFUXSri || opcode == AArch64::SCVTFUXDri;
-
-    auto fTy = getFPType(getRegSize(op0.getReg()));
-    auto val = readFromOperand(1, getRegSize(op1.getReg()));
-    auto converted = isSigned ? createSIToFP(val, fTy) : createUIToFP(val, fTy);
-
-    updateOutputReg(converted);
+  case AArch64::SCVTFUXDri:
+    lift_cvtf_1(opcode);
     break;
-  }
 
   case AArch64::SCVTFv1i32:
-  case AArch64::SCVTFv1i64: {
-    auto &op0 = CurInst->getOperand(0);
-    auto &op1 = CurInst->getOperand(1);
-    assert(op0.isReg() && op1.isReg());
-
-    auto isSigned =
-        opcode == AArch64::SCVTFv1i32 || opcode == AArch64::SCVTFv1i64;
-
-    auto fTy = getFPType(getRegSize(op0.getReg()));
-    auto val = readFromOperand(1, getRegSize(op1.getReg()));
-    auto converted = isSigned ? createSIToFP(val, fTy) : createUIToFP(val, fTy);
-
-    updateOutputReg(converted);
+  case AArch64::SCVTFv1i64:
+    lift_cvtf_2(opcode);
     break;
-  }
 
   case AArch64::FMOVSWr:
   case AArch64::FMOVDXr:
   case AArch64::FMOVWSr:
   case AArch64::FMOVXDr:
   case AArch64::FMOVDr:
-  case AArch64::FMOVSr: {
-    auto v = readFromOperand(1);
-    updateOutputReg(v);
+  case AArch64::FMOVSr:
+    lift_fmov_1();
     break;
-  }
 
   case AArch64::FMOVSi:
-  case AArch64::FMOVDi: {
-    auto imm = getImm(1);
-    assert(imm <= 256);
-    int w = (opcode == AArch64::FMOVSi) ? 32 : 64;
-    auto floatVal = getUnsignedIntConst(VFPExpandImm(imm, w), 64);
-    updateOutputReg(floatVal);
+  case AArch64::FMOVDi:
+    lift_fmov_2(opcode);
     break;
-  }
 
   case AArch64::FMOVv2f32_ns:
   case AArch64::FMOVv4f32_ns:
-  case AArch64::FMOVv2f64_ns: {
-    bool bitWidth128 = false;
-    unsigned numElts, eltSize, op;
-    switch (opcode) {
-    case AArch64::FMOVv2f32_ns: {
-      numElts = 2;
-      eltSize = 32;
-      bitWidth128 = false;
-      op = 0;
-      break;
-    }
-    case AArch64::FMOVv4f32_ns: {
-      numElts = 4;
-      eltSize = 32;
-      bitWidth128 = true;
-      op = 0;
-      break;
-    }
-    case AArch64::FMOVv2f64_ns: {
-      numElts = 2;
-      eltSize = 64;
-      bitWidth128 = true;
-      op = 1;
-      break;
-    }
-    default:
-      assert(false);
-    }
-    unsigned cmode = 15;
-    auto imm = getImm(1);
-    assert(imm <= 256);
-    auto expandedImm = AdvSIMDExpandImm(op, cmode, imm);
-    Constant *expandedImmVal = getUnsignedIntConst(expandedImm, 64);
-    if (bitWidth128) {
-      // Create a 128-bit vector with the expanded immediate
-      expandedImmVal = getElemSplat(2, 64, expandedImm);
-    }
-
-    auto result =
-        createBitCast(expandedImmVal, getVecTy(eltSize, numElts, true));
-    updateOutputReg(result);
-
+  case AArch64::FMOVv2f64_ns:
+    lift_fmov_3(opcode);
     break;
-  }
 
   case AArch64::FABSSr:
-  case AArch64::FABSDr: {
-    auto a = readFromFPOperand(1, getRegSize(CurInst->getOperand(1).getReg()));
-    auto res = createFAbs(a);
-    updateOutputReg(res);
+  case AArch64::FABSDr:
+    lift_fabs();
     break;
-  }
 
   case AArch64::FMINSrr:
   case AArch64::FMINNMSrr:
@@ -4188,41 +4112,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::FMINDrr:
   case AArch64::FMINNMDrr:
   case AArch64::FMAXDrr:
-  case AArch64::FMAXNMDrr: {
-    auto a = readFromFPOperand(1, getRegSize(CurInst->getOperand(1).getReg()));
-    auto b = readFromFPOperand(2, getRegSize(CurInst->getOperand(2).getReg()));
-
-    Function *decl{nullptr};
-    switch (opcode) {
-    case AArch64::FMINSrr:
-    case AArch64::FMINDrr:
-      decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::minimum,
-                                               a->getType());
-      break;
-    case AArch64::FMAXSrr:
-    case AArch64::FMAXDrr:
-      decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::maximum,
-                                               a->getType());
-      break;
-    case AArch64::FMINNMSrr:
-    case AArch64::FMINNMDrr:
-      decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::minnum,
-                                               a->getType());
-      break;
-    case AArch64::FMAXNMSrr:
-    case AArch64::FMAXNMDrr:
-      decl = Intrinsic::getOrInsertDeclaration(LiftedModule, Intrinsic::maxnum,
-                                               a->getType());
-      break;
-    default:
-      assert(false);
-    }
-    assert(decl);
-
-    Value *res = CallInst::Create(decl, {a, b}, nextName(), LLVMBB);
-    updateOutputReg(res);
+  case AArch64::FMAXNMDrr:
+    lift_fminmax(opcode);
     break;
-  }
 
   case AArch64::FMULSrr:
   case AArch64::FMULDrr:
@@ -4233,89 +4125,21 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::FADDSrr:
   case AArch64::FADDDrr:
   case AArch64::FSUBSrr:
-  case AArch64::FSUBDrr: {
-    Instruction::BinaryOps op;
-    if (opcode == AArch64::FADDSrr || opcode == AArch64::FADDDrr) {
-      op = Instruction::FAdd;
-    } else if (opcode == AArch64::FMULSrr || opcode == AArch64::FMULDrr ||
-               opcode == AArch64::FNMULSrr || opcode == AArch64::FNMULDrr) {
-      op = Instruction::FMul;
-    } else if (opcode == AArch64::FDIVSrr || opcode == AArch64::FDIVDrr) {
-      op = Instruction::FDiv;
-    } else if (opcode == AArch64::FSUBSrr || opcode == AArch64::FSUBDrr) {
-      op = Instruction::FSub;
-    } else {
-      assert(false && "missed a case");
-    }
-
-    auto a = readFromFPOperand(1, getRegSize(CurInst->getOperand(1).getReg()));
-    auto b = readFromFPOperand(2, getRegSize(CurInst->getOperand(2).getReg()));
-
-    Value *res = createBinop(a, b, op);
-    if (opcode == AArch64::FNMULSrr || opcode == AArch64::FNMULDrr) {
-      res = createFNeg(res);
-    }
-    updateOutputReg(res);
+  case AArch64::FSUBDrr:
+    lift_fbinop(opcode);
     break;
-  }
 
   case AArch64::FMULv1i32_indexed:
-  case AArch64::FMULv1i64_indexed: {
-    auto &op0 = CurInst->getOperand(0);
-    auto &op1 = CurInst->getOperand(1);
-    auto &op2 = CurInst->getOperand(2);
-    auto &op3 = CurInst->getOperand(3);
-    assert(op0.isReg() && op1.isReg() && op2.isReg() && op3.isImm());
-    Instruction::BinaryOps op;
-    switch (opcode) {
-    case AArch64::FMULv1i32_indexed:
-    case AArch64::FMULv1i64_indexed: {
-      op = Instruction::FMul;
-      break;
-    }
-    default: {
-      assert(false && "missed a case");
-    }
-    }
-
-    auto eltSize = getRegSize(op1.getReg());
-    auto a = readFromFPOperand(1, eltSize);
-    auto b = getIndexedFPElement(op3.getImm(), eltSize, op2.getReg());
-    auto res = createBinop(a, b, op);
-    updateOutputReg(res);
+  case AArch64::FMULv1i64_indexed:
+    lift_fmul_idx(opcode);
     break;
-  }
 
   case AArch64::FMLAv1i32_indexed:
   case AArch64::FMLAv1i64_indexed:
   case AArch64::FMLSv1i32_indexed:
-  case AArch64::FMLSv1i64_indexed: {
-    auto &op1 = CurInst->getOperand(1);
-    auto &op2 = CurInst->getOperand(2);
-    auto &op3 = CurInst->getOperand(3);
-    auto &op4 = CurInst->getOperand(4);
-    assert(op1.isReg() && op2.isReg() && op3.isReg() && op4.isImm());
-
-    bool negateProduct = false;
-    switch (opcode) {
-    case AArch64::FMLSv1i32_indexed:
-    case AArch64::FMLSv1i64_indexed: {
-      negateProduct = true;
-      break;
-    }
-    }
-
-    auto eltSize = getRegSize(op2.getReg());
-    auto c = readFromFPOperand(1, getRegSize(op1.getReg()));
-    auto a = readFromFPOperand(2, eltSize);
-    auto b = getIndexedFPElement(op4.getImm(), eltSize, op3.getReg());
-
-    if (negateProduct)
-      a = createFNeg(a);
-    auto res = createFusedMultiplyAdd(a, b, c);
-    updateOutputReg(res);
+  case AArch64::FMLSv1i64_indexed:
+    lift_fmla_mls(opcode);
     break;
-  }
 
   case AArch64::FMADDSrrr:
   case AArch64::FMADDDrrr:
@@ -4324,58 +4148,14 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::FNMADDSrrr:
   case AArch64::FNMADDDrrr:
   case AArch64::FNMSUBSrrr:
-  case AArch64::FNMSUBDrrr: {
-    auto &op0 = CurInst->getOperand(0);
-    auto &op1 = CurInst->getOperand(1);
-    auto &op2 = CurInst->getOperand(2);
-    auto &op3 = CurInst->getOperand(3);
-    assert(op0.isReg() && op1.isReg() && op2.isReg() && op3.isReg());
-
-    bool negateProduct = false, negateAddend = false;
-    switch (opcode) {
-    case AArch64::FMSUBSrrr:
-    case AArch64::FMSUBDrrr: {
-      negateProduct = true;
-      break;
-    }
-    case AArch64::FNMADDSrrr:
-    case AArch64::FNMADDDrrr: {
-      negateAddend = true;
-      negateProduct = true;
-      break;
-    }
-    case AArch64::FNMSUBSrrr:
-    case AArch64::FNMSUBDrrr: {
-      negateAddend = true;
-      break;
-    }
-    }
-
-    auto a = readFromFPOperand(1, getRegSize(op1.getReg()));
-    auto b = readFromFPOperand(2, getRegSize(op2.getReg()));
-    auto c = readFromFPOperand(3, getRegSize(op3.getReg()));
-
-    if (negateProduct) {
-      a = createFNeg(a);
-    }
-    if (negateAddend) {
-      c = createFNeg(c);
-    }
-
-    auto res = createFusedMultiplyAdd(a, b, c);
-
-    updateOutputReg(res);
+  case AArch64::FNMSUBDrrr:
+    lift_fnm(opcode);
     break;
-  }
 
   case AArch64::FSQRTSr:
-  case AArch64::FSQRTDr: {
-    auto operandSize = getRegSize(CurInst->getOperand(1).getReg());
-    auto a = readFromFPOperand(1, operandSize);
-    auto res = createSQRT(a);
-    updateOutputReg(res);
+  case AArch64::FSQRTDr:
+    lift_fsqrt();
     break;
-  }
 
   case AArch64::FADDv2f32:
   case AArch64::FADDv4f32:

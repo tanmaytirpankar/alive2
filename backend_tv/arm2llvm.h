@@ -320,6 +320,18 @@ public:
   void lift_fcvt_3();
   void lift_fcvt_4();
   void lift_frint(unsigned opcode);
+  void lift_cvtf_1(unsigned opcode);
+  void lift_cvtf_2(unsigned opcode);
+  void lift_fmov_1();
+  void lift_fmov_2(unsigned opcode);
+  void lift_fmov_3(unsigned opcode);
+  void lift_fabs();
+  void lift_fminmax(unsigned opcode);
+  void lift_fbinop(unsigned opcode);
+  void lift_fmul_idx(unsigned opcode);
+  void lift_fmla_mls(unsigned opcode);
+  void lift_fnm(unsigned opcode);
+  void lift_fsqrt();
 };
 
 } // end namespace lifter
