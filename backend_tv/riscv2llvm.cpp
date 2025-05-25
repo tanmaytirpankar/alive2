@@ -20,6 +20,7 @@ riscv2llvm::riscv2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
     : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA, SentinelNOP) {
 }
 
+// TODO -- move this up to mc2llvm so the ARM lifter can use it too
 tuple<BasicBlock *, BasicBlock *> riscv2llvm::getBranchTargetsOperand(int op) {
   auto &jmp_tgt_op = CurInst->getOperand(op);
   assert(jmp_tgt_op.isExpr() && "expected expression");

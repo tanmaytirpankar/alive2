@@ -235,9 +235,19 @@ void riscv2llvm::lift(MCInst &I) {
     break;
   }
 
-  case RISCV::C_JR:
+  case RISCV::C_JR: {
+    
     doReturn();
     break;
+  }
+
+  case RISCV::JALR: {
+    assert(CurInst->getOperand(0).getReg() == RISCV::X0);
+    assert(CurInst->getOperand(1).getReg() == RISCV::X1);
+    assert(CurInst->getOperand(2).getImm() == 0);
+    doReturn();
+    break;
+  }
 
   default:
     *out << "unhandled instruction\n";

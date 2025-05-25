@@ -94,6 +94,7 @@ class Alive2Test(TestFormat):
            filename.endswith('.srctgt.ll') or filename.endswith('.c') or
            filename.endswith('.cpp') or filename.endswith('.opt.ll') or
            filename.endswith('.ident.ll') or filename.endswith('.aarch64.ll') or
+           filename.endswith('.riscv.ll') or
            filename.endswith('.exec.ll') or filename.endswith('.asminput.ll') or
            filename.endswith('.ll')):
 
@@ -113,6 +114,7 @@ class Alive2Test(TestFormat):
     alive_tv_3 = test.endswith('.ident.ll')
     alive_tv_4 = test.endswith('.aarch64.ll')
     alive_tv_5 = test.endswith('.asminput.ll')
+    alive_tv_6 = test.endswith('.riscv.ll')
     if alive_tv_1 or alive_tv_2 or alive_tv_3:
       cmd = ['./alive-tv', '-smt-to=20000', '-always-verify']
       if not has_exe('alive-tv'):
@@ -125,6 +127,11 @@ class Alive2Test(TestFormat):
 
     if alive_tv_5:
       cmd = ['./backend-tv', '-smt-to=20000', '-always-verify', '-asm-input']
+      if not has_exe('backend-tv'):
+        return lit.Test.UNSUPPORTED, ''
+
+    if alive_tv_6:
+      cmd = ['./backend-tv', '-smt-to=20000', '-always-verify', '-backend=riscv']
       if not has_exe('backend-tv'):
         return lit.Test.UNSUPPORTED, ''
 
@@ -158,7 +165,8 @@ class Alive2Test(TestFormat):
         return lit.Test.UNSUPPORTED, ''
 
     if not alive_tv_1 and not alive_tv_2 and not alive_tv_3 and not alive_tv_4 and \
-       not alive_tv_5 and not clang_tv and not opt_tv and not alive_exec and not llvm_exec:
+       not alive_tv_5 and not alive_tv_6 and not clang_tv and not opt_tv and \
+       not alive_exec and not llvm_exec:
        #not clang_tv and not opt_tv and not alive_exec and not llvm_exec:
       cmd = ['./alive', '-smt-to:20000']
       
