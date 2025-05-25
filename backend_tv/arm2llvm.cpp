@@ -4126,7 +4126,7 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::FADDDrr:
   case AArch64::FSUBSrr:
   case AArch64::FSUBDrr:
-    lift_fbinop(opcode);
+    lift_fpbinop(opcode);
     break;
 
   case AArch64::FMULv1i32_indexed:
@@ -4165,57 +4165,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::FSUBv2f64:
   case AArch64::FMULv2f32:
   case AArch64::FMULv4f32:
-  case AArch64::FMULv2f64: {
-    int eltSize = -1, numElts = -1;
-    switch (opcode) {
-    case AArch64::FMULv2f32:
-    case AArch64::FADDv2f32:
-    case AArch64::FSUBv2f32:
-      eltSize = 32;
-      numElts = 2;
-      break;
-    case AArch64::FMULv4f32:
-    case AArch64::FADDv4f32:
-    case AArch64::FSUBv4f32:
-      eltSize = 32;
-      numElts = 4;
-      break;
-    case AArch64::FADDv2f64:
-    case AArch64::FSUBv2f64:
-    case AArch64::FMULv2f64:
-      eltSize = 64;
-      numElts = 2;
-      break;
-    default:
-      assert(false);
-    }
-    auto a = readFromVecOperand(1, eltSize, numElts, /*isUpperHalf=*/false,
-                                /*isFP=*/true);
-    auto b = readFromVecOperand(2, eltSize, numElts, /*isUpperHalf=*/false,
-                                /*isFP=*/true);
-    Value *res{nullptr};
-    switch (opcode) {
-    case AArch64::FADDv2f32:
-    case AArch64::FADDv4f32:
-    case AArch64::FADDv2f64:
-      res = createFAdd(a, b);
-      break;
-    case AArch64::FSUBv2f32:
-    case AArch64::FSUBv4f32:
-    case AArch64::FSUBv2f64:
-      res = createFSub(a, b);
-      break;
-    case AArch64::FMULv2f32:
-    case AArch64::FMULv4f32:
-    case AArch64::FMULv2f64:
-      res = createFMul(a, b);
-      break;
-    default:
-      assert(false);
-    };
-    updateOutputReg(res);
+  case AArch64::FMULv2f64:
+    lift_vec_fpbinop(opcode);
     break;
-  }
 
   case AArch64::FCMPSri:
   case AArch64::FCMPDri:
@@ -4224,23 +4176,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::FCMPSrr:
   case AArch64::FCMPDrr:
   case AArch64::FCMPESrr:
-  case AArch64::FCMPEDrr: {
-    auto operandSize = getRegSize(CurInst->getOperand(0).getReg());
-    auto a = readFromFPOperand(0, operandSize);
-    Value *b;
-    if (opcode == AArch64::FCMPSri || opcode == AArch64::FCMPDri ||
-        opcode == AArch64::FCMPESri || opcode == AArch64::FCMPEDri) {
-      b = ConstantFP::get(getFPType(operandSize), 0.0);
-    } else {
-      b = readFromFPOperand(1, operandSize);
-    }
-    auto [n, z, c, v] = FPCompare(a, b);
-    setN(n);
-    setZ(z);
-    setC(c);
-    setV(v);
+  case AArch64::FCMPEDrr:
+    lift_fcmp(opcode);
     break;
-  }
 
   case AArch64::FCCMPSrr:
   case AArch64::FCCMPDrr: {

@@ -9,6 +9,23 @@ using namespace llvm;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+void arm2llvm::lift_fcmp(unsigned opcode) {
+  auto operandSize = getRegSize(CurInst->getOperand(0).getReg());
+  auto a = readFromFPOperand(0, operandSize);
+  Value *b;
+  if (opcode == AArch64::FCMPSri || opcode == AArch64::FCMPDri ||
+      opcode == AArch64::FCMPESri || opcode == AArch64::FCMPEDri) {
+    b = ConstantFP::get(getFPType(operandSize), 0.0);
+  } else {
+    b = readFromFPOperand(1, operandSize);
+  }
+  auto [n, z, c, v] = FPCompare(a, b);
+  setN(n);
+  setZ(z);
+  setC(c);
+  setV(v);
+}
+
 void arm2llvm::lift_fsqrt() {
   auto operandSize = getRegSize(CurInst->getOperand(1).getReg());
   auto a = readFromFPOperand(1, operandSize);
@@ -111,7 +128,7 @@ void arm2llvm::lift_fmul_idx(unsigned opcode) {
   updateOutputReg(res);
 }
 
-void arm2llvm::lift_fbinop(unsigned opcode) {
+void arm2llvm::lift_fpbinop(unsigned opcode) {
   Instruction::BinaryOps op;
   if (opcode == AArch64::FADDSrr || opcode == AArch64::FADDDrr) {
     op = Instruction::FAdd;

@@ -9,6 +9,57 @@ using namespace llvm;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+void arm2llvm::lift_vec_fpbinop(unsigned opcode) {
+  int eltSize = -1, numElts = -1;
+  switch (opcode) {
+  case AArch64::FMULv2f32:
+  case AArch64::FADDv2f32:
+  case AArch64::FSUBv2f32:
+    eltSize = 32;
+    numElts = 2;
+    break;
+  case AArch64::FMULv4f32:
+  case AArch64::FADDv4f32:
+  case AArch64::FSUBv4f32:
+    eltSize = 32;
+    numElts = 4;
+    break;
+  case AArch64::FADDv2f64:
+  case AArch64::FSUBv2f64:
+  case AArch64::FMULv2f64:
+    eltSize = 64;
+    numElts = 2;
+    break;
+  default:
+    assert(false);
+  }
+  auto a = readFromVecOperand(1, eltSize, numElts, /*isUpperHalf=*/false,
+                              /*isFP=*/true);
+  auto b = readFromVecOperand(2, eltSize, numElts, /*isUpperHalf=*/false,
+                              /*isFP=*/true);
+  Value *res{nullptr};
+  switch (opcode) {
+  case AArch64::FADDv2f32:
+  case AArch64::FADDv4f32:
+  case AArch64::FADDv2f64:
+    res = createFAdd(a, b);
+    break;
+  case AArch64::FSUBv2f32:
+  case AArch64::FSUBv4f32:
+  case AArch64::FSUBv2f64:
+    res = createFSub(a, b);
+    break;
+  case AArch64::FMULv2f32:
+  case AArch64::FMULv4f32:
+  case AArch64::FMULv2f64:
+    res = createFMul(a, b);
+    break;
+  default:
+    assert(false);
+  };
+  updateOutputReg(res);
+}
+
 void arm2llvm::lift_fmov_3(unsigned opcode) {
   bool bitWidth128 = false;
   unsigned numElts, eltSize, op;

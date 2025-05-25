@@ -327,11 +327,13 @@ public:
   void lift_fmov_3(unsigned opcode);
   void lift_fabs();
   void lift_fminmax(unsigned opcode);
-  void lift_fbinop(unsigned opcode);
+  void lift_fpbinop(unsigned opcode);
   void lift_fmul_idx(unsigned opcode);
   void lift_fmla_mls(unsigned opcode);
   void lift_fnm(unsigned opcode);
   void lift_fsqrt();
+  void lift_vec_fpbinop(unsigned opcode);
+  void lift_fcmp(unsigned opcode);
 };
 
 } // end namespace lifter
