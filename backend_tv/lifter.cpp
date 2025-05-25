@@ -94,9 +94,11 @@ void init(std::string &backend) {
   has_ret_attr = false;
 }
 
-pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
-                                      Function *srcFn,
+pair<Function *, Function *> liftFunc(Function *srcFn,
                                       unique_ptr<MemoryBuffer> MB) {
+  // tgtModule->setDataLayout(srcModule->getDataLayout());
+  // tgtModule->setTargetTriple(srcModule->getTargetTriple());
+
   llvm::SourceMgr SrcMgr;
   SrcMgr.AddNewSourceBuffer(std::move(MB), llvm::SMLoc());
 
@@ -163,13 +165,14 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
   unique_ptr<MCCodeEmitter> MCE{Targ->createMCCodeEmitter(*MCII.get(), Ctx)};
   assert(MCE && "createMCCodeEmitter failed.");
 
+  auto liftedModule = new Module("liftedModule", srcFn->getContext());
   Function *liftedFn;
   if (DefaultBackend == "aarch64") {
-    liftedFn = arm2llvm{LiftedModule, Str.MF, *srcFn, IP.get(),
+    liftedFn = arm2llvm{liftedModule, Str.MF, *srcFn, IP.get(),
                         *MCE,         *STI,   *Ana,   SentinelNOP}
                    .run();
   } else if (DefaultBackend == "riscv64") {
-    liftedFn = riscv2llvm{LiftedModule, Str.MF, *srcFn, IP.get(),
+    liftedFn = riscv2llvm{liftedModule, Str.MF, *srcFn, IP.get(),
                           *MCE,         *STI,   *Ana,   SentinelNOP}
                    .run();
   } else {
@@ -178,11 +181,11 @@ pair<Function *, Function *> liftFunc(Module *OrigModule, Module *LiftedModule,
   }
 
   // uncomment this if we're emitting broken functions
-  // LiftedModule->dump();
+  // liftedModule->dump();
 
   std::string sss;
   llvm::raw_string_ostream ss(sss);
-  if (llvm::verifyModule(*LiftedModule, &ss)) {
+  if (llvm::verifyModule(*liftedModule, &ss)) {
     *out << sss << "\n\n";
     out->flush();
     *out << "\nERROR: Lifted module is broken, this should not happen\n";

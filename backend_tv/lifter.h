@@ -53,7 +53,6 @@ void fixupOptimizedTgt(llvm::Function *);
 std::unique_ptr<llvm::MemoryBuffer> generateAsm(llvm::Module &);
 
 std::pair<llvm::Function *, llvm::Function *>
-liftFunc(llvm::Module *, llvm::Module *, llvm::Function *,
-         std::unique_ptr<llvm::MemoryBuffer>);
+liftFunc(llvm::Function *, std::unique_ptr<llvm::MemoryBuffer>);
 
 } // namespace lifter

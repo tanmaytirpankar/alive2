@@ -222,18 +222,14 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   lifter::nameGlobals(srcModule);
   srcFn = lifter::adjustSrc(srcFn);
 
-  std::unique_ptr<llvm::Module> tgtModule =
-      std::make_unique<llvm::Module>("tgtModule", srcModule->getContext());
-  // tgtModule->setDataLayout(srcModule->getDataLayout());
-  // tgtModule->setTargetTriple(srcModule->getTargetTriple());
+  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer));
 
-  auto [F1, F2] =
-      lifter::liftFunc(srcModule, tgtModule.get(), srcFn, std::move(AsmBuffer));
-
+  auto tgtModule = F2->getParent();
+  
   *out << "\n\nabout to optimize lifted code:\n\n";
-  *out << lifter::moduleToString(tgtModule.get()) << std::endl;
+  *out << lifter::moduleToString(tgtModule) << std::endl;
 
-  auto err = optimize_module(tgtModule.get(), opt_optimize_tgt);
+  auto err = optimize_module(tgtModule, opt_optimize_tgt);
   if (!err.empty()) {
     *out << "\n\nERROR running LLVM optimizations\n\n";
     exit(-1);
@@ -241,7 +237,7 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
 
   lifter::fixupOptimizedTgt(F2);
 
-  auto lifted = lifter::moduleToString(tgtModule.get());
+  auto lifted = lifter::moduleToString(tgtModule);
   if (save_lifted_ir) {
     std::filesystem::path p{(string)opt_file};
     p.replace_extension(".lifted.ll");

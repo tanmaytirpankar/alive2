@@ -920,7 +920,7 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   }
   cout << "-------------\n";
 
-  auto [F1, F2] = lifter::liftFunc(M1, M2.get(), srcFn, std::move(AsmBuffer));
+  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer));
 
   auto err = optimize_module(M2.get(), "Oz");
   assert(err.empty());
