@@ -43,9 +43,53 @@ tuple<BasicBlock *, BasicBlock *> riscv2llvm::getBranchTargetsOperand(int op) {
 }
 
 Value *riscv2llvm::enforceSExtZExt(Value *V, bool isSExt, bool isZExt) {
-  // FIXME
-  assert(!isSExt);
-  assert(!isZExt);
+  assert(!(isSExt && isZExt));
+  
+  auto i8 = getIntTy(8);
+  auto i64 = getIntTy(64);
+  auto argTy = V->getType();
+  unsigned targetWidth = 64;
+
+  // no work needed
+  if (argTy->isPointerTy() || argTy->isVoidTy())
+    return V;
+
+  if (argTy->isVectorTy() || argTy->isFloatingPointTy()) {
+    assert(false && "to be implemented!");
+  }
+
+  assert(argTy->isIntegerTy());
+
+  /*
+   * the ABI states that a Boolean value is a byte containing value 0
+   * or 1. as we saw in AArch64, this raises the question of whether a
+   * signext parameter of this type is sign-extended from a width of 1
+   * or 8 bits. the answer there was 1, so we'll do the same thing here
+   */
+  if (getBitWidth(V) == 1) {
+    if (isSExt)
+      V = createSExt(V, i64);
+    else
+      V = createZExt(V, i8);
+  }
+
+  if (isZExt && getBitWidth(V) < targetWidth)
+    V = createZExt(V, getIntTy(targetWidth));
+
+  if (isSExt && getBitWidth(V) < targetWidth)
+    V = createSExt(V, getIntTy(targetWidth));
+
+  // finally, pad out any remaining bits with junk (frozen poisons)
+  auto junkBits = targetWidth - getBitWidth(V);
+  if (junkBits > 0) {
+    auto junk = createFreeze(PoisonValue::get(getIntTy(junkBits)));
+    auto ext1 = createZExt(junk, getIntTy(targetWidth));
+    auto shifted =
+        createRawShl(ext1, getUnsignedIntConst(getBitWidth(V), targetWidth));
+    auto ext2 = createZExt(V, getIntTy(targetWidth));
+    V = createOr(shifted, ext2);
+  }
+
   return V;
 }
 

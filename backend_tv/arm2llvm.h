@@ -56,24 +56,8 @@ public:
 
   bool isSIMDandFPRegOperand(llvm::MCOperand &op);
 
-  /*
-   * the idea here is that if a parameter to the lifted function, or
-   * the return value from the lifted function is, for example, 8
-   * bits, then we only want to initialize the lower 8 bits of the
-   * register or stack slot, with the remaining bits containing junk,
-   * in order to detect cases where the compiler incorrectly emits
-   * code depending on that junk. on the other hand, if a parameter is
-   * signext or zeroext then we have to actually initialize those
-   * higher bits.
-   *
-   * FIXME -- this code was originally developed for scalar parameters
-   * and we're mostly sort of hoping it also works for vectors. this
-   * should work fine as long as the only vectors we accept are 64 and
-   * 128 bits, which seemed (as of Nov 2023) to be the only ones with
-   * a stable ABI
-   */
   llvm::Value *enforceSExtZExt(llvm::Value *V, bool isSExt,
-                               bool isZExt) override;
+                               bool isZExt);
 
   std::tuple<llvm::Value *, int, llvm::Value *> getStoreParams();
 

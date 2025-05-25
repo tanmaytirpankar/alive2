@@ -42,9 +42,6 @@
 namespace lifter {
 
 class riscv2llvm final : public mc2llvm {
-  llvm::Value *enforceSExtZExt(llvm::Value *V, bool isSExt,
-                               bool isZExt) override;
-
   llvm::AllocaInst *get_reg(aslp::reg_t regtype, uint64_t num) override;
 
   void updateOutputReg(llvm::Value *V, bool SExt = false) override;
@@ -62,6 +59,9 @@ class riscv2llvm final : public mc2llvm {
 
   void platformInit() override;
 
+  llvm::Value *enforceSExtZExt(llvm::Value *V, bool isSExt,
+			       bool isZExt);
+  
   void doReturn() override;
 
   llvm::Value *readFromReg(unsigned Reg);

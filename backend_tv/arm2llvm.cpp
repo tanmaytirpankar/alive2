@@ -103,6 +103,7 @@ bool arm2llvm::isSIMDandFPRegOperand(MCOperand &op) {
  * a stable ABI
  */
 Value *arm2llvm::enforceSExtZExt(Value *V, bool isSExt, bool isZExt) {
+  assert(!(isSExt && isZExt));
   auto i8 = getIntTy(8);
   auto i32 = getIntTy(32);
   auto argTy = V->getType();
