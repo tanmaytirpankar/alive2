@@ -9,6 +9,63 @@ using namespace llvm;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+void arm2llvm::lift_frint(unsigned opcode) {
+    auto &op1 = CurInst->getOperand(1);
+    assert(op1.isReg());
+    auto *v = readFromFPOperand(1, getRegSize(op1.getReg()));
+    auto md = MDString::get(Ctx, "fpexcept.strict");
+    Value *converted{nullptr};
+    switch (opcode) {
+    case AArch64::FRINTXSr:
+    case AArch64::FRINTXDr: {
+      converted = createRound(v);
+      break;
+    }
+    case AArch64::FRINTASr:
+    case AArch64::FRINTADr: {
+      converted = createConstrainedRound(v, md);
+      break;
+    }
+    case AArch64::FRINTMSr:
+    case AArch64::FRINTMDr: {
+      converted = createConstrainedFloor(v, md);
+      break;
+    }
+    case AArch64::FRINTPSr:
+    case AArch64::FRINTPDr: {
+      converted = createConstrainedCeil(v, md);
+      break;
+    }
+    default:
+      assert(false);
+    }
+    updateOutputReg(converted);
+}
+
+void arm2llvm::lift_fcvt_4() {
+    auto &op0 = CurInst->getOperand(0);
+    auto &op1 = CurInst->getOperand(1);
+    assert(op0.isReg() && op1.isReg());
+
+    auto op0Size = getRegSize(op0.getReg());
+    auto op1Size = getRegSize(op1.getReg());
+
+    auto fTy = getFPType(op0Size);
+    auto fp_val = readFromFPOperand(1, op1Size);
+
+    auto converted = op0Size < op1Size ? createFPTrunc(fp_val, fTy)
+                                       : createFPExt(fp_val, fTy);
+
+    updateOutputReg(converted);
+}
+
+void arm2llvm::lift_fcvt_3() {
+  // TODO
+    *out << "\nERROR: only float and double supported (not bfloat, half, "
+            "fp128, etc.)\n\n";
+    exit(-1);
+}
+
 void arm2llvm::lift_fcvt_1(unsigned opcode) {
   auto &op0 = CurInst->getOperand(0);
   auto &op1 = CurInst->getOperand(1);

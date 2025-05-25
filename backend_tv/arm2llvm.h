@@ -316,6 +316,10 @@ public:
   void lift_fneg();
   void lift_vec_fneg(unsigned opcode);
   void lift_fcvt_1(unsigned opcode);
+  void lift_fcvt_2(unsigned opcode);
+  void lift_fcvt_3();
+  void lift_fcvt_4();
+  void lift_frint(unsigned opcode);
 };
 
 } // end namespace lifter

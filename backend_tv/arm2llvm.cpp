@@ -4037,50 +4037,21 @@ void arm2llvm::lift(MCInst &I) {
     break;
 
   case AArch64::FCVTZSv1i32:
-  case AArch64::FCVTZSv1i64: {
-    auto &op0 = CurInst->getOperand(0);
-    auto &op1 = CurInst->getOperand(1);
-    assert(op0.isReg() && op1.isReg());
-
-    auto isSigned =
-        opcode == AArch64::FCVTZSv1i32 || opcode == AArch64::FCVTZSv1i64;
-
-    auto op0Size = getRegSize(op0.getReg());
-    auto op1Size = getRegSize(op1.getReg());
-
-    auto fp_val = readFromFPOperand(1, op1Size);
-    auto converted = isSigned ? createFPToSI_sat(fp_val, getIntTy(op0Size))
-                              : createFPToUI_sat(fp_val, getIntTy(op0Size));
-    updateOutputReg(converted);
+  case AArch64::FCVTZSv1i64:
+    lift_fcvt_2(opcode);
     break;
-  }
 
   case AArch64::FCVTSHr:
   case AArch64::FCVTDHr:
   case AArch64::FCVTHSr:
   case AArch64::FCVTHDr:
-    *out << "\nERROR: only float and double supported (not bfloat, half, "
-            "fp128, etc.)\n\n";
-    exit(-1);
+    lift_fcvt_3();
+    break;
 
   case AArch64::FCVTDSr:
-  case AArch64::FCVTSDr: {
-    auto &op0 = CurInst->getOperand(0);
-    auto &op1 = CurInst->getOperand(1);
-    assert(op0.isReg() && op1.isReg());
-
-    auto op0Size = getRegSize(op0.getReg());
-    auto op1Size = getRegSize(op1.getReg());
-
-    auto fTy = getFPType(op0Size);
-    auto fp_val = readFromFPOperand(1, op1Size);
-
-    auto converted = op0Size < op1Size ? createFPTrunc(fp_val, fTy)
-                                       : createFPExt(fp_val, fTy);
-
-    updateOutputReg(converted);
+  case AArch64::FCVTSDr:
+    lift_fcvt_4();
     break;
-  }
 
   case AArch64::FRINTXSr:
   case AArch64::FRINTXDr:
@@ -4089,39 +4060,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::FRINTMSr:
   case AArch64::FRINTMDr:
   case AArch64::FRINTPSr:
-  case AArch64::FRINTPDr: {
-    auto &op1 = CurInst->getOperand(1);
-    assert(op1.isReg());
-    auto *v = readFromFPOperand(1, getRegSize(op1.getReg()));
-    auto md = MDString::get(Ctx, "fpexcept.strict");
-    Value *converted{nullptr};
-    switch (opcode) {
-    case AArch64::FRINTXSr:
-    case AArch64::FRINTXDr: {
-      converted = createRound(v);
-      break;
-    }
-    case AArch64::FRINTASr:
-    case AArch64::FRINTADr: {
-      converted = createConstrainedRound(v, md);
-      break;
-    }
-    case AArch64::FRINTMSr:
-    case AArch64::FRINTMDr: {
-      converted = createConstrainedFloor(v, md);
-      break;
-    }
-    case AArch64::FRINTPSr:
-    case AArch64::FRINTPDr: {
-      converted = createConstrainedCeil(v, md);
-      break;
-    }
-    default:
-      assert(false);
-    }
-    updateOutputReg(converted);
+  case AArch64::FRINTPDr:
+    lift_frint(opcode);
     break;
-  }
 
   case AArch64::UCVTFUWSri:
   case AArch64::UCVTFUWDri:
@@ -4248,7 +4189,6 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::FMINNMDrr:
   case AArch64::FMAXDrr:
   case AArch64::FMAXNMDrr: {
-
     auto a = readFromFPOperand(1, getRegSize(CurInst->getOperand(1).getReg()));
     auto b = readFromFPOperand(2, getRegSize(CurInst->getOperand(2).getReg()));
 
@@ -4370,12 +4310,9 @@ void arm2llvm::lift(MCInst &I) {
     auto a = readFromFPOperand(2, eltSize);
     auto b = getIndexedFPElement(op4.getImm(), eltSize, op3.getReg());
 
-    if (negateProduct) {
+    if (negateProduct)
       a = createFNeg(a);
-    }
-
     auto res = createFusedMultiplyAdd(a, b, c);
-
     updateOutputReg(res);
     break;
   }

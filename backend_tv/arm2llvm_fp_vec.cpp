@@ -9,6 +9,23 @@ using namespace llvm;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+void arm2llvm::lift_fcvt_2(unsigned opcode) {
+    auto &op0 = CurInst->getOperand(0);
+    auto &op1 = CurInst->getOperand(1);
+    assert(op0.isReg() && op1.isReg());
+
+    auto isSigned =
+        opcode == AArch64::FCVTZSv1i32 || opcode == AArch64::FCVTZSv1i64;
+
+    auto op0Size = getRegSize(op0.getReg());
+    auto op1Size = getRegSize(op1.getReg());
+
+    auto fp_val = readFromFPOperand(1, op1Size);
+    auto converted = isSigned ? createFPToSI_sat(fp_val, getIntTy(op0Size))
+                              : createFPToUI_sat(fp_val, getIntTy(op0Size));
+    updateOutputReg(converted);
+}
+
 void arm2llvm::lift_vec_fneg(unsigned opcode) {
   unsigned eltSize, numElts;
   switch (opcode) {
