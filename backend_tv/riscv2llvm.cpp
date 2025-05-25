@@ -44,7 +44,7 @@ tuple<BasicBlock *, BasicBlock *> riscv2llvm::getBranchTargetsOperand(int op) {
 
 Value *riscv2llvm::enforceSExtZExt(Value *V, bool isSExt, bool isZExt) {
   assert(!(isSExt && isZExt));
-  
+
   auto i8 = getIntTy(8);
   auto i64 = getIntTy(64);
   auto argTy = V->getType();
@@ -138,12 +138,15 @@ Value *riscv2llvm::readFromRegOperand(int idx) {
   return readFromReg(op.getReg());
 }
 
-Value *riscv2llvm::readFromImmOperand(int idx, unsigned size) {
-  assert(size > 12);
+Value *riscv2llvm::readFromImmOperand(int idx, unsigned immed_width,
+                                      unsigned result_width) {
+  assert(result_width >= immed_width);
   auto op = CurInst->getOperand(idx);
   assert(op.isImm());
-  auto imm = getSignedIntConst(op.getImm(), 12);
-  return createSExt(imm, getIntTy(size));
+  Value *imm = getSignedIntConst(op.getImm(), immed_width);
+  if (result_width > immed_width)
+    imm = createSExt(imm, getIntTy(result_width));
+  return imm;
 }
 
 Value *riscv2llvm::readFromReg(unsigned Reg) {

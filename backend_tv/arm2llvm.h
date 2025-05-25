@@ -56,8 +56,7 @@ public:
 
   bool isSIMDandFPRegOperand(llvm::MCOperand &op);
 
-  llvm::Value *enforceSExtZExt(llvm::Value *V, bool isSExt,
-                               bool isZExt);
+  llvm::Value *enforceSExtZExt(llvm::Value *V, bool isSExt, bool isZExt);
 
   std::tuple<llvm::Value *, int, llvm::Value *> getStoreParams();
 

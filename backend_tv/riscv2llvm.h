@@ -59,9 +59,8 @@ class riscv2llvm final : public mc2llvm {
 
   void platformInit() override;
 
-  llvm::Value *enforceSExtZExt(llvm::Value *V, bool isSExt,
-			       bool isZExt);
-  
+  llvm::Value *enforceSExtZExt(llvm::Value *V, bool isSExt, bool isZExt);
+
   void doReturn() override;
 
   llvm::Value *readFromReg(unsigned Reg);
@@ -69,7 +68,8 @@ class riscv2llvm final : public mc2llvm {
   llvm::Value *readFromRegOperand(int idx);
   llvm::Value *lookupReg(unsigned Reg);
   void updateReg(llvm::Value *V, uint64_t reg);
-  llvm::Value *readFromImmOperand(int idx, unsigned size);
+  llvm::Value *readFromImmOperand(int idx, unsigned immed_width,
+                                  unsigned result_width);
   std::tuple<llvm::BasicBlock *, llvm::BasicBlock *>
   getBranchTargetsOperand(int op);
 

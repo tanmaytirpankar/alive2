@@ -144,7 +144,7 @@ void riscv2llvm::lift(MCInst &I) {
   case RISCV::C_ADDI:
   case RISCV::ADDI: {
     auto a = readFromRegOperand(1);
-    auto b = readFromImmOperand(2, 64);
+    auto b = readFromImmOperand(2, 12, 64);
     Value *res;
     switch (opcode) {
     case RISCV::C_ADDI:
@@ -177,7 +177,7 @@ void riscv2llvm::lift(MCInst &I) {
   case RISCV::C_ADDIW:
   case RISCV::ADDIW: {
     auto a = readFromRegOperand(1);
-    auto b = readFromImmOperand(2, 32);
+    auto b = readFromImmOperand(2, 12, 32);
     auto a32 = createTrunc(a, i32ty);
     auto res = createAdd(a32, b);
     auto resExt = createSExt(res, i64ty);
@@ -192,7 +192,7 @@ void riscv2llvm::lift(MCInst &I) {
   }
 
   case RISCV::C_LI: {
-    auto a = readFromImmOperand(1, 64);
+    auto a = readFromImmOperand(1, 12, 64);
     updateOutputReg(a);
     break;
   }
@@ -220,7 +220,7 @@ void riscv2llvm::lift(MCInst &I) {
   case RISCV::SLTI:
   case RISCV::SLTIU: {
     auto a = readFromRegOperand(1);
-    auto b = readFromImmOperand(2, 64);
+    auto b = readFromImmOperand(2, 12, 64);
     Value *res;
     switch (opcode) {
     case RISCV::SLTI:
