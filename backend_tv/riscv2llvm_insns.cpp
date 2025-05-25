@@ -110,6 +110,7 @@ void riscv2llvm::lift(MCInst &I) {
   }
 
   case RISCV::C_ADDW:
+  case RISCV::SUBW:
   case RISCV::C_SUBW: {
     auto a = readFromRegOperand(1);
     auto b = readFromRegOperand(2);
@@ -120,6 +121,7 @@ void riscv2llvm::lift(MCInst &I) {
     case RISCV::C_ADDW:
       res = createAdd(a32, b32);
       break;
+    case RISCV::SUBW:
     case RISCV::C_SUBW:
       res = createSub(a32, b32);
       break;
