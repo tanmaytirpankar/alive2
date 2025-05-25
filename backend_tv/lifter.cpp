@@ -96,8 +96,9 @@ void init(std::string &backend) {
 
 pair<Function *, Function *> liftFunc(Function *srcFn,
                                       unique_ptr<MemoryBuffer> MB) {
-  // tgtModule->setDataLayout(srcModule->getDataLayout());
-  // tgtModule->setTargetTriple(srcModule->getTargetTriple());
+  checkSupport(srcFn);
+  nameGlobals(srcFn->getParent());
+  srcFn = adjustSrc(srcFn);
 
   llvm::SourceMgr SrcMgr;
   SrcMgr.AddNewSourceBuffer(std::move(MB), llvm::SMLoc());
@@ -166,6 +167,9 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
   assert(MCE && "createMCCodeEmitter failed.");
 
   auto liftedModule = new Module("liftedModule", srcFn->getContext());
+  // liftedModule->setDataLayout(srcModule->getDataLayout());
+  // liftedModule->setTargetTriple(srcModule->getTargetTriple());
+
   Function *liftedFn;
   if (DefaultBackend == "aarch64") {
     liftedFn = arm2llvm{liftedModule, Str.MF, *srcFn, IP.get(),

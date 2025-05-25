@@ -218,10 +218,6 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   if (opt_asm_only)
     exit(0);
 
-  lifter::checkSupport(srcFn);
-  lifter::nameGlobals(srcModule);
-  srcFn = lifter::adjustSrc(srcFn);
-
   auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer));
 
   auto tgtModule = F2->getParent();
