@@ -131,7 +131,7 @@ class Alive2Test(TestFormat):
         return lit.Test.UNSUPPORTED, ''
 
     if alive_tv_6:
-      cmd = ['./backend-tv', '-smt-to=20000', '-always-verify', '-backend=riscv']
+      cmd = ['./backend-tv', '-smt-to=20000', '-always-verify', '-backend=riscv64']
       if not has_exe('backend-tv'):
         return lit.Test.UNSUPPORTED, ''
 
@@ -159,7 +159,8 @@ class Alive2Test(TestFormat):
     # TODO hacky way of using interpreter with .ll files
     llvm_exec = test.endswith('.ll')
     if llvm_exec and not alive_tv_1 and not alive_tv_2 and \
-       not alive_tv_3 and not alive_tv_4 and not alive_tv_5:
+       not alive_tv_3 and not alive_tv_4 and not alive_tv_5 and \
+       not alive_tv_6:
       cmd = ['./alive-interp']
       if not has_exe('alive-interp'):
         return lit.Test.UNSUPPORTED, ''
