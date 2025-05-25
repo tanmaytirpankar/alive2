@@ -170,19 +170,18 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
   // liftedModule->setDataLayout(srcModule->getDataLayout());
   // liftedModule->setTargetTriple(srcModule->getTargetTriple());
 
-  Function *liftedFn;
+  unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
-    liftedFn = arm2llvm{liftedModule, Str.MF, *srcFn, IP.get(),
-                        *MCE,         *STI,   *Ana,   SentinelNOP}
-                   .run();
+    lifter = make_unique<arm2llvm>(liftedModule, Str.MF, *srcFn, IP.get(), *MCE,
+                                   *STI, *Ana, SentinelNOP);
   } else if (DefaultBackend == "riscv64") {
-    liftedFn = riscv2llvm{liftedModule, Str.MF, *srcFn, IP.get(),
-                          *MCE,         *STI,   *Ana,   SentinelNOP}
-                   .run();
+    lifter = make_unique<riscv2llvm>(liftedModule, Str.MF, *srcFn, IP.get(),
+                                     *MCE, *STI, *Ana, SentinelNOP);
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);
   }
+  Function *liftedFn = lifter->run();
 
   // uncomment this if we're emitting broken functions
   // liftedModule->dump();

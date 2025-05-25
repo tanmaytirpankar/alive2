@@ -376,6 +376,9 @@ Function *adjustSrc(Function *srcFn) {
     }
   }
 
+  // FIXME -- some of this is ARM-specific, we need a hook into
+  // target-specific code here
+  
   has_ret_attr = srcFn->hasRetAttribute(Attribute::SExt) ||
                  srcFn->hasRetAttribute(Attribute::ZExt);
 
