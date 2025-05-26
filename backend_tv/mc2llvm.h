@@ -890,6 +890,7 @@ public:
   virtual void lift(llvm::MCInst &I) = 0;
   virtual void platformInit() = 0;
   virtual void doReturn() = 0;
+  virtual unsigned branchInst() = 0;
 };
 
 } // end namespace lifter

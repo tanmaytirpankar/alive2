@@ -16,6 +16,10 @@ using namespace std;
 using namespace lifter;
 using namespace llvm;
 
+unsigned arm2llvm::branchInst() {
+  return AArch64::B;
+}
+
 arm2llvm::arm2llvm(Module *LiftedModule, MCStreamerWrapper &Str, Function &srcFn,
                    MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
                    const MCSubtargetInfo &STI, const MCInstrAnalysis &IA,

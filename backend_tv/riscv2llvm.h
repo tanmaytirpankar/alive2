@@ -59,6 +59,8 @@ class riscv2llvm final : public mc2llvm {
 
   void platformInit() override;
 
+  unsigned branchInst() override;
+  
   llvm::Value *enforceSExtZExt(llvm::Value *V, bool isSExt, bool isZExt);
 
   void doReturn() override;

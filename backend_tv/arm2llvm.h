@@ -116,6 +116,8 @@ public:
   void doCall(llvm::FunctionCallee FC, llvm::CallInst *llvmCI,
               const std::string &calleeName) override;
 
+  unsigned branchInst() override;
+  
   llvm::Value *conditionHolds(uint64_t cond);
 
   std::tuple<llvm::Value *, std::tuple<llvm::Value *, llvm::Value *,

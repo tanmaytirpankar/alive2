@@ -42,6 +42,10 @@ tuple<BasicBlock *, BasicBlock *> riscv2llvm::getBranchTargetsOperand(int op) {
   return make_pair(dst_true, dst_false);
 }
 
+unsigned riscv2llvm::branchInst() {
+  return RISCV::C_J;
+}
+
 Value *riscv2llvm::enforceSExtZExt(Value *V, bool isSExt, bool isZExt) {
   assert(!(isSExt && isZExt));
 

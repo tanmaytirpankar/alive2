@@ -169,11 +169,6 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
   unique_ptr<MCCodeEmitter> MCE{Targ->createMCCodeEmitter(*MCII.get(), Ctx)};
   assert(MCE && "createMCCodeEmitter failed.");
 
-  Str.removeEmptyBlocks();
-  Str.checkEntryBlock(DefaultBackend == "aarch64" ? (unsigned)AArch64::B
-                                                  : (unsigned)RISCV::C_J);
-  Str.generateSuccessors();
-
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
     lifter = make_unique<arm2llvm>(liftedModule, Str, *srcFn, IP.get(), *MCE,

@@ -517,6 +517,10 @@ void mc2llvm::createRegStorage(unsigned Reg, unsigned Width,
 }
 
 Function *mc2llvm::run() {
+  Str.removeEmptyBlocks();
+  Str.checkEntryBlock(branchInst());
+  Str.generateSuccessors();
+
   // we'll want this later
   vector<Type *> args{getIntTy(1)};
   FunctionType *assertTy = FunctionType::get(Type::getVoidTy(Ctx), args, false);
