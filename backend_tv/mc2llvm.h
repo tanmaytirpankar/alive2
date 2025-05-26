@@ -1,8 +1,5 @@
 #pragma once
 
-#include "backend_tv/bitutils.h"
-#include "backend_tv/lifter.h"
-
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
@@ -18,6 +15,10 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Target/TargetMachine.h"
 
+#include "backend_tv/streamerwrapper.h"
+#include "backend_tv/bitutils.h"
+#include "backend_tv/lifter.h"
+
 #include "aslp/aslp_bridge.h"
 
 namespace lifter {
@@ -29,7 +30,7 @@ class mc2llvm : public aslp::lifter_interface_llvm {
 public:
   llvm::Module *LiftedModule{nullptr};
   llvm::LLVMContext &Ctx = LiftedModule->getContext();
-  MCFunction &MF;
+  MCStreamerWrapper &Str;
   llvm::Function &srcFn;
   llvm::Function *liftedFn{nullptr};
   MCBasicBlock *MCBB{nullptr};
@@ -48,11 +49,11 @@ public:
   const llvm::DataLayout &DL;
   unsigned SentinelNOP;
 
-  mc2llvm(llvm::Module *LiftedModule, MCFunction &MF, llvm::Function &srcFn,
+  mc2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str, llvm::Function &srcFn,
           llvm::MCInstPrinter *InstPrinter, const llvm::MCCodeEmitter &MCE,
           const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
           unsigned SentinelNOP)
-      : LiftedModule(LiftedModule), MF(MF), srcFn(srcFn),
+      : LiftedModule(LiftedModule), Str(Str), srcFn(srcFn),
         InstPrinter(InstPrinter), MCE{MCE}, STI{STI}, IA{IA},
         DL(srcFn.getParent()->getDataLayout()), SentinelNOP(SentinelNOP) {}
 

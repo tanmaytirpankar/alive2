@@ -15,6 +15,11 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Target/TargetMachine.h"
 
+namespace lifter {
+class MCStreamerWrapper;
+}
+  
+#include "backend_tv/lifter.h"
 #include "backend_tv/mc2llvm.h"
 #include "backend_tv/mcutils.h"
 
@@ -66,7 +71,6 @@ public:
     };
     MF.MCglobals.emplace_back(g);
     curROData.clear();
-    *out << "created constant: " << curSym << "\n";
   }
 
   // We only want to intercept the emission of new instructions.

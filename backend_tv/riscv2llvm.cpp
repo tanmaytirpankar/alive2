@@ -13,11 +13,11 @@ using namespace std;
 using namespace lifter;
 using namespace llvm;
 
-riscv2llvm::riscv2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
+riscv2llvm::riscv2llvm(Module *LiftedModule, MCStreamerWrapper &Str, Function &srcFn,
                        MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
                        const MCSubtargetInfo &STI, const MCInstrAnalysis &IA,
                        unsigned SentinelNOP)
-    : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA, SentinelNOP) {
+    : mc2llvm(LiftedModule, Str, srcFn, InstPrinter, MCE, STI, IA, SentinelNOP) {
 }
 
 // TODO -- move this up to mc2llvm so the ARM lifter can use it too

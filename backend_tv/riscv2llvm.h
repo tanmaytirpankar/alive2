@@ -74,7 +74,7 @@ class riscv2llvm final : public mc2llvm {
   getBranchTargetsOperand(int op);
 
 public:
-  riscv2llvm(llvm::Module *LiftedModule, MCFunction &MF, llvm::Function &srcFn,
+  riscv2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str, llvm::Function &srcFn,
              llvm::MCInstPrinter *InstPrinter, const llvm::MCCodeEmitter &MCE,
              const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
              unsigned SentinelNOP);

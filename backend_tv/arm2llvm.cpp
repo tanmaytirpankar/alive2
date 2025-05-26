@@ -16,11 +16,11 @@ using namespace std;
 using namespace lifter;
 using namespace llvm;
 
-arm2llvm::arm2llvm(Module *LiftedModule, MCFunction &MF, Function &srcFn,
+arm2llvm::arm2llvm(Module *LiftedModule, MCStreamerWrapper &Str, Function &srcFn,
                    MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
                    const MCSubtargetInfo &STI, const MCInstrAnalysis &IA,
                    unsigned SentinelNOP)
-    : mc2llvm(LiftedModule, MF, srcFn, InstPrinter, MCE, STI, IA, SentinelNOP) {
+    : mc2llvm(LiftedModule, Str, srcFn, InstPrinter, MCE, STI, IA, SentinelNOP) {
   // sanity checking
   assert(disjoint(instrs_32, instrs_64));
   assert(disjoint(instrs_32, instrs_128));

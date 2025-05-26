@@ -166,25 +166,26 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
     exit(-1);
   }
 
+  unique_ptr<MCCodeEmitter> MCE{Targ->createMCCodeEmitter(*MCII.get(), Ctx)};
+  assert(MCE && "createMCCodeEmitter failed.");
+
   Str.removeEmptyBlocks();
   Str.checkEntryBlock(DefaultBackend == "aarch64" ? (unsigned)AArch64::B
                                                   : (unsigned)RISCV::C_J);
   Str.generateSuccessors();
 
-  unique_ptr<MCCodeEmitter> MCE{Targ->createMCCodeEmitter(*MCII.get(), Ctx)};
-  assert(MCE && "createMCCodeEmitter failed.");
-
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
-    lifter = make_unique<arm2llvm>(liftedModule, Str.MF, *srcFn, IP.get(), *MCE,
+    lifter = make_unique<arm2llvm>(liftedModule, Str, *srcFn, IP.get(), *MCE,
                                    *STI, *Ana, SentinelNOP);
   } else if (DefaultBackend == "riscv64") {
-    lifter = make_unique<riscv2llvm>(liftedModule, Str.MF, *srcFn, IP.get(),
+    lifter = make_unique<riscv2llvm>(liftedModule, Str, *srcFn, IP.get(),
                                      *MCE, *STI, *Ana, SentinelNOP);
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);
   }
+
   Function *liftedFn = lifter->run();
 
   // enabled this if we're emitting broken functions

@@ -66,7 +66,7 @@ Constant *mc2llvm::lazyAddGlobal(string newGlobal) {
   // reference each other. we support the latter by creating an
   // initializer-free dummy variable right now, and then later
   // creating the actual thing we need
-  for (const auto &g : MF.MCglobals) {
+  for (const auto &g : Str.MF.MCglobals) {
     string name{demangle(g.name)};
     if (name != newGlobal)
       continue;
@@ -534,7 +534,7 @@ Function *mc2llvm::run() {
   vector<pair<BasicBlock *, MCBasicBlock *>> BBs;
   {
     long insts = 0;
-    for (auto &mbb : MF.BBs) {
+    for (auto &mbb : Str.MF.BBs) {
       for (auto &inst [[maybe_unused]] : mbb.getInstrs())
         ++insts;
       auto bb = BasicBlock::Create(Ctx, mbb.getName(), liftedFn);
