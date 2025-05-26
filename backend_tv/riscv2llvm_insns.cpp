@@ -67,7 +67,8 @@ void riscv2llvm::lift(MCInst &I) {
   }
 
   case RISCV::BLT:
-  case RISCV::BLTU: {
+  case RISCV::BLTU:
+  case RISCV::BNE: {
     auto a = readFromRegOperand(0);
     auto b = readFromRegOperand(1);
     auto [dst_true, dst_false] = getBranchTargetsOperand(2);
@@ -79,6 +80,9 @@ void riscv2llvm::lift(MCInst &I) {
     case RISCV::BLTU:
       cond = createICmp(ICmpInst::Predicate::ICMP_ULT, a, b);
       break;
+    case RISCV::BNE:
+      cond = createICmp(ICmpInst::Predicate::ICMP_NE, a, b);
+      break;
     default:
       assert(false);
     }
@@ -86,10 +90,12 @@ void riscv2llvm::lift(MCInst &I) {
     break;
   }
 
-  case RISCV::ADD:
-  case RISCV::SUB:
   case RISCV::C_ADD:
-  case RISCV::C_SUB: {
+  case RISCV::ADD:
+  case RISCV::C_SUB:
+  case RISCV::SUB: 
+  case RISCV::C_OR:
+  case RISCV::OR: {
     auto a = readFromRegOperand(1);
     auto b = readFromRegOperand(2);
     Value *res;
@@ -102,6 +108,10 @@ void riscv2llvm::lift(MCInst &I) {
     case RISCV::C_SUB:
       res = createSub(a, b);
       break;
+    case RISCV::C_OR:
+    case RISCV::OR:
+      res = createOr(a, b);
+      break;
     default:
       assert(false);
     }
@@ -110,8 +120,9 @@ void riscv2llvm::lift(MCInst &I) {
   }
 
   case RISCV::C_ADDW:
-  case RISCV::SUBW:
-  case RISCV::C_SUBW: {
+  case RISCV::ADDW:
+  case RISCV::C_SUBW:
+  case RISCV::SUBW: {
     auto a = readFromRegOperand(1);
     auto b = readFromRegOperand(2);
     auto a32 = createTrunc(a, i32ty);
@@ -119,10 +130,11 @@ void riscv2llvm::lift(MCInst &I) {
     Value *res;
     switch (opcode) {
     case RISCV::C_ADDW:
+    case RISCV::ADDW:
       res = createAdd(a32, b32);
       break;
-    case RISCV::SUBW:
     case RISCV::C_SUBW:
+    case RISCV::SUBW:
       res = createSub(a32, b32);
       break;
     default:
@@ -141,6 +153,8 @@ void riscv2llvm::lift(MCInst &I) {
   case RISCV::SLLI:
   case RISCV::C_ANDI:
   case RISCV::ANDI:
+  case RISCV::XORI:
+  case RISCV::ORI:
   case RISCV::C_ADDI:
   case RISCV::ADDI: {
     auto a = readFromRegOperand(1);
@@ -154,6 +168,12 @@ void riscv2llvm::lift(MCInst &I) {
     case RISCV::C_ANDI:
     case RISCV::ANDI:
       res = createAnd(a, b);
+      break;
+    case RISCV::XORI:
+      res = createXor(a, b);
+      break;
+    case RISCV::ORI:
+      res = createOr(a, b);
       break;
     case RISCV::C_SLLI:
     case RISCV::SLLI:
