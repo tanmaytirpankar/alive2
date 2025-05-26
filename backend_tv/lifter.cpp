@@ -96,6 +96,14 @@ void init(std::string &backend) {
 
 pair<Function *, Function *> liftFunc(Function *srcFn,
                                       unique_ptr<MemoryBuffer> MB) {
+
+  auto liftedModule = new Module("liftedModule", srcFn->getContext());
+  // liftedModule->setDataLayout(srcModule->getDataLayout());
+  // liftedModule->setTargetTriple(srcModule->getTargetTriple());
+
+  // FIXME -- all this code below needs to move info mc2llvm so we can
+  // use object dispatch to easily access platform-specific code
+  
   checkSupport(srcFn);
   nameGlobals(srcFn->getParent());
   srcFn = adjustSrc(srcFn);
@@ -166,10 +174,6 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
   unique_ptr<MCCodeEmitter> MCE{Targ->createMCCodeEmitter(*MCII.get(), Ctx)};
   assert(MCE && "createMCCodeEmitter failed.");
 
-  auto liftedModule = new Module("liftedModule", srcFn->getContext());
-  // liftedModule->setDataLayout(srcModule->getDataLayout());
-  // liftedModule->setTargetTriple(srcModule->getTargetTriple());
-
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
     lifter = make_unique<arm2llvm>(liftedModule, Str.MF, *srcFn, IP.get(), *MCE,
@@ -183,8 +187,9 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
   }
   Function *liftedFn = lifter->run();
 
-  // uncomment this if we're emitting broken functions
-  // liftedModule->dump();
+  // enabled this if we're emitting broken functions
+  if (false)
+    liftedModule->dump();
 
   std::string sss;
   llvm::raw_string_ostream ss(sss);
