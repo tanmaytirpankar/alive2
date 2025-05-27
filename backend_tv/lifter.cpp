@@ -132,11 +132,11 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
 
   auto Ana = make_unique<MCInstrAnalysis>(MCII.get());
 
-  MCContext Ctx(DefaultTT, MAI.get(), MRI.get(), STI.get(), &SrcMgr,
-                &MCOptions);
+  MCContext MCCtx(DefaultTT, MAI.get(), MRI.get(), STI.get(), &SrcMgr,
+                  &MCOptions);
   std::unique_ptr<MCObjectFileInfo> MCOFI(
-      Targ->createMCObjectFileInfo(Ctx, false, false));
-  Ctx.setObjectFileInfo(MCOFI.get());
+      Targ->createMCObjectFileInfo(MCCtx, false, false));
+  MCCtx.setObjectFileInfo(MCOFI.get());
 
   unsigned SentinelNOP;
   if (DefaultBackend == "aarch64")
@@ -146,14 +146,14 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
   else
     assert(false);
 
-  MCStreamerWrapper Str(Ctx, Ana.get(), IP.get(), MRI.get(), SentinelNOP);
+  MCStreamerWrapper Str(MCCtx, Ana.get(), IP.get(), MRI.get(), SentinelNOP);
   Str.setUseAssemblerInfoForParsing(true);
 
   raw_ostream &OSRef = nulls();
   formatted_raw_ostream FOSRef(OSRef);
   Targ->createAsmTargetStreamer(Str, FOSRef, IP.get());
 
-  unique_ptr<MCAsmParser> Parser(createMCAsmParser(SrcMgr, Ctx, Str, *MAI));
+  unique_ptr<MCAsmParser> Parser(createMCAsmParser(SrcMgr, MCCtx, Str, *MAI));
   assert(Parser);
 
   unique_ptr<MCTargetAsmParser> TAP(
@@ -166,16 +166,17 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
     exit(-1);
   }
 
-  unique_ptr<MCCodeEmitter> MCE{Targ->createMCCodeEmitter(*MCII.get(), Ctx)};
+  unique_ptr<MCCodeEmitter> MCE{Targ->createMCCodeEmitter(*MCII.get(), MCCtx)};
   assert(MCE && "createMCCodeEmitter failed.");
 
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
     lifter = make_unique<arm2llvm>(liftedModule, Str, *srcFn, IP.get(), *MCE,
-                                   *STI, *Ana, SentinelNOP, *MCII.get());
+                                   *STI, *Ana, SentinelNOP, *MCII.get(), MCCtx);
   } else if (DefaultBackend == "riscv64") {
-    lifter = make_unique<riscv2llvm>(liftedModule, Str, *srcFn, IP.get(), *MCE,
-                                     *STI, *Ana, SentinelNOP, *MCII.get());
+    lifter =
+        make_unique<riscv2llvm>(liftedModule, Str, *srcFn, IP.get(), *MCE, *STI,
+                                *Ana, SentinelNOP, *MCII.get(), MCCtx);
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);
