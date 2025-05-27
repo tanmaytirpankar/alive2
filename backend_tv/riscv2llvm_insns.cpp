@@ -3,6 +3,8 @@
 #include <cmath>
 #include <vector>
 
+#include "Target/RISCV/MCTargetDesc/RISCVMCExpr.h"
+
 #define GET_INSTRINFO_ENUM
 #include "Target/RISCV/RISCVGenInstrInfo.inc"
 
@@ -145,6 +147,26 @@ void riscv2llvm::lift(MCInst &I) {
     break;
   }
 
+  case RISCV::LUI: {
+    auto op1 = CurInst->getOperand(1);
+    if (op1.isImm()) {
+      auto imm = readFromImmOperand(1, 20, 64);
+      auto amt = getUnsignedIntConst(12, 64);
+      auto immShifted = createRawShl(imm, amt);
+      updateOutputReg(immShifted);
+    } else if (op1.isExpr()) {
+      auto expr = op1.getExpr();
+      auto rvexpr = dyn_cast<RISCVMCExpr>(expr);
+      assert(rvexpr);
+      // rvexpr->printImpl(*out, MAI);
+      exit(-1);
+    } else {
+      *out << "unhandled lui case\n";
+      exit(-1);
+    }
+    break;
+  }
+    
   case RISCV::C_SRAI:
   case RISCV::SRAI:
   case RISCV::C_SRLI:
@@ -258,7 +280,6 @@ void riscv2llvm::lift(MCInst &I) {
   }
 
   case RISCV::C_JR: {
-
     doReturn();
     break;
   }

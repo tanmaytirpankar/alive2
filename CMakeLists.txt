@@ -190,6 +190,9 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
   include_directories(${LLVM_INCLUDE_DIRS})
   include_directories(${LLVM_BINARY_DIR}/lib)
 
+  # argh.
+  include_directories(${LLVM_MAIN_INCLUDE_DIR}/../lib)
+
   add_definitions(${LLVM_DEFINITIONS})
 
   set(LLVM_UTIL_SRCS
