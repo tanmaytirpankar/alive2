@@ -9,6 +9,69 @@ using namespace llvm;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+void arm2llvm::lift_ext_2() {
+  auto i128 = getIntTy(128);
+  auto a = readFromOperand(1);
+  auto b = readFromOperand(2);
+  auto imm = getImm(3);
+  auto both = concat(b, a);
+  auto shifted = createRawLShr(both, getUnsignedIntConst(8 * imm, 256));
+  updateOutputReg(createTrunc(shifted, i128));
+}
+
+void arm2llvm::lift_ext_1() {
+  auto i64 = getIntTy(64);
+  auto a = readFromOperand(1);
+  auto b = readFromOperand(2);
+  auto imm = getImm(3);
+  auto both = concat(b, a);
+  auto shifted = createRawLShr(both, getUnsignedIntConst(8 * imm, 128));
+  updateOutputReg(createTrunc(shifted, i64));
+}
+
+void arm2llvm::lift_movi_7() {
+  auto imm1 = getImm(1);
+  auto imm2 = getImm(2);
+  auto val = getUnsignedIntConst(imm1 << imm2, 32);
+  updateOutputReg(dupElts(val, 4, 32));
+}
+
+void arm2llvm::lift_movi_6() {
+  auto imm1 = getImm(1);
+  auto imm2 = getImm(2);
+  auto val = getUnsignedIntConst(imm1 << imm2, 32);
+  updateOutputReg(dupElts(val, 2, 32));
+}
+
+void arm2llvm::lift_movi_5() {
+  auto imm1 = getImm(1);
+  auto imm2 = getImm(2);
+  auto val = getUnsignedIntConst(imm1 << imm2, 16);
+  updateOutputReg(dupElts(val, 8, 16));
+}
+
+void arm2llvm::lift_movi_4() {
+  auto imm1 = getImm(1);
+  auto imm2 = getImm(2);
+  auto val = getUnsignedIntConst(imm1 << imm2, 16);
+  updateOutputReg(dupElts(val, 4, 16));
+}
+
+void arm2llvm::lift_movi_3() {
+  auto v = getUnsignedIntConst(getImm(1), 8);
+  updateOutputReg(dupElts(v, 16, 8));
+}
+
+void arm2llvm::lift_movi_2() {
+  auto v = getUnsignedIntConst(getImm(1), 8);
+  updateOutputReg(dupElts(v, 8, 8));
+}
+
+void arm2llvm::lift_movi_1() {
+  auto imm = getUnsignedIntConst(replicate8to64(getImm(1)), 64);
+  updateOutputReg(dupElts(imm, 2, 64));
+}
+
 void arm2llvm::lift_movi_msl(unsigned opcode) {
   auto imm1 = getUnsignedIntConst(getImm(1), 32);
   auto imm2 = getImm(2) & ~0x100;

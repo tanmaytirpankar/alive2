@@ -325,6 +325,15 @@ public:
   void lift_mvni(unsigned opcode);
   void lift_mvni_msl(unsigned opcode);
   void lift_movi_msl(unsigned opcode);
+  void lift_movi_1();
+  void lift_movi_2();
+  void lift_movi_3();
+  void lift_movi_4();
+  void lift_movi_5();
+  void lift_movi_6();
+  void lift_movi_7();
+  void lift_ext_1();
+  void lift_ext_2();
 };
 
 } // end namespace lifter

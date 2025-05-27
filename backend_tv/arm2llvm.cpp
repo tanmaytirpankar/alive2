@@ -3300,7 +3300,6 @@ void arm2llvm::lift(MCInst &I) {
   auto i16 = getIntTy(16);
   auto i32 = getIntTy(32);
   auto i64 = getIntTy(64);
-  auto i128 = getIntTy(128);
 
   switch (opcode) {
 
@@ -4232,75 +4231,41 @@ void arm2llvm::lift(MCInst &I) {
     break;
 
   case AArch64::MOVID:
-  case AArch64::MOVIv2d_ns: {
-    auto imm = getUnsignedIntConst(replicate8to64(getImm(1)), 64);
-    updateOutputReg(dupElts(imm, 2, 64));
+  case AArch64::MOVIv2d_ns:
+    lift_movi_1();
     break;
-  }
 
-  case AArch64::MOVIv8b_ns: {
-    auto v = getUnsignedIntConst(getImm(1), 8);
-    updateOutputReg(dupElts(v, 8, 8));
+  case AArch64::MOVIv8b_ns:
+    lift_movi_2();
     break;
-  }
 
-  case AArch64::MOVIv16b_ns: {
-    auto v = getUnsignedIntConst(getImm(1), 8);
-    updateOutputReg(dupElts(v, 16, 8));
+  case AArch64::MOVIv16b_ns:
+    lift_movi_3();
     break;
-  }
 
-  case AArch64::MOVIv4i16: {
-    auto imm1 = getImm(1);
-    auto imm2 = getImm(2);
-    auto val = getUnsignedIntConst(imm1 << imm2, 16);
-    updateOutputReg(dupElts(val, 4, 16));
+  case AArch64::MOVIv4i16:
+    lift_movi_4();
     break;
-  }
 
-  case AArch64::MOVIv8i16: {
-    auto imm1 = getImm(1);
-    auto imm2 = getImm(2);
-    auto val = getUnsignedIntConst(imm1 << imm2, 16);
-    updateOutputReg(dupElts(val, 8, 16));
+  case AArch64::MOVIv8i16:
+    lift_movi_5();
     break;
-  }
 
-  case AArch64::MOVIv2i32: {
-    auto imm1 = getImm(1);
-    auto imm2 = getImm(2);
-    auto val = getUnsignedIntConst(imm1 << imm2, 32);
-    updateOutputReg(dupElts(val, 2, 32));
+  case AArch64::MOVIv2i32:
+    lift_movi_6();
     break;
-  }
 
-  case AArch64::MOVIv4i32: {
-    auto imm1 = getImm(1);
-    auto imm2 = getImm(2);
-    auto val = getUnsignedIntConst(imm1 << imm2, 32);
-    updateOutputReg(dupElts(val, 4, 32));
+  case AArch64::MOVIv4i32:
+    lift_movi_7();
     break;
-  }
 
-  case AArch64::EXTv8i8: {
-    auto a = readFromOperand(1);
-    auto b = readFromOperand(2);
-    auto imm = getImm(3);
-    auto both = concat(b, a);
-    auto shifted = createRawLShr(both, getUnsignedIntConst(8 * imm, 128));
-    updateOutputReg(createTrunc(shifted, i64));
+  case AArch64::EXTv8i8:
+    lift_ext_1();
     break;
-  }
 
-  case AArch64::EXTv16i8: {
-    auto a = readFromOperand(1);
-    auto b = readFromOperand(2);
-    auto imm = getImm(3);
-    auto both = concat(b, a);
-    auto shifted = createRawLShr(both, getUnsignedIntConst(8 * imm, 256));
-    updateOutputReg(createTrunc(shifted, i128));
+  case AArch64::EXTv16i8:
+    lift_ext_2();
     break;
-  }
 
   case AArch64::REV64v4i32: {
     auto v = rev(readFromOperand(1), 32, 64);
@@ -4521,12 +4486,6 @@ void arm2llvm::lift(MCInst &I) {
     updateOutputReg(res);
     break;
   }
-
-    /*
-case AArch64::FCMEQ64:
-case AArch64::FCMGT64:
-case AArch64::FCMGE64:
-    */
 
   case AArch64::FCMLEv2i64rz:
   case AArch64::FCMLEv4i32rz:
