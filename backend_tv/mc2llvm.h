@@ -48,14 +48,17 @@ public:
   const llvm::MCInstrAnalysis &IA;
   const llvm::DataLayout &DL;
   unsigned SentinelNOP;
+  llvm::MCInstrInfo &MCII;
 
   mc2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str,
           llvm::Function &srcFn, llvm::MCInstPrinter *InstPrinter,
           const llvm::MCCodeEmitter &MCE, const llvm::MCSubtargetInfo &STI,
-          const llvm::MCInstrAnalysis &IA, unsigned SentinelNOP)
-      : LiftedModule(LiftedModule), Str(Str), srcFn(srcFn),
-        InstPrinter(InstPrinter), MCE{MCE}, STI{STI}, IA{IA},
-        DL(srcFn.getParent()->getDataLayout()), SentinelNOP(SentinelNOP) {}
+          const llvm::MCInstrAnalysis &IA, unsigned SentinelNOP,
+	  llvm::MCInstrInfo &MCII)
+    : LiftedModule{LiftedModule}, Str{Str}, srcFn{srcFn},
+      InstPrinter{InstPrinter}, MCE{MCE}, STI{STI}, IA{IA},
+      DL{srcFn.getParent()->getDataLayout()}, SentinelNOP{SentinelNOP},
+      MCII{MCII} {}
 
   // these are ones that the backend adds to tgt, even when they don't
   // appear at all in src

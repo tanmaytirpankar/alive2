@@ -79,7 +79,9 @@ public:
   riscv2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str,
              llvm::Function &srcFn, llvm::MCInstPrinter *InstPrinter,
              const llvm::MCCodeEmitter &MCE, const llvm::MCSubtargetInfo &STI,
-             const llvm::MCInstrAnalysis &IA, unsigned SentinelNOP);
+             const llvm::MCInstrAnalysis &IA, unsigned SentinelNOP,
+	     llvm::MCInstrInfo &MCII);
+
 };
 
 } // end namespace lifter
