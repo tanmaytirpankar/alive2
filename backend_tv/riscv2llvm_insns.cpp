@@ -95,7 +95,7 @@ void riscv2llvm::lift(MCInst &I) {
   case RISCV::C_ADD:
   case RISCV::ADD:
   case RISCV::C_SUB:
-  case RISCV::SUB: 
+  case RISCV::SUB:
   case RISCV::C_OR:
   case RISCV::OR: {
     auto a = readFromRegOperand(1);
@@ -166,7 +166,7 @@ void riscv2llvm::lift(MCInst &I) {
     }
     break;
   }
-    
+
   case RISCV::C_SRAI:
   case RISCV::SRAI:
   case RISCV::C_SRLI:

@@ -60,7 +60,7 @@ class riscv2llvm final : public mc2llvm {
   void platformInit() override;
 
   unsigned branchInst() override;
-  
+
   llvm::Value *enforceSExtZExt(llvm::Value *V, bool isSExt, bool isZExt);
 
   void doReturn() override;
@@ -76,10 +76,10 @@ class riscv2llvm final : public mc2llvm {
   getBranchTargetsOperand(int op);
 
 public:
-  riscv2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str, llvm::Function &srcFn,
-             llvm::MCInstPrinter *InstPrinter, const llvm::MCCodeEmitter &MCE,
-             const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
-             unsigned SentinelNOP);
+  riscv2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str,
+             llvm::Function &srcFn, llvm::MCInstPrinter *InstPrinter,
+             const llvm::MCCodeEmitter &MCE, const llvm::MCSubtargetInfo &STI,
+             const llvm::MCInstrAnalysis &IA, unsigned SentinelNOP);
 };
 
 } // end namespace lifter

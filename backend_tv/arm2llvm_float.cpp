@@ -9,6 +9,27 @@ using namespace llvm;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+void arm2llvm::lift_fccmp() {
+  auto operandSize = getRegSize(CurInst->getOperand(0).getReg());
+  auto a = readFromFPOperand(0, operandSize);
+  auto b = readFromFPOperand(1, operandSize);
+
+  auto [imm_n, imm_z, imm_c, imm_v] = splitImmNZCV(getImm(2));
+  auto [n, z, c, v] = FPCompare(a, b);
+
+  auto cond = conditionHolds(getImm(3));
+
+  auto new_n = createSelect(cond, n, imm_n);
+  auto new_z = createSelect(cond, z, imm_z);
+  auto new_c = createSelect(cond, c, imm_c);
+  auto new_v = createSelect(cond, v, imm_v);
+
+  setN(new_n);
+  setZ(new_z);
+  setC(new_c);
+  setV(new_v);
+}
+
 void arm2llvm::lift_fcmp(unsigned opcode) {
   auto operandSize = getRegSize(CurInst->getOperand(0).getReg());
   auto a = readFromFPOperand(0, operandSize);

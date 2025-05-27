@@ -38,10 +38,10 @@ namespace lifter {
 
 class arm2llvm final : public mc2llvm {
 public:
-  arm2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str, llvm::Function &srcFn,
-           llvm::MCInstPrinter *InstPrinter, const llvm::MCCodeEmitter &MCE,
-           const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
-           unsigned SentinelNOP);
+  arm2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str,
+           llvm::Function &srcFn, llvm::MCInstPrinter *InstPrinter,
+           const llvm::MCCodeEmitter &MCE, const llvm::MCSubtargetInfo &STI,
+           const llvm::MCInstrAnalysis &IA, unsigned SentinelNOP);
 
   // Implemented library pseudocode for signed satuaration from A64 ISA manual
   std::tuple<llvm::Value *, bool> SignedSatQ(llvm::Value *i, unsigned bitWidth);
@@ -117,7 +117,7 @@ public:
               const std::string &calleeName) override;
 
   unsigned branchInst() override;
-  
+
   llvm::Value *conditionHolds(uint64_t cond);
 
   std::tuple<llvm::Value *, std::tuple<llvm::Value *, llvm::Value *,
@@ -319,6 +319,12 @@ public:
   void lift_fsqrt();
   void lift_vec_fpbinop(unsigned opcode);
   void lift_fcmp(unsigned opcode);
+  void lift_fccmp();
+  void lift_smov_vi(unsigned opcode);
+  void lift_umov_vi(unsigned opcode);
+  void lift_mvni(unsigned opcode);
+  void lift_mvni_msl(unsigned opcode);
+  void lift_movi_msl(unsigned opcode);
 };
 
 } // end namespace lifter

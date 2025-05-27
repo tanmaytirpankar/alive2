@@ -18,7 +18,7 @@
 namespace lifter {
 class MCStreamerWrapper;
 }
-  
+
 #include "backend_tv/lifter.h"
 #include "backend_tv/mc2llvm.h"
 #include "backend_tv/mcutils.h"

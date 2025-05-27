@@ -20,11 +20,12 @@ unsigned arm2llvm::branchInst() {
   return AArch64::B;
 }
 
-arm2llvm::arm2llvm(Module *LiftedModule, MCStreamerWrapper &Str, Function &srcFn,
-                   MCInstPrinter *InstPrinter, const MCCodeEmitter &MCE,
-                   const MCSubtargetInfo &STI, const MCInstrAnalysis &IA,
-                   unsigned SentinelNOP)
-    : mc2llvm(LiftedModule, Str, srcFn, InstPrinter, MCE, STI, IA, SentinelNOP) {
+arm2llvm::arm2llvm(Module *LiftedModule, MCStreamerWrapper &Str,
+                   Function &srcFn, MCInstPrinter *InstPrinter,
+                   const MCCodeEmitter &MCE, const MCSubtargetInfo &STI,
+                   const MCInstrAnalysis &IA, unsigned SentinelNOP)
+    : mc2llvm(LiftedModule, Str, srcFn, InstPrinter, MCE, STI, IA,
+              SentinelNOP) {
   // sanity checking
   assert(disjoint(instrs_32, instrs_64));
   assert(disjoint(instrs_32, instrs_128));
@@ -4186,27 +4187,9 @@ void arm2llvm::lift(MCInst &I) {
     break;
 
   case AArch64::FCCMPSrr:
-  case AArch64::FCCMPDrr: {
-    auto operandSize = getRegSize(CurInst->getOperand(0).getReg());
-    auto a = readFromFPOperand(0, operandSize);
-    auto b = readFromFPOperand(1, operandSize);
-
-    auto [imm_n, imm_z, imm_c, imm_v] = splitImmNZCV(getImm(2));
-    auto [n, z, c, v] = FPCompare(a, b);
-
-    auto cond = conditionHolds(getImm(3));
-
-    auto new_n = createSelect(cond, n, imm_n);
-    auto new_z = createSelect(cond, z, imm_z);
-    auto new_c = createSelect(cond, c, imm_c);
-    auto new_v = createSelect(cond, v, imm_v);
-
-    setN(new_n);
-    setZ(new_z);
-    setC(new_c);
-    setV(new_v);
+  case AArch64::FCCMPDrr:
+    lift_fccmp();
     break;
-  }
 
   case AArch64::SMOVvi8to32_idx0:
   case AArch64::SMOVvi8to32:
@@ -4217,47 +4200,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::SMOVvi16to64_idx0:
   case AArch64::SMOVvi16to64:
   case AArch64::SMOVvi32to64_idx0:
-  case AArch64::SMOVvi32to64: {
-    auto val = readFromOperand(1);
-    auto index = getImm(2);
-    int64_t eltSizeLog2;
-    Type *truncSize;
-
-    switch (opcode) {
-    case AArch64::SMOVvi8to32_idx0:
-    case AArch64::SMOVvi8to32:
-      eltSizeLog2 = 3;
-      truncSize = i8;
-      break;
-    case AArch64::SMOVvi16to32_idx0:
-    case AArch64::SMOVvi16to32:
-      eltSizeLog2 = 4;
-      truncSize = i16;
-      break;
-    case AArch64::SMOVvi8to64_idx0:
-    case AArch64::SMOVvi8to64:
-      eltSizeLog2 = 3;
-      truncSize = i8;
-      break;
-    case AArch64::SMOVvi16to64_idx0:
-    case AArch64::SMOVvi16to64:
-      eltSizeLog2 = 4;
-      truncSize = i16;
-      break;
-    case AArch64::SMOVvi32to64_idx0:
-    case AArch64::SMOVvi32to64:
-      eltSizeLog2 = 5;
-      truncSize = i32;
-      break;
-    default:
-      assert(false && "error");
-    }
-    auto shiftAmt = getUnsignedIntConst(index << eltSizeLog2, 128);
-    auto shifted = createRawLShr(val, shiftAmt);
-    auto trunced = createTrunc(shifted, truncSize);
-    updateOutputReg(trunced, true);
+  case AArch64::SMOVvi32to64:
+    lift_smov_vi(opcode);
     break;
-  }
 
   case AArch64::UMOVvi8:
   case AArch64::UMOVvi8_idx0:
@@ -4265,86 +4210,26 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::UMOVvi16_idx0:
   case AArch64::UMOVvi32:
   case AArch64::UMOVvi32_idx0:
-  case AArch64::UMOVvi64: {
-    unsigned sz;
-    if (opcode == AArch64::UMOVvi8 || opcode == AArch64::UMOVvi8_idx0) {
-      sz = 8;
-    } else if (opcode == AArch64::UMOVvi16 ||
-               opcode == AArch64::UMOVvi16_idx0) {
-      sz = 16;
-    } else if (opcode == AArch64::UMOVvi32 ||
-               opcode == AArch64::UMOVvi32_idx0) {
-      sz = 32;
-    } else if (opcode == AArch64::UMOVvi64) {
-      sz = 64;
-    } else {
-      assert(false);
-    }
-    unsigned idx;
-    if (opcode == AArch64::UMOVvi8_idx0 || opcode == AArch64::UMOVvi16_idx0 ||
-        opcode == AArch64::UMOVvi32_idx0) {
-      idx = 0;
-    } else {
-      idx = getImm(2);
-    }
-    auto vTy = getVecTy(sz, 128 / sz);
-    auto reg = createBitCast(readFromOperand(1), vTy);
-    auto val = createExtractElement(reg, idx);
-    updateOutputReg(val);
+  case AArch64::UMOVvi64:
+    lift_umov_vi(opcode);
     break;
-  }
 
   case AArch64::MVNIv8i16:
   case AArch64::MVNIv4i32:
   case AArch64::MVNIv4i16:
-  case AArch64::MVNIv2i32: {
-    int numElts, eltSize;
-    switch (opcode) {
-    case AArch64::MVNIv8i16:
-      numElts = 8;
-      eltSize = 16;
-      break;
-    case AArch64::MVNIv4i32:
-      numElts = 4;
-      eltSize = 32;
-      break;
-    case AArch64::MVNIv4i16:
-      numElts = 4;
-      eltSize = 16;
-      break;
-    case AArch64::MVNIv2i32:
-      numElts = 2;
-      eltSize = 32;
-      break;
-    default:
-      assert(false);
-    }
-    auto imm1 = getUnsignedIntConst(getImm(1), eltSize);
-    auto imm2 = getUnsignedIntConst(getImm(2), eltSize);
-    auto v = createNot(createRawShl(imm1, imm2));
-    updateOutputReg(dupElts(v, numElts, eltSize));
+  case AArch64::MVNIv2i32:
+    lift_mvni(opcode);
     break;
-  }
 
   case AArch64::MVNIv2s_msl:
-  case AArch64::MVNIv4s_msl: {
-    auto imm1 = getUnsignedIntConst(getImm(1), 32);
-    auto imm2 = getImm(2) & ~0x100;
-    auto v = createNot(createMSL(imm1, imm2));
-    int numElts = (opcode == AArch64::MVNIv2s_msl) ? 2 : 4;
-    updateOutputReg(dupElts(v, numElts, 32));
+  case AArch64::MVNIv4s_msl:
+    lift_mvni_msl(opcode);
     break;
-  }
 
   case AArch64::MOVIv2s_msl:
-  case AArch64::MOVIv4s_msl: {
-    auto imm1 = getUnsignedIntConst(getImm(1), 32);
-    auto imm2 = getImm(2) & ~0x100;
-    auto v = createMSL(imm1, imm2);
-    int numElts = (opcode == AArch64::MOVIv2s_msl) ? 2 : 4;
-    updateOutputReg(dupElts(v, numElts, 32));
+  case AArch64::MOVIv4s_msl:
+    lift_movi_msl(opcode);
     break;
-  }
 
   case AArch64::MOVID:
   case AArch64::MOVIv2d_ns: {

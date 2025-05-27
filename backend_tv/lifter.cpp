@@ -103,7 +103,7 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
 
   // FIXME -- all this code below needs to move info mc2llvm so we can
   // use object dispatch to easily access platform-specific code
-  
+
   checkSupport(srcFn);
   nameGlobals(srcFn->getParent());
   srcFn = adjustSrc(srcFn);
@@ -174,8 +174,8 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
     lifter = make_unique<arm2llvm>(liftedModule, Str, *srcFn, IP.get(), *MCE,
                                    *STI, *Ana, SentinelNOP);
   } else if (DefaultBackend == "riscv64") {
-    lifter = make_unique<riscv2llvm>(liftedModule, Str, *srcFn, IP.get(),
-                                     *MCE, *STI, *Ana, SentinelNOP);
+    lifter = make_unique<riscv2llvm>(liftedModule, Str, *srcFn, IP.get(), *MCE,
+                                     *STI, *Ana, SentinelNOP);
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);

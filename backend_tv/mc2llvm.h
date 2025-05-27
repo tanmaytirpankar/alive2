@@ -15,9 +15,9 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Target/TargetMachine.h"
 
-#include "backend_tv/streamerwrapper.h"
 #include "backend_tv/bitutils.h"
 #include "backend_tv/lifter.h"
+#include "backend_tv/streamerwrapper.h"
 
 #include "aslp/aslp_bridge.h"
 
@@ -49,10 +49,10 @@ public:
   const llvm::DataLayout &DL;
   unsigned SentinelNOP;
 
-  mc2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str, llvm::Function &srcFn,
-          llvm::MCInstPrinter *InstPrinter, const llvm::MCCodeEmitter &MCE,
-          const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
-          unsigned SentinelNOP)
+  mc2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str,
+          llvm::Function &srcFn, llvm::MCInstPrinter *InstPrinter,
+          const llvm::MCCodeEmitter &MCE, const llvm::MCSubtargetInfo &STI,
+          const llvm::MCInstrAnalysis &IA, unsigned SentinelNOP)
       : LiftedModule(LiftedModule), Str(Str), srcFn(srcFn),
         InstPrinter(InstPrinter), MCE{MCE}, STI{STI}, IA{IA},
         DL(srcFn.getParent()->getDataLayout()), SentinelNOP(SentinelNOP) {}

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <string>
 #include <ostream>
+#include <string>
 
 #include "llvm/IR/Module.h"
 #include "llvm/MC/TargetRegistry.h"
