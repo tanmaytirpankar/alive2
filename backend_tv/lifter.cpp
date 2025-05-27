@@ -153,28 +153,15 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
   formatted_raw_ostream FOSRef(OSRef);
   Targ->createAsmTargetStreamer(Str, FOSRef, IP.get());
 
-  unique_ptr<MCAsmParser> Parser(createMCAsmParser(SrcMgr, MCCtx, Str, *MAI));
-  assert(Parser);
-
-  unique_ptr<MCTargetAsmParser> TAP(
-      Targ->createMCAsmParser(*STI, *Parser, *MCII, MCOptions));
-  assert(TAP);
-  Parser->setTargetParser(*TAP);
-
-  if (Parser->Run(true)) {
-    *out << "\nERROR: AsmParser failed\n";
-    exit(-1);
-  }
-
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
     lifter = make_unique<arm2llvm>(liftedModule, Str, *srcFn, IP.get(), *STI,
                                    *Ana, SentinelNOP, *MCII.get(), MCCtx,
-				   MCOptions);
+                                   MCOptions, SrcMgr, *MAI.get());
   } else if (DefaultBackend == "riscv64") {
     lifter = make_unique<riscv2llvm>(liftedModule, Str, *srcFn, IP.get(), *STI,
                                      *Ana, SentinelNOP, *MCII.get(), MCCtx,
-				     MCOptions);
+                                     MCOptions, SrcMgr, *MAI.get());
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);

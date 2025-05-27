@@ -517,6 +517,19 @@ void mc2llvm::createRegStorage(unsigned Reg, unsigned Width,
 }
 
 Function *mc2llvm::run() {
+  unique_ptr<MCAsmParser> Parser(createMCAsmParser(SrcMgr, MCCtx, Str, MAI));
+  assert(Parser);
+
+  unique_ptr<MCTargetAsmParser> TAP(
+      Targ->createMCAsmParser(STI, *Parser, MCII, MCOptions));
+  assert(TAP);
+  Parser->setTargetParser(*TAP);
+
+  if (Parser->Run(true)) {
+    *out << "\nERROR: AsmParser failed\n";
+    exit(-1);
+  }
+
   Str.removeEmptyBlocks();
   Str.checkEntryBlock(branchInst());
   Str.generateSuccessors();

@@ -42,7 +42,8 @@ public:
            llvm::Function &srcFn, llvm::MCInstPrinter *InstPrinter,
            const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
            unsigned SentinelNOP, llvm::MCInstrInfo &MCII,
-           llvm::MCContext &MCCtx, llvm::MCTargetOptions &MCOptions);
+           llvm::MCContext &MCCtx, llvm::MCTargetOptions &MCOptions,
+           llvm::SourceMgr &SrcMgr, llvm::MCAsmInfo &MAI);
 
   // Implemented library pseudocode for signed satuaration from A64 ISA manual
   std::tuple<llvm::Value *, bool> SignedSatQ(llvm::Value *i, unsigned bitWidth);

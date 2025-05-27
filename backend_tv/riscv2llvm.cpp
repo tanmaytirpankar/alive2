@@ -17,9 +17,10 @@ riscv2llvm::riscv2llvm(Module *LiftedModule, MCStreamerWrapper &Str,
                        Function &srcFn, MCInstPrinter *InstPrinter,
                        const MCSubtargetInfo &STI, const MCInstrAnalysis &IA,
                        unsigned SentinelNOP, MCInstrInfo &MCII,
-                       llvm::MCContext &MCCtx,  MCTargetOptions &MCOptions)
+                       llvm::MCContext &MCCtx, MCTargetOptions &MCOptions,
+                       llvm::SourceMgr &SrcMgr, llvm::MCAsmInfo &MAI)
     : mc2llvm(LiftedModule, Str, srcFn, InstPrinter, STI, IA, SentinelNOP, MCII,
-              MCCtx, MCOptions) {}
+              MCCtx, MCOptions, SrcMgr, MAI) {}
 
 // TODO -- move this up to mc2llvm so the ARM lifter can use it too
 tuple<BasicBlock *, BasicBlock *> riscv2llvm::getBranchTargetsOperand(int op) {
