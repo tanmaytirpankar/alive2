@@ -80,7 +80,7 @@ public:
              llvm::Function &srcFn, llvm::MCInstPrinter *InstPrinter,
              const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
              unsigned SentinelNOP, llvm::MCInstrInfo &MCII,
-             llvm::MCContext &MCCtx);
+             llvm::MCContext &MCCtx,  llvm::MCTargetOptions &MCOptions);
 };
 
 } // end namespace lifter

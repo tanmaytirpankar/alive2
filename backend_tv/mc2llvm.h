@@ -50,15 +50,18 @@ public:
   llvm::MCInstrInfo &MCII;
   llvm::MCContext &MCCtx;
   std::unique_ptr<llvm::MCCodeEmitter> MCE;
-
+  llvm::MCTargetOptions &MCOptions;
+ 
   mc2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str,
           llvm::Function &srcFn, llvm::MCInstPrinter *InstPrinter,
           const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
-          unsigned SentinelNOP, llvm::MCInstrInfo &MCII, llvm::MCContext &MCCtx)
+          unsigned SentinelNOP, llvm::MCInstrInfo &MCII, llvm::MCContext &MCCtx,
+	  llvm::MCTargetOptions &MCOptions)
       : LiftedModule{LiftedModule}, Str{Str}, srcFn{srcFn},
         InstPrinter{InstPrinter}, STI{STI}, IA{IA},
         DL{srcFn.getParent()->getDataLayout()}, SentinelNOP{SentinelNOP},
-        MCII{MCII}, MCCtx(MCCtx), MCE{Targ->createMCCodeEmitter(MCII, MCCtx)} {}
+        MCII{MCII}, MCCtx(MCCtx), MCE{Targ->createMCCodeEmitter(MCII, MCCtx)},
+	MCOptions{MCOptions} {}
 
   // these are ones that the backend adds to tgt, even when they don't
   // appear at all in src

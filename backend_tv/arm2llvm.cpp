@@ -24,9 +24,9 @@ arm2llvm::arm2llvm(Module *LiftedModule, MCStreamerWrapper &Str,
                    Function &srcFn, MCInstPrinter *InstPrinter,
                    const MCSubtargetInfo &STI, const MCInstrAnalysis &IA,
                    unsigned SentinelNOP, MCInstrInfo &MCII,
-                   llvm::MCContext &MCCtx)
+                   llvm::MCContext &MCCtx,  MCTargetOptions &MCOptions)
     : mc2llvm(LiftedModule, Str, srcFn, InstPrinter, STI, IA, SentinelNOP, MCII,
-              MCCtx) {
+              MCCtx, MCOptions) {
   // sanity checking
   assert(disjoint(instrs_32, instrs_64));
   assert(disjoint(instrs_32, instrs_128));
