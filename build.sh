@@ -33,10 +33,6 @@ fi
 
 cd ..
 
-#if command -v clang++ &>/dev/null && [[ -z "$CXX" ]]; then
-#  export CXX=$(which clang++)
-#fi
-
 if [ ! -z "$LOCAL_LLVM" ]; then
   cmake -B build -DBUILD_TV=1 \
     -DCMAKE_PREFIX_PATH="$(realpath build/antlr-dev)" \
@@ -47,6 +43,9 @@ if [ ! -z "$LOCAL_LLVM" ]; then
     "$@"
   cmake --build build
 else
+  if command -v clang++ &>/dev/null && [[ -z "$CXX" ]]; then
+    export CXX=$(which clang++)
+  fi
   # -DCMAKE_BUILD_TYPE=Release \
   cmake -B build -DBUILD_TV=1 \
     -DCMAKE_PREFIX_PATH="$(realpath build/antlr-dev);$(realpath build/llvm-dev)" \

@@ -43,23 +43,22 @@ public:
   std::unordered_map<std::string, llvm::Constant *> LLVMglobals;
   llvm::Value *initialSP, *initialReg[32];
   llvm::Function *assertDecl;
-  const llvm::MCCodeEmitter &MCE;
   const llvm::MCSubtargetInfo &STI;
   const llvm::MCInstrAnalysis &IA;
   const llvm::DataLayout &DL;
   unsigned SentinelNOP;
   llvm::MCInstrInfo &MCII;
   llvm::MCContext &MCCtx;
+  std::unique_ptr<llvm::MCCodeEmitter> MCE;
 
   mc2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str,
           llvm::Function &srcFn, llvm::MCInstPrinter *InstPrinter,
-          const llvm::MCCodeEmitter &MCE, const llvm::MCSubtargetInfo &STI,
-          const llvm::MCInstrAnalysis &IA, unsigned SentinelNOP,
-          llvm::MCInstrInfo &MCII, llvm::MCContext &MCCtx)
+          const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
+          unsigned SentinelNOP, llvm::MCInstrInfo &MCII, llvm::MCContext &MCCtx)
       : LiftedModule{LiftedModule}, Str{Str}, srcFn{srcFn},
-        InstPrinter{InstPrinter}, MCE{MCE}, STI{STI}, IA{IA},
+        InstPrinter{InstPrinter}, STI{STI}, IA{IA},
         DL{srcFn.getParent()->getDataLayout()}, SentinelNOP{SentinelNOP},
-        MCII{MCII}, MCCtx(MCCtx) {}
+        MCII{MCII}, MCCtx(MCCtx), MCE{Targ->createMCCodeEmitter(MCII, MCCtx)} {}
 
   // these are ones that the backend adds to tgt, even when they don't
   // appear at all in src

@@ -40,9 +40,9 @@ class arm2llvm final : public mc2llvm {
 public:
   arm2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str,
            llvm::Function &srcFn, llvm::MCInstPrinter *InstPrinter,
-           const llvm::MCCodeEmitter &MCE, const llvm::MCSubtargetInfo &STI,
-           const llvm::MCInstrAnalysis &IA, unsigned SentinelNOP,
-           llvm::MCInstrInfo &MCII, llvm::MCContext &MCCtx);
+           const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
+           unsigned SentinelNOP, llvm::MCInstrInfo &MCII,
+           llvm::MCContext &MCCtx);
 
   // Implemented library pseudocode for signed satuaration from A64 ISA manual
   std::tuple<llvm::Value *, bool> SignedSatQ(llvm::Value *i, unsigned bitWidth);

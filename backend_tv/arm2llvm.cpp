@@ -22,11 +22,11 @@ unsigned arm2llvm::branchInst() {
 
 arm2llvm::arm2llvm(Module *LiftedModule, MCStreamerWrapper &Str,
                    Function &srcFn, MCInstPrinter *InstPrinter,
-                   const MCCodeEmitter &MCE, const MCSubtargetInfo &STI,
-                   const MCInstrAnalysis &IA, unsigned SentinelNOP,
-                   MCInstrInfo &MCII, llvm::MCContext &MCCtx)
-    : mc2llvm(LiftedModule, Str, srcFn, InstPrinter, MCE, STI, IA, SentinelNOP,
-              MCII, MCCtx) {
+                   const MCSubtargetInfo &STI, const MCInstrAnalysis &IA,
+                   unsigned SentinelNOP, MCInstrInfo &MCII,
+                   llvm::MCContext &MCCtx)
+    : mc2llvm(LiftedModule, Str, srcFn, InstPrinter, STI, IA, SentinelNOP, MCII,
+              MCCtx) {
   // sanity checking
   assert(disjoint(instrs_32, instrs_64));
   assert(disjoint(instrs_32, instrs_128));
@@ -3215,7 +3215,7 @@ std::optional<aslp::opcode_t> arm2llvm::getArmOpcode(const MCInst &I) {
   if (I.getOpcode() == SentinelNOP)
     return std::nullopt;
 
-  MCE.encodeInstruction(I, Code, Fixups, STI);
+  MCE->encodeInstruction(I, Code, Fixups, STI);
   for (auto x : Fixups) {
     // std::cerr << "fixup: " << x.getKind() << ' ' << x.getTargetKind() << '
     // ' << x.getOffset() << ' ' << std::flush; x.getValue()->dump();
@@ -3237,7 +3237,7 @@ std::optional<aslp::opcode_t> arm2llvm::getArmOpcode(const MCInst &I) {
 
 void arm2llvm::lift(MCInst &I) {
   auto entrybb = LLVMBB;
-  aslp::bridge bridge{*this, MCE, STI, IA};
+  aslp::bridge bridge{*this, *MCE.get(), STI, IA};
   auto opcode = I.getOpcode();
 
   StringRef instStr = InstPrinter->getOpcodeName(I.getOpcode());

@@ -15,11 +15,11 @@ using namespace llvm;
 
 riscv2llvm::riscv2llvm(Module *LiftedModule, MCStreamerWrapper &Str,
                        Function &srcFn, MCInstPrinter *InstPrinter,
-                       const MCCodeEmitter &MCE, const MCSubtargetInfo &STI,
-                       const MCInstrAnalysis &IA, unsigned SentinelNOP,
-                       MCInstrInfo &MCII, llvm::MCContext &MCCtx)
-    : mc2llvm(LiftedModule, Str, srcFn, InstPrinter, MCE, STI, IA, SentinelNOP,
-              MCII, MCCtx) {}
+                       const MCSubtargetInfo &STI, const MCInstrAnalysis &IA,
+                       unsigned SentinelNOP, MCInstrInfo &MCII,
+                       llvm::MCContext &MCCtx)
+    : mc2llvm(LiftedModule, Str, srcFn, InstPrinter, STI, IA, SentinelNOP, MCII,
+              MCCtx) {}
 
 // TODO -- move this up to mc2llvm so the ARM lifter can use it too
 tuple<BasicBlock *, BasicBlock *> riscv2llvm::getBranchTargetsOperand(int op) {
