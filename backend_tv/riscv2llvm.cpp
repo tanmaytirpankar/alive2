@@ -314,16 +314,17 @@ void riscv2llvm::platformInit() {
  * the specified register. but for now we'll just assume that the
  * backend got this right.
  */
-Value *riscv2llvm::getPointerOperands() {
-    auto op1 = CurInst->getOperand(1);
-    auto op2 = CurInst->getOperand(2);
-    assert(op1.isReg());
-    assert(op2.isExpr());
-    auto indexReg = op1.getReg();
-    auto rvExpr = dyn_cast<RISCVMCExpr>(op2.getExpr());
-    assert(rvExpr);
-    auto specifier = rvExpr->getSpecifier();
-    assert(specifier == RISCVMCExpr::VK_LO);
-    rvExpr->printImpl(outs(), &MAI);
-    exit(-1);
+Value *riscv2llvm::getPointerOperand() {
+  auto op1 = CurInst->getOperand(1);
+  auto op2 = CurInst->getOperand(2);
+  assert(op1.isReg());
+  assert(op2.isExpr());
+  //auto indexReg = op1.getReg();
+  auto rvExpr = dyn_cast<RISCVMCExpr>(op2.getExpr());
+  assert(rvExpr);
+  auto specifier = rvExpr->getSpecifier();
+  assert(specifier == RISCVMCExpr::VK_LO);
+  auto subExpr = rvExpr->getSubExpr();
+  assert(subExpr);
+  return lookupExprVar(*subExpr);
 }

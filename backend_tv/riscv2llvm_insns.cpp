@@ -178,7 +178,7 @@ void riscv2llvm::lift(MCInst &I) {
   }
 
   case RISCV::LW: {
-    auto ptr = getPointerOperands();
+    auto ptr = getPointerOperand();
     auto loaded = createLoad(i32ty, ptr);
     auto loadedExt = createSExt(loaded, i64ty);
     updateOutputReg(loadedExt);

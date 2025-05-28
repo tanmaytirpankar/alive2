@@ -74,7 +74,7 @@ class riscv2llvm final : public mc2llvm {
                                   unsigned result_width);
   std::tuple<llvm::BasicBlock *, llvm::BasicBlock *>
   getBranchTargetsOperand(int op);
-  llvm::Value *getPointerOperands();
+  llvm::Value *getPointerOperand();
 
 public:
   riscv2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str,
