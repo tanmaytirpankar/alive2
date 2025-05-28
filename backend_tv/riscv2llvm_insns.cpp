@@ -94,6 +94,7 @@ void riscv2llvm::lift(MCInst &I) {
     break;
   }
 
+  case RISCV::MUL:
   case RISCV::C_ADD:
   case RISCV::ADD:
   case RISCV::C_SUB:
@@ -115,6 +116,9 @@ void riscv2llvm::lift(MCInst &I) {
     case RISCV::C_OR:
     case RISCV::OR:
       res = createOr(a, b);
+      break;
+    case RISCV::MUL:
+      res = createMul(a, b);
       break;
     default:
       assert(false);
@@ -149,6 +153,7 @@ void riscv2llvm::lift(MCInst &I) {
     break;
   }
 
+  case RISCV::C_LUI:
   case RISCV::LUI: {
     auto op1 = CurInst->getOperand(1);
     if (op1.isImm()) {
@@ -163,9 +168,11 @@ void riscv2llvm::lift(MCInst &I) {
       auto specifier = rvExpr->getSpecifier();
       switch (specifier) {
       case ELF::R_RISCV_HI20:
-        // FIXME: we (unsoundly) ignore this for now -- but we'll need
-        // to connect this up with the lo part that comes (sometimes a
-        // number of instructions) later
+        // FIXME: this is loading the high 20 bits of an address. we
+        // (unsoundly) ignore this for now -- but we'll want to
+        // connect this up with the lo part that comes (sometimes a
+        // number of instructions) later. this will be easy as long as
+        // the pair are always in the same basic block.
         break;
       default:
         *out << "unknown specifier: "
