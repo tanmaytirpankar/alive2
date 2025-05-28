@@ -1,9 +1,10 @@
 #include "backend_tv/riscv2llvm.h"
 
+#include "llvm/BinaryFormat/ELF.h"
+#include "Target/RISCV/MCTargetDesc/RISCVMCExpr.h"
+
 #include <cmath>
 #include <vector>
-
-#include "Target/RISCV/MCTargetDesc/RISCVMCExpr.h"
 
 #define GET_INSTRINFO_ENUM
 #include "Target/RISCV/RISCVGenInstrInfo.inc"
@@ -156,14 +157,31 @@ void riscv2llvm::lift(MCInst &I) {
       updateOutputReg(immShifted);
     } else if (op1.isExpr()) {
       auto expr = op1.getExpr();
-      auto rvexpr = dyn_cast<RISCVMCExpr>(expr);
-      assert(rvexpr);
-      // rvexpr->printImpl(*out, MAI);
-      exit(-1);
+      auto rvExpr = dyn_cast<RISCVMCExpr>(expr);
+      assert(rvExpr);
+      auto specifier = rvExpr->getSpecifier();
+      switch (specifier) {
+      case ELF::R_RISCV_HI20:
+	// FIXME: we (unsoundly) ignore this for now -- but we'll need
+	// to connect this up with the lo part that comes (sometimes a
+	// number of instructions) later
+	break;
+      default:
+	*out << "unknown specifier: " << (string)RISCVMCExpr::getSpecifierName(specifier) << "\n";
+	exit(-1);
+      }
     } else {
       *out << "unhandled lui case\n";
       exit(-1);
     }
+    break;
+  }
+
+  case RISCV::LW: {
+    auto ptr = getPointerOperands();
+    auto loaded = createLoad(i32ty, ptr);
+    auto loadedExt = createSExt(loaded, i64ty);
+    updateOutputReg(loadedExt);
     break;
   }
 

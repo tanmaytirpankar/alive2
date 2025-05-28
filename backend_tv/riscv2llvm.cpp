@@ -1,5 +1,8 @@
 #include "backend_tv/riscv2llvm.h"
 
+#include "llvm/BinaryFormat/ELF.h"
+#include "Target/RISCV/MCTargetDesc/RISCVMCExpr.h"
+
 #include <cmath>
 #include <vector>
 
@@ -297,4 +300,30 @@ void riscv2llvm::platformInit() {
   }
 
   *out << "done with callee-side ABI stuff\n";
+}
+
+/*
+ * RISC-V memory operations are of the form:
+ *
+ *   ld/st src/dst reg, %lo(var)(addr_reg)
+ *
+ * this function returns an LLVM pointer that is the lifted equivalent
+ * of the composite second operand
+ *
+ * FIXME -- we need to verify that the hi part is actually present in
+ * the specified register. but for now we'll just assume that the
+ * backend got this right.
+ */
+Value *riscv2llvm::getPointerOperands() {
+    auto op1 = CurInst->getOperand(1);
+    auto op2 = CurInst->getOperand(2);
+    assert(op1.isReg());
+    assert(op2.isExpr());
+    auto indexReg = op1.getReg();
+    auto rvExpr = dyn_cast<RISCVMCExpr>(op2.getExpr());
+    assert(rvExpr);
+    auto specifier = rvExpr->getSpecifier();
+    assert(specifier == RISCVMCExpr::VK_LO);
+    rvExpr->printImpl(outs(), &MAI);
+    exit(-1);
 }
