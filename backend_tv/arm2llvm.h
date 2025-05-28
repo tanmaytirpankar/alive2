@@ -336,6 +336,18 @@ public:
   void lift_movi_7();
   void lift_ext_1();
   void lift_ext_2();
+  void lift_rev64_1();
+  void lift_rev64_2();
+  void lift_rev64_3();
+  void lift_rev64_4();
+  void lift_rev64_5();
+  void lift_rev64_6();
+  void lift_rev32_1();
+  void lift_rev32_2();
+  void lift_rev32_3();
+  void lift_rev32_4();
+  void lift_rev16_1();
+  void lift_rev16_2();
 };
 
 } // end namespace lifter

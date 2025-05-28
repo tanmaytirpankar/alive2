@@ -9,6 +9,66 @@ using namespace llvm;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+void arm2llvm::lift_rev32_1() {
+  auto v = rev(readFromOperand(1), 16, 32);
+  updateOutputReg(v);
+}
+
+void arm2llvm::lift_rev32_2() {
+  auto v = rev(readFromOperand(1), 8, 32);
+  updateOutputReg(v);
+}
+
+void arm2llvm::lift_rev32_3() {
+  auto v = rev(readFromOperand(1), 16, 32);
+  updateOutputReg(v);
+}
+
+void arm2llvm::lift_rev32_4() {
+  auto v = rev(readFromOperand(1), 8, 32);
+  updateOutputReg(v);
+}
+
+void arm2llvm::lift_rev16_1() {
+  auto v = rev(readFromOperand(1), 8, 16);
+  updateOutputReg(v);
+}
+
+void arm2llvm::lift_rev16_2() {
+  auto v = rev(readFromOperand(1), 8, 16);
+  updateOutputReg(v);
+}
+
+void arm2llvm::lift_rev64_1() {
+  auto v = rev(readFromOperand(1), 32, 64);
+  updateOutputReg(v);
+}
+
+void arm2llvm::lift_rev64_2() {
+  auto v = rev(readFromOperand(1), 32, 64);
+  updateOutputReg(v);
+}
+
+void arm2llvm::lift_rev64_3() {
+  auto v = rev(readFromOperand(1), 16, 64);
+  updateOutputReg(v);
+}
+
+void arm2llvm::lift_rev64_4() {
+  auto v = rev(readFromOperand(1), 8, 64);
+  updateOutputReg(v);
+}
+
+void arm2llvm::lift_rev64_5() {
+  auto v = rev(readFromOperand(1), 16, 64);
+  updateOutputReg(v);
+}
+
+void arm2llvm::lift_rev64_6() {
+  auto v = rev(readFromOperand(1), 8, 64);
+  updateOutputReg(v);
+}
+
 void arm2llvm::lift_rev32(unsigned opcode) {
   // REV16Wr: Reverse bytes of 32 bit value in 16-bit half-words.
   // REV32Xr: Reverse bytes of 64 bit value in 32-bit words.

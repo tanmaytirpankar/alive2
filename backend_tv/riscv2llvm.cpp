@@ -1,7 +1,7 @@
 #include "backend_tv/riscv2llvm.h"
 
-#include "llvm/BinaryFormat/ELF.h"
 #include "Target/RISCV/MCTargetDesc/RISCVMCExpr.h"
+#include "llvm/BinaryFormat/ELF.h"
 
 #include <cmath>
 #include <vector>
@@ -319,7 +319,7 @@ Value *riscv2llvm::getPointerOperand() {
   auto op2 = CurInst->getOperand(2);
   assert(op1.isReg());
   assert(op2.isExpr());
-  //auto indexReg = op1.getReg();
+  // auto indexReg = op1.getReg();
   auto rvExpr = dyn_cast<RISCVMCExpr>(op2.getExpr());
   assert(rvExpr);
   auto specifier = rvExpr->getSpecifier();

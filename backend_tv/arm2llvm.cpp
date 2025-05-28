@@ -4269,77 +4269,53 @@ void arm2llvm::lift(MCInst &I) {
     lift_ext_2();
     break;
 
-  case AArch64::REV64v4i32: {
-    auto v = rev(readFromOperand(1), 32, 64);
-    updateOutputReg(v);
+  case AArch64::REV64v4i32:
+    lift_rev64_1();
     break;
-  }
 
-  case AArch64::REV64v2i32: {
-    auto v = rev(readFromOperand(1), 32, 64);
-    updateOutputReg(v);
+  case AArch64::REV64v2i32:
+    lift_rev64_2();
     break;
-  }
 
-  case AArch64::REV64v4i16: {
-    auto v = rev(readFromOperand(1), 16, 64);
-    updateOutputReg(v);
+  case AArch64::REV64v4i16:
+    lift_rev64_3();
     break;
-  }
 
-  case AArch64::REV64v8i8: {
-    auto v = rev(readFromOperand(1), 8, 64);
-    updateOutputReg(v);
+  case AArch64::REV64v8i8:
+    lift_rev64_4();
     break;
-  }
 
-  case AArch64::REV64v8i16: {
-    auto v = rev(readFromOperand(1), 16, 64);
-    updateOutputReg(v);
+  case AArch64::REV64v8i16:
+    lift_rev64_5();
     break;
-  }
 
-  case AArch64::REV64v16i8: {
-    auto v = rev(readFromOperand(1), 8, 64);
-    updateOutputReg(v);
+  case AArch64::REV64v16i8:
+    lift_rev64_6();
     break;
-  }
 
-  case AArch64::REV16v8i8: {
-    auto v = rev(readFromOperand(1), 8, 16);
-    updateOutputReg(v);
+  case AArch64::REV32v4i16:
+    lift_rev32_1();
     break;
-  }
 
-  case AArch64::REV16v16i8: {
-    auto v = rev(readFromOperand(1), 8, 16);
-    updateOutputReg(v);
+  case AArch64::REV32v8i8:
+    lift_rev32_2();
     break;
-  }
 
-  case AArch64::REV32v4i16: {
-    auto v = rev(readFromOperand(1), 16, 32);
-    updateOutputReg(v);
+  case AArch64::REV32v8i16:
+    lift_rev32_3();
     break;
-  }
 
-  case AArch64::REV32v8i8: {
-    auto v = rev(readFromOperand(1), 8, 32);
-    updateOutputReg(v);
+  case AArch64::REV32v16i8:
+    lift_rev32_4();
     break;
-  }
 
-  case AArch64::REV32v8i16: {
-    auto v = rev(readFromOperand(1), 16, 32);
-    updateOutputReg(v);
+  case AArch64::REV16v8i8:
+    lift_rev16_1();
     break;
-  }
 
-  case AArch64::REV32v16i8: {
-    auto v = rev(readFromOperand(1), 8, 32);
-    updateOutputReg(v);
+  case AArch64::REV16v16i8:
+    lift_rev16_2();
     break;
-  }
 
   case AArch64::DUPi8: {
     auto in = readFromVecOperand(1, 8, 16);

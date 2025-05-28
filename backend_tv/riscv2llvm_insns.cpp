@@ -1,7 +1,7 @@
 #include "backend_tv/riscv2llvm.h"
 
-#include "llvm/BinaryFormat/ELF.h"
 #include "Target/RISCV/MCTargetDesc/RISCVMCExpr.h"
+#include "llvm/BinaryFormat/ELF.h"
 
 #include <cmath>
 #include <vector>
@@ -162,13 +162,14 @@ void riscv2llvm::lift(MCInst &I) {
       auto specifier = rvExpr->getSpecifier();
       switch (specifier) {
       case ELF::R_RISCV_HI20:
-	// FIXME: we (unsoundly) ignore this for now -- but we'll need
-	// to connect this up with the lo part that comes (sometimes a
-	// number of instructions) later
-	break;
+        // FIXME: we (unsoundly) ignore this for now -- but we'll need
+        // to connect this up with the lo part that comes (sometimes a
+        // number of instructions) later
+        break;
       default:
-	*out << "unknown specifier: " << (string)RISCVMCExpr::getSpecifierName(specifier) << "\n";
-	exit(-1);
+        *out << "unknown specifier: "
+             << (string)RISCVMCExpr::getSpecifierName(specifier) << "\n";
+        exit(-1);
       }
     } else {
       *out << "unhandled lui case\n";
