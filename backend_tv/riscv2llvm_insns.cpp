@@ -25,7 +25,7 @@ void riscv2llvm::lift(MCInst &I) {
 
   // auto i1ty = getIntTy(1);
   // auto i8ty = getIntTy(8);
-  // auto i16ty = getIntTy(16);
+  auto i16ty = getIntTy(16);
   auto i32ty = getIntTy(32);
   auto i64ty = getIntTy(64);
   // auto i128ty = getIntTy(128);
@@ -178,11 +178,46 @@ void riscv2llvm::lift(MCInst &I) {
     break;
   }
 
-  case RISCV::LW: {
+  case RISCV::LH:
+  case RISCV::LHU:
+  case RISCV::LW:
+  case RISCV::LWU:
+  case RISCV::LD: {
+    bool sExt;
+    switch (opcode) {
+    case RISCV::LH:
+    case RISCV::LW:
+    case RISCV::LD:
+      sExt = true;
+      break;
+    case RISCV::LHU:
+    case RISCV::LWU:
+      sExt = false;
+      break;
+    default:
+      assert(false);
+    }
+    Type *size{nullptr};
+    switch (opcode) {
+    case RISCV::LH:
+    case RISCV::LHU:
+      size = i16ty;
+      break;
+    case RISCV::LW:
+    case RISCV::LWU:
+      size = i32ty;
+      break;
+    case RISCV::LD:
+    default:
+      size = i64ty;
+      break;
+      assert(false);
+    }
     auto ptr = getPointerOperand();
-    auto loaded = createLoad(i32ty, ptr);
-    auto loadedExt = createSExt(loaded, i64ty);
-    updateOutputReg(loadedExt);
+    Value *loaded = createLoad(size, ptr);
+    if (size != i64ty)
+      loaded = sExt ? createSExt(loaded, i64ty) : createZExt(loaded, i64ty);
+    updateOutputReg(loaded);
     break;
   }
 
