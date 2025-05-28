@@ -141,10 +141,15 @@ void riscv2llvm::doCall(FunctionCallee FC, CallInst *llvmCI,
   assert(false);
 }
 
-Value *riscv2llvm::readFromRegOperand(int idx) {
+Value *riscv2llvm::readFromRegOperand(int idx, Type *ty) {
   auto op = CurInst->getOperand(idx);
   assert(op.isReg());
-  return readFromReg(op.getReg());
+  return readFromReg(op.getReg(), ty);
+}
+
+Value *riscv2llvm::readPtrFromRegOperand(int idx) {
+  auto ptrTy = llvm::PointerType::get(Ctx, 0);
+  return readFromRegOperand(idx, ptrTy);
 }
 
 Value *riscv2llvm::readFromImmOperand(int idx, unsigned immed_width,
@@ -158,11 +163,10 @@ Value *riscv2llvm::readFromImmOperand(int idx, unsigned immed_width,
   return imm;
 }
 
-Value *riscv2llvm::readFromReg(unsigned Reg) {
+Value *riscv2llvm::readFromReg(unsigned Reg, Type *ty) {
   auto addr = lookupReg(Reg);
   *out << "addr = " << addr << "\n";
-  auto i64ty = getIntTy(64);
-  return createLoad(i64ty, addr);
+  return createLoad(ty, addr);
 }
 
 void riscv2llvm::doReturn() {
@@ -177,7 +181,7 @@ void riscv2llvm::doReturn() {
   } else {
     Value *retVal = nullptr;
     // FIXME handle vectors and FP
-    retVal = readFromReg(RISCV::X10);
+    retVal = readFromReg(RISCV::X10, i64ty);
     if (retTyp->isPointerTy()) {
       retVal = new IntToPtrInst(retVal, PointerType::get(Ctx, 0), "", LLVMBB);
     } else {
@@ -205,6 +209,7 @@ void riscv2llvm::doReturn() {
 
 void riscv2llvm::platformInit() {
   auto i8ty = getIntTy(8);
+  auto i64ty = getIntTy(64);
 
   // allocate storage for the main register file
   for (unsigned Reg = RISCV::X0; Reg <= RISCV::X31; ++Reg) {
@@ -221,7 +226,7 @@ void riscv2llvm::platformInit() {
   auto paramBase =
       createGEP(i8ty, stackMem, {getUnsignedIntConst(stackBytes, 64)}, "");
   createStore(paramBase, RegFile[RISCV::X2]);
-  initialSP = readFromReg(RISCV::X2);
+  initialSP = readFromReg(RISCV::X2, i64ty);
 
   // initializing to zero makes loads from XZR work; stores are
   // handled in updateReg()

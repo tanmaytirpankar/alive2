@@ -24,11 +24,12 @@ void riscv2llvm::lift(MCInst &I) {
   LLVMBB = newbb;
 
   // auto i1ty = getIntTy(1);
-  // auto i8ty = getIntTy(8);
+  auto i8ty = getIntTy(8);
   auto i16ty = getIntTy(16);
   auto i32ty = getIntTy(32);
   auto i64ty = getIntTy(64);
   // auto i128ty = getIntTy(128);
+  auto ptrTy = llvm::PointerType::get(Ctx, 0);
 
   switch (opcode) {
 
@@ -61,7 +62,7 @@ void riscv2llvm::lift(MCInst &I) {
   }
 
   case RISCV::C_BNEZ: {
-    auto a = readFromRegOperand(0);
+    auto a = readFromRegOperand(0, i64ty);
     auto [dst_true, dst_false] = getBranchTargetsOperand(1);
     Value *zero = getUnsignedIntConst(0, 64);
     Value *cond = createICmp(ICmpInst::Predicate::ICMP_NE, a, zero);
@@ -72,8 +73,8 @@ void riscv2llvm::lift(MCInst &I) {
   case RISCV::BLT:
   case RISCV::BLTU:
   case RISCV::BNE: {
-    auto a = readFromRegOperand(0);
-    auto b = readFromRegOperand(1);
+    auto a = readFromRegOperand(0, i64ty);
+    auto b = readFromRegOperand(1, i64ty);
     auto [dst_true, dst_false] = getBranchTargetsOperand(2);
     Value *cond;
     switch (opcode) {
@@ -99,8 +100,8 @@ void riscv2llvm::lift(MCInst &I) {
   case RISCV::SUB:
   case RISCV::C_OR:
   case RISCV::OR: {
-    auto a = readFromRegOperand(1);
-    auto b = readFromRegOperand(2);
+    auto a = readFromRegOperand(1, i64ty);
+    auto b = readFromRegOperand(2, i64ty);
     Value *res;
     switch (opcode) {
     case RISCV::ADD:
@@ -126,8 +127,8 @@ void riscv2llvm::lift(MCInst &I) {
   case RISCV::ADDW:
   case RISCV::C_SUBW:
   case RISCV::SUBW: {
-    auto a = readFromRegOperand(1);
-    auto b = readFromRegOperand(2);
+    auto a = readFromRegOperand(1, i64ty);
+    auto b = readFromRegOperand(2, i64ty);
     auto a32 = createTrunc(a, i32ty);
     auto b32 = createTrunc(b, i32ty);
     Value *res;
@@ -213,7 +214,13 @@ void riscv2llvm::lift(MCInst &I) {
       break;
       assert(false);
     }
-    auto ptr = getPointerOperand();
+    Value *ptr{nullptr};
+    if (CurInst->getOperand(2).isImm()) {
+      auto imm = readFromImmOperand(2, 12, 64);
+      ptr = createGEP(i8ty, readFromRegOperand(1, ptrTy), {imm}, nextName());
+    } else {
+      ptr = getPointerOperand();
+    }
     Value *loaded = createLoad(size, ptr);
     if (size != i64ty)
       loaded = sExt ? createSExt(loaded, i64ty) : createZExt(loaded, i64ty);
@@ -233,7 +240,7 @@ void riscv2llvm::lift(MCInst &I) {
   case RISCV::ORI:
   case RISCV::C_ADDI:
   case RISCV::ADDI: {
-    auto a = readFromRegOperand(1);
+    auto a = readFromRegOperand(1, i64ty);
     auto b = readFromImmOperand(2, 12, 64);
     Value *res;
     switch (opcode) {
@@ -272,7 +279,7 @@ void riscv2llvm::lift(MCInst &I) {
 
   case RISCV::C_ADDIW:
   case RISCV::ADDIW: {
-    auto a = readFromRegOperand(1);
+    auto a = readFromRegOperand(1, i64ty);
     auto b = readFromImmOperand(2, 12, 32);
     auto a32 = createTrunc(a, i32ty);
     auto res = createAdd(a32, b);
@@ -282,7 +289,7 @@ void riscv2llvm::lift(MCInst &I) {
   }
 
   case RISCV::C_MV: {
-    auto a = readFromRegOperand(1);
+    auto a = readFromRegOperand(1, i64ty);
     updateOutputReg(a);
     break;
   }
@@ -295,8 +302,8 @@ void riscv2llvm::lift(MCInst &I) {
 
   case RISCV::SLTU:
   case RISCV::SLT: {
-    auto a = readFromRegOperand(1);
-    auto b = readFromRegOperand(2);
+    auto a = readFromRegOperand(1, i64ty);
+    auto b = readFromRegOperand(2, i64ty);
     Value *res;
     switch (opcode) {
     case RISCV::SLT:
@@ -315,7 +322,7 @@ void riscv2llvm::lift(MCInst &I) {
 
   case RISCV::SLTI:
   case RISCV::SLTIU: {
-    auto a = readFromRegOperand(1);
+    auto a = readFromRegOperand(1, i64ty);
     auto b = readFromImmOperand(2, 12, 64);
     Value *res;
     switch (opcode) {
