@@ -9,6 +9,30 @@ using namespace llvm;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+void arm2llvm::lift_dup8() {
+  auto in = readFromVecOperand(1, 8, 16);
+  auto ext = createExtractElement(in, getImm(2));
+  updateOutputReg(ext);
+}
+
+void arm2llvm::lift_dup16() {
+  auto in = readFromVecOperand(1, 16, 8);
+  auto ext = createExtractElement(in, getImm(2));
+  updateOutputReg(ext);
+}
+
+void arm2llvm::lift_dup32() {
+  auto in = readFromVecOperand(1, 32, 4);
+  auto ext = createExtractElement(in, getImm(2));
+  updateOutputReg(ext);
+}
+
+void arm2llvm::lift_dup64() {
+  auto in = readFromVecOperand(1, 64, 2);
+  auto ext = createExtractElement(in, getImm(2));
+  updateOutputReg(ext);
+}
+
 void arm2llvm::lift_ext_2() {
   auto i128 = getIntTy(128);
   auto a = readFromOperand(1);

@@ -4317,33 +4317,21 @@ void arm2llvm::lift(MCInst &I) {
     lift_rev16_2();
     break;
 
-  case AArch64::DUPi8: {
-    auto in = readFromVecOperand(1, 8, 16);
-    auto ext = createExtractElement(in, getImm(2));
-    updateOutputReg(ext);
+  case AArch64::DUPi8:
+    lift_dup8();
     break;
-  }
 
-  case AArch64::DUPi16: {
-    auto in = readFromVecOperand(1, 16, 8);
-    auto ext = createExtractElement(in, getImm(2));
-    updateOutputReg(ext);
+  case AArch64::DUPi16:
+    lift_dup16();
     break;
-  }
 
-  case AArch64::DUPi32: {
-    auto in = readFromVecOperand(1, 32, 4);
-    auto ext = createExtractElement(in, getImm(2));
-    updateOutputReg(ext);
+  case AArch64::DUPi32:
+    lift_dup32();
     break;
-  }
 
-  case AArch64::DUPi64: {
-    auto in = readFromVecOperand(1, 64, 2);
-    auto ext = createExtractElement(in, getImm(2));
-    updateOutputReg(ext);
+  case AArch64::DUPi64:
+    lift_dup64();
     break;
-  }
 
   case AArch64::DUPv8i8gpr: {
     auto t = createTrunc(readFromOperand(1), i8);

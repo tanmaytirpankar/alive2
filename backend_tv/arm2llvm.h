@@ -348,6 +348,10 @@ public:
   void lift_rev32_4();
   void lift_rev16_1();
   void lift_rev16_2();
+  void lift_dup8();
+  void lift_dup16();
+  void lift_dup32();
+  void lift_dup64();
 };
 
 } // end namespace lifter
