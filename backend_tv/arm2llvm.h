@@ -352,6 +352,20 @@ public:
   void lift_dup16();
   void lift_dup32();
   void lift_dup64();
+  void lift_dup88();
+  void lift_dup168();
+  void lift_dup816();
+  void lift_dup416();
+  void lift_dup432();
+  void lift_dup232();
+  void lift_dup264();
+  void lift_dup232lane();
+  void lift_dup264lane();
+  void lift_dup416lane();
+  void lift_dup432lane();
+  void lift_dup88lane();
+  void lift_dup816lane();
+  void lift_dup168lane();
 };
 
 } // end namespace lifter

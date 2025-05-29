@@ -9,6 +9,88 @@ using namespace llvm;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+void arm2llvm::lift_dup88() {
+  auto i8 = getIntTy(8);
+  auto t = createTrunc(readFromOperand(1), i8);
+  updateOutputReg(dupElts(t, 8, 8));
+}
+
+void arm2llvm::lift_dup168() {
+  auto i8 = getIntTy(8);
+  auto t = createTrunc(readFromOperand(1), i8);
+  updateOutputReg(dupElts(t, 16, 8));
+}
+
+void arm2llvm::lift_dup816() {
+  auto i16 = getIntTy(16);
+  auto t = createTrunc(readFromOperand(1), i16);
+  updateOutputReg(dupElts(t, 8, 16));
+}
+
+void arm2llvm::lift_dup416() {
+  auto i16 = getIntTy(16);
+  auto t = createTrunc(readFromOperand(1), i16);
+  updateOutputReg(dupElts(t, 4, 16));
+}
+
+void arm2llvm::lift_dup432() {
+  auto i32 = getIntTy(32);
+  auto t = createTrunc(readFromOperand(1), i32);
+  updateOutputReg(dupElts(t, 4, 32));
+}
+
+void arm2llvm::lift_dup232() {
+  auto i32 = getIntTy(32);
+  auto t = createTrunc(readFromOperand(1), i32);
+  updateOutputReg(dupElts(t, 2, 32));
+}
+
+void arm2llvm::lift_dup264() {
+  updateOutputReg(dupElts(readFromOperand(1), 2, 64));
+}
+
+void arm2llvm::lift_dup232lane() {
+  auto in = readFromVecOperand(1, 32, 4);
+  auto ext = createExtractElement(in, getImm(2));
+  updateOutputReg(dupElts(ext, 2, 32));
+}
+
+void arm2llvm::lift_dup264lane() {
+  auto in = readFromVecOperand(1, 64, 2);
+  auto ext = createExtractElement(in, getImm(2));
+  updateOutputReg(dupElts(ext, 2, 64));
+}
+
+void arm2llvm::lift_dup416lane() {
+  auto in = readFromVecOperand(1, 16, 8);
+  auto ext = createExtractElement(in, getImm(2));
+  updateOutputReg(dupElts(ext, 4, 16));
+}
+
+void arm2llvm::lift_dup432lane() {
+  auto in = readFromVecOperand(1, 32, 4);
+  auto ext = createExtractElement(in, getImm(2));
+  updateOutputReg(dupElts(ext, 4, 32));
+}
+
+void arm2llvm::lift_dup88lane() {
+  auto in = readFromVecOperand(1, 8, 16);
+  auto ext = createExtractElement(in, getImm(2));
+  updateOutputReg(dupElts(ext, 8, 8));
+}
+
+void arm2llvm::lift_dup816lane() {
+  auto in = readFromVecOperand(1, 16, 8);
+  auto ext = createExtractElement(in, getImm(2));
+  updateOutputReg(dupElts(ext, 8, 16));
+}
+
+void arm2llvm::lift_dup168lane() {
+  auto in = readFromVecOperand(1, 8, 16);
+  auto ext = createExtractElement(in, getImm(2));
+  updateOutputReg(dupElts(ext, 16, 8));
+}
+
 void arm2llvm::lift_dup8() {
   auto in = readFromVecOperand(1, 8, 16);
   auto ext = createExtractElement(in, getImm(2));

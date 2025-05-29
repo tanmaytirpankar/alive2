@@ -3298,9 +3298,9 @@ void arm2llvm::lift(MCInst &I) {
   LLVMBB = newbb;
 
   // auto i1 = getIntTy(1);
-  auto i8 = getIntTy(8);
-  auto i16 = getIntTy(16);
-  auto i32 = getIntTy(32);
+  // auto i8 = getIntTy(8);
+  // auto i16 = getIntTy(16);
+  // auto i32 = getIntTy(32);
   auto i64 = getIntTy(64);
 
   switch (opcode) {
@@ -4333,95 +4333,61 @@ void arm2llvm::lift(MCInst &I) {
     lift_dup64();
     break;
 
-  case AArch64::DUPv8i8gpr: {
-    auto t = createTrunc(readFromOperand(1), i8);
-    updateOutputReg(dupElts(t, 8, 8));
+  case AArch64::DUPv8i8gpr:
+    lift_dup88();
     break;
-  }
 
-  case AArch64::DUPv16i8gpr: {
-    auto t = createTrunc(readFromOperand(1), i8);
-    updateOutputReg(dupElts(t, 16, 8));
+  case AArch64::DUPv16i8gpr:
+    lift_dup168();
     break;
-  }
 
-  case AArch64::DUPv8i16gpr: {
-    auto t = createTrunc(readFromOperand(1), i16);
-    updateOutputReg(dupElts(t, 8, 16));
+  case AArch64::DUPv8i16gpr:
+    lift_dup816();
     break;
-  }
 
-  case AArch64::DUPv4i16gpr: {
-    auto t = createTrunc(readFromOperand(1), i16);
-    updateOutputReg(dupElts(t, 4, 16));
+  case AArch64::DUPv4i16gpr:
+    lift_dup416();
     break;
-  }
 
-  case AArch64::DUPv4i32gpr: {
-    auto t = createTrunc(readFromOperand(1), i32);
-    updateOutputReg(dupElts(t, 4, 32));
+  case AArch64::DUPv4i32gpr:
+    lift_dup432();
     break;
-  }
 
-  case AArch64::DUPv2i32gpr: {
-    auto t = createTrunc(readFromOperand(1), i32);
-    updateOutputReg(dupElts(t, 2, 32));
+  case AArch64::DUPv2i32gpr:
+    lift_dup232();
     break;
-  }
 
-  case AArch64::DUPv2i64gpr: {
-    updateOutputReg(dupElts(readFromOperand(1), 2, 64));
+  case AArch64::DUPv2i64gpr:
+    lift_dup264();
     break;
-  }
 
-  case AArch64::DUPv2i32lane: {
-    auto in = readFromVecOperand(1, 32, 4);
-    auto ext = createExtractElement(in, getImm(2));
-    updateOutputReg(dupElts(ext, 2, 32));
+  case AArch64::DUPv2i32lane:
+    lift_dup232lane();
     break;
-  }
 
-  case AArch64::DUPv2i64lane: {
-    auto in = readFromVecOperand(1, 64, 2);
-    auto ext = createExtractElement(in, getImm(2));
-    updateOutputReg(dupElts(ext, 2, 64));
+  case AArch64::DUPv2i64lane:
+    lift_dup264lane();
     break;
-  }
 
-  case AArch64::DUPv4i16lane: {
-    auto in = readFromVecOperand(1, 16, 8);
-    auto ext = createExtractElement(in, getImm(2));
-    updateOutputReg(dupElts(ext, 4, 16));
+  case AArch64::DUPv4i16lane:
+    lift_dup416lane();
     break;
-  }
 
-  case AArch64::DUPv4i32lane: {
-    auto in = readFromVecOperand(1, 32, 4);
-    auto ext = createExtractElement(in, getImm(2));
-    updateOutputReg(dupElts(ext, 4, 32));
+  case AArch64::DUPv4i32lane:
+    lift_dup432lane();
     break;
-  }
 
-  case AArch64::DUPv8i8lane: {
-    auto in = readFromVecOperand(1, 8, 16);
-    auto ext = createExtractElement(in, getImm(2));
-    updateOutputReg(dupElts(ext, 8, 8));
+  case AArch64::DUPv8i8lane:
+    lift_dup88lane();
     break;
-  }
 
-  case AArch64::DUPv8i16lane: {
-    auto in = readFromVecOperand(1, 16, 8);
-    auto ext = createExtractElement(in, getImm(2));
-    updateOutputReg(dupElts(ext, 8, 16));
+  case AArch64::DUPv8i16lane:
+    lift_dup816lane();
     break;
-  }
 
-  case AArch64::DUPv16i8lane: {
-    auto in = readFromVecOperand(1, 8, 16);
-    auto ext = createExtractElement(in, getImm(2));
-    updateOutputReg(dupElts(ext, 16, 8));
+  case AArch64::DUPv16i8lane:
+    lift_dup168lane();
     break;
-  }
 
   case AArch64::BIFv8i8:
   case AArch64::BIFv16i8: {
