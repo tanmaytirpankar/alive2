@@ -369,6 +369,9 @@ public:
   void lift_bif1();
   void lift_bif2();
   void lift_bif3();
+  void lift_fcm(unsigned opcode);
+  void lift_cm(unsigned opcode);
+  void lift_tbl(unsigned opcode);
 };
 
 } // end namespace lifter

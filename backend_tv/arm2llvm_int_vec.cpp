@@ -1,13 +1,402 @@
 #include "backend_tv/arm2llvm.h"
 
+#include <vector>
+
 using namespace lifter;
 using namespace llvm;
+using namespace std;
 
 #define GET_INSTRINFO_ENUM
 #include "Target/AArch64/AArch64GenInstrInfo.inc"
 
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
+
+void arm2llvm::lift_tbl(unsigned opcode) {
+  int lanes;
+  switch (opcode) {
+  case AArch64::TBLv8i8One:
+  case AArch64::TBLv8i8Two:
+  case AArch64::TBLv8i8Three:
+  case AArch64::TBLv8i8Four:
+    lanes = 8;
+    break;
+  case AArch64::TBLv16i8One:
+  case AArch64::TBLv16i8Two:
+  case AArch64::TBLv16i8Three:
+  case AArch64::TBLv16i8Four:
+    lanes = 16;
+    break;
+  default:
+    assert(false);
+  }
+  int nregs;
+  switch (opcode) {
+  case AArch64::TBLv8i8One:
+  case AArch64::TBLv16i8One:
+    nregs = 1;
+    break;
+  case AArch64::TBLv8i8Two:
+  case AArch64::TBLv16i8Two:
+    nregs = 2;
+    break;
+  case AArch64::TBLv8i8Three:
+  case AArch64::TBLv16i8Three:
+    nregs = 3;
+    break;
+  case AArch64::TBLv8i8Four:
+  case AArch64::TBLv16i8Four:
+    nregs = 4;
+    break;
+  default:
+    assert(false);
+  }
+  auto vTy = getVecTy(8, lanes);
+  auto fullTy = getVecTy(8, 16);
+  auto baseReg = decodeRegSet(CurInst->getOperand(1).getReg());
+  vector<Value *> regs;
+  for (int i = 0; i < nregs; ++i) {
+    regs.push_back(createBitCast(readFromRegOld(baseReg), fullTy));
+    baseReg++;
+    if (baseReg > AArch64::Q31)
+      baseReg = AArch64::Q0;
+  }
+  auto src = createBitCast(readFromOperand(2), vTy);
+  Value *res = getUndefVec(lanes, 8);
+  for (int i = 0; i < lanes; ++i) {
+    auto idx = createExtractElement(src, i);
+    auto entry = tblHelper(regs, idx);
+    res = createInsertElement(res, entry, i);
+  }
+  updateOutputReg(res);
+}
+
+void arm2llvm::lift_cm(unsigned opcode) {
+  auto a = readFromOperand(1);
+  Value *b;
+  switch (opcode) {
+  case AArch64::CMGTv4i16rz:
+  case AArch64::CMEQv1i64rz:
+  case AArch64::CMGTv8i8rz:
+  case AArch64::CMLEv4i16rz:
+  case AArch64::CMGEv4i16rz:
+  case AArch64::CMLEv8i8rz:
+  case AArch64::CMLTv1i64rz:
+  case AArch64::CMGTv2i32rz:
+  case AArch64::CMGEv8i8rz:
+  case AArch64::CMLEv2i32rz:
+  case AArch64::CMGEv2i32rz:
+  case AArch64::CMLEv8i16rz:
+  case AArch64::CMLEv16i8rz:
+  case AArch64::CMGTv16i8rz:
+  case AArch64::CMGTv8i16rz:
+  case AArch64::CMGTv2i64rz:
+  case AArch64::CMGEv8i16rz:
+  case AArch64::CMLEv4i32rz:
+  case AArch64::CMGEv2i64rz:
+  case AArch64::CMLEv2i64rz:
+  case AArch64::CMGEv16i8rz:
+  case AArch64::CMGEv4i32rz:
+  case AArch64::CMEQv16i8rz:
+  case AArch64::CMEQv2i32rz:
+  case AArch64::CMEQv2i64rz:
+  case AArch64::CMEQv4i16rz:
+  case AArch64::CMEQv4i32rz:
+  case AArch64::CMEQv8i16rz:
+  case AArch64::CMEQv8i8rz:
+  case AArch64::CMGTv4i32rz:
+  case AArch64::CMLTv16i8rz:
+  case AArch64::CMLTv2i32rz:
+  case AArch64::CMLTv2i64rz:
+  case AArch64::CMLTv4i16rz:
+  case AArch64::CMLTv4i32rz:
+  case AArch64::CMLTv8i16rz:
+  case AArch64::CMLTv8i8rz:
+    b = getUnsignedIntConst(0, getInstSize(opcode));
+    break;
+  case AArch64::CMEQv1i64:
+  case AArch64::CMEQv16i8:
+  case AArch64::CMEQv2i32:
+  case AArch64::CMEQv2i64:
+  case AArch64::CMEQv4i16:
+  case AArch64::CMEQv4i32:
+  case AArch64::CMEQv8i16:
+  case AArch64::CMEQv8i8:
+  case AArch64::CMGEv16i8:
+  case AArch64::CMGEv2i32:
+  case AArch64::CMGEv1i64:
+  case AArch64::CMGEv2i64:
+  case AArch64::CMGEv4i16:
+  case AArch64::CMGEv4i32:
+  case AArch64::CMGEv8i16:
+  case AArch64::CMGEv8i8:
+  case AArch64::CMGTv16i8:
+  case AArch64::CMGTv2i32:
+  case AArch64::CMGTv2i64:
+  case AArch64::CMGTv4i16:
+  case AArch64::CMGTv4i32:
+  case AArch64::CMGTv8i16:
+  case AArch64::CMGTv8i8:
+  case AArch64::CMHIv16i8:
+  case AArch64::CMGTv1i64:
+  case AArch64::CMHIv1i64:
+  case AArch64::CMHIv2i32:
+  case AArch64::CMHIv2i64:
+  case AArch64::CMHIv4i16:
+  case AArch64::CMHIv4i32:
+  case AArch64::CMHIv8i16:
+  case AArch64::CMHIv8i8:
+  case AArch64::CMHSv16i8:
+  case AArch64::CMHSv1i64:
+  case AArch64::CMHSv2i32:
+  case AArch64::CMHSv2i64:
+  case AArch64::CMHSv4i16:
+  case AArch64::CMHSv4i32:
+  case AArch64::CMHSv8i16:
+  case AArch64::CMHSv8i8:
+  case AArch64::CMTSTv4i16:
+  case AArch64::CMTSTv2i32:
+  case AArch64::CMTSTv16i8:
+  case AArch64::CMTSTv2i64:
+  case AArch64::CMTSTv4i32:
+  case AArch64::CMTSTv8i16:
+  case AArch64::CMTSTv8i8:
+    b = readFromOperand(2);
+    break;
+  default:
+    assert(false);
+  }
+
+  int numElts, eltSize;
+  switch (opcode) {
+  case AArch64::CMEQv1i64rz:
+  case AArch64::CMLTv1i64rz:
+  case AArch64::CMHIv1i64:
+  case AArch64::CMGTv1i64:
+  case AArch64::CMEQv1i64:
+  case AArch64::CMGEv1i64:
+  case AArch64::CMHSv1i64:
+    numElts = 1;
+    eltSize = 64;
+    break;
+  case AArch64::CMLEv16i8rz:
+  case AArch64::CMGTv16i8rz:
+  case AArch64::CMGEv16i8rz:
+  case AArch64::CMEQv16i8:
+  case AArch64::CMEQv16i8rz:
+  case AArch64::CMGEv16i8:
+  case AArch64::CMGTv16i8:
+  case AArch64::CMHIv16i8:
+  case AArch64::CMHSv16i8:
+  case AArch64::CMLTv16i8rz:
+  case AArch64::CMTSTv16i8:
+    numElts = 16;
+    eltSize = 8;
+    break;
+  case AArch64::CMTSTv2i32:
+  case AArch64::CMEQv2i32:
+  case AArch64::CMGTv2i32rz:
+  case AArch64::CMLEv2i32rz:
+  case AArch64::CMGEv2i32rz:
+  case AArch64::CMEQv2i32rz:
+  case AArch64::CMGEv2i32:
+  case AArch64::CMGTv2i32:
+  case AArch64::CMHIv2i32:
+  case AArch64::CMHSv2i32:
+  case AArch64::CMLTv2i32rz:
+    numElts = 2;
+    eltSize = 32;
+    break;
+  case AArch64::CMEQv2i64:
+  case AArch64::CMEQv2i64rz:
+  case AArch64::CMGEv2i64:
+  case AArch64::CMGTv2i64:
+  case AArch64::CMHIv2i64:
+  case AArch64::CMHSv2i64:
+  case AArch64::CMGTv2i64rz:
+  case AArch64::CMGEv2i64rz:
+  case AArch64::CMLEv2i64rz:
+  case AArch64::CMLTv2i64rz:
+  case AArch64::CMTSTv2i64:
+    numElts = 2;
+    eltSize = 64;
+    break;
+  case AArch64::CMLEv4i16rz:
+  case AArch64::CMGEv4i16rz:
+  case AArch64::CMGTv4i16rz:
+  case AArch64::CMTSTv4i16:
+  case AArch64::CMEQv4i16:
+  case AArch64::CMEQv4i16rz:
+  case AArch64::CMGEv4i16:
+  case AArch64::CMGTv4i16:
+  case AArch64::CMHIv4i16:
+  case AArch64::CMHSv4i16:
+  case AArch64::CMLTv4i16rz:
+    numElts = 4;
+    eltSize = 16;
+    break;
+  case AArch64::CMLEv4i32rz:
+  case AArch64::CMGEv4i32rz:
+  case AArch64::CMEQv4i32:
+  case AArch64::CMEQv4i32rz:
+  case AArch64::CMGEv4i32:
+  case AArch64::CMGTv4i32:
+  case AArch64::CMGTv4i32rz:
+  case AArch64::CMHIv4i32:
+  case AArch64::CMHSv4i32:
+  case AArch64::CMLTv4i32rz:
+  case AArch64::CMTSTv4i32:
+    numElts = 4;
+    eltSize = 32;
+    break;
+  case AArch64::CMLEv8i16rz:
+  case AArch64::CMGTv8i16rz:
+  case AArch64::CMGEv8i16rz:
+  case AArch64::CMEQv8i16:
+  case AArch64::CMEQv8i16rz:
+  case AArch64::CMGEv8i16:
+  case AArch64::CMGTv8i16:
+  case AArch64::CMHIv8i16:
+  case AArch64::CMHSv8i16:
+  case AArch64::CMLTv8i16rz:
+  case AArch64::CMTSTv8i16:
+    numElts = 8;
+    eltSize = 16;
+    break;
+  case AArch64::CMGTv8i8rz:
+  case AArch64::CMLEv8i8rz:
+  case AArch64::CMGEv8i8rz:
+  case AArch64::CMEQv8i8:
+  case AArch64::CMEQv8i8rz:
+  case AArch64::CMGEv8i8:
+  case AArch64::CMGTv8i8:
+  case AArch64::CMHIv8i8:
+  case AArch64::CMHSv8i8:
+  case AArch64::CMLTv8i8rz:
+  case AArch64::CMTSTv8i8:
+    numElts = 8;
+    eltSize = 8;
+    break;
+  default:
+    assert(false);
+  }
+
+  auto vTy = getVecTy(eltSize, numElts);
+  a = createBitCast(a, vTy);
+  b = createBitCast(b, vTy);
+  Value *res;
+
+  switch (opcode) {
+  case AArch64::CMLEv16i8rz:
+  case AArch64::CMLEv2i32rz:
+  case AArch64::CMLEv2i64rz:
+  case AArch64::CMLEv4i16rz:
+  case AArch64::CMLEv4i32rz:
+  case AArch64::CMLEv8i16rz:
+  case AArch64::CMLEv8i8rz:
+    res = createICmp(ICmpInst::Predicate::ICMP_SLE, a, b);
+    break;
+  case AArch64::CMEQv1i64rz:
+  case AArch64::CMEQv1i64:
+  case AArch64::CMEQv16i8:
+  case AArch64::CMEQv16i8rz:
+  case AArch64::CMEQv2i32:
+  case AArch64::CMEQv2i32rz:
+  case AArch64::CMEQv2i64:
+  case AArch64::CMEQv2i64rz:
+  case AArch64::CMEQv4i16:
+  case AArch64::CMEQv4i16rz:
+  case AArch64::CMEQv4i32:
+  case AArch64::CMEQv4i32rz:
+  case AArch64::CMEQv8i16:
+  case AArch64::CMEQv8i16rz:
+  case AArch64::CMEQv8i8:
+  case AArch64::CMEQv8i8rz:
+    res = createICmp(ICmpInst::Predicate::ICMP_EQ, a, b);
+    break;
+  case AArch64::CMGEv16i8rz:
+  case AArch64::CMGEv2i32rz:
+  case AArch64::CMGEv2i64rz:
+  case AArch64::CMGEv4i16rz:
+  case AArch64::CMGEv4i32rz:
+  case AArch64::CMGEv8i16rz:
+  case AArch64::CMGEv8i8rz:
+  case AArch64::CMGEv16i8:
+  case AArch64::CMGEv2i32:
+  case AArch64::CMGEv1i64:
+  case AArch64::CMGEv2i64:
+  case AArch64::CMGEv4i16:
+  case AArch64::CMGEv4i32:
+  case AArch64::CMGEv8i16:
+  case AArch64::CMGEv8i8:
+    res = createICmp(ICmpInst::Predicate::ICMP_SGE, a, b);
+    break;
+  case AArch64::CMGTv16i8rz:
+  case AArch64::CMGTv2i32rz:
+  case AArch64::CMGTv2i64rz:
+  case AArch64::CMGTv4i16rz:
+  case AArch64::CMGTv8i16rz:
+  case AArch64::CMGTv8i8rz:
+  case AArch64::CMGTv1i64:
+  case AArch64::CMGTv16i8:
+  case AArch64::CMGTv2i32:
+  case AArch64::CMGTv2i64:
+  case AArch64::CMGTv4i16:
+  case AArch64::CMGTv4i32:
+  case AArch64::CMGTv4i32rz:
+  case AArch64::CMGTv8i16:
+  case AArch64::CMGTv8i8:
+    res = createICmp(ICmpInst::Predicate::ICMP_SGT, a, b);
+    break;
+  case AArch64::CMHIv16i8:
+  case AArch64::CMHIv1i64:
+  case AArch64::CMHIv2i32:
+  case AArch64::CMHIv2i64:
+  case AArch64::CMHIv4i16:
+  case AArch64::CMHIv4i32:
+  case AArch64::CMHIv8i16:
+  case AArch64::CMHIv8i8:
+    res = createICmp(ICmpInst::Predicate::ICMP_UGT, a, b);
+    break;
+  case AArch64::CMHSv16i8:
+  case AArch64::CMHSv1i64:
+  case AArch64::CMHSv2i32:
+  case AArch64::CMHSv2i64:
+  case AArch64::CMHSv4i16:
+  case AArch64::CMHSv4i32:
+  case AArch64::CMHSv8i16:
+  case AArch64::CMHSv8i8:
+    res = createICmp(ICmpInst::Predicate::ICMP_UGE, a, b);
+    break;
+  case AArch64::CMLTv1i64rz:
+  case AArch64::CMLTv16i8rz:
+  case AArch64::CMLTv2i32rz:
+  case AArch64::CMLTv2i64rz:
+  case AArch64::CMLTv4i16rz:
+  case AArch64::CMLTv4i32rz:
+  case AArch64::CMLTv8i16rz:
+  case AArch64::CMLTv8i8rz:
+    res = createICmp(ICmpInst::Predicate::ICMP_SLT, a, b);
+    break;
+  case AArch64::CMTSTv2i32:
+  case AArch64::CMTSTv4i16:
+  case AArch64::CMTSTv16i8:
+  case AArch64::CMTSTv2i64:
+  case AArch64::CMTSTv4i32:
+  case AArch64::CMTSTv8i16:
+  case AArch64::CMTSTv8i8: {
+    auto *tmp = createAnd(a, b);
+    auto *zero =
+        createBitCast(getUnsignedIntConst(0, getInstSize(opcode)), vTy);
+    res = createICmp(ICmpInst::Predicate::ICMP_NE, tmp, zero);
+    break;
+  }
+  default:
+    assert(false);
+  }
+
+  updateOutputReg(createSExt(res, vTy));
+}
 
 void arm2llvm::lift_bif1() {
   auto op1 = readFromOperand(1);

@@ -9,6 +9,127 @@ using namespace llvm;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+void arm2llvm::lift_fcm(unsigned opcode) {
+  FCmpInst::Predicate pred;
+  switch (opcode) {
+  case AArch64::FCMLEv2i64rz:
+  case AArch64::FCMLEv4i32rz:
+  case AArch64::FCMLEv2i32rz:
+    pred = FCmpInst::Predicate::FCMP_OLE;
+    break;
+  case AArch64::FCMLTv2i32rz:
+  case AArch64::FCMLTv2i64rz:
+  case AArch64::FCMLTv4i32rz:
+    pred = FCmpInst::Predicate::FCMP_OLT;
+    break;
+  case AArch64::FCMEQv2f32:
+  case AArch64::FCMEQv4f32:
+  case AArch64::FCMEQv2f64:
+  case AArch64::FCMEQv2i32rz:
+  case AArch64::FCMEQv2i64rz:
+  case AArch64::FCMEQv4i32rz:
+    pred = FCmpInst::Predicate::FCMP_OEQ;
+    break;
+  case AArch64::FCMGTv2f32:
+  case AArch64::FCMGTv4f32:
+  case AArch64::FCMGTv2f64:
+  case AArch64::FCMGTv4i32rz:
+  case AArch64::FCMGTv2i64rz:
+  case AArch64::FCMGTv2i32rz:
+    pred = FCmpInst::Predicate::FCMP_OGT;
+    break;
+  case AArch64::FCMGEv2f32:
+  case AArch64::FCMGEv4f32:
+  case AArch64::FCMGEv2f64:
+  case AArch64::FCMGEv2i32rz:
+  case AArch64::FCMGEv4i32rz:
+  case AArch64::FCMGEv2i64rz:
+    pred = FCmpInst::Predicate::FCMP_OGE;
+    break;
+  default:
+    assert(false);
+  }
+
+  int eltSize = -1;
+  int numElts = -1;
+  switch (opcode) {
+  case AArch64::FCMEQv2i32rz:
+  case AArch64::FCMLEv2i32rz:
+  case AArch64::FCMGEv2i32rz:
+  case AArch64::FCMLTv2i32rz:
+  case AArch64::FCMGTv2i32rz:
+  case AArch64::FCMEQv2f32:
+  case AArch64::FCMGTv2f32:
+  case AArch64::FCMGEv2f32:
+    eltSize = 32;
+    numElts = 2;
+    break;
+  case AArch64::FCMEQv4i32rz:
+  case AArch64::FCMLEv4i32rz:
+  case AArch64::FCMGEv4i32rz:
+  case AArch64::FCMLTv4i32rz:
+  case AArch64::FCMGTv4i32rz:
+  case AArch64::FCMEQv4f32:
+  case AArch64::FCMGTv4f32:
+  case AArch64::FCMGEv4f32:
+    eltSize = 32;
+    numElts = 4;
+    break;
+  case AArch64::FCMEQv2f64:
+  case AArch64::FCMGTv2f64:
+  case AArch64::FCMGEv2f64:
+  case AArch64::FCMEQv2i64rz:
+  case AArch64::FCMLEv2i64rz:
+  case AArch64::FCMGEv2i64rz:
+  case AArch64::FCMLTv2i64rz:
+  case AArch64::FCMGTv2i64rz:
+    eltSize = 64;
+    numElts = 2;
+    break;
+  default:
+    assert(false);
+  }
+  auto *vTy = getVecTy(eltSize, numElts, /*FP=*/true);
+  auto *vIntTy = getVecTy(eltSize, numElts, /*FP=*/false);
+  auto a = readFromRegTyped(CurInst->getOperand(1).getReg(), vTy);
+  Value *b{nullptr};
+  switch (opcode) {
+  case AArch64::FCMEQv2i32rz:
+  case AArch64::FCMEQv2i64rz:
+  case AArch64::FCMEQv4i32rz:
+  case AArch64::FCMLEv2i64rz:
+  case AArch64::FCMLEv4i32rz:
+  case AArch64::FCMLEv2i32rz:
+  case AArch64::FCMGEv2i32rz:
+  case AArch64::FCMGEv4i32rz:
+  case AArch64::FCMGEv2i64rz:
+  case AArch64::FCMLTv2i32rz:
+  case AArch64::FCMLTv2i64rz:
+  case AArch64::FCMLTv4i32rz:
+  case AArch64::FCMGTv4i32rz:
+  case AArch64::FCMGTv2i64rz:
+  case AArch64::FCMGTv2i32rz:
+    b = getZeroFPVec(numElts, eltSize);
+    break;
+  case AArch64::FCMEQv2f32:
+  case AArch64::FCMGTv2f32:
+  case AArch64::FCMGEv2f32:
+  case AArch64::FCMEQv4f32:
+  case AArch64::FCMGTv4f32:
+  case AArch64::FCMGEv4f32:
+  case AArch64::FCMEQv2f64:
+  case AArch64::FCMGTv2f64:
+  case AArch64::FCMGEv2f64:
+    b = readFromRegTyped(CurInst->getOperand(2).getReg(), vTy);
+    break;
+  default:
+    assert(false);
+  }
+  auto res1 = createFCmp(pred, a, b);
+  auto res2 = createSExt(res1, vIntTy);
+  updateOutputReg(res2);
+}
+
 void arm2llvm::lift_vec_fpbinop(unsigned opcode) {
   int eltSize = -1, numElts = -1;
   switch (opcode) {
