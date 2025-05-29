@@ -9,6 +9,30 @@ using namespace llvm;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+void arm2llvm::lift_bif1() {
+  auto op1 = readFromOperand(1);
+  auto op4 = readFromOperand(2);
+  auto op3 = createNot(readFromOperand(3));
+  auto res = createXor(op1, createAnd(createXor(op1, op4), op3));
+  updateOutputReg(res);
+}
+
+void arm2llvm::lift_bif2() {
+  auto op4 = readFromOperand(2);
+  auto op1 = readFromOperand(1);
+  auto op3 = readFromOperand(3);
+  auto res = createXor(op1, createAnd(createXor(op1, op4), op3));
+  updateOutputReg(res);
+}
+
+void arm2llvm::lift_bif3() {
+  auto op1 = readFromOperand(3);
+  auto op4 = readFromOperand(2);
+  auto op3 = readFromOperand(1);
+  auto res = createXor(op1, createAnd(createXor(op1, op4), op3));
+  updateOutputReg(res);
+}
+
 void arm2llvm::lift_dup88() {
   auto i8 = getIntTy(8);
   auto t = createTrunc(readFromOperand(1), i8);

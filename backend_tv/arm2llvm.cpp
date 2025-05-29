@@ -4390,34 +4390,19 @@ void arm2llvm::lift(MCInst &I) {
     break;
 
   case AArch64::BIFv8i8:
-  case AArch64::BIFv16i8: {
-    auto op1 = readFromOperand(1);
-    auto op4 = readFromOperand(2);
-    auto op3 = createNot(readFromOperand(3));
-    auto res = createXor(op1, createAnd(createXor(op1, op4), op3));
-    updateOutputReg(res);
+  case AArch64::BIFv16i8:
+    lift_bif1();
     break;
-  }
 
   case AArch64::BITv16i8:
-  case AArch64::BITv8i8: {
-    auto op4 = readFromOperand(2);
-    auto op1 = readFromOperand(1);
-    auto op3 = readFromOperand(3);
-    auto res = createXor(op1, createAnd(createXor(op1, op4), op3));
-    updateOutputReg(res);
+  case AArch64::BITv8i8:
+    lift_bif2();
     break;
-  }
 
   case AArch64::BSLv8i8:
-  case AArch64::BSLv16i8: {
-    auto op1 = readFromOperand(3);
-    auto op4 = readFromOperand(2);
-    auto op3 = readFromOperand(1);
-    auto res = createXor(op1, createAnd(createXor(op1, op4), op3));
-    updateOutputReg(res);
+  case AArch64::BSLv16i8:
+    lift_bif3();
     break;
-  }
 
   case AArch64::FCMLEv2i64rz:
   case AArch64::FCMLEv4i32rz:

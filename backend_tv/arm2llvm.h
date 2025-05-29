@@ -366,6 +366,9 @@ public:
   void lift_dup88lane();
   void lift_dup816lane();
   void lift_dup168lane();
+  void lift_bif1();
+  void lift_bif2();
+  void lift_bif3();
 };
 
 } // end namespace lifter
