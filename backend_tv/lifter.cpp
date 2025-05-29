@@ -149,10 +149,6 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
   MCStreamerWrapper Str(MCCtx, Ana.get(), IP.get(), MRI.get(), SentinelNOP);
   Str.setUseAssemblerInfoForParsing(true);
 
-  raw_ostream &OSRef = nulls();
-  formatted_raw_ostream FOSRef(OSRef);
-  Targ->createAsmTargetStreamer(Str, FOSRef, IP.get());
-
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
     lifter = make_unique<arm2llvm>(liftedModule, Str, *srcFn, IP.get(), *STI,

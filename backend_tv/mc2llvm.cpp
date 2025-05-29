@@ -517,6 +517,10 @@ void mc2llvm::createRegStorage(unsigned Reg, unsigned Width,
 }
 
 Function *mc2llvm::run() {
+  raw_ostream &OSRef = nulls();
+  formatted_raw_ostream FOSRef(OSRef);
+  Targ->createAsmTargetStreamer(Str, FOSRef, InstPrinter);
+
   unique_ptr<MCAsmParser> Parser(createMCAsmParser(SrcMgr, MCCtx, Str, MAI));
   assert(Parser);
 
