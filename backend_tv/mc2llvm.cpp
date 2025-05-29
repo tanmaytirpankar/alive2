@@ -517,6 +517,8 @@ void mc2llvm::createRegStorage(unsigned Reg, unsigned Width,
 }
 
 Function *mc2llvm::run() {
+  Str.setUseAssemblerInfoForParsing(true);
+
   raw_ostream &OSRef = nulls();
   formatted_raw_ostream FOSRef(OSRef);
   Targ->createAsmTargetStreamer(Str, FOSRef, InstPrinter);

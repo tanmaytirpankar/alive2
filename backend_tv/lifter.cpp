@@ -57,6 +57,7 @@ std::string funcToString(llvm::Function *F) {
   return sss;
 }
 
+// FIXME get rid of these globals
 std::ostream *out;
 unsigned origRetWidth;
 bool has_ret_attr;
@@ -147,7 +148,6 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
     assert(false);
 
   MCStreamerWrapper Str(MCCtx, Ana.get(), IP.get(), MRI.get(), SentinelNOP);
-  Str.setUseAssemblerInfoForParsing(true);
 
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
