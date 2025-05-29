@@ -154,10 +154,12 @@ Value *riscv2llvm::readPtrFromRegOperand(int idx) {
 
 Value *riscv2llvm::readFromImmOperand(int idx, unsigned immed_width,
                                       unsigned result_width) {
+  assert(immed_width <= 20);
   assert(result_width >= immed_width);
   auto op = CurInst->getOperand(idx);
   assert(op.isImm());
-  Value *imm = getSignedIntConst(op.getImm(), immed_width);
+  auto imm_int = op.getImm() & ((1U << immed_width) - 1);
+  Value *imm = getUnsignedIntConst(imm_int, immed_width);
   if (result_width > immed_width)
     imm = createSExt(imm, getIntTy(result_width));
   return imm;
