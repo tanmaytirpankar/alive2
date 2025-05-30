@@ -372,6 +372,10 @@ public:
   void lift_fcm(unsigned opcode);
   void lift_cm(unsigned opcode);
   void lift_tbl(unsigned opcode);
+  void lift_xhn(unsigned opcode);
+  void lift_vec_binop(unsigned opcode);
+  void lift_addp();
+  void lift_uzp(unsigned opcode);
 };
 
 } // end namespace lifter

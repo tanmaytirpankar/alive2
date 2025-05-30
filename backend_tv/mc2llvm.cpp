@@ -631,7 +631,7 @@ Function *mc2llvm::run() {
   }
   *out << '\n';
 
-    // enabled this if we're emitting broken functions
+  // enabled this if we're emitting broken functions
   if (false)
     LiftedModule->dump();
 
@@ -643,7 +643,6 @@ Function *mc2llvm::run() {
     *out << "\nERROR: Lifted module is broken, this should not happen\n";
     exit(-1);
   }
-
 
   return liftedFn;
 }

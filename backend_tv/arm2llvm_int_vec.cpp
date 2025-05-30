@@ -12,6 +12,851 @@ using namespace std;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+void arm2llvm::lift_uzp(unsigned opcode) {
+  int which;
+  switch (opcode) {
+  case AArch64::UZP1v8i8:
+  case AArch64::UZP1v4i16:
+  case AArch64::UZP1v16i8:
+  case AArch64::UZP1v8i16:
+  case AArch64::UZP1v4i32:
+    which = 0;
+    break;
+  case AArch64::UZP2v8i8:
+  case AArch64::UZP2v4i16:
+  case AArch64::UZP2v8i16:
+  case AArch64::UZP2v16i8:
+  case AArch64::UZP2v4i32:
+    which = 1;
+    break;
+  default:
+    assert(false);
+  }
+  int numElts, eltSize;
+  if (opcode == AArch64::UZP1v8i8 || opcode == AArch64::UZP2v8i8) {
+    numElts = 8;
+    eltSize = 8;
+  } else if (opcode == AArch64::UZP1v4i16 || opcode == AArch64::UZP2v4i16) {
+    numElts = 4;
+    eltSize = 16;
+  } else if (opcode == AArch64::UZP1v16i8 || opcode == AArch64::UZP2v16i8) {
+    numElts = 16;
+    eltSize = 8;
+  } else if (opcode == AArch64::UZP1v8i16 || opcode == AArch64::UZP2v8i16) {
+    numElts = 8;
+    eltSize = 16;
+  } else if (opcode == AArch64::UZP1v4i32 || opcode == AArch64::UZP2v4i32) {
+    numElts = 4;
+    eltSize = 32;
+  } else {
+    assert(false);
+  }
+  auto vTy = getVecTy(eltSize, numElts);
+  auto a = createBitCast(readFromOperand(1), vTy);
+  auto b = createBitCast(readFromOperand(2), vTy);
+  Value *res = getUndefVec(numElts, eltSize);
+  for (int i = 0; i < numElts / 2; ++i) {
+    auto e1 = createExtractElement(a, (i * 2) + which);
+    auto e2 = createExtractElement(b, (i * 2) + which);
+    res = createInsertElement(res, e1, i);
+    res = createInsertElement(res, e2, i + (numElts / 2));
+  }
+  updateOutputReg(res);
+}
+
+void arm2llvm::lift_addp() {
+  auto vTy = getVecTy(64, 2);
+  auto v = createBitCast(readFromOperand(1), vTy);
+  auto res = createAdd(createExtractElement(v, 0), createExtractElement(v, 1));
+  updateOutputReg(res);
+}
+
+void arm2llvm::lift_vec_binop(unsigned opcode) {
+  unsigned op1Size = 0;
+  switch (opcode) {
+  case AArch64::UADDWv8i8_v8i16:
+  case AArch64::UADDWv4i16_v4i32:
+  case AArch64::UADDWv2i32_v2i64:
+  case AArch64::USUBWv8i8_v8i16:
+  case AArch64::USUBWv4i16_v4i32:
+  case AArch64::USUBWv2i32_v2i64:
+  case AArch64::SADDWv8i8_v8i16:
+  case AArch64::SADDWv4i16_v4i32:
+  case AArch64::SADDWv2i32_v2i64:
+  case AArch64::SSUBWv8i8_v8i16:
+  case AArch64::SSUBWv4i16_v4i32:
+  case AArch64::SSUBWv2i32_v2i64: {
+    op1Size = 128;
+    break;
+  }
+  }
+  auto a = readFromOperand(1, op1Size);
+  auto b = readFromOperand(2);
+  bool elementWise = false;
+  bool splatImm2 = false;
+  extKind ext = extKind::None;
+  bool immShift = false;
+  bool isUpper = false;
+  function<Value *(Value *, Value *)> op;
+  switch (opcode) {
+  case AArch64::SMINv8i8:
+  case AArch64::SMINv4i16:
+  case AArch64::SMINv2i32:
+  case AArch64::SMINv16i8:
+  case AArch64::SMINv8i16:
+  case AArch64::SMINv4i32:
+  case AArch64::SMINPv8i8:
+  case AArch64::SMINPv4i16:
+  case AArch64::SMINPv2i32:
+  case AArch64::SMINPv16i8:
+  case AArch64::SMINPv8i16:
+  case AArch64::SMINPv4i32:
+    op = [&](Value *a, Value *b) { return createSMin(a, b); };
+    break;
+  case AArch64::SMAXv8i8:
+  case AArch64::SMAXv4i16:
+  case AArch64::SMAXv2i32:
+  case AArch64::SMAXv16i8:
+  case AArch64::SMAXv8i16:
+  case AArch64::SMAXv4i32:
+  case AArch64::SMAXPv8i8:
+  case AArch64::SMAXPv4i16:
+  case AArch64::SMAXPv2i32:
+  case AArch64::SMAXPv16i8:
+  case AArch64::SMAXPv8i16:
+  case AArch64::SMAXPv4i32:
+    op = [&](Value *a, Value *b) { return createSMax(a, b); };
+    break;
+  case AArch64::UMINv8i8:
+  case AArch64::UMINv4i16:
+  case AArch64::UMINv2i32:
+  case AArch64::UMINv16i8:
+  case AArch64::UMINv8i16:
+  case AArch64::UMINv4i32:
+  case AArch64::UMINPv8i8:
+  case AArch64::UMINPv4i16:
+  case AArch64::UMINPv2i32:
+  case AArch64::UMINPv16i8:
+  case AArch64::UMINPv8i16:
+  case AArch64::UMINPv4i32:
+    op = [&](Value *a, Value *b) { return createUMin(a, b); };
+    break;
+  case AArch64::UMAXv8i8:
+  case AArch64::UMAXv4i16:
+  case AArch64::UMAXv2i32:
+  case AArch64::UMAXv16i8:
+  case AArch64::UMAXv8i16:
+  case AArch64::UMAXv4i32:
+  case AArch64::UMAXPv8i8:
+  case AArch64::UMAXPv4i16:
+  case AArch64::UMAXPv2i32:
+  case AArch64::UMAXPv16i8:
+  case AArch64::UMAXPv8i16:
+  case AArch64::UMAXPv4i32:
+    op = [&](Value *a, Value *b) { return createUMax(a, b); };
+    break;
+  case AArch64::UMULLv16i8_v8i16:
+  case AArch64::UMULLv8i16_v4i32:
+  case AArch64::UMULLv4i32_v2i64:
+    // these three cases are UMULL2
+    a = createRawLShr(a, getUnsignedIntConst(64, 128));
+    b = createRawLShr(b, getUnsignedIntConst(64, 128));
+  case AArch64::UMULLv2i32_v2i64:
+  case AArch64::UMULLv8i8_v8i16:
+  case AArch64::UMULLv4i16_v4i32:
+    ext = extKind::ZExt;
+    op = [&](Value *a, Value *b) { return createMul(a, b); };
+    break;
+  case AArch64::SMULLv16i8_v8i16:
+  case AArch64::SMULLv4i32_v2i64:
+  case AArch64::SMULLv8i16_v4i32:
+    // these three cases are SMULL2
+    a = createRawLShr(a, getUnsignedIntConst(64, 128));
+    b = createRawLShr(b, getUnsignedIntConst(64, 128));
+  case AArch64::SMULLv8i8_v8i16:
+  case AArch64::SMULLv2i32_v2i64:
+  case AArch64::SMULLv4i16_v4i32:
+    ext = extKind::SExt;
+    op = [&](Value *a, Value *b) { return createMul(a, b); };
+    break;
+  case AArch64::USHRv8i8_shift:
+  case AArch64::USHRv4i16_shift:
+  case AArch64::USHRv2i32_shift:
+  case AArch64::USHRv16i8_shift:
+  case AArch64::USHRv8i16_shift:
+  case AArch64::USHRv4i32_shift:
+  case AArch64::USHRd:
+    splatImm2 = true;
+    op = [&](Value *a, Value *b) { return createMaskedLShr(a, b); };
+    break;
+  case AArch64::MULv2i32:
+  case AArch64::MULv8i8:
+  case AArch64::MULv4i16:
+  case AArch64::MULv16i8:
+  case AArch64::MULv8i16:
+  case AArch64::MULv4i32:
+    op = [&](Value *a, Value *b) { return createMul(a, b); };
+    break;
+  case AArch64::SSHRv8i8_shift:
+  case AArch64::SSHRv16i8_shift:
+  case AArch64::SSHRv4i16_shift:
+  case AArch64::SSHRv8i16_shift:
+  case AArch64::SSHRv2i32_shift:
+  case AArch64::SSHRv4i32_shift:
+  case AArch64::SSHRd:
+  case AArch64::SSHRv2i64_shift:
+    splatImm2 = true;
+    op = [&](Value *a, Value *b) { return createMaskedAShr(a, b); };
+    break;
+  case AArch64::SHLv16i8_shift:
+  case AArch64::SHLv8i16_shift:
+  case AArch64::SHLv4i32_shift:
+  case AArch64::SHLv2i64_shift:
+  case AArch64::SHLv8i8_shift:
+  case AArch64::SHLv4i16_shift:
+  case AArch64::SHLd:
+  case AArch64::SHLv2i32_shift:
+    splatImm2 = true;
+    op = [&](Value *a, Value *b) { return createMaskedShl(a, b); };
+    break;
+  case AArch64::BICv4i16:
+  case AArch64::BICv8i8:
+  case AArch64::BICv2i32:
+  case AArch64::BICv8i16:
+  case AArch64::BICv4i32:
+  case AArch64::BICv16i8:
+    if (CurInst->getOperand(2).isImm()) {
+      splatImm2 = true;
+      immShift = true;
+    }
+    op = [&](Value *a, Value *b) { return createAnd(a, createNot(b)); };
+    break;
+  case AArch64::USHLv1i64:
+  case AArch64::USHLv4i16:
+  case AArch64::USHLv16i8:
+  case AArch64::USHLv8i16:
+  case AArch64::USHLv2i32:
+  case AArch64::USHLv4i32:
+  case AArch64::USHLv8i8:
+  case AArch64::USHLv2i64:
+    op = [&](Value *a, Value *b) { return createUSHL(a, b); };
+    elementWise = true;
+    break;
+  case AArch64::SSHLv1i64:
+  case AArch64::SSHLv4i16:
+  case AArch64::SSHLv16i8:
+  case AArch64::SSHLv8i16:
+  case AArch64::SSHLv2i32:
+  case AArch64::SSHLv4i32:
+  case AArch64::SSHLv8i8:
+  case AArch64::SSHLv2i64:
+    op = [&](Value *a, Value *b) { return createSSHL(a, b); };
+    elementWise = true;
+    break;
+  case AArch64::ADDv2i32:
+  case AArch64::ADDv1i64:
+  case AArch64::ADDv2i64:
+  case AArch64::ADDv4i16:
+  case AArch64::ADDv4i32:
+  case AArch64::ADDv8i8:
+  case AArch64::ADDv8i16:
+  case AArch64::ADDv16i8:
+    op = [&](Value *a, Value *b) { return createAdd(a, b); };
+    break;
+  case AArch64::UADDLv16i8_v8i16:
+  case AArch64::UADDLv8i16_v4i32:
+  case AArch64::UADDLv4i32_v2i64:
+  case AArch64::UADDWv16i8_v8i16:
+  case AArch64::UADDWv8i16_v4i32:
+  case AArch64::UADDWv4i32_v2i64:
+  case AArch64::SADDLv16i8_v8i16:
+  case AArch64::SADDLv8i16_v4i32:
+  case AArch64::SADDLv4i32_v2i64:
+  case AArch64::SADDWv16i8_v8i16:
+  case AArch64::SADDWv8i16_v4i32:
+  case AArch64::SADDWv4i32_v2i64:
+    // These cases are UADDL2, UADDW2, SADDL2, SADDW2
+    isUpper = true;
+  case AArch64::UADDLv8i8_v8i16:
+  case AArch64::UADDLv4i16_v4i32:
+  case AArch64::UADDLv2i32_v2i64:
+  case AArch64::UADDWv8i8_v8i16:
+  case AArch64::UADDWv4i16_v4i32:
+  case AArch64::UADDWv2i32_v2i64:
+  case AArch64::SADDLv8i8_v8i16:
+  case AArch64::SADDLv4i16_v4i32:
+  case AArch64::SADDLv2i32_v2i64:
+  case AArch64::SADDWv8i8_v8i16:
+  case AArch64::SADDWv4i16_v4i32:
+  case AArch64::SADDWv2i32_v2i64:
+    if (opcode == AArch64::SADDLv8i8_v8i16 ||
+        opcode == AArch64::SADDLv16i8_v8i16 ||
+        opcode == AArch64::SADDLv4i16_v4i32 ||
+        opcode == AArch64::SADDLv8i16_v4i32 ||
+        opcode == AArch64::SADDLv2i32_v2i64 ||
+        opcode == AArch64::SADDLv4i32_v2i64 ||
+        opcode == AArch64::SADDWv8i8_v8i16 ||
+        opcode == AArch64::SADDWv16i8_v8i16 ||
+        opcode == AArch64::SADDWv4i16_v4i32 ||
+        opcode == AArch64::SADDWv8i16_v4i32 ||
+        opcode == AArch64::SADDWv2i32_v2i64 ||
+        opcode == AArch64::SADDWv4i32_v2i64) {
+      ext = extKind::SExt;
+    } else {
+      ext = extKind::ZExt;
+    }
+    op = [&](Value *a, Value *b) { return createAdd(a, b); };
+    break;
+  case AArch64::USUBLv16i8_v8i16:
+  case AArch64::USUBLv8i16_v4i32:
+  case AArch64::USUBLv4i32_v2i64:
+  case AArch64::USUBWv16i8_v8i16:
+  case AArch64::USUBWv8i16_v4i32:
+  case AArch64::USUBWv4i32_v2i64:
+  case AArch64::SSUBLv16i8_v8i16:
+  case AArch64::SSUBLv8i16_v4i32:
+  case AArch64::SSUBLv4i32_v2i64:
+  case AArch64::SSUBWv16i8_v8i16:
+  case AArch64::SSUBWv8i16_v4i32:
+  case AArch64::SSUBWv4i32_v2i64:
+    // These three cases are USUBL2, SSUBL2, USUBW2 and SSUBW2
+    isUpper = true;
+  case AArch64::USUBLv8i8_v8i16:
+  case AArch64::USUBLv4i16_v4i32:
+  case AArch64::USUBLv2i32_v2i64:
+  case AArch64::USUBWv8i8_v8i16:
+  case AArch64::USUBWv4i16_v4i32:
+  case AArch64::USUBWv2i32_v2i64:
+  case AArch64::SSUBLv8i8_v8i16:
+  case AArch64::SSUBLv4i16_v4i32:
+  case AArch64::SSUBLv2i32_v2i64:
+  case AArch64::SSUBWv8i8_v8i16:
+  case AArch64::SSUBWv4i16_v4i32:
+  case AArch64::SSUBWv2i32_v2i64:
+    if (opcode == AArch64::SSUBLv8i8_v8i16 ||
+        opcode == AArch64::SSUBLv16i8_v8i16 ||
+        opcode == AArch64::SSUBLv4i16_v4i32 ||
+        opcode == AArch64::SSUBLv8i16_v4i32 ||
+        opcode == AArch64::SSUBLv2i32_v2i64 ||
+        opcode == AArch64::SSUBLv4i32_v2i64 ||
+        opcode == AArch64::SSUBWv8i8_v8i16 ||
+        opcode == AArch64::SSUBWv16i8_v8i16 ||
+        opcode == AArch64::SSUBWv4i16_v4i32 ||
+        opcode == AArch64::SSUBWv8i16_v4i32 ||
+        opcode == AArch64::SSUBWv2i32_v2i64 ||
+        opcode == AArch64::SSUBWv4i32_v2i64) {
+      ext = extKind::SExt;
+    } else {
+      ext = extKind::ZExt;
+    }
+    op = [&](Value *a, Value *b) { return createSub(a, b); };
+    break;
+  case AArch64::SUBv1i64:
+  case AArch64::SUBv2i32:
+  case AArch64::SUBv2i64:
+  case AArch64::SUBv4i16:
+  case AArch64::SUBv4i32:
+  case AArch64::SUBv8i8:
+  case AArch64::SUBv8i16:
+  case AArch64::SUBv16i8:
+    op = [&](Value *a, Value *b) { return createSub(a, b); };
+    break;
+  case AArch64::EORv8i8:
+  case AArch64::EORv16i8:
+    op = [&](Value *a, Value *b) { return createXor(a, b); };
+    break;
+  case AArch64::ANDv8i8:
+  case AArch64::ANDv16i8:
+    op = [&](Value *a, Value *b) { return createAnd(a, b); };
+    break;
+  case AArch64::ORNv8i8:
+  case AArch64::ORNv16i8:
+    op = [&](Value *a, Value *b) { return createOr(a, createNot(b)); };
+    break;
+  case AArch64::ORRv8i8:
+  case AArch64::ORRv16i8:
+  case AArch64::ORRv2i32:
+  case AArch64::ORRv4i16:
+  case AArch64::ORRv8i16:
+  case AArch64::ORRv4i32:
+    if (CurInst->getOperand(2).isImm()) {
+      splatImm2 = true;
+      immShift = true;
+    }
+    op = [&](Value *a, Value *b) { return createOr(a, b); };
+    break;
+  case AArch64::SSHLLv4i32_shift:
+  case AArch64::SSHLLv8i16_shift:
+  case AArch64::SSHLLv16i8_shift:
+    // these three cases are SSHLL2
+    a = createRawLShr(a, getUnsignedIntConst(64, 128));
+  case AArch64::SSHLLv8i8_shift:
+  case AArch64::SSHLLv4i16_shift:
+  case AArch64::SSHLLv2i32_shift:
+    ext = extKind::SExt;
+    splatImm2 = true;
+    op = [&](Value *a, Value *b) { return createRawShl(a, b); };
+    break;
+  case AArch64::USHLLv4i32_shift:
+  case AArch64::USHLLv8i16_shift:
+  case AArch64::USHLLv16i8_shift:
+    // these three cases are USHLL2
+    a = createRawLShr(a, getUnsignedIntConst(64, 128));
+  case AArch64::USHLLv4i16_shift:
+  case AArch64::USHLLv2i32_shift:
+  case AArch64::USHLLv8i8_shift:
+    ext = extKind::ZExt;
+    splatImm2 = true;
+    op = [&](Value *a, Value *b) { return createRawShl(a, b); };
+    break;
+  case AArch64::USHRv2i64_shift:
+    splatImm2 = true;
+    op = [&](Value *a, Value *b) { return createRawLShr(a, b); };
+    break;
+  default:
+    assert(false && "missed a case");
+  }
+
+  unsigned eltSize, numElts;
+  switch (opcode) {
+  case AArch64::USHLv1i64:
+  case AArch64::USHRd:
+  case AArch64::SSHRd:
+  case AArch64::SSHLv1i64:
+  case AArch64::SHLd:
+  case AArch64::ADDv1i64:
+  case AArch64::SUBv1i64:
+    numElts = 1;
+    eltSize = 64;
+    break;
+  case AArch64::ORRv2i32:
+  case AArch64::UMULLv2i32_v2i64:
+  case AArch64::SMINv2i32:
+  case AArch64::SMAXv2i32:
+  case AArch64::UMINv2i32:
+  case AArch64::UMAXv2i32:
+  case AArch64::SMINPv2i32:
+  case AArch64::SMAXPv2i32:
+  case AArch64::UMINPv2i32:
+  case AArch64::UMAXPv2i32:
+  case AArch64::SMULLv2i32_v2i64:
+  case AArch64::USHRv2i32_shift:
+  case AArch64::MULv2i32:
+  case AArch64::SSHLLv2i32_shift:
+  case AArch64::SSHRv2i32_shift:
+  case AArch64::SHLv2i32_shift:
+  case AArch64::SUBv2i32:
+  case AArch64::ADDv2i32:
+  case AArch64::USHLv2i32:
+  case AArch64::SSHLv2i32:
+  case AArch64::BICv2i32:
+  case AArch64::USHLLv2i32_shift:
+  case AArch64::UADDLv2i32_v2i64:
+  case AArch64::UADDWv2i32_v2i64:
+  case AArch64::SADDLv2i32_v2i64:
+  case AArch64::SADDWv2i32_v2i64:
+  case AArch64::USUBLv2i32_v2i64:
+  case AArch64::USUBWv2i32_v2i64:
+  case AArch64::SSUBLv2i32_v2i64:
+  case AArch64::SSUBWv2i32_v2i64:
+    numElts = 2;
+    eltSize = 32;
+    break;
+  case AArch64::SSHRv2i64_shift:
+  case AArch64::SHLv2i64_shift:
+  case AArch64::ADDv2i64:
+  case AArch64::SUBv2i64:
+  case AArch64::USHLv2i64:
+  case AArch64::SSHLv2i64:
+  case AArch64::USHRv2i64_shift:
+    numElts = 2;
+    eltSize = 64;
+    break;
+  case AArch64::ORRv4i16:
+  case AArch64::UMULLv4i16_v4i32:
+  case AArch64::SMINv4i16:
+  case AArch64::SMAXv4i16:
+  case AArch64::UMINv4i16:
+  case AArch64::UMAXv4i16:
+  case AArch64::SMINPv4i16:
+  case AArch64::SMAXPv4i16:
+  case AArch64::UMINPv4i16:
+  case AArch64::UMAXPv4i16:
+  case AArch64::SMULLv4i16_v4i32:
+  case AArch64::USHRv4i16_shift:
+  case AArch64::SSHLLv4i16_shift:
+  case AArch64::SSHRv4i16_shift:
+  case AArch64::ADDv4i16:
+  case AArch64::SUBv4i16:
+  case AArch64::USHLv4i16:
+  case AArch64::SSHLv4i16:
+  case AArch64::BICv4i16:
+  case AArch64::USHLLv4i16_shift:
+  case AArch64::SHLv4i16_shift:
+  case AArch64::MULv4i16:
+  case AArch64::UADDLv4i16_v4i32:
+  case AArch64::UADDWv4i16_v4i32:
+  case AArch64::SADDLv4i16_v4i32:
+  case AArch64::SADDWv4i16_v4i32:
+  case AArch64::USUBLv4i16_v4i32:
+  case AArch64::USUBWv4i16_v4i32:
+  case AArch64::SSUBLv4i16_v4i32:
+  case AArch64::SSUBWv4i16_v4i32:
+    numElts = 4;
+    eltSize = 16;
+    break;
+  case AArch64::UMULLv4i32_v2i64:
+  case AArch64::SMINv4i32:
+  case AArch64::SMAXv4i32:
+  case AArch64::UMINv4i32:
+  case AArch64::UMAXv4i32:
+  case AArch64::SMINPv4i32:
+  case AArch64::SMAXPv4i32:
+  case AArch64::UMINPv4i32:
+  case AArch64::UMAXPv4i32:
+  case AArch64::SMULLv4i32_v2i64:
+  case AArch64::USHRv4i32_shift:
+  case AArch64::MULv4i32:
+  case AArch64::SSHLLv4i32_shift:
+  case AArch64::SSHRv4i32_shift:
+  case AArch64::SHLv4i32_shift:
+  case AArch64::ADDv4i32:
+  case AArch64::SUBv4i32:
+  case AArch64::USHLv4i32:
+  case AArch64::SSHLv4i32:
+  case AArch64::BICv4i32:
+  case AArch64::USHLLv4i32_shift:
+  case AArch64::ORRv4i32:
+  case AArch64::UADDLv4i32_v2i64:
+  case AArch64::UADDWv4i32_v2i64:
+  case AArch64::SADDLv4i32_v2i64:
+  case AArch64::SADDWv4i32_v2i64:
+  case AArch64::USUBLv4i32_v2i64:
+  case AArch64::USUBWv4i32_v2i64:
+  case AArch64::SSUBLv4i32_v2i64:
+  case AArch64::SSUBWv4i32_v2i64:
+    numElts = 4;
+    eltSize = 32;
+    break;
+  case AArch64::ORNv8i8:
+  case AArch64::UMULLv8i8_v8i16:
+  case AArch64::SMINv8i8:
+  case AArch64::SMAXv8i8:
+  case AArch64::UMINv8i8:
+  case AArch64::UMAXv8i8:
+  case AArch64::SMINPv8i8:
+  case AArch64::SMAXPv8i8:
+  case AArch64::UMINPv8i8:
+  case AArch64::UMAXPv8i8:
+  case AArch64::SMULLv8i8_v8i16:
+  case AArch64::MULv8i8:
+  case AArch64::SSHLLv8i8_shift:
+  case AArch64::SSHRv8i8_shift:
+  case AArch64::SHLv8i8_shift:
+  case AArch64::ADDv8i8:
+  case AArch64::SUBv8i8:
+  case AArch64::EORv8i8:
+  case AArch64::ANDv8i8:
+  case AArch64::ORRv8i8:
+  case AArch64::USHLv8i8:
+  case AArch64::SSHLv8i8:
+  case AArch64::BICv8i8:
+  case AArch64::USHRv8i8_shift:
+  case AArch64::USHLLv8i8_shift:
+  case AArch64::UADDLv8i8_v8i16:
+  case AArch64::UADDWv8i8_v8i16:
+  case AArch64::SADDLv8i8_v8i16:
+  case AArch64::SADDWv8i8_v8i16:
+  case AArch64::USUBLv8i8_v8i16:
+  case AArch64::USUBWv8i8_v8i16:
+  case AArch64::SSUBLv8i8_v8i16:
+  case AArch64::SSUBWv8i8_v8i16:
+    numElts = 8;
+    eltSize = 8;
+    break;
+  case AArch64::ORRv8i16:
+  case AArch64::UMULLv8i16_v4i32:
+  case AArch64::SMULLv8i16_v4i32:
+  case AArch64::USHRv8i16_shift:
+  case AArch64::MULv8i16:
+  case AArch64::SSHLLv8i16_shift:
+  case AArch64::ADDv8i16:
+  case AArch64::SUBv8i16:
+  case AArch64::USHLv8i16:
+  case AArch64::SSHLv8i16:
+  case AArch64::BICv8i16:
+  case AArch64::USHLLv8i16_shift:
+  case AArch64::SHLv8i16_shift:
+  case AArch64::SSHRv8i16_shift:
+  case AArch64::SMINv8i16:
+  case AArch64::SMAXv8i16:
+  case AArch64::UMINv8i16:
+  case AArch64::UMAXv8i16:
+  case AArch64::SMINPv8i16:
+  case AArch64::SMAXPv8i16:
+  case AArch64::UMINPv8i16:
+  case AArch64::UMAXPv8i16:
+  case AArch64::UADDLv8i16_v4i32:
+  case AArch64::UADDWv8i16_v4i32:
+  case AArch64::SADDLv8i16_v4i32:
+  case AArch64::SADDWv8i16_v4i32:
+  case AArch64::USUBLv8i16_v4i32:
+  case AArch64::USUBWv8i16_v4i32:
+  case AArch64::SSUBLv8i16_v4i32:
+  case AArch64::SSUBWv8i16_v4i32:
+    numElts = 8;
+    eltSize = 16;
+    break;
+  case AArch64::ORNv16i8:
+  case AArch64::UMULLv16i8_v8i16:
+  case AArch64::SMINv16i8:
+  case AArch64::SMAXv16i8:
+  case AArch64::UMINv16i8:
+  case AArch64::UMAXv16i8:
+  case AArch64::SMINPv16i8:
+  case AArch64::SMAXPv16i8:
+  case AArch64::UMINPv16i8:
+  case AArch64::UMAXPv16i8:
+  case AArch64::SMULLv16i8_v8i16:
+  case AArch64::USHRv16i8_shift:
+  case AArch64::MULv16i8:
+  case AArch64::SSHLLv16i8_shift:
+  case AArch64::ADDv16i8:
+  case AArch64::SUBv16i8:
+  case AArch64::EORv16i8:
+  case AArch64::ANDv16i8:
+  case AArch64::ORRv16i8:
+  case AArch64::USHLv16i8:
+  case AArch64::SSHLv16i8:
+  case AArch64::BICv16i8:
+  case AArch64::USHLLv16i8_shift:
+  case AArch64::SHLv16i8_shift:
+  case AArch64::SSHRv16i8_shift:
+  case AArch64::UADDLv16i8_v8i16:
+  case AArch64::UADDWv16i8_v8i16:
+  case AArch64::SADDLv16i8_v8i16:
+  case AArch64::SADDWv16i8_v8i16:
+  case AArch64::USUBLv16i8_v8i16:
+  case AArch64::USUBWv16i8_v8i16:
+  case AArch64::SSUBLv16i8_v8i16:
+  case AArch64::SSUBWv16i8_v8i16:
+    numElts = 16;
+    eltSize = 8;
+    break;
+  default:
+    assert(false && "missed case");
+    break;
+  }
+
+  // Preprocessing the two operands
+  switch (opcode) {
+  case AArch64::SMINPv8i8:
+  case AArch64::SMINPv4i16:
+  case AArch64::SMINPv2i32:
+  case AArch64::SMINPv16i8:
+  case AArch64::SMINPv8i16:
+  case AArch64::SMINPv4i32:
+  case AArch64::SMAXPv8i8:
+  case AArch64::SMAXPv4i16:
+  case AArch64::SMAXPv2i32:
+  case AArch64::SMAXPv16i8:
+  case AArch64::SMAXPv8i16:
+  case AArch64::SMAXPv4i32:
+  case AArch64::UMINPv8i8:
+  case AArch64::UMINPv4i16:
+  case AArch64::UMINPv2i32:
+  case AArch64::UMINPv16i8:
+  case AArch64::UMINPv8i16:
+  case AArch64::UMINPv4i32:
+  case AArch64::UMAXPv8i8:
+  case AArch64::UMAXPv4i16:
+  case AArch64::UMAXPv2i32:
+  case AArch64::UMAXPv16i8:
+  case AArch64::UMAXPv8i16:
+  case AArch64::UMAXPv4i32: {
+    vector<int> mask1(numElts), mask2(numElts);
+    for (unsigned i = 0; i < numElts; i++) {
+      mask1[i] = 2 * i;
+      mask2[i] = 2 * i + 1;
+    }
+    auto vector_a = createBitCast(a, getVecTy(eltSize, numElts));
+    auto vector_b = createBitCast(b, getVecTy(eltSize, numElts));
+
+    auto new_a = createShuffleVector(vector_b, vector_a, mask1);
+    auto new_b = createShuffleVector(vector_b, vector_a, mask2);
+
+    a = createBitCast(new_a, getIntTy(eltSize * numElts));
+    b = createBitCast(new_b, getIntTy(eltSize * numElts));
+    break;
+  }
+  }
+
+  // Some instructions have first operand of a different type than the
+  // second operand (Twice the eltSize. Also half the number of elements if
+  // isUpper)
+  bool operandTypesDiffer = false;
+  switch (opcode) {
+  case AArch64::UADDWv8i8_v8i16:
+  case AArch64::UADDWv16i8_v8i16:
+  case AArch64::UADDWv4i16_v4i32:
+  case AArch64::UADDWv8i16_v4i32:
+  case AArch64::UADDWv2i32_v2i64:
+  case AArch64::UADDWv4i32_v2i64:
+  case AArch64::SADDWv8i8_v8i16:
+  case AArch64::SADDWv16i8_v8i16:
+  case AArch64::SADDWv4i16_v4i32:
+  case AArch64::SADDWv8i16_v4i32:
+  case AArch64::SADDWv2i32_v2i64:
+  case AArch64::SADDWv4i32_v2i64:
+  case AArch64::USUBWv8i8_v8i16:
+  case AArch64::USUBWv16i8_v8i16:
+  case AArch64::USUBWv4i16_v4i32:
+  case AArch64::USUBWv8i16_v4i32:
+  case AArch64::USUBWv2i32_v2i64:
+  case AArch64::USUBWv4i32_v2i64:
+  case AArch64::SSUBWv8i8_v8i16:
+  case AArch64::SSUBWv16i8_v8i16:
+  case AArch64::SSUBWv4i16_v4i32:
+  case AArch64::SSUBWv8i16_v4i32:
+  case AArch64::SSUBWv2i32_v2i64:
+  case AArch64::SSUBWv4i32_v2i64:
+    operandTypesDiffer = true;
+    break;
+  }
+
+  auto res = createVectorOp(op, a, b, eltSize, numElts, elementWise, ext,
+                            splatImm2, immShift, isUpper, operandTypesDiffer);
+  updateOutputReg(res);
+}
+
+void arm2llvm::lift_xhn(unsigned opcode) {
+  auto i64 = getIntTy(64);
+  unsigned eltSize = -1, numElts = -1;
+  switch (opcode) {
+  case AArch64::RADDHNv2i64_v2i32:
+  case AArch64::RADDHNv2i64_v4i32:
+  case AArch64::ADDHNv2i64_v2i32:
+  case AArch64::ADDHNv2i64_v4i32:
+  case AArch64::RSUBHNv2i64_v2i32:
+  case AArch64::RSUBHNv2i64_v4i32:
+  case AArch64::SUBHNv2i64_v2i32:
+  case AArch64::SUBHNv2i64_v4i32:
+    eltSize = 32;
+    numElts = 2;
+    break;
+  case AArch64::RADDHNv4i32_v4i16:
+  case AArch64::RADDHNv4i32_v8i16:
+  case AArch64::ADDHNv4i32_v4i16:
+  case AArch64::ADDHNv4i32_v8i16:
+  case AArch64::RSUBHNv4i32_v4i16:
+  case AArch64::RSUBHNv4i32_v8i16:
+  case AArch64::SUBHNv4i32_v4i16:
+  case AArch64::SUBHNv4i32_v8i16:
+    eltSize = 16;
+    numElts = 4;
+    break;
+  case AArch64::RADDHNv8i16_v8i8:
+  case AArch64::RADDHNv8i16_v16i8:
+  case AArch64::ADDHNv8i16_v8i8:
+  case AArch64::ADDHNv8i16_v16i8:
+  case AArch64::RSUBHNv8i16_v8i8:
+  case AArch64::RSUBHNv8i16_v16i8:
+  case AArch64::SUBHNv8i16_v8i8:
+  case AArch64::SUBHNv8i16_v16i8:
+    eltSize = 8;
+    numElts = 8;
+    break;
+  default:
+    assert(false);
+    break;
+  }
+
+  Instruction::BinaryOps op;
+  bool addRoundingConst = false;
+  switch (opcode) {
+  case AArch64::RADDHNv2i64_v2i32:
+  case AArch64::RADDHNv4i32_v4i16:
+  case AArch64::RADDHNv8i16_v8i8:
+  case AArch64::RADDHNv2i64_v4i32:
+  case AArch64::RADDHNv4i32_v8i16:
+  case AArch64::RADDHNv8i16_v16i8:
+    addRoundingConst = true;
+  case AArch64::ADDHNv2i64_v2i32:
+  case AArch64::ADDHNv4i32_v4i16:
+  case AArch64::ADDHNv8i16_v8i8:
+  case AArch64::ADDHNv2i64_v4i32:
+  case AArch64::ADDHNv4i32_v8i16:
+  case AArch64::ADDHNv8i16_v16i8:
+    op = Instruction::BinaryOps::Add;
+    break;
+  case AArch64::RSUBHNv2i64_v2i32:
+  case AArch64::RSUBHNv4i32_v4i16:
+  case AArch64::RSUBHNv8i16_v8i8:
+  case AArch64::RSUBHNv2i64_v4i32:
+  case AArch64::RSUBHNv4i32_v8i16:
+  case AArch64::RSUBHNv8i16_v16i8:
+    addRoundingConst = true;
+  case AArch64::SUBHNv2i64_v2i32:
+  case AArch64::SUBHNv4i32_v4i16:
+  case AArch64::SUBHNv8i16_v8i8:
+  case AArch64::SUBHNv2i64_v4i32:
+  case AArch64::SUBHNv4i32_v8i16:
+  case AArch64::SUBHNv8i16_v16i8:
+    op = Instruction::BinaryOps::Sub;
+    break;
+  default:
+    assert(false);
+    break;
+  }
+
+  bool isUpper = false;
+  switch (opcode) {
+  // RADDHN2 variants
+  case AArch64::RADDHNv2i64_v4i32:
+  case AArch64::RADDHNv4i32_v8i16:
+  case AArch64::RADDHNv8i16_v16i8:
+  // ADDHN2 variants
+  case AArch64::ADDHNv2i64_v4i32:
+  case AArch64::ADDHNv4i32_v8i16:
+  case AArch64::ADDHNv8i16_v16i8:
+  // RSUBHN2 variants
+  case AArch64::RSUBHNv2i64_v4i32:
+  case AArch64::RSUBHNv4i32_v8i16:
+  case AArch64::RSUBHNv8i16_v16i8:
+  // SUBHN2 variants
+  case AArch64::SUBHNv2i64_v4i32:
+  case AArch64::SUBHNv4i32_v8i16:
+  case AArch64::SUBHNv8i16_v16i8:
+    isUpper = true;
+    break;
+  default:
+    break;
+  }
+
+  auto a = readFromVecOperand(isUpper ? 2 : 1, 2 * eltSize, numElts);
+  auto b = readFromVecOperand(isUpper ? 3 : 2, 2 * eltSize, numElts);
+
+  Value *res = createBinop(a, b, op);
+
+  if (addRoundingConst) {
+    auto roundingConst =
+        getElemSplat(numElts, 2 * eltSize, (uint64_t)1 << (eltSize - 1));
+    res = createBinop(res, roundingConst, Instruction::BinaryOps::Add);
+  }
+
+  Value *shifted =
+      createRawLShr(res, getElemSplat(numElts, 2 * eltSize, eltSize));
+  res = createTrunc(shifted, getVecTy(eltSize, numElts));
+  if (isUpper) {
+    // Preserve the lower 64 bits so, read from destination register
+    // and insert to the upper 64 bits
+    Value *dest = readFromVecOperand(1, 64, 2);
+    Value *element = createBitCast(res, i64);
+    res = createInsertElement(dest, element, 1);
+  }
+  updateOutputReg(res);
+}
+
 void arm2llvm::lift_tbl(unsigned opcode) {
   int lanes;
   switch (opcode) {
