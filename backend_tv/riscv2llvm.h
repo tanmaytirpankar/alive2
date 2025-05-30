@@ -80,8 +80,7 @@ class riscv2llvm final : public mc2llvm {
 
 public:
   riscv2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
-             llvm::MCInstrInfo &MCII, llvm::MCTargetOptions &MCOptions,
-             llvm::SourceMgr &SrcMgr);
+             llvm::MCInstrInfo &MCII, llvm::SourceMgr &SrcMgr);
 };
 
 } // end namespace lifter

@@ -47,25 +47,24 @@ public:
   const llvm::DataLayout &DL;
   llvm::MCInstrInfo &MCII;
   std::unique_ptr<llvm::MCRegisterInfo> MRI;
+  llvm::MCTargetOptions MCOptions;
   std::unique_ptr<llvm::MCAsmInfo> MAI;
   std::unique_ptr<llvm::MCContext> MCCtx;
   std::unique_ptr<llvm::MCCodeEmitter> MCE;
-  llvm::MCTargetOptions &MCOptions;
   llvm::SourceMgr &SrcMgr;
   std::unique_ptr<MCStreamerWrapper> Str;
 
   mc2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
-          llvm::MCInstrInfo &MCII, llvm::MCTargetOptions &MCOptions,
-          llvm::SourceMgr &SrcMgr)
+          llvm::MCInstrInfo &MCII, llvm::SourceMgr &SrcMgr)
       : LiftedModule{LiftedModule}, srcFn{srcFn},
         STI{Targ->createMCSubtargetInfo(DefaultTT.getTriple(), DefaultCPU, "")},
         DL{srcFn.getParent()->getDataLayout()}, MCII{MCII},
         MRI{Targ->createMCRegInfo(DefaultTT.getTriple())},
+        MCOptions{llvm::mc::InitMCTargetOptionsFromFlags()},
         MAI{Targ->createMCAsmInfo(*MRI, DefaultTT.getTriple(), MCOptions)},
         MCCtx{std::make_unique<llvm::MCContext>(
             DefaultTT, MAI.get(), MRI.get(), STI.get(), &SrcMgr, &MCOptions)},
-        MCE{Targ->createMCCodeEmitter(MCII, *MCCtx.get())},
-        MCOptions{MCOptions}, SrcMgr{SrcMgr} {}
+        MCE{Targ->createMCCodeEmitter(MCII, *MCCtx.get())}, SrcMgr{SrcMgr} {}
 
   // these are ones that the backend adds to tgt, even when they don't
   // appear at all in src
