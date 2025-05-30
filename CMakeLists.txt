@@ -210,7 +210,6 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
     "backend_tv/mc2llvm.cpp"
     "backend_tv/run_backend.cpp"
     "backend_tv/streamerwrapper.cpp"
-    "backend_tv/mcutils.cpp"
 
     "backend_tv/arm2llvm.cpp"
     "backend_tv/arm2llvm_arith.cpp"

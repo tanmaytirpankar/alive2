@@ -21,15 +21,115 @@ class MCStreamerWrapper;
 
 #include "backend_tv/lifter.h"
 #include "backend_tv/mc2llvm.h"
-#include "backend_tv/mcutils.h"
 
 namespace lifter {
 
+// Represents a basic block of machine instructions
+class MCBasicBlock {
+private:
+  std::string name;
+  std::vector<llvm::MCInst> Instrs;
+  llvm::SetVector<MCBasicBlock *> Succs;
+
+public:
+  MCBasicBlock(const std::string &name) : name(name) {}
+
+  const std::string &getName() const {
+    return name;
+  }
+
+  auto &getInstrs() {
+    return Instrs;
+  }
+
+  bool empty() const {
+    return Instrs.size() == 0;
+  }
+
+  auto &getSuccs() {
+    return Succs;
+  }
+
+  void addInst(llvm::MCInst &inst) {
+    Instrs.push_back(inst);
+  }
+
+  void addInstBegin(llvm::MCInst &&inst) {
+    Instrs.insert(Instrs.begin(), std::move(inst));
+  }
+
+  void addSucc(MCBasicBlock *succ_block) {
+    Succs.insert(succ_block);
+  }
+};
+
+struct OffsetSym {
+  std::string sym;
+  long offset;
+};
+
+typedef std::variant<OffsetSym, char> RODataItem;
+
+struct MCGlobal {
+  std::string name;
+  llvm::Align align;
+  std::string section;
+  std::vector<RODataItem> data;
+};
+
+class MCFunction {
+  std::string name;
+  unsigned label_cnt{0};
+
+public:
+  const llvm::MCInstrAnalysis *IA;
+  llvm::MCInstPrinter *InstPrinter;
+  llvm::MCRegisterInfo *MRI;
+  std::vector<MCBasicBlock> BBs;
+  std::vector<MCGlobal> MCglobals;
+
+  MCFunction() {
+    MCGlobal g{
+        .name = "__stack_chk_guard",
+        .align = llvm::Align(8),
+        .section = ".rodata",
+        // FIXME -- use symbolic data here? does this matter?
+        .data = {'7', '7', '7', '7', '7', '7', '7', '7'},
+    };
+    MCglobals.push_back(g);
+  }
+
+  void setName(const std::string &_name) {
+    name = _name;
+  }
+
+  MCBasicBlock *addBlock(const std::string &b_name) {
+    return &BBs.emplace_back(b_name);
+  }
+
+  std::string getName() {
+    return name;
+  }
+
+  std::string getLabel() {
+    return name + std::to_string(++label_cnt);
+  }
+
+  MCBasicBlock *findBlockByName(const std::string &b_name) {
+    for (auto &bb : BBs)
+      if (bb.getName() == b_name)
+        return &bb;
+    return nullptr;
+  }
+
+  void checkEntryBlock(unsigned);
+};
+ 
 /*
  * We're overriding MCStreamerWrapper to generate an MCFunction from
- * the arm assembly. MCStreamerWrapper provides callbacks to handle
- * different parts of the assembly file. The callbacks that we're
- * using right now are all emit* functions.
+ * assembly. MCStreamerWrapper provides callbacks to handle different
+ * parts of the assembly file. The callbacks that we're using right
+ * now are all emit* functions.
  */
 class MCStreamerWrapper final : public llvm::MCStreamer {
   enum ASMLine { none = 0, label = 1, non_term_instr = 2, terminator = 3 };

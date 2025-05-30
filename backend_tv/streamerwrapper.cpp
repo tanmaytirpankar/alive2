@@ -4,6 +4,18 @@ using namespace std;
 using namespace llvm;
 using namespace lifter;
 
+void MCFunction::checkEntryBlock(unsigned jumpOpcode) {
+  // LLVM doesn't let the entry block be a jump target, but assembly
+  // does; we can fix that up by adding an extra block at the start
+  // of the function. simplifyCFG will clean this up when it's not
+  // needed.
+  BBs.emplace(BBs.begin(), "arm_tv_entry");
+  MCInst jmp_instr;
+  jmp_instr.setOpcode(jumpOpcode);
+  jmp_instr.addOperand(MCOperand::createImm(1));
+  BBs[0].addInstBegin(std::move(jmp_instr));
+}
+
 void MCStreamerWrapper::emitInstruction(const MCInst &Inst,
                                         const MCSubtargetInfo & /* unused */) {
 
