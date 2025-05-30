@@ -115,14 +115,11 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
   llvm::SourceMgr SrcMgr;
   SrcMgr.AddNewSourceBuffer(std::move(MB), llvm::SMLoc());
 
-  unique_ptr<MCInstrInfo> MCII(Targ->createMCInstrInfo());
-  assert(MCII && "Unable to create instruction info!");
-
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
-    lifter = make_unique<arm2llvm>(liftedModule, *srcFn, *MCII.get(), SrcMgr);
+    lifter = make_unique<arm2llvm>(liftedModule, *srcFn, SrcMgr);
   } else if (DefaultBackend == "riscv64") {
-    lifter = make_unique<riscv2llvm>(liftedModule, *srcFn, *MCII.get(), SrcMgr);
+    lifter = make_unique<riscv2llvm>(liftedModule, *srcFn, SrcMgr);
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);

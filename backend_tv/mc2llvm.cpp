@@ -516,10 +516,11 @@ void mc2llvm::createRegStorage(unsigned Reg, unsigned Width,
 }
 
 Function *mc2llvm::run() {
-  InstPrinter = Targ->createMCInstPrinter(DefaultTT, 0, *MAI.get(), MCII, *MRI);
+  InstPrinter =
+      Targ->createMCInstPrinter(DefaultTT, 0, *MAI.get(), *MCII.get(), *MRI);
   InstPrinter->setPrintImmHex(true);
 
-  IA = make_unique<MCInstrAnalysis>(&MCII);
+  IA = make_unique<MCInstrAnalysis>(MCII.get());
 
   auto *MCOFI = Targ->createMCObjectFileInfo(*MCCtx.get(), false);
   MCCtx->setObjectFileInfo(MCOFI);
@@ -537,7 +538,7 @@ Function *mc2llvm::run() {
   assert(Parser);
 
   unique_ptr<MCTargetAsmParser> TAP(
-      Targ->createMCAsmParser(*STI.get(), *Parser, MCII, MCOptions));
+      Targ->createMCAsmParser(*STI.get(), *Parser, *MCII.get(), MCOptions));
   assert(TAP);
   Parser->setTargetParser(*TAP);
 

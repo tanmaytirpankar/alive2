@@ -16,9 +16,9 @@ using namespace std;
 using namespace lifter;
 using namespace llvm;
 
-riscv2llvm::riscv2llvm(Module *LiftedModule, Function &srcFn, MCInstrInfo &MCII,
+riscv2llvm::riscv2llvm(Module *LiftedModule, Function &srcFn,
                        llvm::SourceMgr &SrcMgr)
-    : mc2llvm(LiftedModule, srcFn, MCII, SrcMgr) {}
+    : mc2llvm(LiftedModule, srcFn, SrcMgr) {}
 
 // TODO -- move this up to mc2llvm so the ARM lifter can use it too
 tuple<BasicBlock *, BasicBlock *> riscv2llvm::getBranchTargetsOperand(int op) {

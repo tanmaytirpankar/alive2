@@ -24,9 +24,9 @@ unsigned arm2llvm::sentinelNOP() {
   return AArch64::SEH_Nop;
 }
 
-arm2llvm::arm2llvm(Module *LiftedModule, Function &srcFn, MCInstrInfo &MCII,
+arm2llvm::arm2llvm(Module *LiftedModule, Function &srcFn,
                    llvm::SourceMgr &SrcMgr)
-    : mc2llvm(LiftedModule, srcFn, MCII, SrcMgr) {
+    : mc2llvm(LiftedModule, srcFn, SrcMgr) {
   // sanity checking
   assert(disjoint(instrs_32, instrs_64));
   assert(disjoint(instrs_32, instrs_128));
