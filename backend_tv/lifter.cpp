@@ -127,17 +127,13 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
   assert(STI && "Unable to create subtarget info!");
   assert(STI->isCPUStringValid(DefaultCPU) && "Invalid CPU!");
 
-  unique_ptr<MCAsmInfo> MAI(
-      Targ->createMCAsmInfo(*MRI, DefaultTT.getTriple(), MCOptions));
-  assert(MAI && "Unable to create MC asm info!");
-
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
     lifter = make_unique<arm2llvm>(liftedModule, *srcFn, *STI, *MCII.get(),
-                                   MCOptions, SrcMgr, *MAI.get(), MRI.get());
+                                   MCOptions, SrcMgr, MRI.get());
   } else if (DefaultBackend == "riscv64") {
     lifter = make_unique<riscv2llvm>(liftedModule, *srcFn, *STI, *MCII.get(),
-                                     MCOptions, SrcMgr, *MAI.get(), MRI.get());
+                                     MCOptions, SrcMgr, MRI.get());
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);

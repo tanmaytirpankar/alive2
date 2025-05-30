@@ -82,7 +82,7 @@ public:
   riscv2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
              const llvm::MCSubtargetInfo &STI, llvm::MCInstrInfo &MCII,
              llvm::MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
-             llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI);
+             llvm::MCRegisterInfo *MRI);
 };
 
 } // end namespace lifter
