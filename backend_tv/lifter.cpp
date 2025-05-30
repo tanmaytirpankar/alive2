@@ -101,12 +101,12 @@ void init(std::string &backend) {
 pair<Function *, Function *> liftFunc(Function *srcFn,
                                       unique_ptr<MemoryBuffer> MB) {
 
+  // FIXME -- all this code below needs to move info mc2llvm so we can
+  // use object dispatch to easily access platform-specific code
+
   auto liftedModule = new Module("liftedModule", srcFn->getContext());
   // liftedModule->setDataLayout(srcModule->getDataLayout());
   // liftedModule->setTargetTriple(srcModule->getTargetTriple());
-
-  // FIXME -- all this code below needs to move info mc2llvm so we can
-  // use object dispatch to easily access platform-specific code
 
   checkSupport(srcFn);
   nameGlobals(srcFn->getParent());
