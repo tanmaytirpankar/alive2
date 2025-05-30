@@ -55,12 +55,11 @@ public:
   std::unique_ptr<MCStreamerWrapper> Str;
 
   mc2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
-          llvm::MCInstPrinter *InstPrinter, const llvm::MCSubtargetInfo &STI,
-          llvm::MCInstrInfo &MCII,
+          const llvm::MCSubtargetInfo &STI, llvm::MCInstrInfo &MCII,
           llvm::MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
           llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI)
-      : LiftedModule{LiftedModule}, srcFn{srcFn}, InstPrinter{InstPrinter},
-        STI{STI}, DL{srcFn.getParent()->getDataLayout()}, MCII{MCII},
+      : LiftedModule{LiftedModule}, srcFn{srcFn}, STI{STI},
+        DL{srcFn.getParent()->getDataLayout()}, MCII{MCII},
         MCCtx{std::make_unique<llvm::MCContext>(DefaultTT, &MAI, MRI, &STI,
                                                 &SrcMgr, &MCOptions)},
         MCE{Targ->createMCCodeEmitter(MCII, *MCCtx.get())},

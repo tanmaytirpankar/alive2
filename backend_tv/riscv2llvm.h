@@ -80,8 +80,7 @@ class riscv2llvm final : public mc2llvm {
 
 public:
   riscv2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
-             llvm::MCInstPrinter *InstPrinter, const llvm::MCSubtargetInfo &STI,
-             llvm::MCInstrInfo &MCII,
+             const llvm::MCSubtargetInfo &STI, llvm::MCInstrInfo &MCII,
              llvm::MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
              llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI);
 };

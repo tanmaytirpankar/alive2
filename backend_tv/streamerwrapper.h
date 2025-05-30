@@ -150,8 +150,7 @@ public:
   MCStreamerWrapper(llvm::MCContext &Context, const llvm::MCInstrAnalysis &IA,
                     llvm::MCInstPrinter &InstPrinter, llvm::MCRegisterInfo &MRI,
                     unsigned SentinelNOP)
-      : MCStreamer(Context), IA(IA), SentinelNOP(SentinelNOP)
-  {}
+      : MCStreamer(Context), IA(IA), SentinelNOP(SentinelNOP) {}
 
   void addConstant() {
     if (curROData.empty())
