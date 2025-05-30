@@ -1593,3 +1593,170 @@ void arm2llvm::lift_ins_gpr(unsigned opcode) {
   auto inserted = createInsertElement(vec, val, lane);
   updateOutputReg(inserted);
 }
+
+#define GET_SIZES4(INSN, SUFF)                                                 \
+  if (opcode == AArch64::INSN##v2i32##SUFF) {                                  \
+    numElts = 2;                                                               \
+    eltSize = 32;                                                              \
+  } else if (opcode == AArch64::INSN##v4i16##SUFF) {                           \
+    numElts = 4;                                                               \
+    eltSize = 16;                                                              \
+  } else if (opcode == AArch64::INSN##v4i32##SUFF) {                           \
+    numElts = 4;                                                               \
+    eltSize = 32;                                                              \
+  } else if (opcode == AArch64::INSN##v8i16##SUFF) {                           \
+    numElts = 8;                                                               \
+    eltSize = 16;                                                              \
+  } else {                                                                     \
+    assert(false);                                                             \
+  }
+
+void arm2llvm::lift_vec_mul(unsigned opcode) {
+  unsigned eltSize, numElts;
+  GET_SIZES4(MUL, _indexed);
+  auto a = readFromVecOperand(1, eltSize, numElts);
+  auto e2 =
+      getIndexedElement(getImm(3), eltSize, CurInst->getOperand(2).getReg());
+  Value *res = getUndefVec(numElts, eltSize);
+  for (unsigned i = 0; i < numElts; ++i) {
+    auto e1 = createExtractElement(a, i);
+    res = createInsertElement(res, createMul(e1, e2), i);
+  }
+  updateOutputReg(res);
+}
+
+void arm2llvm::lift_vec_mls(unsigned opcode) {
+  int numElts, eltSize;
+  GET_SIZES4(MLS, _indexed);
+  auto vTy = getVecTy(eltSize, numElts);
+  auto a = createBitCast(readFromOperand(1), vTy);
+  auto b = createBitCast(readFromOperand(2), vTy);
+  auto e =
+      getIndexedElement(getImm(4), eltSize, CurInst->getOperand(3).getReg());
+  auto spl = splat(e, numElts, eltSize);
+  auto mul = createMul(b, spl);
+  auto sum = createSub(a, mul);
+  updateOutputReg(sum);
+}
+
+void arm2llvm::lift_vec_mla(unsigned opcode) {
+  int numElts, eltSize;
+  GET_SIZES4(MLA, _indexed);
+  auto vTy = getVecTy(eltSize, numElts);
+  auto a = createBitCast(readFromOperand(1), vTy);
+  auto b = createBitCast(readFromOperand(2), vTy);
+  auto e =
+      getIndexedElement(getImm(4), eltSize, CurInst->getOperand(3).getReg());
+  auto spl = splat(e, numElts, eltSize);
+  auto mul = createMul(b, spl);
+  auto sum = createAdd(mul, a);
+  updateOutputReg(sum);
+}
+
+#undef GET_SIZES4
+
+#define GET_SIZES5(INSN, SUFF)                                                 \
+  if (opcode == AArch64::INSN##v8i8##SUFF) {                                   \
+    numElts = 8;                                                               \
+    eltSize = 8;                                                               \
+  } else if (opcode == AArch64::INSN##v4i16##SUFF) {                           \
+    numElts = 4;                                                               \
+    eltSize = 16;                                                              \
+  } else if (opcode == AArch64::INSN##v16i8##SUFF) {                           \
+    numElts = 16;                                                              \
+    eltSize = 8;                                                               \
+  } else if (opcode == AArch64::INSN##v4i32##SUFF) {                           \
+    numElts = 4;                                                               \
+    eltSize = 32;                                                              \
+  } else if (opcode == AArch64::INSN##v8i16##SUFF) {                           \
+    numElts = 8;                                                               \
+    eltSize = 16;                                                              \
+  }
+
+void arm2llvm::lift_trn(unsigned opcode) {
+  int numElts = -1, eltSize = -1;
+  GET_SIZES5(TRN1, );
+  GET_SIZES5(TRN2, );
+  assert(numElts != -1 && eltSize != -1);
+  int part;
+  switch (opcode) {
+  case AArch64::TRN1v16i8:
+  case AArch64::TRN1v8i16:
+  case AArch64::TRN1v4i32:
+  case AArch64::TRN1v4i16:
+  case AArch64::TRN1v8i8:
+    part = 0;
+    break;
+  case AArch64::TRN2v8i8:
+  case AArch64::TRN2v4i16:
+  case AArch64::TRN2v16i8:
+  case AArch64::TRN2v8i16:
+  case AArch64::TRN2v4i32:
+    part = 1;
+    break;
+  default:
+    assert(false);
+  }
+  auto a = readFromVecOperand(1, eltSize, numElts);
+  auto b = readFromVecOperand(2, eltSize, numElts);
+  Value *res = getUndefVec(numElts, eltSize);
+  for (int p = 0; p < numElts / 2; ++p) {
+    auto *e1 = createExtractElement(a, (2 * p) + part);
+    auto *e2 = createExtractElement(b, (2 * p) + part);
+    res = createInsertElement(res, e1, 2 * p);
+    res = createInsertElement(res, e2, (2 * p) + 1);
+  }
+  updateOutputReg(res);
+}
+
+void arm2llvm::lift_vec_minmax(unsigned opcode) {
+  int numElts = -1, eltSize = -1;
+  GET_SIZES5(SMINV, v);
+  GET_SIZES5(SMAXV, v);
+  GET_SIZES5(UMINV, v);
+  GET_SIZES5(UMAXV, v);
+  assert(numElts != -1 && eltSize != -1);
+  auto v = readFromVecOperand(1, eltSize, numElts);
+  Value *min = createExtractElement(v, 0);
+  for (int i = 1; i < numElts; ++i) {
+    auto e = createExtractElement(v, i);
+    auto p{ICmpInst::Predicate::BAD_ICMP_PREDICATE};
+    switch (opcode) {
+    case AArch64::SMINVv8i8v:
+    case AArch64::SMINVv4i16v:
+    case AArch64::SMINVv8i16v:
+    case AArch64::SMINVv16i8v:
+    case AArch64::SMINVv4i32v:
+      p = ICmpInst::Predicate::ICMP_SLT;
+      break;
+    case AArch64::UMINVv8i8v:
+    case AArch64::UMINVv4i16v:
+    case AArch64::UMINVv4i32v:
+    case AArch64::UMINVv8i16v:
+    case AArch64::UMINVv16i8v:
+      p = ICmpInst::Predicate::ICMP_ULT;
+      break;
+    case AArch64::SMAXVv8i8v:
+    case AArch64::SMAXVv4i16v:
+    case AArch64::SMAXVv8i16v:
+    case AArch64::SMAXVv16i8v:
+    case AArch64::SMAXVv4i32v:
+      p = ICmpInst::Predicate::ICMP_SGT;
+      break;
+    case AArch64::UMAXVv4i16v:
+    case AArch64::UMAXVv4i32v:
+    case AArch64::UMAXVv8i16v:
+    case AArch64::UMAXVv8i8v:
+    case AArch64::UMAXVv16i8v:
+      p = ICmpInst::Predicate::ICMP_UGT;
+      break;
+    default:
+      assert(false);
+    }
+    auto c = createICmp(p, min, e);
+    min = createSelect(c, min, e);
+  }
+  updateOutputReg(min);
+}
+
+#undef GET_SIZES5

@@ -376,6 +376,11 @@ public:
   void lift_vec_binop(unsigned opcode);
   void lift_addp();
   void lift_uzp(unsigned opcode);
+  void lift_vec_mul(unsigned opcode);
+  void lift_vec_mls(unsigned opcode);
+  void lift_vec_mla(unsigned opcode);
+  void lift_trn(unsigned opcode);
+  void lift_vec_minmax(unsigned upcode);
 };
 
 } // end namespace lifter
