@@ -630,5 +630,20 @@ Function *mc2llvm::run() {
     *out << enc << '=' << count << ',';
   }
   *out << '\n';
+
+    // enabled this if we're emitting broken functions
+  if (false)
+    LiftedModule->dump();
+
+  std::string sss;
+  llvm::raw_string_ostream ss(sss);
+  if (llvm::verifyModule(*LiftedModule, &ss)) {
+    *out << sss << "\n\n";
+    out->flush();
+    *out << "\nERROR: Lifted module is broken, this should not happen\n";
+    exit(-1);
+  }
+
+
   return liftedFn;
 }

@@ -163,22 +163,7 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
     exit(-1);
   }
 
-  Function *liftedFn = lifter->run();
-
-  // enabled this if we're emitting broken functions
-  if (false)
-    liftedModule->dump();
-
-  std::string sss;
-  llvm::raw_string_ostream ss(sss);
-  if (llvm::verifyModule(*liftedModule, &ss)) {
-    *out << sss << "\n\n";
-    out->flush();
-    *out << "\nERROR: Lifted module is broken, this should not happen\n";
-    exit(-1);
-  }
-
-  return make_pair(srcFn, liftedFn);
+  return make_pair(srcFn, lifter->run());
 }
 
 } // namespace lifter
