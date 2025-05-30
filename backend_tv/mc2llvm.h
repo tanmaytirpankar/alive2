@@ -42,7 +42,7 @@ public:
   std::unordered_map<std::string, llvm::Constant *> LLVMglobals;
   llvm::Value *initialSP, *initialReg[32];
   llvm::Function *assertDecl;
-  const llvm::MCSubtargetInfo &STI;
+  std::unique_ptr<llvm::MCSubtargetInfo> STI;
   std::unique_ptr<llvm::MCInstrAnalysis> IA;
   const llvm::DataLayout &DL;
   llvm::MCInstrInfo &MCII;
@@ -55,14 +55,14 @@ public:
   std::unique_ptr<MCStreamerWrapper> Str;
 
   mc2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
-          const llvm::MCSubtargetInfo &STI, llvm::MCInstrInfo &MCII,
-          llvm::MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
-          llvm::MCRegisterInfo *MRI)
-      : LiftedModule{LiftedModule}, srcFn{srcFn}, STI{STI},
+          llvm::MCInstrInfo &MCII, llvm::MCTargetOptions &MCOptions,
+          llvm::SourceMgr &SrcMgr, llvm::MCRegisterInfo *MRI)
+      : LiftedModule{LiftedModule}, srcFn{srcFn},
+        STI{Targ->createMCSubtargetInfo(DefaultTT.getTriple(), DefaultCPU, "")},
         DL{srcFn.getParent()->getDataLayout()}, MCII{MCII},
         MAI{Targ->createMCAsmInfo(*MRI, DefaultTT.getTriple(), MCOptions)},
-        MCCtx{std::make_unique<llvm::MCContext>(DefaultTT, MAI.get(), MRI, &STI,
-                                                &SrcMgr, &MCOptions)},
+        MCCtx{std::make_unique<llvm::MCContext>(
+            DefaultTT, MAI.get(), MRI, STI.get(), &SrcMgr, &MCOptions)},
         MCE{Targ->createMCCodeEmitter(MCII, *MCCtx.get())},
         MCOptions{MCOptions}, SrcMgr{SrcMgr}, MRI{MRI} {}
 

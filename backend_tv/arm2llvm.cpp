@@ -24,11 +24,10 @@ unsigned arm2llvm::sentinelNOP() {
   return AArch64::SEH_Nop;
 }
 
-arm2llvm::arm2llvm(Module *LiftedModule, Function &srcFn,
-                   const MCSubtargetInfo &STI, MCInstrInfo &MCII,
+arm2llvm::arm2llvm(Module *LiftedModule, Function &srcFn, MCInstrInfo &MCII,
                    MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
                    llvm::MCRegisterInfo *MRI)
-    : mc2llvm(LiftedModule, srcFn, STI, MCII, MCOptions, SrcMgr, MRI) {
+    : mc2llvm(LiftedModule, srcFn, MCII, MCOptions, SrcMgr, MRI) {
   // sanity checking
   assert(disjoint(instrs_32, instrs_64));
   assert(disjoint(instrs_32, instrs_128));
@@ -3217,7 +3216,7 @@ std::optional<aslp::opcode_t> arm2llvm::getArmOpcode(const MCInst &I) {
   if (I.getOpcode() == sentinelNOP())
     return std::nullopt;
 
-  MCE->encodeInstruction(I, Code, Fixups, STI);
+  MCE->encodeInstruction(I, Code, Fixups, *STI.get());
   for (auto x : Fixups) {
     // std::cerr << "fixup: " << x.getKind() << ' ' << x.getTargetKind() << '
     // ' << x.getOffset() << ' ' << std::flush; x.getValue()->dump();
@@ -3239,7 +3238,7 @@ std::optional<aslp::opcode_t> arm2llvm::getArmOpcode(const MCInst &I) {
 
 void arm2llvm::lift(MCInst &I) {
   auto entrybb = LLVMBB;
-  aslp::bridge bridge{*this, *MCE.get(), STI, *IA.get()};
+  aslp::bridge bridge{*this, *MCE.get(), *STI.get(), *IA.get()};
   auto opcode = I.getOpcode();
 
   StringRef instStr = InstPrinter->getOpcodeName(I.getOpcode());

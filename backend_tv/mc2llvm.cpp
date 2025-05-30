@@ -492,7 +492,7 @@ void mc2llvm::liftInst(MCInst &I) {
   I.dump_pretty(ss, InstPrinter);
   *out << sss << " = " << std::flush;
   if (I.getOpcode() != sentinelNOP()) {
-    InstPrinter->printInst(&I, 100, "", STI, outs());
+    InstPrinter->printInst(&I, 100, "", *STI.get(), outs());
     outs().flush();
   }
   *out << std::endl;
@@ -537,7 +537,7 @@ Function *mc2llvm::run() {
   assert(Parser);
 
   unique_ptr<MCTargetAsmParser> TAP(
-      Targ->createMCAsmParser(STI, *Parser, MCII, MCOptions));
+      Targ->createMCAsmParser(*STI.get(), *Parser, MCII, MCOptions));
   assert(TAP);
   Parser->setTargetParser(*TAP);
 

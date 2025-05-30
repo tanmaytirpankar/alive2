@@ -16,11 +16,10 @@ using namespace std;
 using namespace lifter;
 using namespace llvm;
 
-riscv2llvm::riscv2llvm(Module *LiftedModule, Function &srcFn,
-                       const MCSubtargetInfo &STI, MCInstrInfo &MCII,
+riscv2llvm::riscv2llvm(Module *LiftedModule, Function &srcFn, MCInstrInfo &MCII,
                        MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
                        llvm::MCRegisterInfo *MRI)
-    : mc2llvm(LiftedModule, srcFn, STI, MCII, MCOptions, SrcMgr, MRI) {}
+    : mc2llvm(LiftedModule, srcFn, MCII, MCOptions, SrcMgr, MRI) {}
 
 // TODO -- move this up to mc2llvm so the ARM lifter can use it too
 tuple<BasicBlock *, BasicBlock *> riscv2llvm::getBranchTargetsOperand(int op) {
