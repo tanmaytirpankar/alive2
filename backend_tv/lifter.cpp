@@ -119,16 +119,14 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
   assert(MCII && "Unable to create instruction info!");
 
   auto MCOptions = mc::InitMCTargetOptionsFromFlags();
-  unique_ptr<MCRegisterInfo> MRI(Targ->createMCRegInfo(DefaultTT.getTriple()));
-  assert(MRI && "Unable to create target register info!");
 
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
     lifter = make_unique<arm2llvm>(liftedModule, *srcFn, *MCII.get(), MCOptions,
-                                   SrcMgr, MRI.get());
+                                   SrcMgr);
   } else if (DefaultBackend == "riscv64") {
     lifter = make_unique<riscv2llvm>(liftedModule, *srcFn, *MCII.get(),
-                                     MCOptions, SrcMgr, MRI.get());
+                                     MCOptions, SrcMgr);
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);

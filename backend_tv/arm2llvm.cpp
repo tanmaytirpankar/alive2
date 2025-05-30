@@ -25,9 +25,8 @@ unsigned arm2llvm::sentinelNOP() {
 }
 
 arm2llvm::arm2llvm(Module *LiftedModule, Function &srcFn, MCInstrInfo &MCII,
-                   MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
-                   llvm::MCRegisterInfo *MRI)
-    : mc2llvm(LiftedModule, srcFn, MCII, MCOptions, SrcMgr, MRI) {
+                   MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr)
+    : mc2llvm(LiftedModule, srcFn, MCII, MCOptions, SrcMgr) {
   // sanity checking
   assert(disjoint(instrs_32, instrs_64));
   assert(disjoint(instrs_32, instrs_128));
