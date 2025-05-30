@@ -39,7 +39,7 @@ class arm2llvm final : public mc2llvm {
 public:
   arm2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
            llvm::MCInstPrinter *InstPrinter, const llvm::MCSubtargetInfo &STI,
-           const llvm::MCInstrAnalysis &IA, llvm::MCInstrInfo &MCII,
+           llvm::MCInstrInfo &MCII,
            llvm::MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
            llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI);
 

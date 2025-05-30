@@ -134,15 +134,13 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
       Targ->createMCInstPrinter(DefaultTT, 0, *MAI, *MCII, *MRI));
   IP->setPrintImmHex(true);
 
-  auto Ana = make_unique<MCInstrAnalysis>(MCII.get());
-
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
-    lifter = make_unique<arm2llvm>(liftedModule, *srcFn, IP.get(), *STI, *Ana,
+    lifter = make_unique<arm2llvm>(liftedModule, *srcFn, IP.get(), *STI, 
                                    *MCII.get(), MCOptions, SrcMgr, *MAI.get(),
                                    MRI.get());
   } else if (DefaultBackend == "riscv64") {
-    lifter = make_unique<riscv2llvm>(liftedModule, *srcFn, IP.get(), *STI, *Ana,
+    lifter = make_unique<riscv2llvm>(liftedModule, *srcFn, IP.get(), *STI, 
                                      *MCII.get(), MCOptions, SrcMgr, *MAI.get(),
                                      MRI.get());
   } else {

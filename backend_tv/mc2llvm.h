@@ -43,7 +43,7 @@ public:
   llvm::Value *initialSP, *initialReg[32];
   llvm::Function *assertDecl;
   const llvm::MCSubtargetInfo &STI;
-  const llvm::MCInstrAnalysis &IA;
+  std::unique_ptr<llvm::MCInstrAnalysis> IA;
   const llvm::DataLayout &DL;
   llvm::MCInstrInfo &MCII;
   std::unique_ptr<llvm::MCContext> MCCtx;
@@ -56,11 +56,11 @@ public:
 
   mc2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
           llvm::MCInstPrinter *InstPrinter, const llvm::MCSubtargetInfo &STI,
-          const llvm::MCInstrAnalysis &IA, llvm::MCInstrInfo &MCII,
+          llvm::MCInstrInfo &MCII,
           llvm::MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
           llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI)
       : LiftedModule{LiftedModule}, srcFn{srcFn}, InstPrinter{InstPrinter},
-        STI{STI}, IA{IA}, DL{srcFn.getParent()->getDataLayout()}, MCII{MCII},
+        STI{STI}, DL{srcFn.getParent()->getDataLayout()}, MCII{MCII},
         MCCtx{std::make_unique<llvm::MCContext>(DefaultTT, &MAI, MRI, &STI,
                                                 &SrcMgr, &MCOptions)},
         MCE{Targ->createMCCodeEmitter(MCII, *MCCtx.get())},

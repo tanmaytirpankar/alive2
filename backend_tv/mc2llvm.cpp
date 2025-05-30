@@ -516,10 +516,12 @@ void mc2llvm::createRegStorage(unsigned Reg, unsigned Width,
 }
 
 Function *mc2llvm::run() {
+  IA = make_unique<MCInstrAnalysis>(&MCII);
+
   auto *MCOFI = Targ->createMCObjectFileInfo(*MCCtx.get(), false);
   MCCtx->setObjectFileInfo(MCOFI);
 
-  Str = make_unique<MCStreamerWrapper>(*MCCtx.get(), IA, *InstPrinter, *MRI,
+  Str = make_unique<MCStreamerWrapper>(*MCCtx.get(), *IA.get(), *InstPrinter, *MRI,
                                        sentinelNOP());
   Str->setUseAssemblerInfoForParsing(true);
 

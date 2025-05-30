@@ -26,10 +26,10 @@ unsigned arm2llvm::sentinelNOP() {
 
 arm2llvm::arm2llvm(Module *LiftedModule, Function &srcFn,
                    MCInstPrinter *InstPrinter, const MCSubtargetInfo &STI,
-                   const MCInstrAnalysis &IA, MCInstrInfo &MCII,
+                   MCInstrInfo &MCII,
                    MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
                    llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI)
-    : mc2llvm(LiftedModule, srcFn, InstPrinter, STI, IA, MCII, MCOptions,
+    : mc2llvm(LiftedModule, srcFn, InstPrinter, STI, MCII, MCOptions,
               SrcMgr, MAI, MRI) {
   // sanity checking
   assert(disjoint(instrs_32, instrs_64));
@@ -3241,7 +3241,7 @@ std::optional<aslp::opcode_t> arm2llvm::getArmOpcode(const MCInst &I) {
 
 void arm2llvm::lift(MCInst &I) {
   auto entrybb = LLVMBB;
-  aslp::bridge bridge{*this, *MCE.get(), STI, IA};
+  aslp::bridge bridge{*this, *MCE.get(), STI, *IA.get()};
   auto opcode = I.getOpcode();
 
   StringRef instStr = InstPrinter->getOpcodeName(I.getOpcode());

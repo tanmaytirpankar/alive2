@@ -18,10 +18,10 @@ using namespace llvm;
 
 riscv2llvm::riscv2llvm(Module *LiftedModule, Function &srcFn,
                        MCInstPrinter *InstPrinter, const MCSubtargetInfo &STI,
-                       const MCInstrAnalysis &IA, MCInstrInfo &MCII,
+                       MCInstrInfo &MCII,
                        MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
                        llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI)
-    : mc2llvm(LiftedModule, srcFn, InstPrinter, STI, IA, MCII, MCOptions,
+    : mc2llvm(LiftedModule, srcFn, InstPrinter, STI, MCII, MCOptions,
               SrcMgr, MAI, MRI) {}
 
 // TODO -- move this up to mc2llvm so the ARM lifter can use it too
