@@ -30,7 +30,6 @@ class mc2llvm : public aslp::lifter_interface_llvm {
 public:
   llvm::Module *LiftedModule{nullptr};
   llvm::LLVMContext &Ctx = LiftedModule->getContext();
-  MCStreamerWrapper &Str;
   llvm::Function &srcFn;
   llvm::Function *liftedFn{nullptr};
   MCBasicBlock *MCBB{nullptr};
@@ -54,14 +53,15 @@ public:
   llvm::SourceMgr &SrcMgr;
   llvm::MCAsmInfo &MAI;
   llvm::MCRegisterInfo *MRI;
+  std::unique_ptr<MCStreamerWrapper> Str;
 
-  mc2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str,
+  mc2llvm(llvm::Module *LiftedModule,
           llvm::Function &srcFn, llvm::MCInstPrinter *InstPrinter,
           const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
           unsigned SentinelNOP, llvm::MCInstrInfo &MCII, llvm::MCContext &MCCtx,
           llvm::MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
           llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI)
-      : LiftedModule{LiftedModule}, Str{Str}, srcFn{srcFn},
+      : LiftedModule{LiftedModule}, srcFn{srcFn},
         InstPrinter{InstPrinter}, STI{STI}, IA{IA},
         DL{srcFn.getParent()->getDataLayout()}, SentinelNOP{SentinelNOP},
         MCII{MCII}, MCCtx(MCCtx), MCE{Targ->createMCCodeEmitter(MCII, MCCtx)},

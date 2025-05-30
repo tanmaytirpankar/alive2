@@ -147,15 +147,13 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
   else
     assert(false);
 
-  MCStreamerWrapper Str(MCCtx, Ana.get(), IP.get(), MRI.get(), SentinelNOP);
-
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
-    lifter = make_unique<arm2llvm>(liftedModule, Str, *srcFn, IP.get(), *STI,
+    lifter = make_unique<arm2llvm>(liftedModule, *srcFn, IP.get(), *STI,
                                    *Ana, SentinelNOP, *MCII.get(), MCCtx,
                                    MCOptions, SrcMgr, *MAI.get(), MRI.get());
   } else if (DefaultBackend == "riscv64") {
-    lifter = make_unique<riscv2llvm>(liftedModule, Str, *srcFn, IP.get(), *STI,
+    lifter = make_unique<riscv2llvm>(liftedModule, *srcFn, IP.get(), *STI,
                                      *Ana, SentinelNOP, *MCII.get(), MCCtx,
                                      MCOptions, SrcMgr, *MAI.get(), MRI.get());
   } else {

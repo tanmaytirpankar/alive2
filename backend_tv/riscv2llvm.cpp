@@ -16,14 +16,14 @@ using namespace std;
 using namespace lifter;
 using namespace llvm;
 
-riscv2llvm::riscv2llvm(Module *LiftedModule, MCStreamerWrapper &Str,
+riscv2llvm::riscv2llvm(Module *LiftedModule,
                        Function &srcFn, MCInstPrinter *InstPrinter,
                        const MCSubtargetInfo &STI, const MCInstrAnalysis &IA,
                        unsigned SentinelNOP, MCInstrInfo &MCII,
                        llvm::MCContext &MCCtx, MCTargetOptions &MCOptions,
                        llvm::SourceMgr &SrcMgr, llvm::MCAsmInfo &MAI,
                        llvm::MCRegisterInfo *MRI)
-    : mc2llvm(LiftedModule, Str, srcFn, InstPrinter, STI, IA, SentinelNOP, MCII,
+    : mc2llvm(LiftedModule, srcFn, InstPrinter, STI, IA, SentinelNOP, MCII,
               MCCtx, MCOptions, SrcMgr, MAI, MRI) {}
 
 // TODO -- move this up to mc2llvm so the ARM lifter can use it too

@@ -66,7 +66,7 @@ Constant *mc2llvm::lazyAddGlobal(string newGlobal) {
   // reference each other. we support the latter by creating an
   // initializer-free dummy variable right now, and then later
   // creating the actual thing we need
-  for (const auto &g : Str.MF.MCglobals) {
+  for (const auto &g : Str->MF.MCglobals) {
     string name{demangle(g.name)};
     if (name != newGlobal)
       continue;
@@ -517,13 +517,14 @@ void mc2llvm::createRegStorage(unsigned Reg, unsigned Width,
 }
 
 Function *mc2llvm::run() {
-  Str.setUseAssemblerInfoForParsing(true);
+  Str = make_unique<MCStreamerWrapper>(MCCtx, &IA, InstPrinter, MRI, SentinelNOP);
+  Str->setUseAssemblerInfoForParsing(true);
 
   raw_ostream &OSRef = nulls();
   formatted_raw_ostream FOSRef(OSRef);
-  Targ->createAsmTargetStreamer(Str, FOSRef, InstPrinter);
+  Targ->createAsmTargetStreamer(*Str.get(), FOSRef, InstPrinter);
 
-  unique_ptr<MCAsmParser> Parser(createMCAsmParser(SrcMgr, MCCtx, Str, MAI));
+  unique_ptr<MCAsmParser> Parser(createMCAsmParser(SrcMgr, MCCtx, *Str.get(), MAI));
   assert(Parser);
 
   unique_ptr<MCTargetAsmParser> TAP(
@@ -536,9 +537,9 @@ Function *mc2llvm::run() {
     exit(-1);
   }
 
-  Str.removeEmptyBlocks();
-  Str.checkEntryBlock(branchInst());
-  Str.generateSuccessors();
+  Str->removeEmptyBlocks();
+  Str->checkEntryBlock(branchInst());
+  Str->generateSuccessors();
 
   // we'll want this later
   vector<Type *> args{getIntTy(1)};
@@ -557,7 +558,7 @@ Function *mc2llvm::run() {
   vector<pair<BasicBlock *, MCBasicBlock *>> BBs;
   {
     long insts = 0;
-    for (auto &mbb : Str.MF.BBs) {
+    for (auto &mbb : Str->MF.BBs) {
       for (auto &inst [[maybe_unused]] : mbb.getInstrs())
         ++insts;
       auto bb = BasicBlock::Create(Ctx, mbb.getName(), liftedFn);

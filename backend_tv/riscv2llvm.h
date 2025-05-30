@@ -78,7 +78,7 @@ class riscv2llvm final : public mc2llvm {
   llvm::Value *getPointerOperand();
 
 public:
-  riscv2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str,
+  riscv2llvm(llvm::Module *LiftedModule,
              llvm::Function &srcFn, llvm::MCInstPrinter *InstPrinter,
              const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
              unsigned SentinelNOP, llvm::MCInstrInfo &MCII,

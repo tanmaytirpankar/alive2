@@ -79,7 +79,7 @@ class MCFunction {
   unsigned label_cnt{0};
 
 public:
-  llvm::MCInstrAnalysis *IA;
+  const llvm::MCInstrAnalysis *IA;
   llvm::MCInstPrinter *InstPrinter;
   llvm::MCRegisterInfo *MRI;
   std::vector<MCBasicBlock> BBs;

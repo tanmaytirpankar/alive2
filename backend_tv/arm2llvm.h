@@ -38,7 +38,7 @@ namespace lifter {
 
 class arm2llvm final : public mc2llvm {
 public:
-  arm2llvm(llvm::Module *LiftedModule, MCStreamerWrapper &Str,
+  arm2llvm(llvm::Module *LiftedModule,
            llvm::Function &srcFn, llvm::MCInstPrinter *InstPrinter,
            const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
            unsigned SentinelNOP, llvm::MCInstrInfo &MCII,
