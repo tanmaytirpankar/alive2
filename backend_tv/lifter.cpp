@@ -69,6 +69,10 @@ void init(std::string &backend) {
   DefaultBackend = backend;
   auto TripleStr = DefaultTT.getTriple();
   assert(TripleStr == Triple::normalize(TripleStr));
+  /*
+   * FIXME we probably want to ask the client to run these
+   * initializers
+   */
   if (DefaultBackend == "aarch64") {
     LLVMInitializeAArch64TargetInfo();
     LLVMInitializeAArch64Target();
@@ -132,18 +136,15 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
 
   auto Ana = make_unique<MCInstrAnalysis>(MCII.get());
 
-  MCContext MCCtx(DefaultTT, MAI.get(), MRI.get(), STI.get(), &SrcMgr,
-                  &MCOptions);
-
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
     lifter = make_unique<arm2llvm>(liftedModule, *srcFn, IP.get(), *STI, *Ana,
-                                   *MCII.get(), MCCtx, MCOptions, SrcMgr,
-                                   *MAI.get(), MRI.get());
+                                   *MCII.get(), MCOptions, SrcMgr, *MAI.get(),
+                                   MRI.get());
   } else if (DefaultBackend == "riscv64") {
     lifter = make_unique<riscv2llvm>(liftedModule, *srcFn, IP.get(), *STI, *Ana,
-                                     *MCII.get(), MCCtx, MCOptions, SrcMgr,
-                                     *MAI.get(), MRI.get());
+                                     *MCII.get(), MCOptions, SrcMgr, *MAI.get(),
+                                     MRI.get());
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);

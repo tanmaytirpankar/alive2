@@ -516,11 +516,10 @@ void mc2llvm::createRegStorage(unsigned Reg, unsigned Width,
 }
 
 Function *mc2llvm::run() {
-  std::unique_ptr<MCObjectFileInfo> MCOFI(
-      Targ->createMCObjectFileInfo(MCCtx, false, false));
-  MCCtx.setObjectFileInfo(MCOFI.get());
+  auto *MCOFI = Targ->createMCObjectFileInfo(*MCCtx.get(), false);
+  MCCtx->setObjectFileInfo(MCOFI);
 
-  Str = make_unique<MCStreamerWrapper>(MCCtx, IA, *InstPrinter, *MRI,
+  Str = make_unique<MCStreamerWrapper>(*MCCtx.get(), IA, *InstPrinter, *MRI,
                                        sentinelNOP());
   Str->setUseAssemblerInfoForParsing(true);
 
@@ -529,7 +528,7 @@ Function *mc2llvm::run() {
   Targ->createAsmTargetStreamer(*Str.get(), FOSRef, InstPrinter);
 
   unique_ptr<MCAsmParser> Parser(
-      createMCAsmParser(SrcMgr, MCCtx, *Str.get(), MAI));
+      createMCAsmParser(SrcMgr, *MCCtx.get(), *Str.get(), MAI));
   assert(Parser);
 
   unique_ptr<MCTargetAsmParser> TAP(

@@ -27,10 +27,9 @@ unsigned arm2llvm::sentinelNOP() {
 arm2llvm::arm2llvm(Module *LiftedModule, Function &srcFn,
                    MCInstPrinter *InstPrinter, const MCSubtargetInfo &STI,
                    const MCInstrAnalysis &IA, MCInstrInfo &MCII,
-                   llvm::MCContext &MCCtx, MCTargetOptions &MCOptions,
-                   llvm::SourceMgr &SrcMgr, llvm::MCAsmInfo &MAI,
-                   llvm::MCRegisterInfo *MRI)
-    : mc2llvm(LiftedModule, srcFn, InstPrinter, STI, IA, MCII, MCCtx, MCOptions,
+                   MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
+                   llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI)
+    : mc2llvm(LiftedModule, srcFn, InstPrinter, STI, IA, MCII, MCOptions,
               SrcMgr, MAI, MRI) {
   // sanity checking
   assert(disjoint(instrs_32, instrs_64));

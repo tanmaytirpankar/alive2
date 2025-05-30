@@ -46,7 +46,7 @@ public:
   const llvm::MCInstrAnalysis &IA;
   const llvm::DataLayout &DL;
   llvm::MCInstrInfo &MCII;
-  llvm::MCContext &MCCtx;
+  std::unique_ptr<llvm::MCContext> MCCtx;
   std::unique_ptr<llvm::MCCodeEmitter> MCE;
   llvm::MCTargetOptions &MCOptions;
   llvm::SourceMgr &SrcMgr;
@@ -57,12 +57,13 @@ public:
   mc2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
           llvm::MCInstPrinter *InstPrinter, const llvm::MCSubtargetInfo &STI,
           const llvm::MCInstrAnalysis &IA, llvm::MCInstrInfo &MCII,
-          llvm::MCContext &MCCtx, llvm::MCTargetOptions &MCOptions,
-          llvm::SourceMgr &SrcMgr, llvm::MCAsmInfo &MAI,
-          llvm::MCRegisterInfo *MRI)
+          llvm::MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
+          llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI)
       : LiftedModule{LiftedModule}, srcFn{srcFn}, InstPrinter{InstPrinter},
         STI{STI}, IA{IA}, DL{srcFn.getParent()->getDataLayout()}, MCII{MCII},
-        MCCtx(MCCtx), MCE{Targ->createMCCodeEmitter(MCII, MCCtx)},
+        MCCtx{std::make_unique<llvm::MCContext>(DefaultTT, &MAI, MRI, &STI,
+                                                &SrcMgr, &MCOptions)},
+        MCE{Targ->createMCCodeEmitter(MCII, *MCCtx.get())},
         MCOptions{MCOptions}, SrcMgr{SrcMgr}, MAI{MAI}, MRI{MRI} {}
 
   // these are ones that the backend adds to tgt, even when they don't
