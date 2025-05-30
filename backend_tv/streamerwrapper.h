@@ -137,7 +137,7 @@ class MCStreamerWrapper final : public llvm::MCStreamer {
   enum ASMLine { none = 0, label = 1, non_term_instr = 2, terminator = 3 };
 
 private:
-  const llvm::MCInstrAnalysis *IA;
+  const llvm::MCInstrAnalysis &IA;
   MCBasicBlock *curBB{nullptr};
   unsigned prev_line{0};
   llvm::Align curAlign;
@@ -152,11 +152,11 @@ public:
   MCFunction MF;
   unsigned cnt{0};
 
-  MCStreamerWrapper(llvm::MCContext &Context, const llvm::MCInstrAnalysis *IA,
-                    llvm::MCInstPrinter *InstPrinter, llvm::MCRegisterInfo *MRI,
+  MCStreamerWrapper(llvm::MCContext &Context, const llvm::MCInstrAnalysis &IA,
+                    llvm::MCInstPrinter &InstPrinter, llvm::MCRegisterInfo &MRI,
                     unsigned SentinelNOP)
       : MCStreamer(Context), IA(IA), SentinelNOP(SentinelNOP),
-        MF(*IA, *InstPrinter, *MRI) {}
+        MF(IA, InstPrinter, MRI) {}
 
   void addConstant() {
     if (curROData.empty())

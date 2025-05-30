@@ -517,7 +517,7 @@ void mc2llvm::createRegStorage(unsigned Reg, unsigned Width,
 
 Function *mc2llvm::run() {
   Str =
-      make_unique<MCStreamerWrapper>(MCCtx, &IA, InstPrinter, MRI, SentinelNOP);
+    make_unique<MCStreamerWrapper>(MCCtx, IA, *InstPrinter, *MRI, SentinelNOP);
   Str->setUseAssemblerInfoForParsing(true);
 
   raw_ostream &OSRef = nulls();

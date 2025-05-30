@@ -33,7 +33,7 @@ void MCStreamerWrapper::emitInstruction(const MCInst &Inst,
   curBB->addInst(i);
 
   prev_line =
-      IA->isTerminator(Inst) ? ASMLine::terminator : ASMLine::non_term_instr;
+      IA.isTerminator(Inst) ? ASMLine::terminator : ASMLine::non_term_instr;
   auto num_operands = i.getNumOperands();
   for (unsigned idx = 0; idx < num_operands; ++idx) {
     auto op = i.getOperand(idx);
@@ -54,13 +54,13 @@ void MCStreamerWrapper::emitInstruction(const MCInst &Inst,
   llvm::raw_string_ostream ss(sss);
   // Inst.dump_pretty(ss, IP, " ", MRI);
   *out << sss;
-  if (IA->isBranch(Inst))
+  if (IA.isBranch(Inst))
     *out << ": branch ";
-  if (IA->isConditionalBranch(Inst))
+  if (IA.isConditionalBranch(Inst))
     *out << ": conditional branch ";
-  if (IA->isUnconditionalBranch(Inst))
+  if (IA.isUnconditionalBranch(Inst))
     *out << ": unconditional branch ";
-  if (IA->isTerminator(Inst))
+  if (IA.isTerminator(Inst))
     *out << ": terminator ";
   *out << "\n";
 }
@@ -151,19 +151,19 @@ void MCStreamerWrapper::generateSuccessors() {
     // with no predecessors. This is hacky because I don't know the API to
     // create an MCExpr and have to create a branch with an immediate operand
     // instead
-    if (i == 0 && (IA->isUnconditionalBranch(last_mc_instr)) &&
+    if (i == 0 && (IA.isUnconditionalBranch(last_mc_instr)) &&
         last_mc_instr.getOperand(0).isImm()) {
       cur_bb.addSucc(next_bb_ptr);
       continue;
     }
-    if (IA->isConditionalBranch(last_mc_instr)) {
+    if (IA.isConditionalBranch(last_mc_instr)) {
       std::string target = findTargetLabel(last_mc_instr);
       auto target_bb = MF.findBlockByName(target);
       assert(target_bb);
       cur_bb.addSucc(target_bb);
       if (next_bb_ptr)
         cur_bb.addSucc(next_bb_ptr);
-    } else if (IA->isUnconditionalBranch(last_mc_instr)) {
+    } else if (IA.isUnconditionalBranch(last_mc_instr)) {
       std::string target = findTargetLabel(last_mc_instr);
       auto target_bb = MF.findBlockByName(target);
       if (target_bb) {
@@ -171,7 +171,7 @@ void MCStreamerWrapper::generateSuccessors() {
       } else {
         *out << "looks like a tail call to " << target << "\n";
       }
-    } else if (IA->isReturn(last_mc_instr)) {
+    } else if (IA.isReturn(last_mc_instr)) {
       continue;
     } else if (next_bb_ptr) {
       // add edge to next block
