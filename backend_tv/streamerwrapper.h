@@ -80,17 +80,12 @@ struct MCGlobal {
 class MCFunction {
   std::string name;
   unsigned label_cnt{0};
-  const llvm::MCInstrAnalysis &IA;
-  llvm::MCInstPrinter &InstPrinter;
-  llvm::MCRegisterInfo &MRI;
 
 public:
   std::vector<MCBasicBlock> BBs;
   std::vector<MCGlobal> MCglobals;
 
-  MCFunction(const llvm::MCInstrAnalysis &IA, llvm::MCInstPrinter &InstPrinter,
-             llvm::MCRegisterInfo &MRI)
-      : IA{IA}, InstPrinter{InstPrinter}, MRI{MRI} {
+  MCFunction() {
     MCGlobal g{
         .name = "__stack_chk_guard",
         .align = llvm::Align(8),
@@ -155,8 +150,8 @@ public:
   MCStreamerWrapper(llvm::MCContext &Context, const llvm::MCInstrAnalysis &IA,
                     llvm::MCInstPrinter &InstPrinter, llvm::MCRegisterInfo &MRI,
                     unsigned SentinelNOP)
-      : MCStreamer(Context), IA(IA), SentinelNOP(SentinelNOP),
-        MF(IA, InstPrinter, MRI) {}
+      : MCStreamer(Context), IA(IA), SentinelNOP(SentinelNOP)
+  {}
 
   void addConstant() {
     if (curROData.empty())
