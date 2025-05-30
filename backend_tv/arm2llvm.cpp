@@ -25,8 +25,8 @@ unsigned arm2llvm::sentinelNOP() {
 }
 
 arm2llvm::arm2llvm(Module *LiftedModule, Function &srcFn,
-                   llvm::SourceMgr &SrcMgr)
-    : mc2llvm(LiftedModule, srcFn, SrcMgr) {
+                   unique_ptr<MemoryBuffer> MB)
+    : mc2llvm(LiftedModule, srcFn, std::move(MB)) {
   // sanity checking
   assert(disjoint(instrs_32, instrs_64));
   assert(disjoint(instrs_32, instrs_128));
