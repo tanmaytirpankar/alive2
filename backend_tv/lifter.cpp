@@ -148,13 +148,13 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
 
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
-    lifter = make_unique<arm2llvm>(liftedModule, *srcFn, IP.get(), *STI,
-                                   *Ana, SentinelNOP, *MCII.get(), MCCtx,
-                                   MCOptions, SrcMgr, *MAI.get(), MRI.get());
+    lifter = make_unique<arm2llvm>(liftedModule, *srcFn, IP.get(), *STI, *Ana,
+                                   SentinelNOP, *MCII.get(), MCCtx, MCOptions,
+                                   SrcMgr, *MAI.get(), MRI.get());
   } else if (DefaultBackend == "riscv64") {
-    lifter = make_unique<riscv2llvm>(liftedModule, *srcFn, IP.get(), *STI,
-                                     *Ana, SentinelNOP, *MCII.get(), MCCtx,
-                                     MCOptions, SrcMgr, *MAI.get(), MRI.get());
+    lifter = make_unique<riscv2llvm>(liftedModule, *srcFn, IP.get(), *STI, *Ana,
+                                     SentinelNOP, *MCII.get(), MCCtx, MCOptions,
+                                     SrcMgr, *MAI.get(), MRI.get());
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);

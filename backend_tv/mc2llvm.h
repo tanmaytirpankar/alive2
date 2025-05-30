@@ -55,17 +55,17 @@ public:
   llvm::MCRegisterInfo *MRI;
   std::unique_ptr<MCStreamerWrapper> Str;
 
-  mc2llvm(llvm::Module *LiftedModule,
-          llvm::Function &srcFn, llvm::MCInstPrinter *InstPrinter,
-          const llvm::MCSubtargetInfo &STI, const llvm::MCInstrAnalysis &IA,
-          unsigned SentinelNOP, llvm::MCInstrInfo &MCII, llvm::MCContext &MCCtx,
+  mc2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
+          llvm::MCInstPrinter *InstPrinter, const llvm::MCSubtargetInfo &STI,
+          const llvm::MCInstrAnalysis &IA, unsigned SentinelNOP,
+          llvm::MCInstrInfo &MCII, llvm::MCContext &MCCtx,
           llvm::MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
           llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI)
-      : LiftedModule{LiftedModule}, srcFn{srcFn},
-        InstPrinter{InstPrinter}, STI{STI}, IA{IA},
-        DL{srcFn.getParent()->getDataLayout()}, SentinelNOP{SentinelNOP},
-        MCII{MCII}, MCCtx(MCCtx), MCE{Targ->createMCCodeEmitter(MCII, MCCtx)},
-        MCOptions{MCOptions}, SrcMgr{SrcMgr}, MAI{MAI}, MRI{MRI} {}
+      : LiftedModule{LiftedModule}, srcFn{srcFn}, InstPrinter{InstPrinter},
+        STI{STI}, IA{IA}, DL{srcFn.getParent()->getDataLayout()},
+        SentinelNOP{SentinelNOP}, MCII{MCII}, MCCtx(MCCtx),
+        MCE{Targ->createMCCodeEmitter(MCII, MCCtx)}, MCOptions{MCOptions},
+        SrcMgr{SrcMgr}, MAI{MAI}, MRI{MRI} {}
 
   // these are ones that the backend adds to tgt, even when they don't
   // appear at all in src

@@ -516,14 +516,16 @@ void mc2llvm::createRegStorage(unsigned Reg, unsigned Width,
 }
 
 Function *mc2llvm::run() {
-  Str = make_unique<MCStreamerWrapper>(MCCtx, &IA, InstPrinter, MRI, SentinelNOP);
+  Str =
+      make_unique<MCStreamerWrapper>(MCCtx, &IA, InstPrinter, MRI, SentinelNOP);
   Str->setUseAssemblerInfoForParsing(true);
 
   raw_ostream &OSRef = nulls();
   formatted_raw_ostream FOSRef(OSRef);
   Targ->createAsmTargetStreamer(*Str.get(), FOSRef, InstPrinter);
 
-  unique_ptr<MCAsmParser> Parser(createMCAsmParser(SrcMgr, MCCtx, *Str.get(), MAI));
+  unique_ptr<MCAsmParser> Parser(
+      createMCAsmParser(SrcMgr, MCCtx, *Str.get(), MAI));
   assert(Parser);
 
   unique_ptr<MCTargetAsmParser> TAP(

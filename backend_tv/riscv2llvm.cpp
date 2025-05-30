@@ -16,13 +16,12 @@ using namespace std;
 using namespace lifter;
 using namespace llvm;
 
-riscv2llvm::riscv2llvm(Module *LiftedModule,
-                       Function &srcFn, MCInstPrinter *InstPrinter,
-                       const MCSubtargetInfo &STI, const MCInstrAnalysis &IA,
-                       unsigned SentinelNOP, MCInstrInfo &MCII,
-                       llvm::MCContext &MCCtx, MCTargetOptions &MCOptions,
-                       llvm::SourceMgr &SrcMgr, llvm::MCAsmInfo &MAI,
-                       llvm::MCRegisterInfo *MRI)
+riscv2llvm::riscv2llvm(Module *LiftedModule, Function &srcFn,
+                       MCInstPrinter *InstPrinter, const MCSubtargetInfo &STI,
+                       const MCInstrAnalysis &IA, unsigned SentinelNOP,
+                       MCInstrInfo &MCII, llvm::MCContext &MCCtx,
+                       MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
+                       llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI)
     : mc2llvm(LiftedModule, srcFn, InstPrinter, STI, IA, SentinelNOP, MCII,
               MCCtx, MCOptions, SrcMgr, MAI, MRI) {}
 
