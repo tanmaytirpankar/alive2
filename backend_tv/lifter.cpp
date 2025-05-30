@@ -134,27 +134,16 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
 
   MCContext MCCtx(DefaultTT, MAI.get(), MRI.get(), STI.get(), &SrcMgr,
                   &MCOptions);
-  std::unique_ptr<MCObjectFileInfo> MCOFI(
-      Targ->createMCObjectFileInfo(MCCtx, false, false));
-  MCCtx.setObjectFileInfo(MCOFI.get());
-
-  unsigned SentinelNOP;
-  if (DefaultBackend == "aarch64")
-    SentinelNOP = AArch64::SEH_Nop;
-  else if (DefaultBackend == "riscv64")
-    SentinelNOP = RISCV::C_NOP_HINT;
-  else
-    assert(false);
 
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
     lifter = make_unique<arm2llvm>(liftedModule, *srcFn, IP.get(), *STI, *Ana,
-                                   SentinelNOP, *MCII.get(), MCCtx, MCOptions,
-                                   SrcMgr, *MAI.get(), MRI.get());
+                                   *MCII.get(), MCCtx, MCOptions, SrcMgr,
+                                   *MAI.get(), MRI.get());
   } else if (DefaultBackend == "riscv64") {
     lifter = make_unique<riscv2llvm>(liftedModule, *srcFn, IP.get(), *STI, *Ana,
-                                     SentinelNOP, *MCII.get(), MCCtx, MCOptions,
-                                     SrcMgr, *MAI.get(), MRI.get());
+                                     *MCII.get(), MCCtx, MCOptions, SrcMgr,
+                                     *MAI.get(), MRI.get());
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);

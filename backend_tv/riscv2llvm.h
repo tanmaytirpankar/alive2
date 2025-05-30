@@ -62,6 +62,8 @@ class riscv2llvm final : public mc2llvm {
 
   llvm::Value *enforceSExtZExt(llvm::Value *V, bool isSExt, bool isZExt);
 
+  unsigned sentinelNOP() override;
+
   void doReturn() override;
 
   unsigned mapRegToBackingReg(unsigned Reg);
@@ -79,10 +81,10 @@ class riscv2llvm final : public mc2llvm {
 public:
   riscv2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
              llvm::MCInstPrinter *InstPrinter, const llvm::MCSubtargetInfo &STI,
-             const llvm::MCInstrAnalysis &IA, unsigned SentinelNOP,
-             llvm::MCInstrInfo &MCII, llvm::MCContext &MCCtx,
-             llvm::MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
-             llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI);
+             const llvm::MCInstrAnalysis &IA, llvm::MCInstrInfo &MCII,
+             llvm::MCContext &MCCtx, llvm::MCTargetOptions &MCOptions,
+             llvm::SourceMgr &SrcMgr, llvm::MCAsmInfo &MAI,
+             llvm::MCRegisterInfo *MRI);
 };
 
 } // end namespace lifter

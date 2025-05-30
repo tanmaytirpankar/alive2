@@ -20,14 +20,18 @@ unsigned arm2llvm::branchInst() {
   return AArch64::B;
 }
 
+unsigned arm2llvm::sentinelNOP() {
+  return AArch64::SEH_Nop;
+}
+
 arm2llvm::arm2llvm(Module *LiftedModule, Function &srcFn,
                    MCInstPrinter *InstPrinter, const MCSubtargetInfo &STI,
-                   const MCInstrAnalysis &IA, unsigned SentinelNOP,
-                   MCInstrInfo &MCII, llvm::MCContext &MCCtx,
-                   MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
-                   llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI)
-    : mc2llvm(LiftedModule, srcFn, InstPrinter, STI, IA, SentinelNOP, MCII,
-              MCCtx, MCOptions, SrcMgr, MAI, MRI) {
+                   const MCInstrAnalysis &IA, MCInstrInfo &MCII,
+                   llvm::MCContext &MCCtx, MCTargetOptions &MCOptions,
+                   llvm::SourceMgr &SrcMgr, llvm::MCAsmInfo &MAI,
+                   llvm::MCRegisterInfo *MRI)
+    : mc2llvm(LiftedModule, srcFn, InstPrinter, STI, IA, MCII, MCCtx, MCOptions,
+              SrcMgr, MAI, MRI) {
   // sanity checking
   assert(disjoint(instrs_32, instrs_64));
   assert(disjoint(instrs_32, instrs_128));
@@ -3213,7 +3217,7 @@ std::optional<aslp::opcode_t> arm2llvm::getArmOpcode(const MCInst &I) {
   SmallVector<MCFixup> Fixups{};
   SmallVector<char> Code{};
 
-  if (I.getOpcode() == SentinelNOP)
+  if (I.getOpcode() == sentinelNOP())
     return std::nullopt;
 
   MCE->encodeInstruction(I, Code, Fixups, STI);
@@ -3321,6 +3325,7 @@ void arm2llvm::lift(MCInst &I) {
   // we're abusing this opcode as the sentinel for basic blocks,
   // shouldn't be a problem
   case AArch64::SEH_Nop:
+    assert(AArch64::SEH_Nop == sentinelNOP());
     break;
 
   case AArch64::BRK:

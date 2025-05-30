@@ -39,10 +39,10 @@ class arm2llvm final : public mc2llvm {
 public:
   arm2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
            llvm::MCInstPrinter *InstPrinter, const llvm::MCSubtargetInfo &STI,
-           const llvm::MCInstrAnalysis &IA, unsigned SentinelNOP,
-           llvm::MCInstrInfo &MCII, llvm::MCContext &MCCtx,
-           llvm::MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
-           llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI);
+           const llvm::MCInstrAnalysis &IA, llvm::MCInstrInfo &MCII,
+           llvm::MCContext &MCCtx, llvm::MCTargetOptions &MCOptions,
+           llvm::SourceMgr &SrcMgr, llvm::MCAsmInfo &MAI,
+           llvm::MCRegisterInfo *MRI);
 
   // Implemented library pseudocode for signed satuaration from A64 ISA manual
   std::tuple<llvm::Value *, bool> SignedSatQ(llvm::Value *i, unsigned bitWidth);
@@ -230,6 +230,8 @@ public:
   llvm::AllocaInst *get_reg(aslp::reg_t regtype, uint64_t num) override;
 
   void platformInit() override;
+
+  unsigned sentinelNOP() override;
 
   std::optional<aslp::opcode_t> getArmOpcode(const llvm::MCInst &I);
 

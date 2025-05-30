@@ -491,7 +491,7 @@ void mc2llvm::liftInst(MCInst &I) {
   llvm::raw_string_ostream ss{sss};
   I.dump_pretty(ss, InstPrinter);
   *out << sss << " = " << std::flush;
-  if (I.getOpcode() != SentinelNOP) {
+  if (I.getOpcode() != sentinelNOP()) {
     InstPrinter->printInst(&I, 100, "", STI, outs());
     outs().flush();
   }
@@ -516,8 +516,12 @@ void mc2llvm::createRegStorage(unsigned Reg, unsigned Width,
 }
 
 Function *mc2llvm::run() {
-  Str =
-    make_unique<MCStreamerWrapper>(MCCtx, IA, *InstPrinter, *MRI, SentinelNOP);
+  std::unique_ptr<MCObjectFileInfo> MCOFI(
+      Targ->createMCObjectFileInfo(MCCtx, false, false));
+  MCCtx.setObjectFileInfo(MCOFI.get());
+
+  Str = make_unique<MCStreamerWrapper>(MCCtx, IA, *InstPrinter, *MRI,
+                                       sentinelNOP());
   Str->setUseAssemblerInfoForParsing(true);
 
   raw_ostream &OSRef = nulls();

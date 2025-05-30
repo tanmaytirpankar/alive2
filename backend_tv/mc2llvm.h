@@ -45,7 +45,6 @@ public:
   const llvm::MCSubtargetInfo &STI;
   const llvm::MCInstrAnalysis &IA;
   const llvm::DataLayout &DL;
-  unsigned SentinelNOP;
   llvm::MCInstrInfo &MCII;
   llvm::MCContext &MCCtx;
   std::unique_ptr<llvm::MCCodeEmitter> MCE;
@@ -57,15 +56,14 @@ public:
 
   mc2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
           llvm::MCInstPrinter *InstPrinter, const llvm::MCSubtargetInfo &STI,
-          const llvm::MCInstrAnalysis &IA, unsigned SentinelNOP,
-          llvm::MCInstrInfo &MCII, llvm::MCContext &MCCtx,
-          llvm::MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
-          llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI)
+          const llvm::MCInstrAnalysis &IA, llvm::MCInstrInfo &MCII,
+          llvm::MCContext &MCCtx, llvm::MCTargetOptions &MCOptions,
+          llvm::SourceMgr &SrcMgr, llvm::MCAsmInfo &MAI,
+          llvm::MCRegisterInfo *MRI)
       : LiftedModule{LiftedModule}, srcFn{srcFn}, InstPrinter{InstPrinter},
-        STI{STI}, IA{IA}, DL{srcFn.getParent()->getDataLayout()},
-        SentinelNOP{SentinelNOP}, MCII{MCII}, MCCtx(MCCtx),
-        MCE{Targ->createMCCodeEmitter(MCII, MCCtx)}, MCOptions{MCOptions},
-        SrcMgr{SrcMgr}, MAI{MAI}, MRI{MRI} {}
+        STI{STI}, IA{IA}, DL{srcFn.getParent()->getDataLayout()}, MCII{MCII},
+        MCCtx(MCCtx), MCE{Targ->createMCCodeEmitter(MCII, MCCtx)},
+        MCOptions{MCOptions}, SrcMgr{SrcMgr}, MAI{MAI}, MRI{MRI} {}
 
   // these are ones that the backend adds to tgt, even when they don't
   // appear at all in src
@@ -901,6 +899,7 @@ public:
   virtual void platformInit() = 0;
   virtual void doReturn() = 0;
   virtual unsigned branchInst() = 0;
+  virtual unsigned sentinelNOP() = 0;
 };
 
 } // end namespace lifter

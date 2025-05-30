@@ -18,12 +18,12 @@ using namespace llvm;
 
 riscv2llvm::riscv2llvm(Module *LiftedModule, Function &srcFn,
                        MCInstPrinter *InstPrinter, const MCSubtargetInfo &STI,
-                       const MCInstrAnalysis &IA, unsigned SentinelNOP,
-                       MCInstrInfo &MCII, llvm::MCContext &MCCtx,
-                       MCTargetOptions &MCOptions, llvm::SourceMgr &SrcMgr,
-                       llvm::MCAsmInfo &MAI, llvm::MCRegisterInfo *MRI)
-    : mc2llvm(LiftedModule, srcFn, InstPrinter, STI, IA, SentinelNOP, MCII,
-              MCCtx, MCOptions, SrcMgr, MAI, MRI) {}
+                       const MCInstrAnalysis &IA, MCInstrInfo &MCII,
+                       llvm::MCContext &MCCtx, MCTargetOptions &MCOptions,
+                       llvm::SourceMgr &SrcMgr, llvm::MCAsmInfo &MAI,
+                       llvm::MCRegisterInfo *MRI)
+    : mc2llvm(LiftedModule, srcFn, InstPrinter, STI, IA, MCII, MCCtx, MCOptions,
+              SrcMgr, MAI, MRI) {}
 
 // TODO -- move this up to mc2llvm so the ARM lifter can use it too
 tuple<BasicBlock *, BasicBlock *> riscv2llvm::getBranchTargetsOperand(int op) {
@@ -49,6 +49,10 @@ tuple<BasicBlock *, BasicBlock *> riscv2llvm::getBranchTargetsOperand(int op) {
 
 unsigned riscv2llvm::branchInst() {
   return RISCV::C_J;
+}
+
+unsigned riscv2llvm::sentinelNOP() {
+  return RISCV::C_NOP_HINT;
 }
 
 Value *riscv2llvm::enforceSExtZExt(Value *V, bool isSExt, bool isZExt) {
