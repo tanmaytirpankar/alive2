@@ -5001,80 +5001,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::SSRAv2i32_shift:
   case AArch64::SSRAv4i32_shift:
   case AArch64::SSRAd:
-  case AArch64::SSRAv2i64_shift: {
-    unsigned numElts = -1, eltSize = -1;
-    switch (opcode) {
-    case AArch64::SSRAv8i8_shift:
-      eltSize = 8;
-      numElts = 8;
-      break;
-    case AArch64::SSRAv16i8_shift:
-      eltSize = 8;
-      numElts = 16;
-      break;
-    case AArch64::SSRAv4i16_shift:
-      eltSize = 16;
-      numElts = 4;
-      break;
-    case AArch64::SSRAv8i16_shift:
-      eltSize = 16;
-      numElts = 8;
-      break;
-    case AArch64::SSRAv2i32_shift:
-      eltSize = 32;
-      numElts = 2;
-      break;
-    case AArch64::SSRAv4i32_shift:
-      eltSize = 32;
-      numElts = 4;
-      break;
-    case AArch64::SSRAd:
-      eltSize = 64;
-      numElts = 1;
-      break;
-    case AArch64::SSRAv2i64_shift:
-      eltSize = 64;
-      numElts = 2;
-      break;
-    default:
-      assert(false);
-    }
-
-    Value *a, *b, *c;
-    a = readFromVecOperand(2, eltSize, numElts);
-    b = getElemSplat(numElts, eltSize, getImm(3));
-    c = readFromVecOperand(1, eltSize, numElts);
-
-    auto shiftedVec = createMaskedAShr(a, b);
-    auto res = createAdd(shiftedVec, c);
-
-    updateOutputReg(res);
+  case AArch64::SSRAv2i64_shift:
+    lift_ssra(opcode);
     break;
-  }
-
-#define GET_SIZES7(INSN, SUFF)                                                 \
-  if (opcode == AArch64::INSN##v8i8##SUFF) {                                   \
-    numElts = 8;                                                               \
-    eltSize = 8;                                                               \
-  } else if (opcode == AArch64::INSN##v4i16##SUFF) {                           \
-    numElts = 4;                                                               \
-    eltSize = 16;                                                              \
-  } else if (opcode == AArch64::INSN##v2i32##SUFF) {                           \
-    numElts = 2;                                                               \
-    eltSize = 32;                                                              \
-  } else if (opcode == AArch64::INSN##v16i8##SUFF) {                           \
-    numElts = 16;                                                              \
-    eltSize = 8;                                                               \
-  } else if (opcode == AArch64::INSN##v4i32##SUFF) {                           \
-    numElts = 4;                                                               \
-    eltSize = 32;                                                              \
-  } else if (opcode == AArch64::INSN##v8i16##SUFF) {                           \
-    numElts = 8;                                                               \
-    eltSize = 16;                                                              \
-  } else if (opcode == AArch64::INSN##v2i64##SUFF) {                           \
-    numElts = 2;                                                               \
-    eltSize = 64;                                                              \
-  }
 
   case AArch64::USRAv8i8_shift:
   case AArch64::USRAv16i8_shift:
@@ -5083,27 +5012,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::USRAv2i32_shift:
   case AArch64::USRAv4i32_shift:
   case AArch64::USRAv2i64_shift:
-  case AArch64::USRAd: {
-    unsigned numElts, eltSize;
-    GET_SIZES7(USRA, _shift);
-    if (opcode == AArch64::USRAd) {
-      numElts = 1;
-      eltSize = 64;
-    }
-    auto a = readFromVecOperand(1, eltSize, numElts);
-    auto b = readFromVecOperand(2, eltSize, numElts);
-    auto exp = getImm(3);
-    Value *res = getUndefVec(numElts, eltSize);
-    for (unsigned i = 0; i < numElts; ++i) {
-      auto e1 = createExtractElement(a, i);
-      auto e2 = createExtractElement(b, i);
-      auto shift = createMaskedLShr(e2, getUnsignedIntConst(exp, eltSize));
-      auto sum = createAdd(e1, shift);
-      res = createInsertElement(res, sum, i);
-    }
-    updateOutputReg(res);
+  case AArch64::USRAd:
+    lift_usra(opcode);
     break;
-  }
 
   case AArch64::ZIP1v4i16:
   case AArch64::ZIP1v2i32:
@@ -5111,21 +5022,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::ZIP1v8i16:
   case AArch64::ZIP1v16i8:
   case AArch64::ZIP1v2i64:
-  case AArch64::ZIP1v4i32: {
-    unsigned numElts = -1, eltSize = -1;
-    GET_SIZES7(ZIP1, );
-    auto a = readFromVecOperand(1, eltSize, numElts);
-    auto b = readFromVecOperand(2, eltSize, numElts);
-    Value *res = getUndefVec(numElts, eltSize);
-    for (unsigned i = 0; i < numElts / 2; ++i) {
-      auto e1 = createExtractElement(a, i);
-      auto e2 = createExtractElement(b, i);
-      res = createInsertElement(res, e1, 2 * i);
-      res = createInsertElement(res, e2, (2 * i) + 1);
-    }
-    updateOutputReg(res);
+  case AArch64::ZIP1v4i32:
+    lift_zip1(opcode);
     break;
-  }
 
   case AArch64::ZIP2v4i16:
   case AArch64::ZIP2v2i32:
@@ -5133,21 +5032,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::ZIP2v8i16:
   case AArch64::ZIP2v2i64:
   case AArch64::ZIP2v16i8:
-  case AArch64::ZIP2v4i32: {
-    unsigned numElts = -1, eltSize = -1;
-    GET_SIZES7(ZIP2, );
-    auto a = readFromVecOperand(1, eltSize, numElts);
-    auto b = readFromVecOperand(2, eltSize, numElts);
-    Value *res = getUndefVec(numElts, eltSize);
-    for (unsigned i = 0; i < numElts / 2; ++i) {
-      auto e1 = createExtractElement(a, (numElts / 2) + i);
-      auto e2 = createExtractElement(b, (numElts / 2) + i);
-      res = createInsertElement(res, e1, 2 * i);
-      res = createInsertElement(res, e2, (2 * i) + 1);
-    }
-    updateOutputReg(res);
+  case AArch64::ZIP2v4i32:
+    lift_zip2(opcode);
     break;
-  }
 
   case AArch64::ADDPv8i8:
   case AArch64::ADDPv4i16:
@@ -5155,25 +5042,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::ADDPv16i8:
   case AArch64::ADDPv4i32:
   case AArch64::ADDPv8i16:
-  case AArch64::ADDPv2i64: {
-    unsigned numElts = -1, eltSize = -1;
-    GET_SIZES7(ADDP, );
-    auto x = readFromOperand(1);
-    auto y = readFromOperand(2);
-    auto conc = concat(y, x);
-    auto concTy = getVecTy(eltSize, numElts * 2);
-    auto concV = createBitCast(conc, concTy);
-    Value *res = getUndefVec(numElts, eltSize);
-    for (unsigned e = 0; e < numElts; ++e) {
-      *out << "e = " << e << "\n";
-      auto elt1 = createExtractElement(concV, 2 * e);
-      auto elt2 = createExtractElement(concV, (2 * e) + 1);
-      auto sum = createAdd(elt1, elt2);
-      res = createInsertElement(res, sum, e);
-    }
-    updateOutputReg(res);
+  case AArch64::ADDPv2i64:
+    lift_addp(opcode);
     break;
-  }
 
 #define GET_SIZES9(INSN, SUFF)                                                 \
   unsigned numElts, eltSize;                                                   \
