@@ -80,7 +80,7 @@ class riscv2llvm final : public mc2llvm {
 
 public:
   riscv2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
-             std::unique_ptr<llvm::MemoryBuffer> MB);
+             llvm::SourceMgr &SrcMgr);
 };
 
 } // end namespace lifter

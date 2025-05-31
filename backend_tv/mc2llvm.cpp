@@ -516,8 +516,6 @@ void mc2llvm::createRegStorage(unsigned Reg, unsigned Width,
 }
 
 Function *mc2llvm::run() {
-  SrcMgr.AddNewSourceBuffer(std::move(MB), llvm::SMLoc());
-
   InstPrinter =
       Targ->createMCInstPrinter(DefaultTT, 0, *MAI.get(), *MCII.get(), *MRI);
   InstPrinter->setPrintImmHex(true);
