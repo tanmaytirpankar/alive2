@@ -2530,12 +2530,13 @@ void arm2llvm::lift_more_vec_binops(unsigned opcode) {
   }
 
 void arm2llvm::lift_usra(unsigned opcode) {
-  unsigned numElts, eltSize;
+  unsigned numElts = 999, eltSize = 999;
   GET_SIZES7(USRA, _shift);
   if (opcode == AArch64::USRAd) {
     numElts = 1;
     eltSize = 64;
   }
+  assert(numElts != 999 && eltSize != 999);
   auto a = readFromVecOperand(1, eltSize, numElts);
   auto b = readFromVecOperand(2, eltSize, numElts);
   auto exp = getImm(3);
