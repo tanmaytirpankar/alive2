@@ -198,52 +198,31 @@ void riscv2llvm::lift(MCInst &I) {
     break;
   }
 
-  case RISCV::SW:
   case RISCV::LH:
   case RISCV::LHU:
   case RISCV::LW:
   case RISCV::LWU:
   case RISCV::LD: {
-    bool isLoad;
+    bool sExt;
     switch (opcode) {
-    case RISCV::SW:
-      isLoad = false;
-      break;
     case RISCV::LH:
-    case RISCV::LHU:
     case RISCV::LW:
-    case RISCV::LWU:
     case RISCV::LD:
-      isLoad = true;
+      sExt = true;
+      break;
+    case RISCV::LHU:
+    case RISCV::LWU:
+      sExt = false;
       break;
     default:
       assert(false);
     }
-
-    bool sExt;
-    if (isLoad) {
-      switch (opcode) {
-      case RISCV::LH:
-      case RISCV::LW:
-      case RISCV::LD:
-	sExt = true;
-	break;
-      case RISCV::LHU:
-      case RISCV::LWU:
-	sExt = false;
-	break;
-      default:
-	assert(false);
-      }
-    }
-
     Type *size{nullptr};
     switch (opcode) {
     case RISCV::LH:
     case RISCV::LHU:
       size = i16ty;
       break;
-    case RISCV::SW:
     case RISCV::LW:
     case RISCV::LWU:
       size = i32ty;
@@ -254,7 +233,6 @@ void riscv2llvm::lift(MCInst &I) {
       break;
       assert(false);
     }
-
     Value *ptr{nullptr};
     if (CurInst->getOperand(2).isImm()) {
       auto imm = readFromImmOperand(2, 12, 64);
@@ -262,16 +240,10 @@ void riscv2llvm::lift(MCInst &I) {
     } else {
       ptr = getPointerOperand();
     }
-
-    if (isLoad) {
-      Value *loaded = createLoad(size, ptr);
-      if (size != i64ty)
-	loaded = sExt ? createSExt(loaded, i64ty) : createZExt(loaded, i64ty);
-      updateOutputReg(loaded);
-    } else {
-      auto toStore = readFromRegOperand(0, size);
-      createStore(toStore, ptr);
-    }
+    Value *loaded = createLoad(size, ptr);
+    if (size != i64ty)
+      loaded = sExt ? createSExt(loaded, i64ty) : createZExt(loaded, i64ty);
+    updateOutputReg(loaded);
     break;
   }
 
@@ -289,7 +261,7 @@ void riscv2llvm::lift(MCInst &I) {
     }
     break;
   }
-    
+
   case RISCV::C_SRAI:
   case RISCV::SRAI:
   case RISCV::C_SRLI:
