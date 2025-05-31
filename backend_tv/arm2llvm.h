@@ -378,6 +378,16 @@ public:
   void lift_vec_mla(unsigned opcode);
   void lift_trn(unsigned opcode);
   void lift_vec_minmax(unsigned upcode);
+  void lift_more_vec_binops(unsigned opcode);
+  void lift_shll(unsigned opcode);
+  void lift_shrn(unsigned opcode);
+  void lift_sli_sri(unsigned opcode);
+  void lift_mls(unsigned opcode);
+  void lift_mla(unsigned opcode);
+  void lift_abal_abdl(unsigned opcode);
+  void lift_mlal_mlsl_idx(unsigned opcode);
+  void lift_mlal_mlsl(unsigned opcode);
+  void lift_aba_abd(unsigned opcode);
 };
 
 } // end namespace lifter
