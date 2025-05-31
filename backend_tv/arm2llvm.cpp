@@ -4994,30 +4994,6 @@ void arm2llvm::lift(MCInst &I) {
     lift_aba_abd(opcode);
     break;
 
-#define GET_SIZES7(INSN, SUFF)                                                 \
-  if (opcode == AArch64::INSN##v8i8##SUFF) {                                   \
-    numElts = 8;                                                               \
-    eltSize = 8;                                                               \
-  } else if (opcode == AArch64::INSN##v4i16##SUFF) {                           \
-    numElts = 4;                                                               \
-    eltSize = 16;                                                              \
-  } else if (opcode == AArch64::INSN##v2i32##SUFF) {                           \
-    numElts = 2;                                                               \
-    eltSize = 32;                                                              \
-  } else if (opcode == AArch64::INSN##v16i8##SUFF) {                           \
-    numElts = 16;                                                              \
-    eltSize = 8;                                                               \
-  } else if (opcode == AArch64::INSN##v4i32##SUFF) {                           \
-    numElts = 4;                                                               \
-    eltSize = 32;                                                              \
-  } else if (opcode == AArch64::INSN##v8i16##SUFF) {                           \
-    numElts = 8;                                                               \
-    eltSize = 16;                                                              \
-  } else if (opcode == AArch64::INSN##v2i64##SUFF) {                           \
-    numElts = 2;                                                               \
-    eltSize = 64;                                                              \
-  }
-
   case AArch64::SSRAv8i8_shift:
   case AArch64::SSRAv16i8_shift:
   case AArch64::SSRAv4i16_shift:
@@ -5074,6 +5050,30 @@ void arm2llvm::lift(MCInst &I) {
 
     updateOutputReg(res);
     break;
+  }
+
+#define GET_SIZES7(INSN, SUFF)                                                 \
+  if (opcode == AArch64::INSN##v8i8##SUFF) {                                   \
+    numElts = 8;                                                               \
+    eltSize = 8;                                                               \
+  } else if (opcode == AArch64::INSN##v4i16##SUFF) {                           \
+    numElts = 4;                                                               \
+    eltSize = 16;                                                              \
+  } else if (opcode == AArch64::INSN##v2i32##SUFF) {                           \
+    numElts = 2;                                                               \
+    eltSize = 32;                                                              \
+  } else if (opcode == AArch64::INSN##v16i8##SUFF) {                           \
+    numElts = 16;                                                              \
+    eltSize = 8;                                                               \
+  } else if (opcode == AArch64::INSN##v4i32##SUFF) {                           \
+    numElts = 4;                                                               \
+    eltSize = 32;                                                              \
+  } else if (opcode == AArch64::INSN##v8i16##SUFF) {                           \
+    numElts = 8;                                                               \
+    eltSize = 16;                                                              \
+  } else if (opcode == AArch64::INSN##v2i64##SUFF) {                           \
+    numElts = 2;                                                               \
+    eltSize = 64;                                                              \
   }
 
   case AArch64::USRAv8i8_shift:
