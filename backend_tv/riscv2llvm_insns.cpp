@@ -262,14 +262,15 @@ void riscv2llvm::lift(MCInst &I) {
     } else {
       ptr = getPointerOperand();
     }
+
     if (isLoad) {
       Value *loaded = createLoad(size, ptr);
       if (size != i64ty)
 	loaded = sExt ? createSExt(loaded, i64ty) : createZExt(loaded, i64ty);
       updateOutputReg(loaded);
     } else {
-      auto val = readFromRegOperand(0, size);
-      createStore(val, ptr);
+      auto toStore = readFromRegOperand(0, size);
+      createStore(toStore, ptr);
     }
     break;
   }
