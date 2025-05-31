@@ -99,8 +99,12 @@ void riscv2llvm::lift(MCInst &I) {
   case RISCV::ADD:
   case RISCV::C_SUB:
   case RISCV::SUB:
+  case RISCV::C_AND:
+  case RISCV::AND:
   case RISCV::C_OR:
-  case RISCV::OR: {
+  case RISCV::OR:
+  case RISCV::C_XOR:
+  case RISCV::XOR: {
     auto a = readFromRegOperand(1, i64ty);
     auto b = readFromRegOperand(2, i64ty);
     Value *res;
@@ -109,13 +113,21 @@ void riscv2llvm::lift(MCInst &I) {
     case RISCV::C_ADD:
       res = createAdd(a, b);
       break;
-    case RISCV::SUB:
     case RISCV::C_SUB:
+    case RISCV::SUB:
       res = createSub(a, b);
       break;
     case RISCV::C_OR:
     case RISCV::OR:
       res = createOr(a, b);
+      break;
+    case RISCV::C_AND:
+    case RISCV::AND:
+      res = createAnd(a, b);
+      break;
+    case RISCV::C_XOR:
+    case RISCV::XOR:
+      res = createXor(a, b);
       break;
     case RISCV::MUL:
       res = createMul(a, b);
@@ -235,6 +247,21 @@ void riscv2llvm::lift(MCInst &I) {
     break;
   }
 
+  case RISCV::C_ADDI:
+  case RISCV::ADDI: {
+    auto a = readFromRegOperand(1, i64ty);
+    if (CurInst->getOperand(2).isImm()) {
+      auto b = readFromImmOperand(2, 12, 64);
+      updateOutputReg(createAdd(a, b));
+    }
+    else {
+      auto ptr = getPointerOperand();
+      auto res = createGEP(i8ty, ptr, {a}, nextName());
+      updateOutputReg(res);
+    }
+    break;
+  }
+
   case RISCV::C_SRAI:
   case RISCV::SRAI:
   case RISCV::C_SRLI:
@@ -244,17 +271,11 @@ void riscv2llvm::lift(MCInst &I) {
   case RISCV::C_ANDI:
   case RISCV::ANDI:
   case RISCV::XORI:
-  case RISCV::ORI:
-  case RISCV::C_ADDI:
-  case RISCV::ADDI: {
+  case RISCV::ORI: {
     auto a = readFromRegOperand(1, i64ty);
     auto b = readFromImmOperand(2, 12, 64);
     Value *res;
     switch (opcode) {
-    case RISCV::C_ADDI:
-    case RISCV::ADDI:
-      res = createAdd(a, b);
-      break;
     case RISCV::C_ANDI:
     case RISCV::ANDI:
       res = createAnd(a, b);
