@@ -884,6 +884,8 @@ public:
 
   /*
    * shared with the aslp lifter
+   *
+   * FIXME -- this should take an MCSymbolRef, not a generic MCExpr
    */
   llvm::Value *lookupExprVar(const llvm::MCExpr &expr) override {
     return lookupGlobal(mapExprVar(&expr));

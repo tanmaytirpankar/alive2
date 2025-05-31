@@ -253,8 +253,7 @@ void riscv2llvm::lift(MCInst &I) {
     if (CurInst->getOperand(2).isImm()) {
       auto b = readFromImmOperand(2, 12, 64);
       updateOutputReg(createAdd(a, b));
-    }
-    else {
+    } else {
       auto ptr = getPointerOperand();
       auto res = createGEP(i8ty, ptr, {a}, nextName());
       updateOutputReg(res);

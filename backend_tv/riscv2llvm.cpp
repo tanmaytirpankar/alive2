@@ -320,8 +320,9 @@ void riscv2llvm::platformInit() {
  * the specified register. but for now we'll just assume that the
  * backend got this right.
  *
- * FIXME -- just like in the ARM backend, we might end up needing a
- * proper recursive descent parser here
+ * FIXME -- we should be dealing with the offset computation in
+ * portable code, not in RISC-V code. there's even some portable code
+ * in mc2llvm.cpp that kind of almost handles this already
  */
 Value *riscv2llvm::getPointerOperand() {
   auto op1 = CurInst->getOperand(1);
@@ -349,7 +350,7 @@ Value *riscv2llvm::getPointerOperand() {
       ptr = createGEP(i8ty, ptr, {offsetVal}, nextName());
       return ptr;
     } else {
-      assert (false && "unhandled MCBinaryExpr");
+      assert(false && "unhandled MCBinaryExpr");
     }
   } else {
     assert(addrExpr->getKind() == MCExpr::SymbolRef);

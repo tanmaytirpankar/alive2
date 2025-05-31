@@ -273,6 +273,8 @@ std::string mc2llvm::mapExprVar(const MCExpr *expr) {
   auto [root, offset] = getOffset(name);
   name = root;
 
+  // FIXME -- yikes why are we ignoring the offset????
+
   if (!lookupGlobal(name)) {
     *out << "\ncan't find global '" << name << "'\n";
     *out << "ERROR: Unknown global in ADRP\n\n";
