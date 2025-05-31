@@ -319,18 +319,40 @@ void riscv2llvm::platformInit() {
  * FIXME -- we need to verify that the hi part is actually present in
  * the specified register. but for now we'll just assume that the
  * backend got this right.
+ *
+ * FIXME -- just like in the ARM backend, we might end up needing a
+ * proper recursive descent parser here
  */
 Value *riscv2llvm::getPointerOperand() {
   auto op1 = CurInst->getOperand(1);
   auto op2 = CurInst->getOperand(2);
   assert(op1.isReg());
   assert(op2.isExpr());
-  // auto indexReg = op1.getReg();
   auto rvExpr = dyn_cast<RISCVMCExpr>(op2.getExpr());
   assert(rvExpr);
   auto specifier = rvExpr->getSpecifier();
   assert(specifier == RISCVMCExpr::VK_LO);
-  auto subExpr = rvExpr->getSubExpr();
-  assert(subExpr);
-  return lookupExprVar(*subExpr);
+  auto addrExpr = rvExpr->getSubExpr();
+  assert(addrExpr);
+  if (auto binaryExpr = dyn_cast<MCBinaryExpr>(addrExpr)) {
+    if (binaryExpr->getOpcode() == MCBinaryExpr::Add) {
+      auto LHS = binaryExpr->getLHS();
+      auto RHS = binaryExpr->getRHS();
+      assert(LHS && LHS->getKind() == MCExpr::SymbolRef);
+      auto ptr = lookupExprVar(*LHS);
+      assert(RHS);
+      auto CE = dyn_cast<MCConstantExpr>(RHS);
+      assert(CE);
+      auto offset = CE->getValue();
+      auto i8ty = getIntTy(8);
+      auto offsetVal = getSignedIntConst(offset, 64);
+      ptr = createGEP(i8ty, ptr, {offsetVal}, nextName());
+      return ptr;
+    } else {
+      assert (false && "unhandled MCBinaryExpr");
+    }
+  } else {
+    assert(addrExpr->getKind() == MCExpr::SymbolRef);
+    return lookupExprVar(*addrExpr);
+  }
 }
