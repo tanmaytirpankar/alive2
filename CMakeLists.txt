@@ -212,6 +212,7 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
     "backend_tv/streamerwrapper.cpp"
 
     "backend_tv/arm2llvm.cpp"
+    "backend_tv/arm2llvm_insns.cpp"
     "backend_tv/arm2llvm_arith.cpp"
     "backend_tv/arm2llvm_float.cpp"
     "backend_tv/arm2llvm_branch.cpp"

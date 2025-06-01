@@ -400,6 +400,7 @@ public:
   void lift_uqsub(unsigned opcode);
   void lift_sqadd(unsigned opcode);
   void lift_sqsub(unsigned opcode);
+  void lift_mull(unsigned opcode);
 };
 
 } // end namespace lifter
