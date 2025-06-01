@@ -2239,6 +2239,7 @@ const set<int> arm2llvm::instrs_64 = {
     AArch64::CMGTv1i64rz,
     AArch64::CMGTv2i32rz,
     AArch64::CMGEv8i8rz,
+    AArch64::CMLEv1i64rz,
     AArch64::CMLEv2i32rz,
     AArch64::CMGEv2i32rz,
     AArch64::UQADDv1i64,
@@ -4442,6 +4443,7 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::CMGTv1i64rz:
   case AArch64::CMGTv2i32rz:
   case AArch64::CMGEv8i8rz:
+  case AArch64::CMLEv1i64rz:
   case AArch64::CMLEv2i32rz:
   case AArch64::CMGEv2i32rz:
   case AArch64::CMLEv8i16rz:

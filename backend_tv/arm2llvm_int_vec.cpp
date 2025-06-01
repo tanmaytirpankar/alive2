@@ -979,6 +979,7 @@ void arm2llvm::lift_cm(unsigned opcode) {
   case AArch64::CMGTv1i64rz:
   case AArch64::CMGTv2i32rz:
   case AArch64::CMGEv8i8rz:
+  case AArch64::CMLEv1i64rz:
   case AArch64::CMLEv2i32rz:
   case AArch64::CMGEv2i32rz:
   case AArch64::CMLEv8i16rz:
@@ -1065,6 +1066,7 @@ void arm2llvm::lift_cm(unsigned opcode) {
   int numElts, eltSize;
   switch (opcode) {
   case AArch64::CMEQv1i64rz:
+  case AArch64::CMLEv1i64rz:
   case AArch64::CMLTv1i64rz:
   case AArch64::CMHIv1i64:
   case AArch64::CMGTv1i64:
@@ -1184,6 +1186,7 @@ void arm2llvm::lift_cm(unsigned opcode) {
 
   switch (opcode) {
   case AArch64::CMLEv16i8rz:
+  case AArch64::CMLEv1i64rz:
   case AArch64::CMLEv2i32rz:
   case AArch64::CMLEv2i64rz:
   case AArch64::CMLEv4i16rz:
