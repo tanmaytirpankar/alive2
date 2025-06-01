@@ -31,7 +31,7 @@ public:
   llvm::SourceMgr SrcMgr;
   llvm::Module *LiftedModule{nullptr};
   llvm::LLVMContext &Ctx = LiftedModule->getContext();
-  llvm::Function &srcFn;
+  llvm::Function *srcFn{nullptr};
   llvm::Function *liftedFn{nullptr};
   MCBasicBlock *MCBB{nullptr};
   llvm::BasicBlock *LLVMBB{nullptr};
@@ -55,11 +55,11 @@ public:
   std::unique_ptr<MCStreamerWrapper> Str;
   std::unique_ptr<llvm::MemoryBuffer> MB;
 
-  mc2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
+  mc2llvm(llvm::Module *LiftedModule, llvm::Function *srcFn,
           std::unique_ptr<llvm::MemoryBuffer> MB)
       : LiftedModule{LiftedModule}, srcFn{srcFn},
         STI{Targ->createMCSubtargetInfo(DefaultTT.getTriple(), DefaultCPU, "")},
-        DL{srcFn.getParent()->getDataLayout()}, MCII{Targ->createMCInstrInfo()},
+        DL{srcFn->getParent()->getDataLayout()}, MCII{Targ->createMCInstrInfo()},
         MRI{Targ->createMCRegInfo(DefaultTT.getTriple())},
         MCOptions{llvm::mc::InitMCTargetOptionsFromFlags()},
         MAI{Targ->createMCAsmInfo(*MRI, DefaultTT.getTriple(), MCOptions)},

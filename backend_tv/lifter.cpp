@@ -114,9 +114,9 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
 
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
-    lifter = make_unique<arm2llvm>(liftedModule, *srcFn, std::move(MB));
+    lifter = make_unique<arm2llvm>(liftedModule, srcFn, std::move(MB));
   } else if (DefaultBackend == "riscv64") {
-    lifter = make_unique<riscv2llvm>(liftedModule, *srcFn, std::move(MB));
+    lifter = make_unique<riscv2llvm>(liftedModule, srcFn, std::move(MB));
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);

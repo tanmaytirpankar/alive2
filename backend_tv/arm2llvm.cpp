@@ -20,7 +20,7 @@ unsigned arm2llvm::sentinelNOP() {
   return AArch64::SEH_Nop;
 }
 
-arm2llvm::arm2llvm(Module *LiftedModule, Function &srcFn,
+arm2llvm::arm2llvm(Module *LiftedModule, Function *srcFn,
                    unique_ptr<MemoryBuffer> MB)
   : mc2llvm(LiftedModule, srcFn, std::move(MB)) {
   // sanity checking
@@ -715,7 +715,7 @@ void arm2llvm::doReturn() {
                  readFromRegTyped(AArch64::X0 + r, getIntTy(64)));
   }
 
-  auto *retTyp = srcFn.getReturnType();
+  auto *retTyp = srcFn->getReturnType();
   if (retTyp->isVoidTy()) {
     createReturn(nullptr);
   } else {
@@ -3290,7 +3290,7 @@ void arm2llvm::platformInit() {
 
   for (Function::arg_iterator arg = liftedFn->arg_begin(),
                               E = liftedFn->arg_end(),
-                              srcArg = srcFn.arg_begin();
+                              srcArg = srcFn->arg_begin();
        arg != E; ++arg, ++srcArg) {
     *out << "  processing " << getBitWidth(arg)
          << "-bit arg with vecArgNum = " << vecArgNum

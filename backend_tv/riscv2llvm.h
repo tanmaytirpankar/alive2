@@ -79,7 +79,7 @@ class riscv2llvm final : public mc2llvm {
   llvm::Value *getPointerOperand();
 
 public:
-  riscv2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
+  riscv2llvm(llvm::Module *LiftedModule, llvm::Function *srcFn,
              std::unique_ptr<llvm::MemoryBuffer> MB);
 };
 

@@ -51,7 +51,7 @@ Constant *mc2llvm::lazyAddGlobal(string newGlobal) {
     *out << "  yay it's me!\n";
     return liftedFn;
   }
-  for (auto &f : *srcFn.getParent()) {
+  for (auto &f : *srcFn->getParent()) {
     auto name = f.getName();
     if (name != newGlobal)
       continue;
@@ -133,7 +133,7 @@ Constant *mc2llvm::lazyAddGlobal(string newGlobal) {
   // LLVM IR, but they don't show up anywhere in the assembly -- the
   // declaration is implicit. so here we find those and create them
   // in the lifted module
-  for (auto &srcFnGlobal : srcFn.getParent()->globals()) {
+  for (auto &srcFnGlobal : srcFn->getParent()->globals()) {
     if (!srcFnGlobal.isDeclaration())
       continue;
     string name{srcFnGlobal.getName()};
@@ -564,9 +564,9 @@ Function *mc2llvm::run() {
 
   // create a fresh function
   liftedFn =
-      Function::Create(srcFn.getFunctionType(), GlobalValue::ExternalLinkage, 0,
-                       srcFn.getName(), LiftedModule);
-  liftedFn->copyAttributesFrom(&srcFn);
+      Function::Create(srcFn->getFunctionType(), GlobalValue::ExternalLinkage, 0,
+                       srcFn->getName(), LiftedModule);
+  liftedFn->copyAttributesFrom(srcFn);
 
   // create LLVM-side basic blocks
   vector<pair<BasicBlock *, MCBasicBlock *>> BBs;
