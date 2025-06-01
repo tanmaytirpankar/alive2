@@ -393,6 +393,13 @@ public:
   void lift_zip1(unsigned opcode);
   void lift_zip2(unsigned opcode);
   void lift_addp(unsigned opcode);
+  void lift_xtn(unsigned opcode);
+  void lift_qxtn(unsigned opcode);
+  void lift_unary_vec(unsigned opcode);
+  void lift_uqadd(unsigned opcode);
+  void lift_uqsub(unsigned opcode);
+  void lift_sqadd(unsigned opcode);
+  void lift_sqsub(unsigned opcode);
 };
 
 } // end namespace lifter

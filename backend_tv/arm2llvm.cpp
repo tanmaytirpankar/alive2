@@ -3302,7 +3302,7 @@ void arm2llvm::lift(MCInst &I) {
   // auto i8 = getIntTy(8);
   // auto i16 = getIntTy(16);
   // auto i32 = getIntTy(32);
-  auto i64 = getIntTy(64);
+  // auto i64 = getIntTy(64);
 
   switch (opcode) {
 
@@ -5050,42 +5050,6 @@ void arm2llvm::lift(MCInst &I) {
     lift_addp(opcode);
     break;
 
-#define GET_SIZES9(INSN, SUFF)                                                 \
-  unsigned numElts, eltSize;                                                   \
-  if (opcode == AArch64::INSN##v8i8##SUFF) {                                   \
-    numElts = 8;                                                               \
-    eltSize = 8;                                                               \
-  } else if (opcode == AArch64::INSN##v4i16##SUFF) {                           \
-    numElts = 4;                                                               \
-    eltSize = 16;                                                              \
-  } else if (opcode == AArch64::INSN##v1i32##SUFF) {                           \
-    numElts = 1;                                                               \
-    eltSize = 32;                                                              \
-  } else if (opcode == AArch64::INSN##v2i32##SUFF) {                           \
-    numElts = 2;                                                               \
-    eltSize = 32;                                                              \
-  } else if (opcode == AArch64::INSN##v16i8##SUFF) {                           \
-    numElts = 16;                                                              \
-    eltSize = 8;                                                               \
-  } else if (opcode == AArch64::INSN##v4i32##SUFF) {                           \
-    numElts = 4;                                                               \
-    eltSize = 32;                                                              \
-  } else if (opcode == AArch64::INSN##v8i16##SUFF) {                           \
-    numElts = 8;                                                               \
-    eltSize = 16;                                                              \
-  } else if (opcode == AArch64::INSN##v1i64##SUFF) {                           \
-    numElts = 1;                                                               \
-    eltSize = 64;                                                              \
-  } else if (opcode == AArch64::INSN##v2i64##SUFF) {                           \
-    numElts = 2;                                                               \
-    eltSize = 64;                                                              \
-  } else {                                                                     \
-    assert(false);                                                             \
-  }
-
-    // FIXME: we're not doing this "If saturation occurs, the
-    // cumulative saturation bit FPSR.QC is set." (same applies to
-    // UQSUB)
   case AArch64::UQADDv1i32:
   case AArch64::UQADDv1i64:
   case AArch64::UQADDv8i8:
@@ -5094,14 +5058,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::UQADDv2i64:
   case AArch64::UQADDv4i32:
   case AArch64::UQADDv16i8:
-  case AArch64::UQADDv8i16: {
-    GET_SIZES9(UQADD, );
-    auto x = readFromVecOperand(1, eltSize, numElts);
-    auto y = readFromVecOperand(2, eltSize, numElts);
-    auto res = createUAddSat(x, y);
-    updateOutputReg(res);
+  case AArch64::UQADDv8i16:
+    lift_uqadd(opcode);
     break;
-  }
 
   case AArch64::UQSUBv1i32:
   case AArch64::UQSUBv1i64:
@@ -5111,14 +5070,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::UQSUBv2i64:
   case AArch64::UQSUBv4i32:
   case AArch64::UQSUBv16i8:
-  case AArch64::UQSUBv8i16: {
-    GET_SIZES9(UQSUB, );
-    auto x = readFromVecOperand(1, eltSize, numElts);
-    auto y = readFromVecOperand(2, eltSize, numElts);
-    auto res = createUSubSat(x, y);
-    updateOutputReg(res);
+  case AArch64::UQSUBv8i16:
+    lift_uqsub(opcode);
     break;
-  }
 
   case AArch64::SQADDv1i32:
   case AArch64::SQADDv1i64:
@@ -5128,14 +5082,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::SQADDv2i64:
   case AArch64::SQADDv4i32:
   case AArch64::SQADDv16i8:
-  case AArch64::SQADDv8i16: {
-    GET_SIZES9(SQADD, );
-    auto x = readFromVecOperand(1, eltSize, numElts);
-    auto y = readFromVecOperand(2, eltSize, numElts);
-    auto res = createSAddSat(x, y);
-    updateOutputReg(res);
+  case AArch64::SQADDv8i16:
+    lift_sqadd(opcode);
     break;
-  }
 
   case AArch64::SQSUBv1i32:
   case AArch64::SQSUBv1i64:
@@ -5145,14 +5094,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::SQSUBv2i64:
   case AArch64::SQSUBv4i32:
   case AArch64::SQSUBv16i8:
-  case AArch64::SQSUBv8i16: {
-    GET_SIZES9(SQSUB, );
-    auto x = readFromVecOperand(1, eltSize, numElts);
-    auto y = readFromVecOperand(2, eltSize, numElts);
-    auto res = createSSubSat(x, y);
-    updateOutputReg(res);
+  case AArch64::SQSUBv8i16:
+    lift_sqsub(opcode);
     break;
-  }
 
   case AArch64::UMULLv4i16_indexed:
   case AArch64::UMULLv2i32_indexed:
@@ -5271,70 +5215,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::XTNv4i16:
   case AArch64::XTNv8i16:
   case AArch64::XTNv8i8:
-  case AArch64::XTNv16i8: {
-    auto &op0 = CurInst->getOperand(0);
-    uint64_t srcReg = opcode == AArch64::XTNv2i32 ||
-                              opcode == AArch64::XTNv4i16 ||
-                              opcode == AArch64::XTNv8i8
-                          ? 1
-                          : 2;
-    auto &op1 = CurInst->getOperand(srcReg);
-    assert(isSIMDandFPRegOperand(op0) && isSIMDandFPRegOperand(op0));
-
-    Value *src = readFromRegOld(op1.getReg());
-    assert(getBitWidth(src) == 128 &&
-           "Source value is not a vector with 128 bits");
-
-    uint64_t eltSize, numElts, part;
-    part = opcode == AArch64::XTNv2i32 || opcode == AArch64::XTNv4i16 ||
-                   opcode == AArch64::XTNv8i8
-               ? 0
-               : 1;
-    switch (opcode) {
-    case AArch64::XTNv8i8:
-    case AArch64::XTNv16i8:
-      numElts = 8;
-      eltSize = 8;
-      break;
-    case AArch64::XTNv4i16:
-    case AArch64::XTNv8i16:
-      numElts = 4;
-      eltSize = 16;
-      break;
-    case AArch64::XTNv2i32:
-    case AArch64::XTNv4i32:
-      numElts = 2;
-      eltSize = 32;
-      break;
-    default:
-      *out << "\nError Unknown opcode\n";
-      visitError();
-      break;
-    }
-
-    // BitCast src to a vector of numElts x (2*eltSize) for narrowing
-    assert(numElts * (2 * eltSize) == 128 && "BitCasting to wrong type");
-    Value *src_vector = createBitCast(src, getVecTy(2 * eltSize, numElts));
-    Value *narrowed_vector =
-        createTrunc(src_vector, getVecTy(eltSize, numElts));
-
-    Value *final_vector = narrowed_vector;
-    // For XTN2 - insertion to upper half
-    if (part) {
-      // Preserve the lower 64 bits so, read from destination register
-      // and insert to the upper 64 bits
-      Value *dest = readFromRegOld(op0.getReg());
-      Value *original_dest_vector = createBitCast(dest, getVecTy(64, 2));
-
-      Value *element = createBitCast(narrowed_vector, i64);
-
-      final_vector = createInsertElement(original_dest_vector, element, 1);
-    }
-
-    // Write 64 bits for XTN or 128 bits XTN2 to output register
-    updateOutputReg(final_vector);
+  case AArch64::XTNv16i8:
+    lift_xtn(opcode);
     break;
-  }
 
     //    case AArch64::UQXTNv1i8:
     //    case AArch64::UQXTNv1i16:
@@ -5353,134 +5236,9 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::SQXTNv2i32:
   case AArch64::SQXTNv16i8:
   case AArch64::SQXTNv8i16:
-  case AArch64::SQXTNv4i32: {
-    auto &op0 = CurInst->getOperand(0);
-
-    uint64_t srcReg, part;
-    switch (opcode) {
-    case AArch64::UQXTNv1i8:
-    case AArch64::UQXTNv1i16:
-    case AArch64::UQXTNv1i32:
-    case AArch64::UQXTNv8i8:
-    case AArch64::UQXTNv4i16:
-    case AArch64::UQXTNv2i32:
-    case AArch64::SQXTNv1i8:
-    case AArch64::SQXTNv1i16:
-    case AArch64::SQXTNv1i32:
-    case AArch64::SQXTNv8i8:
-    case AArch64::SQXTNv4i16:
-    case AArch64::SQXTNv2i32:
-      srcReg = 1;
-      part = 0;
-      break;
-    case AArch64::UQXTNv16i8:
-    case AArch64::UQXTNv8i16:
-    case AArch64::UQXTNv4i32:
-    case AArch64::SQXTNv16i8:
-    case AArch64::SQXTNv8i16:
-    case AArch64::SQXTNv4i32:
-      srcReg = 2;
-      part = 1;
-      break;
-    default:
-      *out << "\nError Unknown opcode\n";
-      visitError();
-      break;
-    }
-
-    auto &op1 = CurInst->getOperand(srcReg);
-    assert(isSIMDandFPRegOperand(op0) && isSIMDandFPRegOperand(op0));
-
-    Value *src = readFromRegOld(op1.getReg());
-    assert(getBitWidth(src) == 128 &&
-           "Source value is not a vector with 128 bits");
-
-    uint64_t eltSize, numElts;
-    switch (opcode) {
-    case AArch64::UQXTNv1i8:
-    case AArch64::UQXTNv16i8:
-    case AArch64::UQXTNv8i8:
-    case AArch64::SQXTNv1i8:
-    case AArch64::SQXTNv16i8:
-    case AArch64::SQXTNv8i8:
-      numElts = 8;
-      eltSize = 8;
-      break;
-    case AArch64::UQXTNv1i16:
-    case AArch64::UQXTNv8i16:
-    case AArch64::UQXTNv4i16:
-    case AArch64::SQXTNv1i16:
-    case AArch64::SQXTNv8i16:
-    case AArch64::SQXTNv4i16:
-      numElts = 4;
-      eltSize = 16;
-      break;
-    case AArch64::UQXTNv1i32:
-    case AArch64::UQXTNv4i32:
-    case AArch64::UQXTNv2i32:
-    case AArch64::SQXTNv1i32:
-    case AArch64::SQXTNv2i32:
-    case AArch64::SQXTNv4i32:
-      numElts = 2;
-      eltSize = 32;
-      break;
-    default:
-      *out << "\nError Unknown opcode\n";
-      visitError();
-      break;
-    }
-
-    if (opcode == AArch64::UQXTNv1i8 || opcode == AArch64::UQXTNv1i16 ||
-        opcode == AArch64::UQXTNv1i32 || opcode == AArch64::SQXTNv1i8 ||
-        opcode == AArch64::SQXTNv1i16 || opcode == AArch64::SQXTNv1i32) {
-      numElts = 1;
-    }
-
-    bool isSigned = false;
-    switch (opcode) {
-    case AArch64::SQXTNv1i8:
-    case AArch64::SQXTNv1i16:
-    case AArch64::SQXTNv1i32:
-    case AArch64::SQXTNv8i8:
-    case AArch64::SQXTNv4i16:
-    case AArch64::SQXTNv2i32:
-    case AArch64::SQXTNv16i8:
-    case AArch64::SQXTNv8i16:
-    case AArch64::SQXTNv4i32:
-      isSigned = true;
-      break;
-    }
-
-    // BitCast src to a vector of numElts x (2*eltSize) for narrowing
-    assert(numElts * (2 * eltSize) == 128 && "BitCasting to wrong type");
-    Value *src_vector = createBitCast(src, getVecTy(2 * eltSize, numElts));
-
-    Value *final_vector = getUndefVec(numElts, eltSize);
-    // Perform element-wise saturating narrow using SatQ
-    for (unsigned i = 0; i < numElts; ++i) {
-      auto element = createExtractElement(src_vector, i);
-      auto [narrowed_element, sat] = SatQ(element, eltSize, isSigned);
-      final_vector = createInsertElement(final_vector, narrowed_element, i);
-    }
-
-    // For UQXTN2, SQXTN2 - insertion to upper half
-    if (part) {
-      // Preserve the lower 64 bits so, read from destination register
-      // and insert to the upper 64 bits
-      Value *dest = readFromRegOld(op0.getReg());
-      Value *original_dest_vector = createBitCast(dest, getVecTy(64, 2));
-
-      Value *element = createBitCast(final_vector, i64);
-
-      final_vector = createInsertElement(original_dest_vector, element, 1);
-    }
-
-    // Write 64 bits for UQXTN, SQXTN or 128 bits for UQXTN2, SQXTN2 to output
-    // register
-    updateOutputReg(final_vector);
-
+  case AArch64::SQXTNv4i32:
+    lift_qxtn(opcode);
     break;
-  }
 
     // unary vector instructions
   case AArch64::ABSv1i64:
@@ -5549,270 +5307,10 @@ void arm2llvm::lift(MCInst &I) {
   case AArch64::ADDVv8i8v:
   case AArch64::ADDVv4i16v:
   case AArch64::RBITv8i8:
-  case AArch64::RBITv16i8: {
-    auto src = readFromOperand(1);
-    uint64_t eltSize, numElts;
-
-    switch (opcode) {
-    case AArch64::ABSv1i64:
-    case AArch64::NEGv1i64:
-      eltSize = 64;
-      numElts = 1;
-      break;
-    case AArch64::ABSv4i16:
-    case AArch64::CLZv4i16:
-    case AArch64::NEGv4i16:
-    case AArch64::UADDLVv4i16v:
-    case AArch64::SADDLVv4i16v:
-    case AArch64::UADDLPv4i16_v2i32:
-    case AArch64::SADDLPv4i16_v2i32:
-    case AArch64::UADALPv4i16_v2i32:
-    case AArch64::SADALPv4i16_v2i32:
-    case AArch64::ADDVv4i16v:
-      eltSize = 16;
-      numElts = 4;
-      break;
-    case AArch64::ABSv2i32:
-    case AArch64::CLZv2i32:
-    case AArch64::NEGv2i32:
-    case AArch64::UADDLPv2i32_v1i64:
-    case AArch64::SADDLPv2i32_v1i64:
-    case AArch64::UADALPv2i32_v1i64:
-    case AArch64::SADALPv2i32_v1i64:
-      eltSize = 32;
-      numElts = 2;
-      break;
-    case AArch64::ABSv8i16:
-    case AArch64::CLZv8i16:
-    case AArch64::NEGv8i16:
-    case AArch64::UADDLVv8i16v:
-    case AArch64::SADDLVv8i16v:
-    case AArch64::UADDLPv8i16_v4i32:
-    case AArch64::SADDLPv8i16_v4i32:
-    case AArch64::UADALPv8i16_v4i32:
-    case AArch64::SADALPv8i16_v4i32:
-    case AArch64::ADDVv8i16v:
-      eltSize = 16;
-      numElts = 8;
-      break;
-    case AArch64::ABSv2i64:
-    case AArch64::NEGv2i64:
-      eltSize = 64;
-      numElts = 2;
-      break;
-    case AArch64::ABSv4i32:
-    case AArch64::CLZv4i32:
-    case AArch64::NEGv4i32:
-    case AArch64::UADDLVv4i32v:
-    case AArch64::SADDLVv4i32v:
-    case AArch64::UADDLPv4i32_v2i64:
-    case AArch64::SADDLPv4i32_v2i64:
-    case AArch64::UADALPv4i32_v2i64:
-    case AArch64::SADALPv4i32_v2i64:
-    case AArch64::ADDVv4i32v:
-      eltSize = 32;
-      numElts = 4;
-      break;
-    case AArch64::ABSv8i8:
-    case AArch64::CLZv8i8:
-    case AArch64::UADDLVv8i8v:
-    case AArch64::SADDLVv8i8v:
-    case AArch64::UADDLPv8i8_v4i16:
-    case AArch64::SADDLPv8i8_v4i16:
-    case AArch64::UADALPv8i8_v4i16:
-    case AArch64::SADALPv8i8_v4i16:
-    case AArch64::NEGv8i8:
-    case AArch64::NOTv8i8:
-    case AArch64::CNTv8i8:
-    case AArch64::ADDVv8i8v:
-    case AArch64::RBITv8i8:
-      eltSize = 8;
-      numElts = 8;
-      break;
-    case AArch64::ABSv16i8:
-    case AArch64::CLZv16i8:
-    case AArch64::RBITv16i8:
-    case AArch64::ADDVv16i8v:
-    case AArch64::NEGv16i8:
-    case AArch64::UADDLVv16i8v:
-    case AArch64::SADDLVv16i8v:
-    case AArch64::UADDLPv16i8_v8i16:
-    case AArch64::SADDLPv16i8_v8i16:
-    case AArch64::UADALPv16i8_v8i16:
-    case AArch64::SADALPv16i8_v8i16:
-    case AArch64::NOTv16i8:
-    case AArch64::CNTv16i8:
-      eltSize = 8;
-      numElts = 16;
-      break;
-    default:
-      assert(false);
-    }
-
-    auto *vTy = getVecTy(eltSize, numElts);
-
-    // Perform the operation
-    switch (opcode) {
-    case AArch64::ABSv1i64:
-    case AArch64::ABSv8i8:
-    case AArch64::ABSv4i16:
-    case AArch64::ABSv2i32:
-    case AArch64::ABSv2i64:
-    case AArch64::ABSv16i8:
-    case AArch64::ABSv8i16:
-    case AArch64::ABSv4i32: {
-      auto src_vector = createBitCast(src, vTy);
-      auto res = createAbs(src_vector);
-      updateOutputReg(res);
-      break;
-    }
-    case AArch64::CLZv2i32:
-    case AArch64::CLZv4i16:
-    case AArch64::CLZv8i8:
-    case AArch64::CLZv16i8:
-    case AArch64::CLZv8i16:
-    case AArch64::CLZv4i32: {
-      auto src_vector = createBitCast(src, vTy);
-      auto res = createCtlz(src_vector);
-      updateOutputReg(res);
-      break;
-    }
-    case AArch64::ADDVv16i8v:
-    case AArch64::ADDVv8i16v:
-    case AArch64::ADDVv4i32v:
-    case AArch64::ADDVv8i8v:
-    case AArch64::ADDVv4i16v: {
-      auto src_vector = createBitCast(src, vTy);
-      Value *sum = getUnsignedIntConst(0, eltSize);
-      for (unsigned i = 0; i < numElts; ++i) {
-        auto elt = createExtractElement(src_vector, i);
-        sum = createAdd(sum, elt);
-      }
-      // sum goes into the bottom lane, all others are zeroed out
-      auto zero = getZeroIntVec(numElts, eltSize);
-      auto res = createInsertElement(zero, sum, 0);
-      updateOutputReg(res);
-      break;
-    }
-    case AArch64::UADDLPv4i16_v2i32:
-    case AArch64::UADDLPv2i32_v1i64:
-    case AArch64::UADDLPv8i8_v4i16:
-    case AArch64::UADDLPv8i16_v4i32:
-    case AArch64::UADDLPv4i32_v2i64:
-    case AArch64::UADDLPv16i8_v8i16: {
-      auto src_vector = createBitCast(src, vTy);
-      auto res = addPairs(src_vector, eltSize, numElts, extKind::ZExt);
-      updateOutputReg(res);
-      break;
-    }
-    case AArch64::SADDLPv4i16_v2i32:
-    case AArch64::SADDLPv2i32_v1i64:
-    case AArch64::SADDLPv8i8_v4i16:
-    case AArch64::SADDLPv8i16_v4i32:
-    case AArch64::SADDLPv4i32_v2i64:
-    case AArch64::SADDLPv16i8_v8i16: {
-      auto src_vector = createBitCast(src, vTy);
-      auto res = addPairs(src_vector, eltSize, numElts, extKind::SExt);
-      updateOutputReg(res);
-      break;
-    }
-    case AArch64::UADALPv4i16_v2i32:
-    case AArch64::UADALPv2i32_v1i64:
-    case AArch64::UADALPv8i8_v4i16:
-    case AArch64::UADALPv8i16_v4i32:
-    case AArch64::UADALPv4i32_v2i64:
-    case AArch64::UADALPv16i8_v8i16:
-    case AArch64::SADALPv4i16_v2i32:
-    case AArch64::SADALPv2i32_v1i64:
-    case AArch64::SADALPv8i8_v4i16:
-    case AArch64::SADALPv8i16_v4i32:
-    case AArch64::SADALPv4i32_v2i64:
-    case AArch64::SADALPv16i8_v8i16: {
-      auto ext = opcode == AArch64::SADALPv4i16_v2i32 ||
-                         opcode == AArch64::SADALPv2i32_v1i64 ||
-                         opcode == AArch64::SADALPv8i8_v4i16 ||
-                         opcode == AArch64::SADALPv8i16_v4i32 ||
-                         opcode == AArch64::SADALPv4i32_v2i64 ||
-                         opcode == AArch64::SADALPv16i8_v8i16
-                     ? extKind::SExt
-                     : extKind::ZExt;
-      auto src2 = readFromOperand(2);
-      auto src2_vector = createBitCast(src2, vTy);
-      auto sum = addPairs(src2_vector, eltSize, numElts, ext);
-      auto *bigTy = getVecTy(2 * eltSize, numElts / 2);
-      Value *res = getUndefVec(numElts / 2, 2 * eltSize);
-      auto src_vector = createBitCast(src, bigTy);
-      for (unsigned i = 0; i < numElts / 2; ++i) {
-        auto elt1 = createExtractElement(src_vector, i);
-        auto elt2 = createExtractElement(sum, i);
-        auto add = createAdd(elt1, elt2);
-        res = createInsertElement(res, add, i);
-      }
-      updateOutputReg(res);
-      break;
-    }
-    case AArch64::UADDLVv8i16v:
-    case AArch64::UADDLVv4i32v:
-    case AArch64::UADDLVv8i8v:
-    case AArch64::UADDLVv4i16v:
-    case AArch64::UADDLVv16i8v:
-    case AArch64::SADDLVv8i8v:
-    case AArch64::SADDLVv16i8v:
-    case AArch64::SADDLVv4i16v:
-    case AArch64::SADDLVv8i16v:
-    case AArch64::SADDLVv4i32v: {
-      bool isSigned =
-          opcode == AArch64::SADDLVv8i8v || opcode == AArch64::SADDLVv16i8v ||
-          opcode == AArch64::SADDLVv4i16v || opcode == AArch64::SADDLVv8i16v ||
-          opcode == AArch64::SADDLVv4i32v;
-      auto src_vector = createBitCast(src, vTy);
-      auto bigTy = getIntTy(2 * eltSize);
-      Value *sum = getUnsignedIntConst(0, 2 * eltSize);
-      for (unsigned i = 0; i < numElts; ++i) {
-        auto elt = createExtractElement(src_vector, i);
-        auto ext = isSigned ? createSExt(elt, bigTy) : createZExt(elt, bigTy);
-        sum = createAdd(sum, ext);
-      }
-      updateOutputReg(sum);
-      break;
-    }
-    case AArch64::NOTv8i8:
-    case AArch64::NOTv16i8: {
-      auto src_vector = createBitCast(src, vTy);
-      updateOutputReg(createNot(src_vector));
-      break;
-    }
-    case AArch64::RBITv8i8:
-    case AArch64::RBITv16i8: {
-      auto src_vector = createBitCast(src, vTy);
-      auto result = createBitReverse(src_vector);
-      updateOutputReg(result);
-      break;
-    }
-    case AArch64::CNTv8i8:
-    case AArch64::CNTv16i8: {
-      auto src_vector = createBitCast(src, vTy);
-      updateOutputReg(createCtPop(src_vector));
-      break;
-    }
-    case AArch64::NEGv1i64:
-    case AArch64::NEGv4i16:
-    case AArch64::NEGv8i8:
-    case AArch64::NEGv16i8:
-    case AArch64::NEGv2i32:
-    case AArch64::NEGv8i16:
-    case AArch64::NEGv2i64:
-    case AArch64::NEGv4i32: {
-      auto src_vector = createBitCast(src, vTy);
-      auto zeroes = ConstantInt::get(vTy, APInt::getZero(eltSize));
-      updateOutputReg(createSub(zeroes, src_vector));
-      break;
-    }
-    default:
-      assert(false);
-    }
+  case AArch64::RBITv16i8:
+    lift_unary_vec(opcode);
     break;
-  }
+
   default:
     *out << funcToString(liftedFn);
     *out << "\nError "
