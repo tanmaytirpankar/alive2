@@ -388,6 +388,11 @@ public:
   void lift_mlal_mlsl_idx(unsigned opcode);
   void lift_mlal_mlsl(unsigned opcode);
   void lift_aba_abd(unsigned opcode);
+  void lift_ssra(unsigned opcode);
+  void lift_usra(unsigned opcode);
+  void lift_zip1(unsigned opcode);
+  void lift_zip2(unsigned opcode);
+  void lift_addp(unsigned opcode);
 };
 
 } // end namespace lifter
