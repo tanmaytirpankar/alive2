@@ -30,7 +30,7 @@ class mc2llvm : public aslp::lifter_interface_llvm {
 public:
   llvm::SourceMgr SrcMgr;
   llvm::Module *LiftedModule{nullptr};
-  llvm::LLVMContext &Ctx = LiftedModule->getContext();
+  llvm::LLVMContext &Ctx;
   llvm::Function *srcFn{nullptr};
   llvm::Function *liftedFn{nullptr};
   MCBasicBlock *MCBB{nullptr};
@@ -55,9 +55,9 @@ public:
   std::unique_ptr<MCStreamerWrapper> Str;
   std::unique_ptr<llvm::MemoryBuffer> MB;
 
-  mc2llvm(llvm::Module *LiftedModule, llvm::Function *srcFn,
-          std::unique_ptr<llvm::MemoryBuffer> MB)
-      : LiftedModule{LiftedModule}, srcFn{srcFn},
+  mc2llvm(llvm::Function *srcFn, std::unique_ptr<llvm::MemoryBuffer> MB)
+      : LiftedModule{new llvm::Module("LiftedModule", srcFn->getContext())},
+        Ctx{srcFn->getContext()}, srcFn{srcFn},
         STI{Targ->createMCSubtargetInfo(DefaultTT.getTriple(), DefaultCPU, "")},
         DL{srcFn->getParent()->getDataLayout()},
         MCII{Targ->createMCInstrInfo()},

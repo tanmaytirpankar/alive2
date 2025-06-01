@@ -104,15 +104,11 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
   // FIXME -- all this code below needs to move info mc2llvm so we can
   // use object dispatch to easily access platform-specific code
 
-  auto liftedModule = new Module("liftedModule", srcFn->getContext());
-  // liftedModule->setDataLayout(srcModule->getDataLayout());
-  // liftedModule->setTargetTriple(srcModule->getTargetTriple());
-
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
-    lifter = make_unique<arm2llvm>(liftedModule, srcFn, std::move(MB));
+    lifter = make_unique<arm2llvm>(srcFn, std::move(MB));
   } else if (DefaultBackend == "riscv64") {
-    lifter = make_unique<riscv2llvm>(liftedModule, srcFn, std::move(MB));
+    lifter = make_unique<riscv2llvm>(srcFn, std::move(MB));
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);

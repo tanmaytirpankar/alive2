@@ -518,6 +518,9 @@ void mc2llvm::createRegStorage(unsigned Reg, unsigned Width,
 }
 
 pair<Function *, Function *> mc2llvm::run() {
+  // liftedModule->setDataLayout(srcModule->getDataLayout());
+  // liftedModule->setTargetTriple(srcModule->getTargetTriple());
+
   checkSupport(srcFn);
   nameGlobals(srcFn->getParent());
   srcFn = adjustSrc(srcFn);
