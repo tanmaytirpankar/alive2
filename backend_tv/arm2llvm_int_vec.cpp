@@ -13,68 +13,68 @@ using namespace std;
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
 void arm2llvm::lift_mull(unsigned opcode) {
-    int eltSize, numElts1, numElts2;
-    if (opcode == AArch64::SMULLv8i16_indexed ||
-        opcode == AArch64::UMULLv8i16_indexed) {
-      numElts1 = 8;
-      numElts2 = 8;
-      eltSize = 16;
-    } else if (opcode == AArch64::SMULLv4i32_indexed ||
-               opcode == AArch64::UMULLv4i32_indexed) {
-      numElts1 = 4;
-      numElts2 = 4;
-      eltSize = 32;
-    } else if (opcode == AArch64::SMULLv2i32_indexed ||
-               opcode == AArch64::UMULLv2i32_indexed) {
-      numElts1 = 2;
-      numElts2 = 4;
-      eltSize = 32;
-    } else if (opcode == AArch64::SMULLv4i16_indexed ||
-               opcode == AArch64::UMULLv4i16_indexed) {
-      numElts1 = 4;
-      numElts2 = 8;
-      eltSize = 16;
-    } else {
-      assert(false);
-    }
-    auto vTy1 = getVecTy(eltSize, numElts1);
-    auto vTy2 = getVecTy(eltSize, numElts2);
-    auto vBigTy1 = getVecTy(2 * eltSize, numElts1);
-    auto vBigTy2 = getVecTy(2 * eltSize, numElts2);
-    Value *a, *b;
-    switch (opcode) {
-    case AArch64::UMULLv4i16_indexed:
-    case AArch64::UMULLv2i32_indexed:
-    case AArch64::UMULLv8i16_indexed:
-    case AArch64::UMULLv4i32_indexed:
-      a = createZExt(createBitCast(readFromOperand(1), vTy1), vBigTy1);
-      b = createZExt(createBitCast(readFromOperand(2, 128), vTy2), vBigTy2);
-      break;
-    case AArch64::SMULLv4i32_indexed:
-    case AArch64::SMULLv8i16_indexed:
-    case AArch64::SMULLv4i16_indexed:
-    case AArch64::SMULLv2i32_indexed:
-      a = createSExt(createBitCast(readFromOperand(1), vTy1), vBigTy1);
-      b = createSExt(createBitCast(readFromOperand(2, 128), vTy2), vBigTy2);
-      break;
-    default:
-      assert(false);
-    }
-    auto idx = getImm(3);
-    Value *res = getUndefVec(numElts1, 2 * eltSize);
-    // offset is nonzero when we're dealing with SMULL2/UMULL2
-    int offset = (opcode == AArch64::SMULLv4i32_indexed ||
-                  opcode == AArch64::SMULLv8i16_indexed ||
-                  opcode == AArch64::UMULLv4i32_indexed ||
-                  opcode == AArch64::UMULLv8i16_indexed)
-                     ? (numElts1 / 2)
-                     : 0;
-    auto e2 = createExtractElement(b, idx);
-    for (int i = 0; i < numElts1; ++i) {
-      auto e1 = createExtractElement(a, i + offset);
-      res = createInsertElement(res, createMul(e1, e2), i);
-    }
-    updateOutputReg(res);
+  int eltSize, numElts1, numElts2;
+  if (opcode == AArch64::SMULLv8i16_indexed ||
+      opcode == AArch64::UMULLv8i16_indexed) {
+    numElts1 = 8;
+    numElts2 = 8;
+    eltSize = 16;
+  } else if (opcode == AArch64::SMULLv4i32_indexed ||
+             opcode == AArch64::UMULLv4i32_indexed) {
+    numElts1 = 4;
+    numElts2 = 4;
+    eltSize = 32;
+  } else if (opcode == AArch64::SMULLv2i32_indexed ||
+             opcode == AArch64::UMULLv2i32_indexed) {
+    numElts1 = 2;
+    numElts2 = 4;
+    eltSize = 32;
+  } else if (opcode == AArch64::SMULLv4i16_indexed ||
+             opcode == AArch64::UMULLv4i16_indexed) {
+    numElts1 = 4;
+    numElts2 = 8;
+    eltSize = 16;
+  } else {
+    assert(false);
+  }
+  auto vTy1 = getVecTy(eltSize, numElts1);
+  auto vTy2 = getVecTy(eltSize, numElts2);
+  auto vBigTy1 = getVecTy(2 * eltSize, numElts1);
+  auto vBigTy2 = getVecTy(2 * eltSize, numElts2);
+  Value *a, *b;
+  switch (opcode) {
+  case AArch64::UMULLv4i16_indexed:
+  case AArch64::UMULLv2i32_indexed:
+  case AArch64::UMULLv8i16_indexed:
+  case AArch64::UMULLv4i32_indexed:
+    a = createZExt(createBitCast(readFromOperand(1), vTy1), vBigTy1);
+    b = createZExt(createBitCast(readFromOperand(2, 128), vTy2), vBigTy2);
+    break;
+  case AArch64::SMULLv4i32_indexed:
+  case AArch64::SMULLv8i16_indexed:
+  case AArch64::SMULLv4i16_indexed:
+  case AArch64::SMULLv2i32_indexed:
+    a = createSExt(createBitCast(readFromOperand(1), vTy1), vBigTy1);
+    b = createSExt(createBitCast(readFromOperand(2, 128), vTy2), vBigTy2);
+    break;
+  default:
+    assert(false);
+  }
+  auto idx = getImm(3);
+  Value *res = getUndefVec(numElts1, 2 * eltSize);
+  // offset is nonzero when we're dealing with SMULL2/UMULL2
+  int offset = (opcode == AArch64::SMULLv4i32_indexed ||
+                opcode == AArch64::SMULLv8i16_indexed ||
+                opcode == AArch64::UMULLv4i32_indexed ||
+                opcode == AArch64::UMULLv8i16_indexed)
+                   ? (numElts1 / 2)
+                   : 0;
+  auto e2 = createExtractElement(b, idx);
+  for (int i = 0; i < numElts1; ++i) {
+    auto e1 = createExtractElement(a, i + offset);
+    res = createInsertElement(res, createMul(e1, e2), i);
+  }
+  updateOutputReg(res);
 }
 
 void arm2llvm::lift_unary_vec(unsigned opcode) {

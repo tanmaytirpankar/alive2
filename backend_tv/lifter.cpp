@@ -108,10 +108,6 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
   // liftedModule->setDataLayout(srcModule->getDataLayout());
   // liftedModule->setTargetTriple(srcModule->getTargetTriple());
 
-  checkSupport(srcFn);
-  nameGlobals(srcFn->getParent());
-  srcFn = adjustSrc(srcFn);
-
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
     lifter = make_unique<arm2llvm>(liftedModule, srcFn, std::move(MB));
@@ -122,7 +118,7 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
     exit(-1);
   }
 
-  return make_pair(srcFn, lifter->run());
+  return lifter->run();
 }
 
 } // namespace lifter

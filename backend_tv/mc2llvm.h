@@ -59,7 +59,8 @@ public:
           std::unique_ptr<llvm::MemoryBuffer> MB)
       : LiftedModule{LiftedModule}, srcFn{srcFn},
         STI{Targ->createMCSubtargetInfo(DefaultTT.getTriple(), DefaultCPU, "")},
-        DL{srcFn->getParent()->getDataLayout()}, MCII{Targ->createMCInstrInfo()},
+        DL{srcFn->getParent()->getDataLayout()},
+        MCII{Targ->createMCInstrInfo()},
         MRI{Targ->createMCRegInfo(DefaultTT.getTriple())},
         MCOptions{llvm::mc::InitMCTargetOptionsFromFlags()},
         MAI{Targ->createMCAsmInfo(*MRI, DefaultTT.getTriple(), MCOptions)},
@@ -881,7 +882,7 @@ public:
   void liftInst(llvm::MCInst &I);
   void invalidateReg(unsigned Reg, unsigned Width);
   void createRegStorage(unsigned Reg, unsigned Width, const std::string &Name);
-  llvm::Function *run();
+  std::pair<llvm::Function *, llvm::Function *> run();
 
   /*
    * shared with the aslp lifter

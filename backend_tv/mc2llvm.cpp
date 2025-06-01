@@ -517,7 +517,11 @@ void mc2llvm::createRegStorage(unsigned Reg, unsigned Width,
   RegFile[Reg] = A;
 }
 
-Function *mc2llvm::run() {
+pair<Function *, Function *> mc2llvm::run() {
+  checkSupport(srcFn);
+  nameGlobals(srcFn->getParent());
+  srcFn = adjustSrc(srcFn);
+
   SrcMgr.AddNewSourceBuffer(std::move(MB), llvm::SMLoc());
 
   InstPrinter =
@@ -564,8 +568,8 @@ Function *mc2llvm::run() {
 
   // create a fresh function
   liftedFn =
-      Function::Create(srcFn->getFunctionType(), GlobalValue::ExternalLinkage, 0,
-                       srcFn->getName(), LiftedModule);
+      Function::Create(srcFn->getFunctionType(), GlobalValue::ExternalLinkage,
+                       0, srcFn->getName(), LiftedModule);
   liftedFn->copyAttributesFrom(srcFn);
 
   // create LLVM-side basic blocks
@@ -659,5 +663,5 @@ Function *mc2llvm::run() {
     exit(-1);
   }
 
-  return liftedFn;
+  return make_pair(srcFn, liftedFn);
 }
