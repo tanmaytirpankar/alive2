@@ -976,6 +976,7 @@ void arm2llvm::lift_cm(unsigned opcode) {
   case AArch64::CMGEv4i16rz:
   case AArch64::CMLEv8i8rz:
   case AArch64::CMLTv1i64rz:
+  case AArch64::CMGTv1i64rz:
   case AArch64::CMGTv2i32rz:
   case AArch64::CMGEv8i8rz:
   case AArch64::CMLEv2i32rz:
@@ -1067,6 +1068,7 @@ void arm2llvm::lift_cm(unsigned opcode) {
   case AArch64::CMLTv1i64rz:
   case AArch64::CMHIv1i64:
   case AArch64::CMGTv1i64:
+  case AArch64::CMGTv1i64rz:
   case AArch64::CMEQv1i64:
   case AArch64::CMGEv1i64:
   case AArch64::CMHSv1i64:
@@ -1232,6 +1234,7 @@ void arm2llvm::lift_cm(unsigned opcode) {
   case AArch64::CMGTv8i16rz:
   case AArch64::CMGTv8i8rz:
   case AArch64::CMGTv1i64:
+  case AArch64::CMGTv1i64rz:
   case AArch64::CMGTv16i8:
   case AArch64::CMGTv2i32:
   case AArch64::CMGTv2i64:
