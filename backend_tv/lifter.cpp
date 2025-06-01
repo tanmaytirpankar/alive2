@@ -14,20 +14,10 @@
 #include "llvm/Target/TargetMachine.h"
 
 #include "backend_tv/arm2llvm.h"
-#include "backend_tv/bitutils.h"
 #include "backend_tv/lifter.h"
 #include "backend_tv/mc2llvm.h"
 #include "backend_tv/riscv2llvm.h"
 #include "backend_tv/streamerwrapper.h"
-
-#include <cmath>
-#include <vector>
-
-#define GET_INSTRINFO_ENUM
-#include "Target/AArch64/AArch64GenInstrInfo.inc"
-
-#define GET_INSTRINFO_ENUM
-#include "Target/RISCV/RISCVGenInstrInfo.inc"
 
 using namespace std;
 using namespace llvm;
@@ -36,25 +26,7 @@ using namespace lifter;
 // do not delete this line
 mc::RegisterMCTargetOptionsFlags MOF;
 
-llvm::Triple lifter::DefaultTT;
-const char *lifter::DefaultDL;
-const char *lifter::DefaultCPU;
-
 namespace lifter {
-
-std::string moduleToString(llvm::Module *M) {
-  std::string sss;
-  llvm::raw_string_ostream ss(sss);
-  M->print(ss, nullptr);
-  return sss;
-}
-
-std::string funcToString(llvm::Function *F) {
-  std::string sss;
-  llvm::raw_string_ostream ss(sss);
-  F->print(ss, nullptr);
-  return sss;
-}
 
 // FIXME get rid of these globals
 std::ostream *out;
@@ -64,6 +36,9 @@ const Target *Targ;
 Function *myAlloc;
 Constant *stackSize;
 std::string DefaultBackend;
+llvm::Triple DefaultTT;
+const char *DefaultDL;
+const char *DefaultCPU;
 
 void init(std::string &backend) {
   DefaultBackend = backend;
@@ -100,10 +75,6 @@ void init(std::string &backend) {
 
 pair<Function *, Function *> liftFunc(Function *srcFn,
                                       unique_ptr<MemoryBuffer> MB) {
-
-  // FIXME -- all this code below needs to move info mc2llvm so we can
-  // use object dispatch to easily access platform-specific code
-
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
     lifter = make_unique<arm2llvm>(srcFn, std::move(MB));
@@ -115,6 +86,54 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
   }
 
   return lifter->run();
+}
+
+std::string moduleToString(llvm::Module *M) {
+  std::string sss;
+  llvm::raw_string_ostream ss(sss);
+  M->print(ss, nullptr);
+  return sss;
+}
+
+std::string funcToString(llvm::Function *F) {
+  std::string sss;
+  llvm::raw_string_ostream ss(sss);
+  F->print(ss, nullptr);
+  return sss;
+}
+
+// Some of these are from https://github.com/agustingianni/retools
+
+uint64_t replicate8to64(uint64_t v) {
+  uint64_t ret = 0;
+  for (int i = 0; i < 8; ++i) {
+    bool b = (v & 128) != 0;
+    ret <<= 8;
+    if (b)
+      ret |= 0xff;
+    v <<= 1;
+  }
+  return ret;
+}
+
+uint64_t Replicate(uint64_t bit, int N) {
+  if (!bit)
+    return 0;
+  if (N == 64)
+    return 0xffffffffffffffffLL;
+  return (1ULL << N) - 1;
+}
+
+uint64_t Replicate32x2(uint64_t bits32) {
+  return (bits32 << 32) | bits32;
+}
+
+uint64_t Replicate16x4(uint64_t bits16) {
+  return Replicate32x2((bits16 << 16) | bits16);
+}
+
+uint64_t Replicate8x8(uint64_t bits8) {
+  return Replicate16x4((bits8 << 8) | bits8);
 }
 
 } // namespace lifter

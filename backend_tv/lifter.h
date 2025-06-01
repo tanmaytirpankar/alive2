@@ -56,4 +56,10 @@ std::unique_ptr<llvm::MemoryBuffer> generateAsm(llvm::Module &);
 std::pair<llvm::Function *, llvm::Function *>
 liftFunc(llvm::Function *, std::unique_ptr<llvm::MemoryBuffer>);
 
+uint64_t replicate8to64(uint64_t v);
+uint64_t Replicate(uint64_t bit, int N);
+uint64_t Replicate32x2(uint64_t bits32);
+uint64_t Replicate16x4(uint64_t bits16);
+uint64_t Replicate8x8(uint64_t bits8);
+
 } // namespace lifter

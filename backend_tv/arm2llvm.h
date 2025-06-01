@@ -16,7 +16,6 @@
 #include "llvm/Target/TargetMachine.h"
 
 #include "backend_tv/arm2llvm.h"
-#include "backend_tv/bitutils.h"
 #include "backend_tv/lifter.h"
 #include "backend_tv/mc2llvm.h"
 #include "backend_tv/riscv2llvm.h"

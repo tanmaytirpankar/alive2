@@ -1,5 +1,4 @@
 #include "backend_tv/mc2llvm.h"
-#include "backend_tv/bitutils.h"
 #include "backend_tv/lifter.h"
 
 #include <regex>

@@ -15,7 +15,6 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Target/TargetMachine.h"
 
-#include "backend_tv/bitutils.h"
 #include "backend_tv/lifter.h"
 #include "backend_tv/streamerwrapper.h"
 
