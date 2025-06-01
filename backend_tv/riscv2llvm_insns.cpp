@@ -381,7 +381,6 @@ void riscv2llvm::lift(MCInst &I) {
   }
 
   default:
-    *out << "unhandled instruction\n";
-    exit(-1);
+    visitError();
   }
 }

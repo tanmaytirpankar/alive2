@@ -257,7 +257,7 @@ public:
   [[noreturn]] void visitError() {
     out->flush();
     std::string str(InstPrinter->getOpcodeName(CurInst->getOpcode()));
-    *out << "\nERROR: Unsupported AArch64 instruction: " << str << "\n";
+    *out << "\nERROR: Unsupported instruction: " << str << "\n";
     out->flush();
     exit(-1);
   }
