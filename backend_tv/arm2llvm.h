@@ -38,7 +38,7 @@ namespace lifter {
 class arm2llvm final : public mc2llvm {
 public:
   arm2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
-           llvm::SourceMgr &SrcMgr);
+           std::unique_ptr<llvm::MemoryBuffer> MB);
 
   // Implemented library pseudocode for signed satuaration from A64 ISA manual
   std::tuple<llvm::Value *, bool> SignedSatQ(llvm::Value *i, unsigned bitWidth);

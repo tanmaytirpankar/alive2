@@ -28,6 +28,7 @@ class MCBasicBlock;
 
 class mc2llvm : public aslp::lifter_interface_llvm {
 public:
+  llvm::SourceMgr SrcMgr;
   llvm::Module *LiftedModule{nullptr};
   llvm::LLVMContext &Ctx = LiftedModule->getContext();
   llvm::Function &srcFn;
@@ -51,11 +52,11 @@ public:
   std::unique_ptr<llvm::MCAsmInfo> MAI;
   std::unique_ptr<llvm::MCContext> MCCtx;
   std::unique_ptr<llvm::MCCodeEmitter> MCE;
-  llvm::SourceMgr &SrcMgr;
   std::unique_ptr<MCStreamerWrapper> Str;
+  std::unique_ptr<llvm::MemoryBuffer> MB;
 
   mc2llvm(llvm::Module *LiftedModule, llvm::Function &srcFn,
-          llvm::SourceMgr &SrcMgr)
+          std::unique_ptr<llvm::MemoryBuffer> MB)
       : LiftedModule{LiftedModule}, srcFn{srcFn},
         STI{Targ->createMCSubtargetInfo(DefaultTT.getTriple(), DefaultCPU, "")},
         DL{srcFn.getParent()->getDataLayout()}, MCII{Targ->createMCInstrInfo()},
@@ -65,7 +66,7 @@ public:
         MCCtx{std::make_unique<llvm::MCContext>(
             DefaultTT, MAI.get(), MRI.get(), STI.get(), &SrcMgr, &MCOptions)},
         MCE{Targ->createMCCodeEmitter(*MCII.get(), *MCCtx.get())},
-        SrcMgr{SrcMgr} {}
+        MB{std::move(MB)} {}
 
   // these are ones that the backend adds to tgt, even when they don't
   // appear at all in src
