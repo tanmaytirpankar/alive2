@@ -165,7 +165,6 @@ Value *riscv2llvm::readFromImmOperand(int idx, unsigned immed_width,
 
 Value *riscv2llvm::readFromReg(unsigned Reg, Type *ty) {
   auto addr = lookupReg(Reg);
-  *out << "addr = " << addr << "\n";
   return createLoad(ty, addr);
 }
 

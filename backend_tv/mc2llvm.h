@@ -40,8 +40,8 @@ public:
   std::map<unsigned, llvm::Value *> RegFile;
   llvm::Value *stackMem{nullptr};
   std::unordered_map<std::string, llvm::Constant *> LLVMglobals;
-  llvm::Value *initialSP, *initialReg[32];
-  llvm::Function *assertDecl;
+  llvm::Value *initialSP{nullptr}, *initialReg[32]{nullptr};
+  llvm::Function *assertDecl{nullptr};
   std::unique_ptr<llvm::MCSubtargetInfo> STI;
   std::unique_ptr<llvm::MCInstrAnalysis> IA;
   const llvm::DataLayout &DL;
