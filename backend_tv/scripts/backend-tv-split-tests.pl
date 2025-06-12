@@ -12,6 +12,7 @@ use Sys::CPU;
 
 ## FIXME these tools crash sometimes, should reduce and report triggers
 
+my $ARCH = "riscv64";
 my $ALIVETV = "/home/regehr/alive2-regehr/build/alive-tv";
 my $LLVMROOT = "/home/regehr/llvm-project";
 my $LLVMBIN = "${LLVMROOT}/for-alive/bin";
@@ -81,7 +82,7 @@ sub splitFile($) {
 	    {
 		# discard any test that cannot be compiled to arm64 assembly
 		(my $fh, my $tmpfn) = File::Temp::tempfile();
-		my $res = runit("/usr/bin/timeout --preserve-status 5 ${LLC} -march=aarch64 -o - $outfn > $tmpfn 2>&1");
+		my $res = runit("/usr/bin/timeout --preserve-status 5 ${LLC} -march=$ARCH -o - $outfn > $tmpfn 2>&1");
 		if ($res != 0) {
 		    print "$fn : can't compile to arm\n" if $VERBOSE;
 		    goto discard;
