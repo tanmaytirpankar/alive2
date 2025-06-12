@@ -377,8 +377,8 @@ void riscv2llvm::lift(MCInst &I) {
   case RISCV::C_ADDI16SP:
   case RISCV::C_ADDI:
   case RISCV::ADDI: {
-    auto a = readFromRegOperand(1, i64ty);
     if (CurInst->getOperand(2).isImm()) {
+      auto a = readFromRegOperand(1, i64ty);
       auto imm = readFromImmOperand(2, 12, 64);
       if (opcode == RISCV::C_ADDI16SP) {
         auto scaled = createMaskedShl(imm, getUnsignedIntConst(4, 64));
@@ -388,8 +388,7 @@ void riscv2llvm::lift(MCInst &I) {
       updateOutputReg(createAdd(a, imm));
     } else {
       Value *ptr = getPointerFromMCExpr();
-      auto res = createGEP(i8ty, ptr, {a}, nextName());
-      updateOutputReg(res);
+      updateOutputReg(ptr);
     }
     break;
   }
