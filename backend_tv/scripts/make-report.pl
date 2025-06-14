@@ -39,7 +39,7 @@ sub classify($) {
         if ($data =~ /^(Segmentation fault)/) {
             return "[f] $1";
         }
-        if ($data =~ /^(ERROR: Unsupported AArch64 instruction.*)/) {
+        if ($data =~ /^(ERROR: Unsupported instruction.*)/) {
             return "[i] $1";
         }
         if ($data =~ /^(ERROR: Function is too large)/) {
@@ -204,7 +204,7 @@ my $pct3 = sprintf("%0.1f%%", ($nfix * 100.0) / $n);
 my $pct4 = sprintf("%0.1f%%", ($nunsupported * 100.0) / $n);
 
 $report .= "$ncorrect correct ($pct1)\n";
-$report .= "$ninsn missing AArch64 instructions ($pct2)\n";
+$report .= "$ninsn missing instructions ($pct2)\n";
 $report .= "$nfix problems to address ($pct3)\n";
 $report .= "$nunsupported unsupported stuff ($pct4)\n";
 

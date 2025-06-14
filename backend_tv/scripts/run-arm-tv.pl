@@ -21,7 +21,7 @@ my $ARMTV = "/home/regehr/alive2-regehr/build/backend-tv";
 my $ISEL = "";
 # my $ISEL = "-global-isel -global-isel-abort=0";
 
-my $XTRA = "";
+my $XTRA = "-backend=riscv64";
 
 sub runit ($) {
     (my $cmd) = @_;
