@@ -2027,9 +2027,6 @@ void arm2llvm::lift(MCInst &I) {
     break;
 
   default:
-    *out << funcToString(liftedFn);
-    *out << "\nError "
-            "detected----------partially-lifted-arm-target----------\n";
     visitError();
   }
 }

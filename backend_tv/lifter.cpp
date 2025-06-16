@@ -89,18 +89,4 @@ pair<Function *, Function *> liftFunc(Function *srcFn,
   return lifter->run();
 }
 
-std::string moduleToString(llvm::Module *M) {
-  std::string sss;
-  llvm::raw_string_ostream ss(sss);
-  M->print(ss, nullptr);
-  return sss;
-}
-
-std::string funcToString(llvm::Function *F) {
-  std::string sss;
-  llvm::raw_string_ostream ss(sss);
-  F->print(ss, nullptr);
-  return sss;
-}
-
 } // namespace lifter

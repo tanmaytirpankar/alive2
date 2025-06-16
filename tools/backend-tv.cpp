@@ -120,6 +120,13 @@ llvm::cl::opt<string> opt_asm_input(
 
 llvm::ExitOnError ExitOnErr;
 
+std::string moduleToString(llvm::Module *M) {
+  std::string sss;
+  llvm::raw_string_ostream ss(sss);
+  M->print(ss, nullptr);
+  return sss;
+}
+
 void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
           llvm::TargetLibraryInfoWrapperPass &TLI) {
   assert(lifter::out);
@@ -223,7 +230,7 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   auto tgtModule = F2->getParent();
   
   *out << "\n\nabout to optimize lifted code:\n\n";
-  *out << lifter::moduleToString(tgtModule) << std::endl;
+  *out << moduleToString(tgtModule) << std::endl;
 
   auto err = optimize_module(tgtModule, opt_optimize_tgt);
   if (!err.empty()) {
@@ -233,7 +240,7 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
 
   lifter::fixupOptimizedTgt(F2);
 
-  auto lifted = lifter::moduleToString(tgtModule);
+  auto lifted = moduleToString(tgtModule);
   if (save_lifted_ir) {
     std::filesystem::path p{(string)opt_file};
     p.replace_extension(".lifted.ll");

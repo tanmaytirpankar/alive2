@@ -22,8 +22,6 @@ namespace lifter {
 
 void checkArguments(llvm::CallInst *ci, llvm::Value *val);
 void checkVectorTy(llvm::VectorType *Ty);
-std::string funcToString(llvm::Function *F);
-std::string moduleToString(llvm::Module *M);
 
 extern std::ostream *out;
 
