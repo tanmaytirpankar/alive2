@@ -1,7 +1,7 @@
 #include "backend_tv/riscv2llvm.h"
 
-#include "Target/RISCV/MCTargetDesc/RISCVMCExpr.h"
 #include "llvm/BinaryFormat/ELF.h"
+#include "llvm/MC/MCAsmInfo.h"
 
 #include <cmath>
 #include <vector>
@@ -246,7 +246,7 @@ void riscv2llvm::lift(MCInst &I) {
       updateOutputReg(immShifted);
     } else if (op1.isExpr()) {
       auto expr = op1.getExpr();
-      auto rvExpr = dyn_cast<RISCVMCExpr>(expr);
+      auto rvExpr = dyn_cast<MCSpecifierExpr>(expr);
       assert(rvExpr);
       auto specifier = rvExpr->getSpecifier();
       switch (specifier) {
@@ -259,7 +259,7 @@ void riscv2llvm::lift(MCInst &I) {
         break;
       default:
         *out << "unknown specifier: "
-             << (string)RISCVMCExpr::getSpecifierName(specifier) << "\n";
+             << (string)MAI->getSpecifierName(specifier) << "\n";
         exit(-1);
       }
     } else {

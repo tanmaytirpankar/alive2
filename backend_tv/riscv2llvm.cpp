@@ -1,6 +1,6 @@
 #include "backend_tv/riscv2llvm.h"
 
-#include "Target/RISCV/MCTargetDesc/RISCVMCExpr.h"
+#include "Target/RISCV/MCTargetDesc/RISCVMCAsmInfo.h"
 #include "llvm/BinaryFormat/ELF.h"
 
 #include <cmath>
@@ -327,10 +327,10 @@ Value *riscv2llvm::getPointerFromMCExpr() {
   auto op2 = CurInst->getOperand(2);
   assert(op1.isReg());
   assert(op2.isExpr());
-  auto rvExpr = dyn_cast<RISCVMCExpr>(op2.getExpr());
+  auto rvExpr = dyn_cast<MCSpecifierExpr>(op2.getExpr());
   assert(rvExpr);
   auto specifier = rvExpr->getSpecifier();
-  assert(specifier == RISCVMCExpr::VK_LO);
+  assert(specifier == RISCV::S_LO);
   auto addrExpr = rvExpr->getSubExpr();
   assert(addrExpr);
   if (auto binaryExpr = dyn_cast<MCBinaryExpr>(addrExpr)) {
