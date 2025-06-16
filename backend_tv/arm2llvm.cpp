@@ -896,6 +896,26 @@ tuple<Value *, Value *> arm2llvm::getParamsLoadReg() {
   return make_pair(baseAddr, offset);
 }
 
+static uint64_t Replicate32x2(uint64_t bits32) {
+  return (bits32 << 32) | bits32;
+}
+
+static uint64_t Replicate16x4(uint64_t bits16) {
+  return Replicate32x2((bits16 << 16) | bits16);
+}
+
+static uint64_t Replicate8x8(uint64_t bits8) {
+  return Replicate16x4((bits8 << 8) | bits8);
+}
+
+static uint64_t replicateBit(uint64_t bit, int N) {
+  if (!bit)
+    return 0;
+  if (N == 64)
+    return 0xffffffffffffffffLL;
+  return (1ULL << N) - 1;
+}
+
 // From https://github.com/agustingianni/retools
 uint64_t arm2llvm::VFPExpandImm(uint64_t imm8, unsigned N) {
   unsigned E = ((N == 32) ? 8 : 11) - 2; // E in {6, 9}
@@ -903,9 +923,9 @@ uint64_t arm2llvm::VFPExpandImm(uint64_t imm8, unsigned N) {
   uint64_t imm8_6 = (imm8 >> 6) & 1;     // imm8<6>
   uint64_t sign = (imm8 >> 7) & 1;       // imm8<7>
   // NOT(imm8<6>):Replicate(imm8<6>,{5, 8})
-  uint64_t exp = ((imm8_6 ^ 1) << (E - 1)) | Replicate(imm8_6, E - 1);
+  uint64_t exp = ((imm8_6 ^ 1) << (E - 1)) | replicateBit(imm8_6, E - 1);
   // imm8<5:0> : Zeros({19, 48})
-  uint64_t frac = ((imm8 & 0x3f) << (F - 6)) | Replicate(0, F - 6);
+  uint64_t frac = ((imm8 & 0x3f) << (F - 6)) | replicateBit(0, F - 6);
   uint64_t res = (sign << (E + F)) | (exp << F) | frac;
   return res;
 }
@@ -971,7 +991,7 @@ uint64_t arm2llvm::AdvSIMDExpandImm(unsigned op, unsigned cmode,
       uint64_t imm8_50 = imm8 & 63;
       uint64_t imm32 = (imm8_7 << (1 + 5 + 6 + 19)) |
                        ((imm8_6 ^ 1) << (5 + 6 + 19)) |
-                       (Replicate(imm8_6, 5) << (6 + 19)) | (imm8_50 << 19);
+                       (replicateBit(imm8_6, 5) << (6 + 19)) | (imm8_50 << 19);
       imm64 = Replicate32x2(imm32);
     }
 
@@ -982,7 +1002,7 @@ uint64_t arm2llvm::AdvSIMDExpandImm(unsigned op, unsigned cmode,
       uint64_t imm8_6 = (imm8 >> 6) & 1;
       uint64_t imm8_50 = imm8 & 63;
       imm64 = (imm8_7 << 63) | ((imm8_6 ^ 1) << 62) |
-              (Replicate(imm8_6, 8) << 54) | (imm8_50 << 48);
+              (replicateBit(imm8_6, 8) << 54) | (imm8_50 << 48);
     }
     break;
   default:

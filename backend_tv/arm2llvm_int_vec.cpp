@@ -12,6 +12,18 @@ using namespace std;
 #define GET_REGINFO_ENUM
 #include "Target/AArch64/AArch64GenRegisterInfo.inc"
 
+static uint64_t replicate8to64(uint64_t v) {
+  uint64_t ret = 0;
+  for (int i = 0; i < 8; ++i) {
+    bool b = (v & 128) != 0;
+    ret <<= 8;
+    if (b)
+      ret |= 0xff;
+    v <<= 1;
+  }
+  return ret;
+}
+
 void arm2llvm::lift_mull(unsigned opcode) {
   int eltSize, numElts1, numElts2;
   if (opcode == AArch64::SMULLv8i16_indexed ||
