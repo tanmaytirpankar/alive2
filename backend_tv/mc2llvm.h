@@ -61,6 +61,14 @@ public:
   unsigned origRetWidth = 64;
   bool has_ret_attr = false;
   std::ostream *out;
+  llvm::Function *myAlloc{nullptr};
+  llvm::Constant *stackSize{nullptr};
+
+  // amount of stack available for use by the lifted function, in bytes
+  const int stackBytes = 1024;
+
+  // number of 8-byte stack slots for parameters
+  const int numStackSlots = 32;
 
   mc2llvm(llvm::Function *srcFn, std::unique_ptr<llvm::MemoryBuffer> MB,
           std::unordered_map<unsigned, llvm::Instruction *> &lineMap,

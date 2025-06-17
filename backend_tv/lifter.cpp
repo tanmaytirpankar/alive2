@@ -32,8 +32,6 @@ mc::RegisterMCTargetOptionsFlags MOF;
 namespace lifter {
 
 // FIXME get rid of these globals
-Function *myAlloc;
-Constant *stackSize;
 
 std::string DefaultBackend;
 const Target *Targ;
