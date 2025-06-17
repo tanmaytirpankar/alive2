@@ -33,32 +33,16 @@ namespace lifter {
 
 // FIXME get rid of these globals
 
-std::string DefaultBackend;
 llvm::Triple DefaultTT;
 const char *DefaultDL;
 const char *DefaultCPU;
 const char *DefaultFeatures;
 
 // FIXME this all belongs in mc2llvm
-void init(std::string &backend, std::ostream *out) {
-  DefaultBackend = backend;
+void init(const Target *Targ, std::ostream *out) {
   auto TripleStr = DefaultTT.getTriple();
+  string backend{Targ->getName()};
   assert(TripleStr == Triple::normalize(TripleStr));
-  if (DefaultBackend == "aarch64") {
-    LLVMInitializeAArch64TargetInfo();
-    LLVMInitializeAArch64Target();
-    LLVMInitializeAArch64TargetMC();
-    LLVMInitializeAArch64AsmParser();
-    LLVMInitializeAArch64AsmPrinter();
-  } else if (DefaultBackend == "riscv64") {
-    LLVMInitializeRISCVTargetInfo();
-    LLVMInitializeRISCVTarget();
-    LLVMInitializeRISCVTargetMC();
-    LLVMInitializeRISCVAsmParser();
-    LLVMInitializeRISCVAsmPrinter();
-  } else {
-    assert(false);
-  }
 }
 
 void addDebugInfo(Function *srcFn,
@@ -105,10 +89,11 @@ pair<Function *, Function *>
 liftFunc(Function *srcFn, unique_ptr<MemoryBuffer> MB,
          std::unordered_map<unsigned, llvm::Instruction *> &lineMap,
          std::string optimize_tgt, std::ostream *out, const Target *Targ) {
+  string backend{Targ->getName()};
   unique_ptr<mc2llvm> lifter;
-  if (DefaultBackend == "aarch64") {
+  if (backend == "aarch64") {
     lifter = make_unique<arm2llvm>(srcFn, std::move(MB), lineMap, out, Targ);
-  } else if (DefaultBackend == "riscv64") {
+  } else if (backend == "riscv64") {
     lifter = make_unique<riscv2llvm>(srcFn, std::move(MB), lineMap, out, Targ);
   } else {
     *out << "ERROR: Nonexistent backend\n";

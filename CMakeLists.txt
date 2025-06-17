@@ -189,9 +189,11 @@ if (BUILD_LLVM_UTILS OR BUILD_TV)
 
   include_directories(${LLVM_INCLUDE_DIRS})
   include_directories(${LLVM_BINARY_DIR}/lib)
+  include_directories(${LLVM_BINARY_DIR}/lib/Target/AArch64)
 
   # argh.
   include_directories(${LLVM_MAIN_INCLUDE_DIR}/../lib)
+  include_directories(${LLVM_MAIN_INCLUDE_DIR}/../lib/Target/AArch64)
 
   add_definitions(${LLVM_DEFINITIONS})
 

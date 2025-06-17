@@ -10,6 +10,11 @@
 #include "tools/transform.h"
 #include "util/version.h"
 
+#include "Target/AArch64/AArch64Subtarget.h"
+#include "AArch64TargetMachine.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/TargetSelect.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Bitcode/BitcodeReader.h"
@@ -178,15 +183,15 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
     MPM.run(*srcModule, MAM);
   }
 
-  lifter::init(opt_backend, out);
-
   string Error;
   const auto *Targ = llvm::TargetRegistry::lookupTarget(lifter::DefaultTT, Error);
   if (!Targ) {
-    *out << "Can't lookup targer\n";
+    *out << "Can't lookup target\n";
     *out << Error;
     exit(-1);
   }
+
+  lifter::init(Targ, out);
 
   unique_ptr<llvm::MemoryBuffer> AsmBuffer;
   std::unordered_map<unsigned, llvm::Instruction *> lineMap;
@@ -297,16 +302,28 @@ version )EOF";
         "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128-Fn32";
     lifter::DefaultCPU = "generic";
     lifter::DefaultFeatures = "";
+    
+    LLVMInitializeAArch64TargetInfo();
+    LLVMInitializeAArch64Target();
+    LLVMInitializeAArch64TargetMC();
+    LLVMInitializeAArch64AsmParser();
+    LLVMInitializeAArch64AsmPrinter();
   } else if (opt_backend == "riscv64") {
     lifter::DefaultTT = llvm::Triple("riscv64-unknown-linux-gnu");
     lifter::DefaultDL = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128";
     lifter::DefaultCPU = "generic";
     lifter::DefaultFeatures = "+m";
+    
+    LLVMInitializeRISCVTargetInfo();
+    LLVMInitializeRISCVTarget();
+    LLVMInitializeRISCVTargetMC();
+    LLVMInitializeRISCVAsmParser();
+    LLVMInitializeRISCVAsmPrinter();
   } else {
     *out << "ERROR: Only aarch64 or riscv64 are supported\n";
     exit(-1);
   }
-
+  
   srcModule.get()->setTargetTriple(lifter::DefaultTT);
   srcModule.get()->setDataLayout(lifter::DefaultDL);
 

@@ -901,10 +901,11 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   string Error;
   const auto *Targ = llvm::TargetRegistry::lookupTarget(lifter::DefaultTT, Error);
   if (!Targ) {
-    *out << "Can't lookup targer\n";
+    *out << "Can't lookup target\n";
     *out << Error;
     exit(-1);
   }
+  lifter::init(Targ, out);
 
   std::unique_ptr<llvm::Module> M2 =
       std::make_unique<llvm::Module>("M2", M1->getContext());
