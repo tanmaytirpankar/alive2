@@ -26,29 +26,30 @@ using namespace std;
 using namespace llvm;
 using namespace lifter;
 
-// do not delete this line
+// do not delete this line, it's not as dead as it looks
 mc::RegisterMCTargetOptionsFlags MOF;
 
 namespace lifter {
 
 // FIXME get rid of these globals
-std::ostream *out;
-const Target *Targ;
 Function *myAlloc;
 Constant *stackSize;
+
 std::string DefaultBackend;
+const Target *Targ;
 llvm::Triple DefaultTT;
 const char *DefaultDL;
 const char *DefaultCPU;
 const char *DefaultFeatures;
 
-void init(std::string &backend) {
+// FIXME this all belongs in mc2llvm
+void init(std::string &backend, std::ostream *out) {
   DefaultBackend = backend;
   auto TripleStr = DefaultTT.getTriple();
   assert(TripleStr == Triple::normalize(TripleStr));
   /*
-   * FIXME we probably want to ask the client to run these
-   * initializers
+   * FIXME are these idempotent? if not, let's ask the client to run
+   * them instead of doing it here
    */
   if (DefaultBackend == "aarch64") {
     LLVMInitializeAArch64TargetInfo();
@@ -68,6 +69,7 @@ void init(std::string &backend) {
   string Error;
   Targ = TargetRegistry::lookupTarget(DefaultTT, Error);
   if (!Targ) {
+    *out << "Can't lookup targer\n";
     *out << Error;
     exit(-1);
   }
@@ -104,25 +106,24 @@ void addDebugInfo(Function *srcFn,
     }
   }
 
-  if (false) {
+#if 0
     M.dump();
     *out << "\n\n\n";
-  }
+#endif
 
   DBuilder.finalize();
   verifyModule(M);
-  *out << "\n\n\n";
 }
 
 pair<Function *, Function *>
 liftFunc(Function *srcFn, unique_ptr<MemoryBuffer> MB,
          std::unordered_map<unsigned, llvm::Instruction *> &lineMap,
-         std::string optimize_tgt) {
+         std::string optimize_tgt, std::ostream *out) {
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
-    lifter = make_unique<arm2llvm>(srcFn, std::move(MB), lineMap);
+    lifter = make_unique<arm2llvm>(srcFn, std::move(MB), lineMap, out);
   } else if (DefaultBackend == "riscv64") {
-    lifter = make_unique<riscv2llvm>(srcFn, std::move(MB), lineMap);
+    lifter = make_unique<riscv2llvm>(srcFn, std::move(MB), lineMap, out);
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);

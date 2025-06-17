@@ -80,7 +80,8 @@ class riscv2llvm final : public mc2llvm {
 
 public:
   riscv2llvm(llvm::Function *srcFn, std::unique_ptr<llvm::MemoryBuffer> MB,
-             std::unordered_map<unsigned, llvm::Instruction *> &lineMap);
+             std::unordered_map<unsigned, llvm::Instruction *> &lineMap,
+             std::ostream *out);
 };
 
 } // end namespace lifter

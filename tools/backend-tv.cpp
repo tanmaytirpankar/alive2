@@ -114,7 +114,6 @@ llvm::ExitOnError ExitOnErr;
 
 void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
           llvm::TargetLibraryInfoWrapperPass &TLI) {
-  assert(lifter::out);
 
   // sigh... do this check earlier to stop an assertion in LLVM from
   // firing
@@ -179,7 +178,7 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
     MPM.run(*srcModule, MAM);
   }
 
-  lifter::init(opt_backend);
+  lifter::init(opt_backend, out);
 
   unique_ptr<llvm::MemoryBuffer> AsmBuffer;
   std::unordered_map<unsigned, llvm::Instruction *> lineMap;
@@ -212,7 +211,7 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   if (opt_asm_only)
     exit(0);
 
-  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, opt_optimize_tgt);
+  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, opt_optimize_tgt, out);
 
   auto lifted = lifter::moduleToString(F2->getParent());
   if (save_lifted_ir) {
@@ -302,8 +301,6 @@ version )EOF";
 
   srcModule.get()->setTargetTriple(lifter::DefaultTT);
   srcModule.get()->setDataLayout(lifter::DefaultDL);
-
-  lifter::out = out;
 
   auto &DL = srcModule.get()->getDataLayout();
   llvm::Triple targetTriple(srcModule.get()->getTargetTriple());

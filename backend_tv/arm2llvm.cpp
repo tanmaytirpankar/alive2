@@ -21,8 +21,9 @@ unsigned arm2llvm::sentinelNOP() {
 }
 
 arm2llvm::arm2llvm(Function *srcFn, unique_ptr<MemoryBuffer> MB,
-                   std::unordered_map<unsigned, llvm::Instruction *> &lineMap)
-    : mc2llvm(srcFn, std::move(MB), lineMap) {
+                   std::unordered_map<unsigned, llvm::Instruction *> &lineMap,
+                   std::ostream *out)
+    : mc2llvm(srcFn, std::move(MB), lineMap, out) {
   // sanity checking
   assert(disjoint(instrs_32, instrs_64));
   assert(disjoint(instrs_32, instrs_128));

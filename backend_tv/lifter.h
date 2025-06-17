@@ -13,6 +13,8 @@ class Function;
 class VectorType;
 } // namespace llvm
 
+// FIXME -- cleanup lots of dead stuff below
+
 namespace lifter {
 
 // amount of stack available for use by the lifted function, in bytes
@@ -23,8 +25,6 @@ namespace lifter {
 
 void checkArguments(llvm::CallInst *ci, llvm::Value *val);
 void checkVectorTy(llvm::VectorType *Ty);
-
-extern std::ostream *out;
 
 // FIXME we'd rather not have these globals shared across files
 
@@ -41,7 +41,7 @@ extern const char *DefaultDL;
 extern const char *DefaultCPU;
 extern const char *DefaultFeatures;
 
-void init(std::string &backend);
+void init(std::string &backend, std::ostream *out);
 
 void nameGlobals(llvm::Module *);
 llvm::Function *adjustSrc(llvm::Function *);
@@ -56,7 +56,7 @@ void addDebugInfo(llvm::Function *srcFn,
 std::pair<llvm::Function *, llvm::Function *>
 liftFunc(llvm::Function *, std::unique_ptr<llvm::MemoryBuffer>,
          std::unordered_map<unsigned, llvm::Instruction *> &lineMap,
-         std::string optimize_tgt);
+         std::string optimize_tgt, std::ostream *out);
 
 inline std::string moduleToString(llvm::Module *M) {
   std::string sss;

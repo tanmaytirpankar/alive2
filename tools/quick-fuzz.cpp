@@ -898,7 +898,7 @@ void BBFuzzer::go() {
 }
 
 void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
-  lifter::init(opt_backend);
+  lifter::init(opt_backend, out);
 
   std::unique_ptr<llvm::Module> M2 =
       std::make_unique<llvm::Module>("M2", M1->getContext());
@@ -915,7 +915,7 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   cout << "-------------\n";
 
   std::unordered_map<unsigned, llvm::Instruction *> lineMap;
-  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, "Oz");
+  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, "Oz", out);
 
   verifier.compareFunctions(*F1, *F2);
 
@@ -963,8 +963,6 @@ reduced using llvm-reduce.
   unique_ptr<Module> MDummy;
 #define ARGS_MODULE_VAR MDummy
 #include "llvm_util/cmd_args_def.h"
-
-  lifter::out = out;
 
   auto M1 = make_unique<Module>("M1", Context);
 

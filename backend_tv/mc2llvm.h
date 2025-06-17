@@ -60,9 +60,11 @@ public:
   std::unordered_map<unsigned, llvm::Instruction *> &lineMap;
   unsigned origRetWidth = 64;
   bool has_ret_attr = false;
+  std::ostream *out;
 
   mc2llvm(llvm::Function *srcFn, std::unique_ptr<llvm::MemoryBuffer> MB,
-          std::unordered_map<unsigned, llvm::Instruction *> &lineMap)
+          std::unordered_map<unsigned, llvm::Instruction *> &lineMap,
+          std::ostream *out)
       : LiftedModule{new llvm::Module("LiftedModule", srcFn->getContext())},
         Ctx{srcFn->getContext()}, srcFn{srcFn},
         STI{Targ->createMCSubtargetInfo(DefaultTT.getTriple(), DefaultCPU,
@@ -75,7 +77,7 @@ public:
         MCCtx{std::make_unique<llvm::MCContext>(
             DefaultTT, MAI.get(), MRI.get(), STI.get(), &SrcMgr, &MCOptions)},
         MCE{Targ->createMCCodeEmitter(*MCII.get(), *MCCtx.get())},
-        MB{std::move(MB)}, lineMap{lineMap} {}
+        MB{std::move(MB)}, lineMap{lineMap}, out{out} {}
 
   // these are ones that the backend adds to tgt, even when they don't
   // appear at all in src

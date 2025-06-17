@@ -680,7 +680,7 @@ pair<Function *, Function *> mc2llvm::run() {
   MCCtx->setObjectFileInfo(MCOFI);
 
   Str = make_unique<MCStreamerWrapper>(*MCCtx.get(), *IA.get(), *InstPrinter,
-                                       *MRI, sentinelNOP(), lineMap);
+                                       *MRI, sentinelNOP(), lineMap, out);
   Str->setUseAssemblerInfoForParsing(true);
 
   raw_ostream &OSRef = nulls();
