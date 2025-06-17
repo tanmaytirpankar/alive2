@@ -191,8 +191,6 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
     exit(-1);
   }
 
-  lifter::init(Targ, out);
-
   unique_ptr<llvm::MemoryBuffer> AsmBuffer;
   std::unordered_map<unsigned, llvm::Instruction *> lineMap;
   if (opt_asm_input == "") {

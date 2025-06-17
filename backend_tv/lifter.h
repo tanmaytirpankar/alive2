@@ -25,8 +25,6 @@ extern const char *DefaultDL;
 extern const char *DefaultCPU;
 extern const char *DefaultFeatures;
 
-void init(const llvm::Target *Targ, std::ostream *out);
-
 void nameGlobals(llvm::Module *);
 llvm::Function *adjustSrc(llvm::Function *);
 void addDebugInfo(llvm::Function *);

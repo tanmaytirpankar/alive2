@@ -905,7 +905,6 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
     *out << Error;
     exit(-1);
   }
-  lifter::init(Targ, out);
 
   std::unique_ptr<llvm::Module> M2 =
       std::make_unique<llvm::Module>("M2", M1->getContext());

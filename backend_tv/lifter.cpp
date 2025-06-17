@@ -38,13 +38,6 @@ const char *DefaultDL;
 const char *DefaultCPU;
 const char *DefaultFeatures;
 
-// FIXME this all belongs in mc2llvm
-void init(const Target *Targ, std::ostream *out) {
-  auto TripleStr = DefaultTT.getTriple();
-  string backend{Targ->getName()};
-  assert(TripleStr == Triple::normalize(TripleStr));
-}
-
 void addDebugInfo(Function *srcFn,
                   unordered_map<unsigned, Instruction *> &lineMap) {
   auto &M = *srcFn->getParent();
