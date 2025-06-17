@@ -5,7 +5,6 @@
 #include "cache/cache.h"
 #include "llvm_util/compare.h"
 #include "llvm_util/llvm2alive.h"
-#include "llvm_util/llvm_optimizer.h"
 #include "llvm_util/utils.h"
 #include "smt/smt.h"
 #include "tools/transform.h"
@@ -113,13 +112,6 @@ llvm::cl::opt<string> opt_asm_input(
 
 llvm::ExitOnError ExitOnErr;
 
-std::string moduleToString(llvm::Module *M) {
-  std::string sss;
-  llvm::raw_string_ostream ss(sss);
-  M->print(ss, nullptr);
-  return sss;
-}
-
 void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
           llvm::TargetLibraryInfoWrapperPass &TLI) {
   assert(lifter::out);
@@ -220,22 +212,9 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   if (opt_asm_only)
     exit(0);
 
-  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap);
+  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, opt_optimize_tgt);
 
-  auto tgtModule = F2->getParent();
-
-  *out << "\n\nabout to optimize lifted code:\n\n";
-  *out << moduleToString(tgtModule) << std::endl;
-
-  auto err = optimize_module(tgtModule, opt_optimize_tgt);
-  if (!err.empty()) {
-    *out << "\n\nERROR running LLVM optimizations\n\n";
-    exit(-1);
-  }
-
-  lifter::fixupOptimizedTgt(F2);
-
-  auto lifted = moduleToString(tgtModule);
+  auto lifted = lifter::moduleToString(F2->getParent());
   if (save_lifted_ir) {
     std::filesystem::path p{(string)opt_file};
     p.replace_extension(".lifted.ll");
@@ -243,11 +222,6 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
     of << lifted;
     of.close();
   }
-
-  *out << "\n\nafter optimization:\n\n";
-  *out << lifted;
-  *out << "\n";
-  out->flush();
 
   if (!opt_skip_verification)
     verifier.compareFunctions(*F1, *F2);

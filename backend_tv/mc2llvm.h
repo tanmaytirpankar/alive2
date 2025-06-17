@@ -56,6 +56,8 @@ public:
   std::unique_ptr<llvm::MemoryBuffer> MB;
   long totalAllocas{0};
   std::unordered_map<unsigned, llvm::Instruction *> &lineMap;
+  unsigned origRetWidth = 64;
+  bool has_ret_attr = false;
 
   mc2llvm(llvm::Function *srcFn, std::unique_ptr<llvm::MemoryBuffer> MB,
           std::unordered_map<unsigned, llvm::Instruction *> &lineMap)
@@ -895,6 +897,7 @@ public:
   void checkSupport(llvm::Function *srcFn);
   void nameGlobals(llvm::Module *M);
   llvm::Function *adjustSrc(llvm::Function *srcFn);
+  void fixupOptimizedTgt(llvm::Function *tgt);
 
   /*
    * shared with the aslp lifter

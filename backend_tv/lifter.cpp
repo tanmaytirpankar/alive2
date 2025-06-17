@@ -2,7 +2,6 @@
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/Function.h"
-#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -21,6 +20,7 @@
 #include "backend_tv/mc2llvm.h"
 #include "backend_tv/riscv2llvm.h"
 #include "backend_tv/streamerwrapper.h"
+#include "llvm_util/llvm_optimizer.h"
 
 using namespace std;
 using namespace llvm;
@@ -33,8 +33,6 @@ namespace lifter {
 
 // FIXME get rid of these globals
 std::ostream *out;
-unsigned origRetWidth;
-bool has_ret_attr;
 const Target *Targ;
 Function *myAlloc;
 Constant *stackSize;
@@ -43,6 +41,37 @@ llvm::Triple DefaultTT;
 const char *DefaultDL;
 const char *DefaultCPU;
 const char *DefaultFeatures;
+
+void init(std::string &backend) {
+  DefaultBackend = backend;
+  auto TripleStr = DefaultTT.getTriple();
+  assert(TripleStr == Triple::normalize(TripleStr));
+  /*
+   * FIXME we probably want to ask the client to run these
+   * initializers
+   */
+  if (DefaultBackend == "aarch64") {
+    LLVMInitializeAArch64TargetInfo();
+    LLVMInitializeAArch64Target();
+    LLVMInitializeAArch64TargetMC();
+    LLVMInitializeAArch64AsmParser();
+    LLVMInitializeAArch64AsmPrinter();
+  } else if (DefaultBackend == "riscv64") {
+    LLVMInitializeRISCVTargetInfo();
+    LLVMInitializeRISCVTarget();
+    LLVMInitializeRISCVTargetMC();
+    LLVMInitializeRISCVAsmParser();
+    LLVMInitializeRISCVAsmPrinter();
+  } else {
+    assert(false);
+  }
+  string Error;
+  Targ = TargetRegistry::lookupTarget(DefaultTT, Error);
+  if (!Targ) {
+    *out << Error;
+    exit(-1);
+  }
+}
 
 void addDebugInfo(Function *srcFn,
                   unordered_map<unsigned, Instruction *> &lineMap) {
@@ -85,84 +114,10 @@ void addDebugInfo(Function *srcFn,
   *out << "\n\n\n";
 }
 
-void init(std::string &backend) {
-  DefaultBackend = backend;
-  auto TripleStr = DefaultTT.getTriple();
-  assert(TripleStr == Triple::normalize(TripleStr));
-  /*
-   * FIXME we probably want to ask the client to run these
-   * initializers
-   */
-  if (DefaultBackend == "aarch64") {
-    LLVMInitializeAArch64TargetInfo();
-    LLVMInitializeAArch64Target();
-    LLVMInitializeAArch64TargetMC();
-    LLVMInitializeAArch64AsmParser();
-    LLVMInitializeAArch64AsmPrinter();
-  } else if (DefaultBackend == "riscv64") {
-    LLVMInitializeRISCVTargetInfo();
-    LLVMInitializeRISCVTarget();
-    LLVMInitializeRISCVTargetMC();
-    LLVMInitializeRISCVAsmParser();
-    LLVMInitializeRISCVAsmPrinter();
-  } else {
-    assert(false);
-  }
-  string Error;
-  Targ = TargetRegistry::lookupTarget(DefaultTT, Error);
-  if (!Targ) {
-    *out << Error;
-    exit(-1);
-  }
-  origRetWidth = 64;
-  has_ret_attr = false;
-}
-
-void fixupOptimizedTgt(llvm::Function *tgt) {
-  /*
-   * these attributes can be soundly removed, and a good thing too
-   * since they cause spurious TV failures in ASM memory mode
-   */
-  for (auto arg = tgt->arg_begin(); arg != tgt->arg_end(); ++arg) {
-    arg->removeAttr(llvm::Attribute::Captures);
-    arg->removeAttr(llvm::Attribute::ReadNone);
-    arg->removeAttr(llvm::Attribute::ReadOnly);
-    arg->removeAttr(llvm::Attribute::WriteOnly);
-  }
-
-  /*
-   * when we originally generated the target function, we allocated
-   * its stack memory using a custom allocation function; this is to
-   * keep LLVM from making unwarranted assumptions about that memory
-   * and optimizing it in undesirable ways. however, Alive doesn't
-   * want to see the custom allocator. so, here, before passing target
-   * to Alive, we replace it with a regular old alloc
-   */
-  Instruction *myAllocCall{nullptr};
-  for (auto &bb : *tgt) {
-    for (auto &i : bb) {
-      if (auto *ci = dyn_cast<CallInst>(&i)) {
-        if (auto callee = ci->getCalledFunction()) {
-          if (callee == myAlloc) {
-            IRBuilder<> B(&i);
-            auto *i8Ty = Type::getInt8Ty(ci->getContext());
-            auto *alloca = B.CreateAlloca(i8Ty, 0, stackSize, "stack");
-            alloca->setAlignment(Align(16));
-            i.replaceAllUsesWith(alloca);
-            assert(myAllocCall == nullptr);
-            myAllocCall = &i;
-          }
-        }
-      }
-    }
-  }
-  if (myAllocCall)
-    myAllocCall->eraseFromParent();
-}
-
 pair<Function *, Function *>
 liftFunc(Function *srcFn, unique_ptr<MemoryBuffer> MB,
-         std::unordered_map<unsigned, llvm::Instruction *> &lineMap) {
+         std::unordered_map<unsigned, llvm::Instruction *> &lineMap,
+         std::string optimize_tgt) {
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
     lifter = make_unique<arm2llvm>(srcFn, std::move(MB), lineMap);
@@ -173,7 +128,22 @@ liftFunc(Function *srcFn, unique_ptr<MemoryBuffer> MB,
     exit(-1);
   }
 
-  return lifter->run();
+  auto [adjustedSrc, tgtFn] = lifter->run();
+
+  auto tgtModule = tgtFn->getParent();
+
+  *out << "\n\nabout to optimize lifted code:\n\n";
+  *out << moduleToString(tgtModule) << std::endl;
+
+  auto err = llvm_util::optimize_module(tgtModule, optimize_tgt);
+  if (!err.empty()) {
+    *out << "\n\nERROR running LLVM optimizations\n\n";
+    exit(-1);
+  }
+
+  lifter->fixupOptimizedTgt(tgtFn);
+
+  return make_pair(adjustedSrc, tgtFn);
 }
 
 } // namespace lifter

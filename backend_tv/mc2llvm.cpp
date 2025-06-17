@@ -1,5 +1,7 @@
-#include "backend_tv/mc2llvm.h"
+#include "llvm/IR/IRBuilder.h"
+
 #include "backend_tv/lifter.h"
+#include "backend_tv/mc2llvm.h"
 
 #include <regex>
 
@@ -1046,4 +1048,46 @@ Function *mc2llvm::adjustSrc(Function *srcFn) {
 
   srcFn->eraseFromParent();
   return NF;
+}
+
+void mc2llvm::fixupOptimizedTgt(Function *tgt) {
+  /*
+   * these attributes can be soundly removed, and a good thing too
+   * since they cause spurious TV failures in ASM memory mode
+   */
+  for (auto arg = tgt->arg_begin(); arg != tgt->arg_end(); ++arg) {
+    arg->removeAttr(llvm::Attribute::Captures);
+    arg->removeAttr(llvm::Attribute::ReadNone);
+    arg->removeAttr(llvm::Attribute::ReadOnly);
+    arg->removeAttr(llvm::Attribute::WriteOnly);
+  }
+
+  /*
+   * when we originally generated the target function, we allocated
+   * its stack memory using a custom allocation function; this is to
+   * keep LLVM from making unwarranted assumptions about that memory
+   * and optimizing it in undesirable ways. however, Alive doesn't
+   * want to see the custom allocator. so, here, before passing target
+   * to Alive, we replace it with a regular old alloc
+   */
+  Instruction *myAllocCall{nullptr};
+  for (auto &bb : *tgt) {
+    for (auto &i : bb) {
+      if (auto *ci = dyn_cast<CallInst>(&i)) {
+        if (auto callee = ci->getCalledFunction()) {
+          if (callee == myAlloc) {
+            IRBuilder<> B(&i);
+            auto *i8Ty = Type::getInt8Ty(ci->getContext());
+            auto *alloca = B.CreateAlloca(i8Ty, 0, stackSize, "stack");
+            alloca->setAlignment(Align(16));
+            i.replaceAllUsesWith(alloca);
+            assert(myAllocCall == nullptr);
+            myAllocCall = &i;
+          }
+        }
+      }
+    }
+  }
+  if (myAllocCall)
+    myAllocCall->eraseFromParent();
 }

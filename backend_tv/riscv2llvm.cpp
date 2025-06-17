@@ -71,6 +71,8 @@ Value *riscv2llvm::enforceSExtZExt(Value *V, bool isSExt, bool isZExt) {
   if (isSExt && getBitWidth(V) < targetWidth)
     V = createSExt(V, getIntTy(targetWidth));
 
+  // FIXME -- zext i1 to i8
+
   // finally, pad out any remaining bits with junk (frozen poisons)
   auto junkBits = targetWidth - getBitWidth(V);
   if (junkBits > 0) {
@@ -157,7 +159,7 @@ void riscv2llvm::doReturn() {
   auto i32ty = getIntTy(32);
   auto i64ty = getIntTy(64);
 
-  // FIXME add ABI checks
+  // FIXME add ABI checks -- this function needs a bunch of work!
 
   auto *retTyp = srcFn->getReturnType();
   if (retTyp->isVoidTy()) {
