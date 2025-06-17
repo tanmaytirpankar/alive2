@@ -34,7 +34,6 @@ namespace lifter {
 // FIXME get rid of these globals
 
 std::string DefaultBackend;
-const Target *Targ;
 llvm::Triple DefaultTT;
 const char *DefaultDL;
 const char *DefaultCPU;
@@ -45,10 +44,6 @@ void init(std::string &backend, std::ostream *out) {
   DefaultBackend = backend;
   auto TripleStr = DefaultTT.getTriple();
   assert(TripleStr == Triple::normalize(TripleStr));
-  /*
-   * FIXME are these idempotent? if not, let's ask the client to run
-   * them instead of doing it here
-   */
   if (DefaultBackend == "aarch64") {
     LLVMInitializeAArch64TargetInfo();
     LLVMInitializeAArch64Target();
@@ -63,13 +58,6 @@ void init(std::string &backend, std::ostream *out) {
     LLVMInitializeRISCVAsmPrinter();
   } else {
     assert(false);
-  }
-  string Error;
-  Targ = TargetRegistry::lookupTarget(DefaultTT, Error);
-  if (!Targ) {
-    *out << "Can't lookup targer\n";
-    *out << Error;
-    exit(-1);
   }
 }
 
@@ -116,12 +104,12 @@ void addDebugInfo(Function *srcFn,
 pair<Function *, Function *>
 liftFunc(Function *srcFn, unique_ptr<MemoryBuffer> MB,
          std::unordered_map<unsigned, llvm::Instruction *> &lineMap,
-         std::string optimize_tgt, std::ostream *out) {
+         std::string optimize_tgt, std::ostream *out, const Target *Targ) {
   unique_ptr<mc2llvm> lifter;
   if (DefaultBackend == "aarch64") {
-    lifter = make_unique<arm2llvm>(srcFn, std::move(MB), lineMap, out);
+    lifter = make_unique<arm2llvm>(srcFn, std::move(MB), lineMap, out, Targ);
   } else if (DefaultBackend == "riscv64") {
-    lifter = make_unique<riscv2llvm>(srcFn, std::move(MB), lineMap, out);
+    lifter = make_unique<riscv2llvm>(srcFn, std::move(MB), lineMap, out, Targ);
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);

@@ -29,7 +29,7 @@ void appendTargetFeatures(std::unique_ptr<llvm::Module> &MClone) {
   }
 }
 
-unique_ptr<MemoryBuffer> lifter::generateAsm(Module &M) {
+unique_ptr<MemoryBuffer> lifter::generateAsm(Module &M, const Target *Targ) {
   assert(DefaultFeatures != NULL &&
          "[generateAsm] DefaultFeatures must be set");
   TargetOptions Opt;

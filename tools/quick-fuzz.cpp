@@ -898,14 +898,20 @@ void BBFuzzer::go() {
 }
 
 void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
-  lifter::init(opt_backend, out);
+  string Error;
+  const auto *Targ = llvm::TargetRegistry::lookupTarget(lifter::DefaultTT, Error);
+  if (!Targ) {
+    *out << "Can't lookup targer\n";
+    *out << Error;
+    exit(-1);
+  }
 
   std::unique_ptr<llvm::Module> M2 =
       std::make_unique<llvm::Module>("M2", M1->getContext());
   M2->setDataLayout(M1->getDataLayout());
   M2->setTargetTriple(M1->getTargetTriple());
 
-  auto AsmBuffer = lifter::generateAsm(*M1);
+  auto AsmBuffer = lifter::generateAsm(*M1, Targ);
 
   cout << "\n\nAArch64 Assembly:\n\n";
   for (auto it = AsmBuffer->getBuffer().begin();
@@ -915,7 +921,7 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   cout << "-------------\n";
 
   std::unordered_map<unsigned, llvm::Instruction *> lineMap;
-  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, "Oz", out);
+  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, "Oz", out, Targ);
 
   verifier.compareFunctions(*F1, *F2);
 

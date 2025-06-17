@@ -180,11 +180,19 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
 
   lifter::init(opt_backend, out);
 
+  string Error;
+  const auto *Targ = llvm::TargetRegistry::lookupTarget(lifter::DefaultTT, Error);
+  if (!Targ) {
+    *out << "Can't lookup targer\n";
+    *out << Error;
+    exit(-1);
+  }
+
   unique_ptr<llvm::MemoryBuffer> AsmBuffer;
   std::unordered_map<unsigned, llvm::Instruction *> lineMap;
   if (opt_asm_input == "") {
     lifter::addDebugInfo(srcFn, lineMap);
-    AsmBuffer = lifter::generateAsm(*srcModule);
+    AsmBuffer = lifter::generateAsm(*srcModule, Targ);
   } else {
     AsmBuffer = ExitOnErr(
         llvm::errorOrToExpected(llvm::MemoryBuffer::getFile(opt_asm_input)));
@@ -211,7 +219,7 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   if (opt_asm_only)
     exit(0);
 
-  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, opt_optimize_tgt, out);
+  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, opt_optimize_tgt, out, Targ);
 
   auto lifted = lifter::moduleToString(F2->getParent());
   if (save_lifted_ir) {
