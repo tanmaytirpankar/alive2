@@ -4,6 +4,7 @@
 #include "llvm/BinaryFormat/ELF.h"
 
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 #define GET_INSTRINFO_ENUM

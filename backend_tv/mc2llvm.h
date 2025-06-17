@@ -4,6 +4,7 @@
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Value.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
@@ -15,6 +16,7 @@
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Target/TargetMachine.h"
+#include <cstdint>
 
 #include "backend_tv/lifter.h"
 #include "backend_tv/streamerwrapper.h"
@@ -631,6 +633,16 @@ public:
                                         nextName(), LLVMBB);
   }
 
+  llvm::BinaryOperator *createURem(llvm::Value *a, llvm::Value *b) override {
+    return llvm::BinaryOperator::Create(llvm::Instruction::URem, a, b,
+                                        nextName(), LLVMBB);
+  }
+
+  llvm::BinaryOperator *createSRem(llvm::Value *a, llvm::Value *b) override {
+    return llvm::BinaryOperator::Create(llvm::Instruction::SRem, a, b,
+                                        nextName(), LLVMBB);
+  }
+
   llvm::BinaryOperator *createMul(llvm::Value *a, llvm::Value *b) override {
     return llvm::BinaryOperator::Create(llvm::Instruction::Mul, a, b,
                                         nextName(), LLVMBB);
@@ -882,6 +894,18 @@ public:
   llvm::Value *rev(llvm::Value *in, unsigned eltSize, unsigned amt);
   llvm::Value *dupElts(llvm::Value *v, unsigned numElts, unsigned eltSize);
   llvm::Value *concat(llvm::Value *a, llvm::Value *b);
+  // div by 0 and INT_MIN / -1 is UB for LLVM. This checks for these conditions
+  // and substitutes the specified value.
+  llvm::Value *createCheckedUDiv(llvm::Value *a, llvm::Value *b,
+                                 llvm::Value *ifDivByZero);
+  llvm::Value *createCheckedSDiv(llvm::Value *a, llvm::Value *b,
+                                 llvm::Value *ifDivByZero,
+                                 llvm::Value *ifOverflow);
+  llvm::Value *createCheckedURem(llvm::Value *a, llvm::Value *b,
+                                 llvm::Value *ifDivByZero);
+  llvm::Value *createCheckedSRem(llvm::Value *a, llvm::Value *b,
+                                 llvm::Value *ifDivByZero,
+                                 llvm::Value *ifOverflow);
   void assertSame(llvm::Value *a, llvm::Value *b);
   void doDirectCall();
   llvm::Instruction *getCurLLVMInst();
