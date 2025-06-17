@@ -78,13 +78,6 @@ llvm::cl::opt<bool> opt_skip_verification(
         "Perform lifting but skip the refinement check (default=false)"),
     llvm::cl::cat(alive_cmdargs), llvm::cl::init(false));
 
-llvm::cl::opt<bool> opt_use_debuginfo(
-    LLVM_ARGS_PREFIX "use-debug-info",
-    llvm::cl::desc(
-        "Try to improve results by using LLVM debuginfo to provide a mapping "
-        "between LLVM and ARM instructions (default=true)"),
-    llvm::cl::cat(alive_cmdargs), llvm::cl::init(true));
-
 // FIXME -- this needs to be turned off by default
 llvm::cl::opt<bool> opt_internalize(
     LLVM_ARGS_PREFIX "internalize",
@@ -196,13 +189,15 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
 
   lifter::init(opt_backend);
 
-  if (opt_use_debuginfo)
-    lifter::addDebugInfo(srcFn);
-
-  auto AsmBuffer = (opt_asm_input != "")
-                       ? ExitOnErr(llvm::errorOrToExpected(
-                             llvm::MemoryBuffer::getFile(opt_asm_input)))
-                       : lifter::generateAsm(*srcModule);
+  unique_ptr<llvm::MemoryBuffer> AsmBuffer;
+  std::unordered_map<unsigned, llvm::Instruction *> lineMap;
+  if (opt_asm_input == "") {
+    lifter::addDebugInfo(srcFn, lineMap);
+    AsmBuffer = lifter::generateAsm(*srcModule);
+  } else {
+    AsmBuffer = ExitOnErr(
+        llvm::errorOrToExpected(llvm::MemoryBuffer::getFile(opt_asm_input)));
+  }
 
   if (opt_asm_output != "") {
     std::error_code EC;
@@ -225,10 +220,10 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   if (opt_asm_only)
     exit(0);
 
-  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer));
+  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap);
 
   auto tgtModule = F2->getParent();
-  
+
   *out << "\n\nabout to optimize lifted code:\n\n";
   *out << moduleToString(tgtModule) << std::endl;
 

@@ -3,6 +3,7 @@
 #include <ostream>
 #include <string>
 
+#include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/Module.h"
 #include "llvm/MC/TargetRegistry.h"
 
@@ -40,8 +41,6 @@ extern const char *DefaultDL;
 extern const char *DefaultCPU;
 extern const char *DefaultFeatures;
 
-extern std::unordered_map<unsigned, llvm::Instruction *> lineMap;
-
 void init(std::string &backend);
 
 void nameGlobals(llvm::Module *);
@@ -51,8 +50,11 @@ void checkSupport(llvm::Function *);
 void fixupOptimizedTgt(llvm::Function *);
 
 std::unique_ptr<llvm::MemoryBuffer> generateAsm(llvm::Module &);
+void addDebugInfo(llvm::Function *srcFn,
+                  std::unordered_map<unsigned, llvm::Instruction *> &lineMap);
 
 std::pair<llvm::Function *, llvm::Function *>
-liftFunc(llvm::Function *, std::unique_ptr<llvm::MemoryBuffer>);
+liftFunc(llvm::Function *, std::unique_ptr<llvm::MemoryBuffer>,
+         std::unordered_map<unsigned, llvm::Instruction *> &lineMap);
 
 } // namespace lifter

@@ -914,7 +914,8 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   }
   cout << "-------------\n";
 
-  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer));
+  std::unordered_map<unsigned, llvm::Instruction *> lineMap;
+  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap);
 
   auto err = optimize_module(M2.get(), "Oz");
   assert(err.empty());

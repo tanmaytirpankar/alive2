@@ -142,6 +142,7 @@ private:
   unsigned curDebugLine = 0;
   std::vector<RODataItem> curROData;
   unsigned SentinelNOP;
+  std::unordered_map<unsigned, llvm::Instruction *> &lineMap;
 
 public:
   MCFunction MF;
@@ -149,8 +150,10 @@ public:
 
   MCStreamerWrapper(llvm::MCContext &Context, const llvm::MCInstrAnalysis &IA,
                     llvm::MCInstPrinter &InstPrinter, llvm::MCRegisterInfo &MRI,
-                    unsigned SentinelNOP)
-      : MCStreamer(Context), IA(IA), SentinelNOP(SentinelNOP) {}
+                    unsigned SentinelNOP,
+                    std::unordered_map<unsigned, llvm::Instruction *> &lineMap)
+      : MCStreamer(Context), IA(IA), SentinelNOP(SentinelNOP),
+        lineMap(lineMap) {}
 
   void addConstant() {
     if (curROData.empty())

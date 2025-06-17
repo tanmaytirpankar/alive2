@@ -20,8 +20,9 @@ unsigned arm2llvm::sentinelNOP() {
   return AArch64::SEH_Nop;
 }
 
-arm2llvm::arm2llvm(Function *srcFn, unique_ptr<MemoryBuffer> MB)
-    : mc2llvm(srcFn, std::move(MB)) {
+arm2llvm::arm2llvm(Function *srcFn, unique_ptr<MemoryBuffer> MB,
+                   std::unordered_map<unsigned, llvm::Instruction *> &lineMap)
+    : mc2llvm(srcFn, std::move(MB), lineMap) {
   // sanity checking
   assert(disjoint(instrs_32, instrs_64));
   assert(disjoint(instrs_32, instrs_128));

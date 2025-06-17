@@ -1,6 +1,7 @@
 #pragma once
 
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
@@ -53,8 +54,11 @@ public:
   std::unique_ptr<llvm::MCCodeEmitter> MCE;
   std::unique_ptr<MCStreamerWrapper> Str;
   std::unique_ptr<llvm::MemoryBuffer> MB;
+  long totalAllocas{0};
+  std::unordered_map<unsigned, llvm::Instruction *> &lineMap;
 
-  mc2llvm(llvm::Function *srcFn, std::unique_ptr<llvm::MemoryBuffer> MB)
+  mc2llvm(llvm::Function *srcFn, std::unique_ptr<llvm::MemoryBuffer> MB,
+          std::unordered_map<unsigned, llvm::Instruction *> &lineMap)
       : LiftedModule{new llvm::Module("LiftedModule", srcFn->getContext())},
         Ctx{srcFn->getContext()}, srcFn{srcFn},
         STI{Targ->createMCSubtargetInfo(DefaultTT.getTriple(), DefaultCPU,
@@ -67,7 +71,7 @@ public:
         MCCtx{std::make_unique<llvm::MCContext>(
             DefaultTT, MAI.get(), MRI.get(), STI.get(), &SrcMgr, &MCOptions)},
         MCE{Targ->createMCCodeEmitter(*MCII.get(), *MCCtx.get())},
-        MB{std::move(MB)} {}
+        MB{std::move(MB)}, lineMap{lineMap} {}
 
   // these are ones that the backend adds to tgt, even when they don't
   // appear at all in src
@@ -883,6 +887,14 @@ public:
   void invalidateReg(unsigned Reg, unsigned Width);
   void createRegStorage(unsigned Reg, unsigned Width, const std::string &Name);
   std::pair<llvm::Function *, llvm::Function *> run();
+  void checkCallingConv(llvm::Function *fn);
+  void avoidArgMD(llvm::CallInst *ci, const std::string &str);
+  void checkSupportHelper(llvm::Instruction &i, const llvm::DataLayout &DL,
+                          std::set<llvm::Type *> &typeSet);
+  void checkVectorTy(llvm::VectorType *Ty);
+  void checkSupport(llvm::Function *srcFn);
+  void nameGlobals(llvm::Module *M);
+  llvm::Function *adjustSrc(llvm::Function *srcFn);
 
   /*
    * shared with the aslp lifter
