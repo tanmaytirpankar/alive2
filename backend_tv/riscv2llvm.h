@@ -82,7 +82,8 @@ public:
   riscv2llvm(llvm::Function *srcFn, std::unique_ptr<llvm::MemoryBuffer> MB,
              std::unordered_map<unsigned, llvm::Instruction *> &lineMap,
              std::ostream *out, const llvm::Target *Targ,
-             llvm::Triple DefaultTT);
+             llvm::Triple DefaultTT, const char *DefaultCPU,
+             const char *DefaultFeatures);
 };
 
 } // end namespace lifter

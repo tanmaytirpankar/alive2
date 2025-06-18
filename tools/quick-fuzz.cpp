@@ -107,6 +107,8 @@ cl::opt<string>
             cl::cat(alive_cmdargs), cl::init("O2"));
 
 Triple DefaultTT;
+  const char *DefaultCPU;
+  const char *DefaultFeatures;
 
 class Chooser {
   mt19937_64 Rand;
@@ -913,7 +915,9 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   M2->setDataLayout(M1->getDataLayout());
   M2->setTargetTriple(M1->getTargetTriple());
 
-  auto AsmBuffer = lifter::generateAsm(*M1, Targ, DefaultTT);
+  auto AsmBuffer = lifter::generateAsm(*M1, Targ, DefaultTT,
+				       	  DefaultCPU,
+	 DefaultFeatures);
 
   cout << "\n\nAArch64 Assembly:\n\n";
   for (auto it = AsmBuffer->getBuffer().begin();
@@ -923,7 +927,9 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   cout << "-------------\n";
 
   std::unordered_map<unsigned, llvm::Instruction *> lineMap;
-  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, "Oz", out, Targ, DefaultTT);
+  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, "Oz", out, Targ, DefaultTT,
+				   	 DefaultCPU,
+				  DefaultFeatures);
 
   verifier.compareFunctions(*F1, *F2);
 

@@ -117,6 +117,9 @@ llvm::cl::opt<string> opt_asm_input(
 
 llvm::ExitOnError ExitOnErr;
 llvm::Triple DefaultTT;
+const char *DefaultDL;
+const char *DefaultCPU;
+const char *DefaultFeatures;
 
 void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
           llvm::TargetLibraryInfoWrapperPass &TLI) {
@@ -196,7 +199,9 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   std::unordered_map<unsigned, llvm::Instruction *> lineMap;
   if (opt_asm_input == "") {
     lifter::addDebugInfo(srcFn, lineMap);
-    AsmBuffer = lifter::generateAsm(*srcModule, Targ, DefaultTT);
+    AsmBuffer = lifter::generateAsm(*srcModule, Targ, DefaultTT,
+	 DefaultCPU,
+	 DefaultFeatures);
   } else {
     AsmBuffer = ExitOnErr(
         llvm::errorOrToExpected(llvm::MemoryBuffer::getFile(opt_asm_input)));
@@ -223,7 +228,9 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   if (opt_asm_only)
     exit(0);
 
-  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, opt_optimize_tgt, out, Targ, DefaultTT);
+  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, opt_optimize_tgt, out, Targ, DefaultTT,
+				   	  DefaultCPU,
+	DefaultFeatures);
 
   auto lifted = lifter::moduleToString(F2->getParent());
   if (save_lifted_ir) {
@@ -297,10 +304,10 @@ version )EOF";
   // FIXME: we should avoid hard-coding these
   if (opt_backend == "aarch64") {
     DefaultTT = llvm::Triple("aarch64-unknown-linux-gnu");
-    lifter::DefaultDL =
+    DefaultDL =
         "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128-Fn32";
-    lifter::DefaultCPU = "generic";
-    lifter::DefaultFeatures = "";
+    DefaultCPU = "generic";
+    DefaultFeatures = "";
     LLVMInitializeAArch64TargetInfo();
     LLVMInitializeAArch64Target();
     LLVMInitializeAArch64TargetMC();
@@ -308,9 +315,9 @@ version )EOF";
     LLVMInitializeAArch64AsmPrinter();
   } else if (opt_backend == "riscv64") {
     DefaultTT = llvm::Triple("riscv64-unknown-linux-gnu");
-    lifter::DefaultDL = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128";
-    lifter::DefaultCPU = "generic";
-    lifter::DefaultFeatures = "+m";
+    DefaultDL = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128";
+    DefaultCPU = "generic";
+    DefaultFeatures = "+m";
     LLVMInitializeRISCVTargetInfo();
     LLVMInitializeRISCVTarget();
     LLVMInitializeRISCVTargetMC();
@@ -322,7 +329,7 @@ version )EOF";
   }
   
   srcModule.get()->setTargetTriple(DefaultTT);
-  srcModule.get()->setDataLayout(lifter::DefaultDL);
+  srcModule.get()->setDataLayout(DefaultDL);
 
   auto &DL = srcModule.get()->getDataLayout();
   llvm::Triple targetTriple(srcModule.get()->getTargetTriple());

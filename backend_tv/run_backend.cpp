@@ -19,7 +19,8 @@ using namespace lifter;
 
 SmallString<1024> Asm;
 
-void appendTargetFeatures(std::unique_ptr<llvm::Module> &MClone) {
+void appendTargetFeatures(std::unique_ptr<llvm::Module> &MClone,
+                          const char *DefaultFeatures) {
   for (llvm::Function &F : *MClone) {
     if (F.hasFnAttribute("target-features")) {
       std::string current_features =
@@ -30,9 +31,10 @@ void appendTargetFeatures(std::unique_ptr<llvm::Module> &MClone) {
 }
 
 unique_ptr<MemoryBuffer> lifter::generateAsm(Module &M, const Target *Targ,
-                                             Triple DefaultTT) {
-  assert(DefaultFeatures != NULL &&
-         "[generateAsm] DefaultFeatures must be set");
+                                             Triple DefaultTT,
+                                             const char *DefaultCPU,
+                                             const char *DefaultFeatures) {
+  assert(DefaultFeatures && "[generateAsm] DefaultFeatures must be set");
   TargetOptions Opt;
   auto RM = optional<Reloc::Model>();
   unique_ptr<TargetMachine> TM(Targ->createTargetMachine(
@@ -55,7 +57,7 @@ unique_ptr<MemoryBuffer> lifter::generateAsm(Module &M, const Target *Targ,
   MClone->setDataLayout(TM->createDataLayout());
 
   if (DefaultFeatures[0] != '\0')
-    appendTargetFeatures(MClone);
+    appendTargetFeatures(MClone, DefaultFeatures);
 
   pass.run(*MClone.get());
   return MemoryBuffer::getMemBuffer(Asm.c_str());

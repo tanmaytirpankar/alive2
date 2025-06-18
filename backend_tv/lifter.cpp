@@ -31,12 +31,6 @@ mc::RegisterMCTargetOptionsFlags MOF;
 
 namespace lifter {
 
-// FIXME get rid of these globals
-
-const char *DefaultDL;
-const char *DefaultCPU;
-const char *DefaultFeatures;
-
 void addDebugInfo(Function *srcFn,
                   unordered_map<unsigned, Instruction *> &lineMap) {
   auto &M = *srcFn->getParent();
@@ -81,15 +75,16 @@ pair<Function *, Function *>
 liftFunc(Function *srcFn, unique_ptr<MemoryBuffer> MB,
          std::unordered_map<unsigned, llvm::Instruction *> &lineMap,
          std::string optimize_tgt, std::ostream *out, const Target *Targ,
-         llvm::Triple DefaultTT) {
+         llvm::Triple DefaultTT, const char *DefaultCPU,
+         const char *DefaultFeatures) {
   string backend{Targ->getName()};
   unique_ptr<mc2llvm> lifter;
   if (backend == "aarch64") {
     lifter = make_unique<arm2llvm>(srcFn, std::move(MB), lineMap, out, Targ,
-                                   DefaultTT);
+                                   DefaultTT, DefaultCPU, DefaultFeatures);
   } else if (backend == "riscv64") {
     lifter = make_unique<riscv2llvm>(srcFn, std::move(MB), lineMap, out, Targ,
-                                     DefaultTT);
+                                     DefaultTT, DefaultCPU, DefaultFeatures);
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);
