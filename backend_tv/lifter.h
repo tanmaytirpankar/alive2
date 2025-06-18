@@ -13,15 +13,7 @@ class Function;
 class VectorType;
 } // namespace llvm
 
-// FIXME -- cleanup lots of dead stuff below
-
 namespace lifter {
-
-void nameGlobals(llvm::Module *);
-llvm::Function *adjustSrc(llvm::Function *);
-void addDebugInfo(llvm::Function *);
-void checkSupport(llvm::Function *);
-void fixupOptimizedTgt(llvm::Function *);
 
 std::unique_ptr<llvm::MemoryBuffer>
 generateAsm(llvm::Module &, const llvm::Target *Targ, llvm::Triple DefaultTT,
