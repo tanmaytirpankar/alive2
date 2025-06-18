@@ -30,7 +30,12 @@ generateAsm(llvm::Module &, const llvm::Target *Targ, llvm::Triple DefaultTT,
             const char *DefaultCPU, const char *DefaultFeatures);
 
 /*
- * lift textual assembly to LLVM IR
+ * lift textual assembly to LLVM IR. the target arguments should be
+ * the same as those used to generate assembly, and lineMap should
+ * come from addDebugInfo(). it's fine to pass an empty
+ * lineMap. return value is a source/target pair that is ready for an
+ * Alive2 refinement check. the source function is returned because it
+ * has been rewritten, for example to implement ABI checks.
  */
 std::pair<llvm::Function *, llvm::Function *>
 liftFunc(llvm::Function *, std::unique_ptr<llvm::MemoryBuffer>,
