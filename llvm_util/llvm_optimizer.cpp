@@ -9,14 +9,14 @@ using namespace std;
 
 namespace llvm_util {
 
-string optimize_module(llvm::Module *M, string_view optArgs) {
-  llvm::LoopAnalysisManager LAM;
-  llvm::FunctionAnalysisManager FAM;
-  llvm::CGSCCAnalysisManager CGAM;
-  llvm::ModuleAnalysisManager MAM;
-  llvm::PassBuilder PB;
+string optimize_module(Module *M, string_view optArgs) {
+  LoopAnalysisManager LAM;
+  FunctionAnalysisManager FAM;
+  CGSCCAnalysisManager CGAM;
+  ModuleAnalysisManager MAM;
+  PassBuilder PB;
 
-  llvm::ModulePassManager MPM;
+  ModulePassManager MPM;
 
   PB.registerModuleAnalyses(MAM);
   PB.registerCGSCCAnalyses(CGAM);

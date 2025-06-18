@@ -69,7 +69,7 @@ public:
   const int stackBytes = 1024;
 
   // number of 8-byte stack slots for parameters
-  const int numStackSlots = 32;
+  const unsigned numStackSlots = 32;
 
   mc2llvm(llvm::Function *srcFn, std::unique_ptr<llvm::MemoryBuffer> MB,
           std::unordered_map<unsigned, llvm::Instruction *> &lineMap,

@@ -102,7 +102,8 @@ liftFunc(Function *srcFn, unique_ptr<MemoryBuffer> MB,
 
   auto err = llvm_util::optimize_module(tgtModule, optimize_tgt);
   if (!err.empty()) {
-    *out << "\n\nERROR running LLVM optimizations\n\n";
+    *out << "\n\nERROR running LLVM optimizations:\n";
+    *out << err << "\n";
     exit(-1);
   }
 
