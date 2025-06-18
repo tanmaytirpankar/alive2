@@ -109,6 +109,9 @@ liftFunc(Function *srcFn, unique_ptr<MemoryBuffer> MB,
 
   lifter->fixupOptimizedTgt(tgtFn);
 
+  *out << "\n\noptimized lifted code:\n\n";
+  *out << moduleToString(tgtModule) << std::endl;
+
   return make_pair(adjustedSrc, tgtFn);
 }
 
