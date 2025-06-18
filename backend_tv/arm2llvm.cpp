@@ -21,9 +21,9 @@ unsigned arm2llvm::sentinelNOP() {
 }
 
 arm2llvm::arm2llvm(Function *srcFn, unique_ptr<MemoryBuffer> MB,
-                   std::unordered_map<unsigned, llvm::Instruction *> &lineMap,
-                   std::ostream *out, const llvm::Target *Targ)
-    : mc2llvm(srcFn, std::move(MB), lineMap, out, Targ) {
+                   unordered_map<unsigned, Instruction *> &lineMap,
+                   ostream *out, const Target *Targ, Triple DefaultTT)
+    : mc2llvm(srcFn, std::move(MB), lineMap, out, Targ, DefaultTT) {
   // sanity checking
   assert(disjoint(instrs_32, instrs_64));
   assert(disjoint(instrs_32, instrs_128));
@@ -774,8 +774,8 @@ arm2llvm::splitImmNZCV(uint64_t imm_flags) {
 
 bool arm2llvm::disjoint(const set<int> &a, const set<int> &b) {
   set<int> i;
-  std::set_intersection(a.begin(), a.end(), b.begin(), b.end(),
-                        std::inserter(i, i.begin()));
+  set_intersection(a.begin(), a.end(), b.begin(), b.end(),
+                   inserter(i, i.begin()));
   return i.empty();
 }
 
@@ -3227,12 +3227,12 @@ llvm::AllocaInst *arm2llvm::get_reg(aslp::reg_t regtype, uint64_t num) {
   return llvm::cast<llvm::AllocaInst>(RegFile.at(reg));
 }
 
-std::optional<aslp::opcode_t> arm2llvm::getArmOpcode(const MCInst &I) {
+optional<aslp::opcode_t> arm2llvm::getArmOpcode(const MCInst &I) {
   SmallVector<MCFixup> Fixups{};
   SmallVector<char> Code{};
 
   if (I.getOpcode() == sentinelNOP())
-    return std::nullopt;
+    return nullopt;
 
   MCE->encodeInstruction(I, Code, Fixups, *STI.get());
   for (auto x : Fixups) {
@@ -3244,7 +3244,7 @@ std::optional<aslp::opcode_t> arm2llvm::getArmOpcode(const MCInst &I) {
 
   // do not hand any instructions with relocation fixups to aslp
   if (Fixups.size() != 0)
-    return std::nullopt;
+    return nullopt;
 
   aslp::opcode_t ret;
   unsigned i = 0;

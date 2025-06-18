@@ -33,7 +33,6 @@ namespace lifter {
 
 // FIXME get rid of these globals
 
-llvm::Triple DefaultTT;
 const char *DefaultDL;
 const char *DefaultCPU;
 const char *DefaultFeatures;
@@ -81,13 +80,16 @@ void addDebugInfo(Function *srcFn,
 pair<Function *, Function *>
 liftFunc(Function *srcFn, unique_ptr<MemoryBuffer> MB,
          std::unordered_map<unsigned, llvm::Instruction *> &lineMap,
-         std::string optimize_tgt, std::ostream *out, const Target *Targ) {
+         std::string optimize_tgt, std::ostream *out, const Target *Targ,
+         llvm::Triple DefaultTT) {
   string backend{Targ->getName()};
   unique_ptr<mc2llvm> lifter;
   if (backend == "aarch64") {
-    lifter = make_unique<arm2llvm>(srcFn, std::move(MB), lineMap, out, Targ);
+    lifter = make_unique<arm2llvm>(srcFn, std::move(MB), lineMap, out, Targ,
+                                   DefaultTT);
   } else if (backend == "riscv64") {
-    lifter = make_unique<riscv2llvm>(srcFn, std::move(MB), lineMap, out, Targ);
+    lifter = make_unique<riscv2llvm>(srcFn, std::move(MB), lineMap, out, Targ,
+                                     DefaultTT);
   } else {
     *out << "ERROR: Nonexistent backend\n";
     exit(-1);

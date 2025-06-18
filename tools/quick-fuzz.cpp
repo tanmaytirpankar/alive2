@@ -106,6 +106,8 @@ cl::opt<string>
                      "https://llvm.org/docs/NewPassManager.html#invoking-opt"),
             cl::cat(alive_cmdargs), cl::init("O2"));
 
+Triple DefaultTT;
+
 class Chooser {
   mt19937_64 Rand;
   Chooser() = delete;
@@ -899,7 +901,7 @@ void BBFuzzer::go() {
 
 void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   string Error;
-  const auto *Targ = llvm::TargetRegistry::lookupTarget(lifter::DefaultTT, Error);
+  const auto *Targ = llvm::TargetRegistry::lookupTarget(DefaultTT, Error);
   if (!Targ) {
     *out << "Can't lookup target\n";
     *out << Error;
@@ -911,7 +913,7 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   M2->setDataLayout(M1->getDataLayout());
   M2->setTargetTriple(M1->getTargetTriple());
 
-  auto AsmBuffer = lifter::generateAsm(*M1, Targ);
+  auto AsmBuffer = lifter::generateAsm(*M1, Targ, DefaultTT);
 
   cout << "\n\nAArch64 Assembly:\n\n";
   for (auto it = AsmBuffer->getBuffer().begin();
@@ -921,7 +923,7 @@ void doit(llvm::Module *M1, llvm::Function *srcFn, Verifier &verifier) {
   cout << "-------------\n";
 
   std::unordered_map<unsigned, llvm::Instruction *> lineMap;
-  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, "Oz", out, Targ);
+  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, "Oz", out, Targ, DefaultTT);
 
   verifier.compareFunctions(*F1, *F2);
 

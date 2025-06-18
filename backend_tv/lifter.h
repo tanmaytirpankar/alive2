@@ -20,7 +20,6 @@ namespace lifter {
 // FIXME eliminate all globals
 
 // TODO -- let users change these?
-extern llvm::Triple DefaultTT;
 extern const char *DefaultDL;
 extern const char *DefaultCPU;
 extern const char *DefaultFeatures;
@@ -31,15 +30,16 @@ void addDebugInfo(llvm::Function *);
 void checkSupport(llvm::Function *);
 void fixupOptimizedTgt(llvm::Function *);
 
-std::unique_ptr<llvm::MemoryBuffer> generateAsm(llvm::Module &,
-                                                const llvm::Target *Targ);
+std::unique_ptr<llvm::MemoryBuffer>
+generateAsm(llvm::Module &, const llvm::Target *Targ, llvm::Triple DefaultTT);
 void addDebugInfo(llvm::Function *srcFn,
                   std::unordered_map<unsigned, llvm::Instruction *> &lineMap);
 
 std::pair<llvm::Function *, llvm::Function *>
 liftFunc(llvm::Function *, std::unique_ptr<llvm::MemoryBuffer>,
          std::unordered_map<unsigned, llvm::Instruction *> &lineMap,
-         std::string optimize_tgt, std::ostream *out, const llvm::Target *Targ);
+         std::string optimize_tgt, std::ostream *out, const llvm::Target *Targ,
+         llvm::Triple DefaultTT);
 
 inline std::string moduleToString(llvm::Module *M) {
   std::string sss;

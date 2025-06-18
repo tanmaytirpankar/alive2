@@ -116,6 +116,7 @@ llvm::cl::opt<string> opt_asm_input(
     llvm::cl::cat(alive_cmdargs));
 
 llvm::ExitOnError ExitOnErr;
+llvm::Triple DefaultTT;
 
 void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
           llvm::TargetLibraryInfoWrapperPass &TLI) {
@@ -184,7 +185,7 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   }
 
   string Error;
-  const auto *Targ = llvm::TargetRegistry::lookupTarget(lifter::DefaultTT, Error);
+  const auto *Targ = llvm::TargetRegistry::lookupTarget(DefaultTT, Error);
   if (!Targ) {
     *out << "Can't lookup target\n";
     *out << Error;
@@ -195,7 +196,7 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   std::unordered_map<unsigned, llvm::Instruction *> lineMap;
   if (opt_asm_input == "") {
     lifter::addDebugInfo(srcFn, lineMap);
-    AsmBuffer = lifter::generateAsm(*srcModule, Targ);
+    AsmBuffer = lifter::generateAsm(*srcModule, Targ, DefaultTT);
   } else {
     AsmBuffer = ExitOnErr(
         llvm::errorOrToExpected(llvm::MemoryBuffer::getFile(opt_asm_input)));
@@ -222,7 +223,7 @@ void doit(llvm::Module *srcModule, llvm::Function *srcFn, Verifier &verifier,
   if (opt_asm_only)
     exit(0);
 
-  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, opt_optimize_tgt, out, Targ);
+  auto [F1, F2] = lifter::liftFunc(srcFn, std::move(AsmBuffer), lineMap, opt_optimize_tgt, out, Targ, DefaultTT);
 
   auto lifted = lifter::moduleToString(F2->getParent());
   if (save_lifted_ir) {
@@ -295,7 +296,7 @@ version )EOF";
 
   // FIXME: we should avoid hard-coding these
   if (opt_backend == "aarch64") {
-    lifter::DefaultTT = llvm::Triple("aarch64-unknown-linux-gnu");
+    DefaultTT = llvm::Triple("aarch64-unknown-linux-gnu");
     lifter::DefaultDL =
         "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128-Fn32";
     lifter::DefaultCPU = "generic";
@@ -306,7 +307,7 @@ version )EOF";
     LLVMInitializeAArch64AsmParser();
     LLVMInitializeAArch64AsmPrinter();
   } else if (opt_backend == "riscv64") {
-    lifter::DefaultTT = llvm::Triple("riscv64-unknown-linux-gnu");
+    DefaultTT = llvm::Triple("riscv64-unknown-linux-gnu");
     lifter::DefaultDL = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128";
     lifter::DefaultCPU = "generic";
     lifter::DefaultFeatures = "+m";
@@ -320,7 +321,7 @@ version )EOF";
     exit(-1);
   }
   
-  srcModule.get()->setTargetTriple(lifter::DefaultTT);
+  srcModule.get()->setTargetTriple(DefaultTT);
   srcModule.get()->setDataLayout(lifter::DefaultDL);
 
   auto &DL = srcModule.get()->getDataLayout();

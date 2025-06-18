@@ -30,6 +30,7 @@ class MCBasicBlock;
 
 class mc2llvm : public aslp::lifter_interface_llvm {
 public:
+  llvm::Triple DefaultTT;
   const llvm::Target *Targ{nullptr};
   llvm::SourceMgr SrcMgr;
   llvm::Module *LiftedModule{nullptr};
@@ -73,8 +74,8 @@ public:
 
   mc2llvm(llvm::Function *srcFn, std::unique_ptr<llvm::MemoryBuffer> MB,
           std::unordered_map<unsigned, llvm::Instruction *> &lineMap,
-          std::ostream *out, const llvm::Target *Targ)
-      : Targ{Targ},
+          std::ostream *out, const llvm::Target *Targ, llvm::Triple DefaultTT)
+      : DefaultTT{DefaultTT}, Targ{Targ},
         LiftedModule{new llvm::Module("LiftedModule", srcFn->getContext())},
         Ctx{srcFn->getContext()}, srcFn{srcFn},
         STI{Targ->createMCSubtargetInfo(DefaultTT.getTriple(), DefaultCPU,

@@ -20,8 +20,8 @@ using namespace llvm;
 riscv2llvm::riscv2llvm(
     Function *srcFn, unique_ptr<MemoryBuffer> MB,
     std::unordered_map<unsigned, llvm::Instruction *> &lineMap,
-    std::ostream *out, const llvm::Target *Targ)
-    : mc2llvm(srcFn, std::move(MB), lineMap, out, Targ) {}
+    std::ostream *out, const llvm::Target *Targ, llvm::Triple DefaultTT)
+    : mc2llvm(srcFn, std::move(MB), lineMap, out, Targ, DefaultTT) {}
 
 // TODO -- move this up to mc2llvm so the ARM lifter can use it too
 tuple<BasicBlock *, BasicBlock *> riscv2llvm::getBranchTargetsOperand(int op) {
