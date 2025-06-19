@@ -932,8 +932,8 @@ public:
   std::pair<llvm::Function *, llvm::Function *> run();
   void checkCallingConv(llvm::Function *fn);
   void avoidArgMD(llvm::CallInst *ci, const std::string &str);
-  void checkSupportHelper(llvm::Instruction &i, const llvm::DataLayout &DL,
-                          std::set<llvm::Type *> &typeSet);
+  void checkInstSupport(llvm::Instruction &i, const llvm::DataLayout &DL,
+                        std::set<llvm::Type *> &typeSet);
   void checkVectorTy(llvm::VectorType *Ty);
   void checkSupport(llvm::Function *srcFn);
   void nameGlobals(llvm::Module *M);

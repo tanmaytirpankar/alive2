@@ -832,8 +832,8 @@ void mc2llvm::avoidArgMD(CallInst *ci, const string &str) {
   }
 }
 
-void mc2llvm::checkSupportHelper(Instruction &i, const DataLayout &DL,
-                                 set<Type *> &typeSet) {
+void mc2llvm::checkInstSupport(Instruction &i, const DataLayout &DL,
+                               set<Type *> &typeSet) {
   typeSet.insert(i.getType());
   for (auto &op : i.operands()) {
     auto *ty = op.get()->getType();
@@ -1052,7 +1052,7 @@ void mc2llvm::checkSupport(Function *srcFn) {
   totalAllocas = 0;
   for (auto &bb : *srcFn) {
     for (auto &i : bb) {
-      checkSupportHelper(i, DL, typeSet);
+      checkInstSupport(i, DL, typeSet);
       ++llvmInstCount;
     }
   }
@@ -1062,15 +1062,8 @@ void mc2llvm::checkSupport(Function *srcFn) {
     exit(-1);
   }
 
-  for (auto ty : typeSet) {
-    if (ty->isFloatingPointTy()) {
-      if (!(ty->isFloatTy() || ty->isDoubleTy())) {
-        *out << "\nERROR: only float and double supported (not bfloat, half, "
-                "fp128, etc.)\n\n";
-        exit(-1);
-      }
-    }
-  }
+  for (auto ty : typeSet)
+    checkTypeSupport(ty);
 
   *out << llvmInstCount << " LLVM instructions in source function\n";
 }

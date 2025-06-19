@@ -3380,4 +3380,12 @@ void arm2llvm::platformInit() {
 
 void arm2llvm::checkArgSupport(Argument &arg) {}
 void arm2llvm::checkFuncSupport(Function &func) {}
-void arm2llvm::checkTypeSupport(Type *ty) {}
+void arm2llvm::checkTypeSupport(Type *ty) {
+  if (ty->isFloatingPointTy()) {
+    if (!(ty->isFloatTy() || ty->isDoubleTy())) {
+      *out << "\nERROR: only float and double supported (not bfloat, half, "
+              "fp128, etc.)\n\n";
+      exit(-1);
+    }
+  }
+}

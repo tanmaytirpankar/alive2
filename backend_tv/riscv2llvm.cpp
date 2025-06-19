@@ -360,4 +360,13 @@ Value *riscv2llvm::getPointerOperand() {
 
 void riscv2llvm::checkArgSupport(Argument &arg) {}
 void riscv2llvm::checkFuncSupport(Function &func) {}
-void riscv2llvm::checkTypeSupport(Type *ty) {}
+void riscv2llvm::checkTypeSupport(Type *ty) {
+  if (ty->isFloatingPointTy()) {
+    *out << "\nERROR: float point not yet supported\n\n";
+    exit(-1);
+  }
+  if (ty->isVectorTy()) {
+    *out << "\nERROR: vectors not yet supported\n\n";
+    exit(-1);
+  }
+}
