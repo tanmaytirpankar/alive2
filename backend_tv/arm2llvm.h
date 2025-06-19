@@ -229,6 +229,8 @@ public:
   void platformInit() override;
 
   void checkArgSupport(llvm::Argument &arg) override;
+  void checkFuncSupport(llvm::Function &func) override;
+  void checkTypeSupport(llvm::Type *ty) override;
 
   unsigned sentinelNOP() override;
 

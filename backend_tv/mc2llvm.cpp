@@ -1065,7 +1065,7 @@ void mc2llvm::checkSupport(Function *srcFn) {
   for (auto ty : typeSet) {
     if (ty->isFloatingPointTy()) {
       if (!(ty->isFloatTy() || ty->isDoubleTy())) {
-        *out << "\nERROR: only float and double supported (not  bfloat, half, "
+        *out << "\nERROR: only float and double supported (not bfloat, half, "
                 "fp128, etc.)\n\n";
         exit(-1);
       }

@@ -957,15 +957,43 @@ public:
    *******************************************************************/
 
   /*
-   * exit with an error message if this argument type is not supported
-   * by this lifter
+   * setup the platform-specific execution environment: registers,
+   * stack frame, flags, etc.
    */
   virtual void platformInit() = 0;
+  /*
+   * called once per function argument; exit with an error message if
+   * this argument type is not supported by this lifter
+   */
   virtual void checkArgSupport(llvm::Argument &arg) = 0;
+  /*
+   * called once per function exit with an error message if something
+   * at the function level such as a function or return attribute or
+   * return type is not supported
+   */
+  virtual void checkFuncSupport(llvm::Function &func) = 0;
+  /*
+   * called once per Value type used in this function; exit with an
+   * error message if we can't left operations on this type
+   */
+  virtual void checkTypeSupport(llvm::Type *ty) = 0;
+  /*
+   * lift a single instruction
+   */
   virtual void lift(llvm::MCInst &I) = 0;
+  /*
+   * lift a function call
+   */
   virtual void doCall(llvm::FunctionCallee FC, llvm::CallInst *llvmCI,
                       const std::string &calleeName) = 0;
+  /*
+   * lift a function return
+   */
   virtual void doReturn() = 0;
+  /*
+   * return an unconditional direct branch opcode, it should take a
+   * single argument: the target BB
+   */
   virtual unsigned branchInst() = 0;
   /*
    * return a nop opcode for this platform that is expected to not be

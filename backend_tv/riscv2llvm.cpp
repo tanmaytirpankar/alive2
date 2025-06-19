@@ -359,3 +359,5 @@ Value *riscv2llvm::getPointerOperand() {
 }
 
 void riscv2llvm::checkArgSupport(Argument &arg) {}
+void riscv2llvm::checkFuncSupport(Function &func) {}
+void riscv2llvm::checkTypeSupport(Type *ty) {}
