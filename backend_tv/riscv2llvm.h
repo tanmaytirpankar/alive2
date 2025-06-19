@@ -65,6 +65,8 @@ class riscv2llvm final : public mc2llvm {
 
   void doReturn() override;
 
+  void checkArgSupport(llvm::Argument &arg) override;
+
   unsigned mapRegToBackingReg(unsigned Reg);
   llvm::Value *readFromReg(unsigned Reg, llvm::Type *ty);
   llvm::Value *readFromRegOperand(int idx, llvm::Type *ty);

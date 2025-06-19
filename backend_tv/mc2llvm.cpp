@@ -1000,6 +1000,10 @@ void mc2llvm::checkSupport(Function *srcFn) {
   }
 
   for (auto &arg : srcFn->args()) {
+    // backend-specific checks go here
+    checkArgSupport(arg);
+
+    // rest of this code is checks that apply to all supported backends
     if (arg.hasByValAttr()) {
       *out << "\nERROR: we don't support the byval parameter attribute yet\n\n";
       exit(-1);

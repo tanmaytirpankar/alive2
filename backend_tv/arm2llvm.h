@@ -228,6 +228,8 @@ public:
 
   void platformInit() override;
 
+  void checkArgSupport(llvm::Argument &arg) override;
+
   unsigned sentinelNOP() override;
 
   std::optional<aslp::opcode_t> getArmOpcode(const llvm::MCInst &I);

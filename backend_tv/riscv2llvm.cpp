@@ -357,3 +357,5 @@ Value *riscv2llvm::getPointerOperand() {
 
   return getPointerFromMCExpr();
 }
+
+void riscv2llvm::checkArgSupport(Argument &arg) {}

@@ -3377,3 +3377,5 @@ void arm2llvm::platformInit() {
       createGEP(i64, paramBase, {getUnsignedIntConst(stackSlot, 64)}, "");
   createStore(initFP, RegFile[AArch64::FP]);
 }
+
+void arm2llvm::checkArgSupport(Argument &arg) {}

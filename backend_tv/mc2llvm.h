@@ -952,15 +952,26 @@ public:
   void storeToMemoryValOffset(llvm::Value *base, llvm::Value *offset,
                               uint64_t size, llvm::Value *val) override;
 
-  /*
+  /********************************************************************
    * per-backend functionality goes here
+   *******************************************************************/
+
+  /*
+   * exit with an error message if this argument type is not supported
+   * by this lifter
    */
+  virtual void platformInit() = 0;
+  virtual void checkArgSupport(llvm::Argument &arg) = 0;
+  virtual void lift(llvm::MCInst &I) = 0;
   virtual void doCall(llvm::FunctionCallee FC, llvm::CallInst *llvmCI,
                       const std::string &calleeName) = 0;
-  virtual void lift(llvm::MCInst &I) = 0;
-  virtual void platformInit() = 0;
   virtual void doReturn() = 0;
   virtual unsigned branchInst() = 0;
+  /*
+   * return a nop opcode for this platform that is expected to not be
+   * otherwise used by lifted programs; we'll use this internally to
+   * artifically ensure there are not empty BBs
+   */
   virtual unsigned sentinelNOP() = 0;
 };
 
